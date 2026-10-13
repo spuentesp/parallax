@@ -3,25 +3,25 @@
 // apiVersion and analyzerVersion before the first tool call (Review Focus #2
 // in the plan: a bad URL must fail fast, not on the first request).
 
-import {
-  type LainView,
-  type ListServicesResponse,
-  type GetServiceArgs,
-  type GetServiceResponse,
-  type PrepareSnapshotArgs,
-  type PrepareSnapshotResponse,
-  type GetSnapshotArgs,
-  type GetSnapshotResponse,
-  type DiffContractsArgs,
-  type DiffContractsResponse,
-  type TraceImpactArgs,
-  type TraceImpactResponse,
-  type GetCoverageArgs,
-  type GetCoverageResponse,
-  type ResolveEvidenceArgs,
-  type ResolveEvidenceResponse,
-  type ReadSourceArgs,
-  type ReadSourceResponse,
+import type {
+  DiffContractsArgs,
+  DiffContractsResponse,
+  GetCoverageArgs,
+  GetCoverageResponse,
+  GetServiceArgs,
+  GetServiceResponse,
+  GetSnapshotArgs,
+  GetSnapshotResponse,
+  LainView,
+  ListServicesResponse,
+  PrepareSnapshotArgs,
+  PrepareSnapshotResponse,
+  ReadSourceArgs,
+  ReadSourceResponse,
+  ResolveEvidenceArgs,
+  ResolveEvidenceResponse,
+  TraceImpactArgs,
+  TraceImpactResponse,
 } from '@parallax/shared/lain';
 import { LainCallError } from './errors.js';
 import type { LainAdapter } from './types.js';
@@ -55,7 +55,7 @@ interface LainEnvelope {
   error?: unknown;
 }
 
-function pickRateLimit(headers: Headers): {
+function _pickRateLimit(headers: Headers): {
   remainingRequests?: number;
   remainingTokens?: number;
   overLimit?: boolean;
@@ -204,27 +204,45 @@ export class RealLainAdapter implements LainAdapter {
   }
 
   async prepareSnapshot(req: PrepareSnapshotArgs): Promise<PrepareSnapshotResponse> {
-    return this.call<PrepareSnapshotResponse>('prepare_snapshot', req as unknown as Record<string, unknown>);
+    return this.call<PrepareSnapshotResponse>(
+      'prepare_snapshot',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async getSnapshot(req: GetSnapshotArgs): Promise<GetSnapshotResponse> {
-    return this.call<GetSnapshotResponse>('get_snapshot', req as unknown as Record<string, unknown>);
+    return this.call<GetSnapshotResponse>(
+      'get_snapshot',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse> {
-    return this.call<DiffContractsResponse>('diff_contracts', req as unknown as Record<string, unknown>);
+    return this.call<DiffContractsResponse>(
+      'diff_contracts',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {
-    return this.call<TraceImpactResponse>('trace_impact', req as unknown as Record<string, unknown>);
+    return this.call<TraceImpactResponse>(
+      'trace_impact',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {
-    return this.call<GetCoverageResponse>('get_coverage', req as unknown as Record<string, unknown>);
+    return this.call<GetCoverageResponse>(
+      'get_coverage',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async resolveEvidence(req: ResolveEvidenceArgs): Promise<ResolveEvidenceResponse> {
-    return this.call<ResolveEvidenceResponse>('resolve_evidence', req as unknown as Record<string, unknown>);
+    return this.call<ResolveEvidenceResponse>(
+      'resolve_evidence',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async readSource(req: ReadSourceArgs): Promise<ReadSourceResponse> {

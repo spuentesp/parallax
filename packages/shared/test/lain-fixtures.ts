@@ -9,19 +9,47 @@ import type {
 export const apiVersion = '1' as const;
 export const analyzerVersion = '0.9.1-fixture';
 
-const orders = { id: 'orders', name: 'orders', repo: 'orders', scope: 'live' };
-const billing = { id: 'billing', name: 'billing', repo: 'billing', scope: 'live' };
-const reports = { id: 'reports', name: 'reports', repo: 'reports', scope: 'live' };
-const platform = { id: 'platform', name: 'platform', repo: 'platform', scope: 'live' };
+const orders = {
+  service: 'orders',
+  repo: 'orders',
+  endpoints: 5,
+  consumer_services: 1,
+  unresolved_inbound: 0,
+  paths: [] as string[],
+};
+const billing = {
+  service: 'billing',
+  repo: 'billing',
+  endpoints: 2,
+  consumer_services: 2,
+  unresolved_inbound: 0,
+  paths: [] as string[],
+};
+const reports = {
+  service: 'reports',
+  repo: 'reports',
+  endpoints: 2,
+  consumer_services: 0,
+  unresolved_inbound: 0,
+  paths: [] as string[],
+};
+const platform = {
+  service: 'platform',
+  repo: 'platform',
+  endpoints: 3,
+  consumer_services: 1,
+  unresolved_inbound: 0,
+  paths: ['services/shipping/', 'services/inventory/'],
+};
 
 export const services = [
   orders,
   billing,
   reports,
   platform,
-] as const satisfies ListServicesResponse['services'];
+] as const satisfies ListServicesResponse['items'];
 
-const getService = (svc: { id: string; name: string; repo: string }): GetServiceResponse => {
+const getService = (svc: { service: string; repo: string }): GetServiceResponse => {
   const consumers: Record<string, GetServiceResponse['consumers']> = {
     orders: [
       {
@@ -51,15 +79,14 @@ const getService = (svc: { id: string; name: string; repo: string }): GetService
     ],
   };
   return {
-    view: 'live',
-    service: { id: svc.id, name: svc.name },
-    consumers: consumers[svc.id] ?? [],
+    service: { id: svc.service, name: svc.service },
+    consumers: consumers[svc.service] ?? [],
     usedByTruncated: false,
   };
 };
 
 export const getServiceById = (id: string): GetServiceResponse => {
-  const svc = services.find((s) => s.id === id);
+  const svc = services.find((s: { service: string }) => s.service === id);
   if (!svc) throw new Error(`unknown service: ${id}`);
   return getService(svc);
 };

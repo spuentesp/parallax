@@ -57,8 +57,13 @@ export function createLainMock(): LainAdapter {
 
     async listServices(view, opts) {
       recordMockCall({ tool: 'list_services', view, args: opts ?? {} });
-      const filtered = opts?.repo ? services.filter((s) => s.repo === opts.repo) : services;
-      const r: ListServicesResponse = { view, services: filtered };
+      const filtered = opts?.repo
+        ? services.filter((s: { repo: string }) => s.repo === opts.repo)
+        : services;
+      const r: ListServicesResponse = {
+        items: filtered,
+        scope: { configured_only: true, reviewed: [], unreviewed: [] },
+      };
       return r;
     },
 

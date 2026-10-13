@@ -23,7 +23,7 @@ describe('lain-adapter plugin', () => {
     await app.register(lainAdapterPlugin);
     expect(app.lain.apiVersion).toBe('1');
     const services = await app.lain.listServices('live');
-    expect(services.services.length).toBeGreaterThan(0);
+    expect(services.items.length).toBeGreaterThan(0);
     await app.close();
   });
 

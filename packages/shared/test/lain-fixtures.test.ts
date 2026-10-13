@@ -16,7 +16,7 @@ describe('lain fixtures', () => {
   });
   it('lists the four services from the design fixture', () => {
     expect(services).toHaveLength(4);
-    const ids = services.map((s) => s.id);
+    const ids = services.map((s: { service: string }) => s.service);
     expect(ids).toEqual(expect.arrayContaining(['orders', 'billing', 'reports', 'platform']));
   });
   it('s1-remove-customer-id fixture is a FieldRemoved with billing as consumer', () => {
@@ -34,6 +34,27 @@ describe('lain fixtures', () => {
     expect(scenarios['s2-add-currency']).toBe(s2AddCurrency);
   });
   it('every service passes ListServicesResponse', () => {
-    expect(() => ListServicesResponse.parse({ view: 'live', services })).not.toThrow();
+    const items = services.map((s) => ({
+      service: s.service,
+      repo: s.repo ?? s.service,
+      endpoints: 2,
+      consumer_services: 1,
+      unresolved_inbound: 0,
+      paths: [],
+    }));
+    expect(() =>
+      ListServicesResponse.parse({
+        items,
+        scope: {
+          configured_only: true,
+          reviewed: items.map((i: { repo: string }) => ({
+            repo: i.repo,
+            commit: 'b5bf29a',
+            dirty: false,
+          })),
+          unreviewed: [],
+        },
+      }),
+    ).not.toThrow();
   });
 });

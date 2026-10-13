@@ -25,15 +25,37 @@ describe('lain tool schemas', () => {
     expect(() => ListServicesArgs.parse({})).toThrow();
   });
 
-  it('ListServicesResponse: parses a service with consumers', () => {
+  it('ListServicesResponse: parses items with service and repo', () => {
     const r = ListServicesResponse.parse({
-      view: 'live',
-      services: [
-        { id: 'orders', name: 'orders', repo: 'orders', scope: 'live' },
-        { id: 'billing', name: 'billing', repo: 'billing', scope: 'live' },
+      items: [
+        {
+          service: 'orders',
+          repo: 'orders',
+          endpoints: 5,
+          consumer_services: 1,
+          unresolved_inbound: 0,
+          paths: [],
+        },
+        {
+          service: 'billing',
+          repo: 'billing',
+          endpoints: 2,
+          consumer_services: 2,
+          unresolved_inbound: 0,
+          paths: [],
+        },
       ],
+      scope: {
+        configured_only: true,
+        reviewed: [
+          { repo: 'orders', commit: 'b5bf29a', dirty: false },
+          { repo: 'billing', commit: '9726517', dirty: false },
+        ],
+        unreviewed: [],
+      },
     });
-    expect(r.services).toHaveLength(2);
+    expect(r.items).toHaveLength(2);
+    expect(r.scope.reviewed).toHaveLength(2);
   });
 
   it('GetService: requires service and view; consumers[] is a list of uses', () => {

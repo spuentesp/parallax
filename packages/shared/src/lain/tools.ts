@@ -1,18 +1,51 @@
 import { z } from 'zod';
 import { EdgeType, FindingClass, LainView } from './enums.js';
 
+// Real response envelope from a running lain server:
+// { _meta: { revision, static_graph_generation, view: { git_commits, kind, snapshot_id } },
+//   content: [ { text: "<JSON string with analyzer_version, api_version, data, meta>" } ] }
+//
+// The `text` field is a JSON string. The LainAdapter client parses it and
+// returns the `data` payload. These schemas describe that payload.
+
 const Range = z.object({
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),
 });
 
-const Service = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
+// 1. list_services — data.items[] + data.scope
+export const ListServicesArgs = z.object({
+  view: LainView,
   repo: z.string().min(1).optional(),
-  scope: z.string().optional(),
 });
 
+export const ServiceSummary = z.object({
+  service: z.string().min(1),
+  repo: z.string().min(1),
+  endpoints: z.number().int().nonnegative(),
+  consumer_services: z.number().int().nonnegative(),
+  unresolved_inbound: z.number().int().nonnegative(),
+  paths: z.array(z.string()).optional(),
+});
+
+export const ListServicesResponse = z.object({
+  items: z.array(ServiceSummary),
+  scope: z.object({
+    configured_only: z.boolean(),
+    reviewed: z.array(
+      z.object({
+        repo: z.string().min(1),
+        commit: z.string().min(1),
+        dirty: z.boolean(),
+      }),
+    ),
+    unreviewed: z.array(z.string().min(1)),
+  }),
+});
+export type ListServicesArgs = z.infer<typeof ListServicesArgs>;
+export type ListServicesResponse = z.infer<typeof ListServicesResponse>;
+
+// 2. get_service — data.service + data.consumers[]
 const Use = z.object({
   field: z.string().min(1).optional(),
   route: z.string().min(1).optional(),
@@ -25,27 +58,9 @@ const Consumer = z.object({
   uses: z.array(Use),
 });
 
-const ImpactConsumer = z.object({
-  consumer: z.string().min(1),
-  field: z.string().min(1).optional(),
-  route: z.string().min(1).optional(),
-});
-
-// 1. list_services
-export const ListServicesArgs = z.object({ view: LainView, repo: z.string().min(1).optional() });
-export const ListServicesResponse = z.object({
-  view: LainView,
-  services: z.array(Service),
-  truncated: z.boolean().optional(),
-});
-export type ListServicesArgs = z.infer<typeof ListServicesArgs>;
-export type ListServicesResponse = z.infer<typeof ListServicesResponse>;
-
-// 2. get_service
 export const GetServiceArgs = z.object({ view: LainView, service: z.string().min(1) });
 export const GetServiceResponse = z.object({
-  view: LainView,
-  service: Service,
+  service: z.object({ id: z.string().min(1), name: z.string().min(1) }),
   consumers: z.array(Consumer),
   usedByTruncated: z.boolean(),
 });
@@ -103,6 +118,12 @@ export type DiffContractsArgs = z.infer<typeof DiffContractsArgs>;
 export type DiffContractsResponse = z.infer<typeof DiffContractsResponse>;
 
 // 6. trace_impact
+const ImpactConsumer = z.object({
+  consumer: z.string().min(1),
+  field: z.string().min(1).optional(),
+  route: z.string().min(1).optional(),
+});
+
 export const TraceImpactArgs = z.object({
   snapshotId: z.string().min(1),
   service: z.string().min(1).optional(),

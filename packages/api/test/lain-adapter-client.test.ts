@@ -43,10 +43,10 @@ describe('LainAdapter real client', () => {
       'read_source',
     ].map((name) => ({ name }));
     fetchSpy.mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools } }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      ),
+      new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
     );
     const a = await createLainClient({ lainUrl: 'http://lain:9999/mcp', apiVersion: '1' });
     expect(a.apiVersion).toBe('1');
@@ -63,7 +63,11 @@ describe('LainAdapter real client', () => {
   it('rejects when JSON-RPC returns an error', async () => {
     fetchSpy.mockResolvedValueOnce(
       new Response(
-        JSON.stringify({ jsonrpc: '2.0', id: 1, error: { code: -32601, message: 'method not found' } }),
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          error: { code: -32601, message: 'method not found' },
+        }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );

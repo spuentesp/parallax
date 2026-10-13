@@ -14,7 +14,12 @@ describe('LainAdapter mock', () => {
   it('listServices returns the four fixture services', async () => {
     const m = createLainMock();
     const r = await m.listServices('live');
-    expect(r.services.map((s) => s.id)).toEqual(['orders', 'billing', 'reports', 'platform']);
+    expect(r.items.map((s: { service: string }) => s.service)).toEqual([
+      'orders',
+      'billing',
+      'reports',
+      'platform',
+    ]);
   });
 
   it('getService returns consumers for orders', async () => {
