@@ -152,21 +152,49 @@ export class RealLainAdapter implements LainAdapter {
             message: `JSON-RPC error ${body.error.code}: ${body.error.message}`,
           });
         }
-        const envelope = body.result as LainEnvelope | undefined;
+        // Real lain wraps the payload in { _meta, content: [{ text: "<JSON>" }] }.
+        // The `text` field is a JSON string with analyzer_version, api_version,
+        // data, meta. We return `data` (the domain payload) plus `_meta`.
+        const envelope = body.result as {
+          _meta?: Record<string, unknown>;
+          content?: Array<{ text?: string }>;
+          structuredContent?: Record<string, unknown>;
+        } | undefined;
         if (!envelope) {
           throw LainCallError.parse({
             code: 'LainUnavailable',
             message: 'no result in JSON-RPC response',
           });
         }
-        // Validate envelope: data/error separation, cursor/limit/truncated.
-        if (envelope.error !== undefined && envelope.error !== null) {
+        // Prefer structuredContent (already parsed); fall back to content[0].text.
+        let parsed: Record<string, unknown> | undefined;
+        if (envelope.structuredContent && typeof envelope.structuredContent === 'object') {
+          parsed = envelope.structuredContent as Record<string, unknown>;
+        } else if (envelope.content?.[0]?.text) {
+          try {
+            parsed = JSON.parse(envelope.content[0].text) as Record<string, unknown>;
+          } catch {
+            throw LainCallError.parse({
+              code: 'LainUnavailable',
+              message: `lain returned unparseable content[0].text for ${tool}`,
+            });
+          }
+        }
+        if (!parsed) {
           throw LainCallError.parse({
             code: 'LainUnavailable',
-            message: `lain returned error in envelope: ${JSON.stringify(envelope.error)}`,
+            message: `lain returned no parseable payload for ${tool}`,
           });
         }
-        return envelope as T;
+        if (parsed.error !== undefined && parsed.error !== null) {
+          throw LainCallError.parse({
+            code: 'LainUnavailable',
+            message: `lain returned error in envelope: ${JSON.stringify(parsed.error)}`,
+          });
+        }
+        // Return the `data` field (domain payload) merged with `_meta`.
+        const data = parsed.data ?? parsed;
+        return data as T;
       } catch (e) {
         clearTimeout(timer);
         if (e instanceof Error && e.name === 'AbortError') {
@@ -218,10 +246,14 @@ export class RealLainAdapter implements LainAdapter {
   }
 
   async diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse> {
-    return this.call<DiffContractsResponse>(
-      'diff_contracts',
-      req as unknown as Record<string, unknown>,
-    );
+    return this.call<DiffContractsResponse>('diff_contracts', {
+      base: req.base,
+      head: req.head,
+      ...(req.service ? { service: req.service } : {}),
+      ...(req.repo ? { repo: req.repo } : {}),
+      ...(req.cap !== undefined ? { cap: req.cap } : {}),
+      ...(req.min_impact ? { min_impact: req.min_impact } : {}),
+    });
   }
 
   async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {

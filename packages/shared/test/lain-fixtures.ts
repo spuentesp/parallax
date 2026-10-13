@@ -112,7 +112,7 @@ export const s1RemoveCustomerId: Scenario = {
     cap: 1000,
   },
   traceImpact: {
-    snapshotId: 'snap_head_s1',
+    snapshot: 'snap_head_s1',
     findings: [
       {
         id: 'f_s1_1',
@@ -141,7 +141,7 @@ export const s2AddCurrency: Scenario = {
     cap: 1000,
   },
   traceImpact: {
-    snapshotId: 'snap_head_s2',
+    snapshot: 'snap_head_s2',
     findings: [
       {
         id: 'f_s2_1',

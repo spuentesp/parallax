@@ -73,18 +73,29 @@ export const PrepareSnapshotArgs = z.object({
   configHash: z.string().min(1).optional(),
 });
 export const PrepareSnapshotResponse = z.object({
-  snapshotId: z.string().min(1),
-  status: z.enum(['pending', 'ready', 'failed']),
-  manifestDigest: z.string().min(1),
+  snapshot: z.string().min(1),
+  state: z.enum(['pending', 'ready', 'failed']),
+  reproducible: z.boolean().optional(),
+  repos: z
+    .array(
+      z.object({
+        repo: z.string().min(1),
+        commit: z.string().min(1),
+        state: z.string().min(1),
+      }),
+    )
+    .optional(),
+  created_unix: z.number().optional(),
+  last_access_unix: z.number().optional(),
 });
 export type PrepareSnapshotArgs = z.infer<typeof PrepareSnapshotArgs>;
 export type PrepareSnapshotResponse = z.infer<typeof PrepareSnapshotResponse>;
 
 // 4. get_snapshot
-export const GetSnapshotArgs = z.object({ snapshotId: z.string().min(1) });
+export const GetSnapshotArgs = z.object({ snapshot: z.string().min(1) });
 export const GetSnapshotResponse = z.object({
-  snapshotId: z.string().min(1),
-  status: z.enum(['pending', 'ready', 'failed']),
+  snapshot: z.string().min(1),
+  state: z.enum(['pending', 'ready', 'failed']),
   error: z.string().optional(),
   analyzerVersion: z.string().min(1).optional(),
   configHash: z.string().min(1).optional(),
@@ -95,24 +106,50 @@ export type GetSnapshotResponse = z.infer<typeof GetSnapshotResponse>;
 
 // 5. diff_contracts
 export const DiffContractsArgs = z.object({
-  baseId: z.string().min(1),
-  headId: z.string().min(1),
+  base: z.string().min(1),
+  head: z.string().min(1),
   service: z.string().min(1).optional(),
+  repo: z.string().min(1).optional(),
   cap: z.number().int().positive().optional(),
+  min_impact: z.string().min(1).optional(),
 });
 export const DiffContractsResponse = z.object({
-  baseId: z.string().min(1),
-  headId: z.string().min(1),
+  base: z.string().min(1).optional(),
+  head: z.string().min(1).optional(),
+  baseId: z.string().min(1).optional(),
+  headId: z.string().min(1).optional(),
   changes: z.array(
     z.object({
       kind: z.string().min(1),
-      service: z.string().min(1),
+      service: z.string().min(1).optional(),
+      side: z.string().optional(),
+      endpoint: z
+        .object({
+          service: z.string().min(1).optional(),
+          key: z.string().min(1).optional(),
+        })
+        .optional(),
       field: z.string().min(1).optional(),
       route: z.string().min(1).optional(),
+      direction: z.string().optional(),
+      compat: z.string().optional(),
     }),
   ),
-  truncated: z.boolean(),
-  cap: z.number().int().positive(),
+  compatible_changes: z.number().int().nonnegative().optional(),
+  truncated: z.boolean().optional(),
+  cap: z.number().int().positive().optional(),
+  coverage: z
+    .object({
+      complete: z.boolean(),
+      scope: z
+        .object({
+          reviewed: z.array(z.string().min(1)),
+          unreviewed: z.array(z.string().min(1)),
+          configured_only: z.boolean(),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type DiffContractsArgs = z.infer<typeof DiffContractsArgs>;
 export type DiffContractsResponse = z.infer<typeof DiffContractsResponse>;
@@ -125,21 +162,33 @@ const ImpactConsumer = z.object({
 });
 
 export const TraceImpactArgs = z.object({
-  snapshotId: z.string().min(1),
-  service: z.string().min(1).optional(),
+  snapshot: z.string().min(1),
+  from: z
+    .object({
+      endpoint: z.string().min(1).optional(),
+      field: z.string().min(1).optional(),
+      symbol: z.string().min(1).optional(),
+    })
+    .refine((v) => v.endpoint || v.field || v.symbol, {
+      message: 'exactly one of endpoint, field, symbol must be set',
+    }),
   cap: z.number().int().positive().optional(),
+  depth: z.number().int().nonnegative().optional(),
+  min_confidence: z.number().min(0).max(1).optional(),
 });
 export const TraceImpactResponse = z.object({
-  snapshotId: z.string().min(1),
+  snapshot: z.string().min(1).optional(),
   findings: z.array(
     z.object({
-      id: z.string().min(1),
-      change: z.object({
-        kind: z.string().min(1),
-        service: z.string().min(1),
-        field: z.string().min(1).optional(),
-        route: z.string().min(1).optional(),
-      }),
+      id: z.string().min(1).optional(),
+      change: z
+        .object({
+          kind: z.string().min(1).optional(),
+          service: z.string().min(1).optional(),
+          field: z.string().min(1).optional(),
+          route: z.string().min(1).optional(),
+        })
+        .optional(),
       classification: FindingClass,
       consumers: z.array(ImpactConsumer),
     }),

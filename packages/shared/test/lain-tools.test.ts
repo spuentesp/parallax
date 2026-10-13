@@ -78,27 +78,27 @@ describe('lain tool schemas', () => {
 
   it('PrepareSnapshot: requires repos map and returns a snapshot id', () => {
     const r = PrepareSnapshotResponse.parse({
-      snapshotId: 'snap_abc',
-      status: 'pending',
+      snapshot: 'snap_abc',
+      state: 'pending',
       manifestDigest: 'd_1',
     });
-    expect(r.snapshotId).toBe('snap_abc');
+    expect(r.snapshot).toBe('snap_abc');
     void PrepareSnapshotArgs;
   });
 
   it('GetSnapshot: status pending|ready|failed', () => {
-    expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'ready' }).status).toBe('ready');
-    expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'pending' }).status).toBe(
+    expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'ready' }).state).toBe('ready');
+    expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'pending' }).state).toBe(
       'pending',
     );
-    expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'failed' }).status).toBe('failed');
-    expect(() => GetSnapshotResponse.parse({ snapshotId: 's1', status: 'oops' })).toThrow();
+    expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'failed' }).state).toBe('failed');
+    expect(() => GetSnapshotResponse.parse({ snapshot: 's1', status: 'oops' })).toThrow();
   });
 
   it('DiffContracts: requires base and head snapshot ids and returns changes[]', () => {
     const r = DiffContractsResponse.parse({
-      baseId: 'snap_b',
-      headId: 'snap_h',
+      base: 'snap_b',
+      head: 'snap_h',
       changes: [{ kind: 'FieldRemoved', service: 'orders', field: 'customer_id' }],
       truncated: false,
       cap: 1000,
@@ -109,7 +109,7 @@ describe('lain tool schemas', () => {
 
   it('TraceImpact: returns findings with classification and consumers', () => {
     const r = TraceImpactResponse.parse({
-      snapshotId: 'snap_head_s1',
+      snapshot: 'snap_head_s1',
       findings: [
         {
           id: 'f1',
