@@ -13,6 +13,7 @@ import { orgsRoutes } from './routes/orgs.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
+import { mcpRoutes } from './routes/mcp.js';
 import type { AppConfig } from './config.js';
 import './plugins/db.js';
 
@@ -34,5 +35,6 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(assessmentRoutes);
   await app.register(proposalRoutes);
   await app.register(publicationRoutes);
+  await app.register(mcpRoutes);
   return app;
 }
