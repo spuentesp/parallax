@@ -43,7 +43,8 @@ export const orgsRoutes: FastifyPluginAsync = async (app) => {
       schema: { params: z.object({ orgId: z.string().min(1) }) },
     },
     async (req) => {
-      throw notImpl(`GET /orgs/${req.params.orgId} lands in subproject 2`);
+      const orgId = (req.params as { orgId: string }).orgId;
+      throw notImpl(`GET /orgs/${orgId} lands in subproject 2`);
     },
   );
 };
