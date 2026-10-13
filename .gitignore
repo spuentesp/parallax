@@ -1,0 +1,19 @@
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Lain runtime state (workspace-local, never source)
+.lain/
+.parallax/
+
+# Test data
+data/
+
+# Build artifacts
+node_modules/
+dist/
+build/
+coverage/
+**/*.tsbuildinfo
+.DS_Store
