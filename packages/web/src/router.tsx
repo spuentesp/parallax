@@ -1,11 +1,29 @@
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { Orgs } from './routes/Orgs.js';
+import { Org } from './routes/Org.js';
+import { Service } from './routes/Service.js';
+import { Assessments } from './routes/Assessments.js';
+import { Assessment } from './routes/Assessment.js';
+import { Proposal } from './routes/Proposal.js';
 
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/orgs" replace /> },
   {
     path: '/',
     element: <AppShell />,
-    children: [{ path: 'orgs', element: <div>orgs (stub)</div> }],
+    children: [
+      { path: 'orgs', element: <Orgs /> },
+      {
+        path: 'orgs/:orgId',
+        element: <Org />,
+        children: [
+          { path: 'services/:serviceId', element: <Service /> },
+          { path: 'assessments', element: <Assessments /> },
+          { path: 'assessments/:assessmentId', element: <Assessment /> },
+          { path: 'proposals/:proposalId', element: <Proposal /> },
+        ],
+      },
+    ],
   },
 ]);
