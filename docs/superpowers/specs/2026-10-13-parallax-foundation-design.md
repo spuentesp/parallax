@@ -106,12 +106,56 @@ The MCP transport is selected by env: `PARALLAX_MCP_TRANSPORT=stdio|http-sse` (d
 
 The hackathon requires the project to make a runtime call to **Nebius Token Factory** or run on **Nebius AI Cloud** compute. Parallax satisfies both:
 
-- **Token Factory**: the Nemotron investigator (subproject 5) calls Token Factory's inference API for `nvidia/nvidia-nemotron-3-nano-30b-a3b` (default) and `nvidia/nvidia-nemotron-3-ultra` (heavy reasoning). The Nemotron SDK key is read from the `NEMOTRON_TOKEN` env var (already in the user's local `.env`).
+- **Token Factory**: the Nemotron investigator (subproject 5) calls Token Factory's inference API for `nvidia/Nemotron-3_5-Lightning` (worker role) and `nvidia/nemotron-3-super-120b-a12b` (planner role). The Nemotron SDK key is read from the `NEMOTRON_TOKEN` env var (already in the user's local `.env`).
 - **Nebius AI Cloud — DevPod**: the `api` and `mcp` containers run on a DevPod (subproject 6). The same binaries are used in dev mode locally.
-- **Nebius Serverless Jobs**: the **Nemotron investigator** (subproject 5) is the natural Serverless Job target. Each assessment's explanation step has bounded work (8 tool calls, 120s) and a clear input/output contract, which fits the Serverless Job model. Subproject 5 implements both a synchronous mode (for the demo) and a Serverless Job entrypoint; the Job mode is enabled in production via `NEMOTRON_RUN_MODE=serverless-job`.
-- **Nebius Serverless Endpoints**: not used in MVP. The Nemotron models are consumed via Token Factory directly, not via a hosted endpoint.
+- **Nebius Serverless Jobs**: the **ExploreAgent** (repo-load discovery) runs as a Serverless Job. It is bounded, stateless, and terminates after profiling a repo. The **QueryAgent** (conversational) runs as a dedicated process — it is stateful, streams to the UI, and handles multi-turn conversations.
+- **Nebius Serverless Endpoints**: not used in MVP.
 
-This split (Token Factory for the model, AI Cloud DevPod for the app, Serverless Jobs for the bounded investigator work) is intentional: it matches the track's encouragement to use multiple Nebius surfaces and makes the architecture legible in the submission video.
+### 2.6 Agent architecture (LangGraph + LangSmith)
+
+Parallax is a **conversational architectural intelligence center**. Users ask questions like *"we're adding a customer sales service — do we already have microservices that do that?"* and receive curated topology graphs with evidence.
+
+**Two LangGraph agents (TypeScript):**
+
+| Agent | Trigger | Process | Output |
+|---|---|---|---|
+| **QueryAgent** | User question in the chat UI | Dedicated process (stateful, streaming) | TopologyView + natural language answer + evidence |
+| **ExploreAgent** | New repo loaded to the workspace | Nebius Serverless Job (bounded, stateless) | RepoProfile (services, entry points, contracts, key symbols) |
+
+**QueryAgent graph:**
+
+```
+[question] → [plan] → [query_lain] → [analyze] → [curate] → [visualize] → [respond]
+                  ↑                      ↓ (need more)
+                  └──────────────────────┘
+```
+
+- `plan` — Nemotron Super decomposes the question into lain queries
+- `query_lain` — executes queries via LainAdapter (search_org, list_services, get_service, get_blast_radius, find_anchors, diff_contracts)
+- `analyze` — Nemotron Lightning interprets results, decides if more exploration is needed
+- `curate` — filters to what matters: top-K nodes by relevance, fan-out threshold for edges, focus by service/symbol mentioned in the question
+- `visualize` — generates a `TopologyView` (curated nodes + edges)
+- `respond` — natural language answer + TopologyView + evidence refs
+
+**State (LangGraph checkpointer on SQLite):**
+```typescript
+interface AgentState {
+  question: string;
+  discovered: { services: []; symbols: []; contracts: [] };
+  budget: { toolCalls: 8; tokens: 50000; timeMs: 120000 };
+  evidence: EvidenceRef[];
+  topology: TopologyView;
+}
+```
+
+**ExploreAgent graph (runs on repo load):**
+```
+[repo] → [discover] → [profile] → [index] → [RepoProfile]
+```
+
+**LangSmith tracing:** every Nemotron call is traced (model, latency, tokens, cost, tool calls). This provides observability for the hackathon demo and satisfies the Technological Implementation criterion (25% of judging). The `model_calls` table in SQLite provides the durable audit trail; LangSmith provides the visual debugging.
+
+**Curation:** the agent decides case-by-case which nodes/edges to include. For ExploreAgent, exploratory models run when repos are loaded to discover architecture patterns.
 
 ---
 
