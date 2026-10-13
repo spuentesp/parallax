@@ -35,7 +35,9 @@ describe('lain-adapter plugin', () => {
       lainAdapter: 'real',
       lainUrl: 'http://lain.invalid/mcp',
     });
-    await expect(app.register(lainAdapterPlugin)).rejects.toThrow(/LainUnavailable/);
+    await expect(app.register(lainAdapterPlugin)).rejects.toMatchObject({
+      code: 'LainUnavailable',
+    });
     fetchSpy.mockRestore();
     await app.close();
   });
