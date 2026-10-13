@@ -1,0 +1,31 @@
+{
+  "name": "parallax",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Architectural intelligence center built on lain",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24.21.0",
+    "pnpm": ">=12.11.0"
+  },
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "typecheck": "pnpm -r --parallel run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "pnpm -r --filter=!./packages/shared run build",
+    "smoke": "pnpm --filter @parallax/api run smoke",
+    "dev:api": "pnpm --filter @parallax/api dev",
+    "dev:web": "pnpm --filter @parallax/web dev",
+    "dev:mcp": "pnpm --filter @parallax/mcp dev"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.4"
+  }
+}
