@@ -51,7 +51,7 @@ export interface QueryAgentDeps {
 
 export function buildQueryAgent(deps: QueryAgentDeps) {
   const graph = new StateGraph(AgentState)
-    .addNode('plan', async (state) => {
+    .addNode('planner', async (state) => {
       const resp = await deps.nemotron.complete(
         [
           {
@@ -140,7 +140,8 @@ export function buildQueryAgent(deps: QueryAgentDeps) {
       answer: state.answer ?? 'No pude responder la pregunta.',
       step: (state.step ?? 0) + 1,
     }))
-    .addEdge('plan', 'query_lain')
+    .addEdge('__start__', 'planner')
+    .addEdge('planner', 'query_lain')
     .addEdge('query_lain', 'analyze')
     .addEdge('analyze', 'curate')
     .addEdge('curate', 'respond');

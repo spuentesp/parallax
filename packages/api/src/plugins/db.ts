@@ -20,13 +20,13 @@ declare module 'fastify' {
 
 export default fp(
   async (fastify) => {
-    const dbPath = resolve(fastify.config.databasePath);
+    const dbPath = resolve(fastify.config?.databasePath ?? "./data/parallax.db");
     mkdirSync(dirname(dbPath), { recursive: true });
     const sqlite = new Database(dbPath);
     sqlite.pragma('journal_mode = WAL');
     sqlite.pragma('foreign_keys = ON');
     sqlite.pragma('busy_timeout = 5000');
-    runMigrations(sqlite, resolve(import.meta.dirname, '../../drizzle'));
+    runMigrations(sqlite, resolve(process.cwd(), 'drizzle'));
 
     const db = drizzle(sqlite, { schema });
     fastify.decorate('db', db);

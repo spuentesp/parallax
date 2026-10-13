@@ -39,7 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     lainUrl: env.LAIN_URL,
     mcpTransport: env.PARALLAX_MCP_TRANSPORT,
     authTokens,
-    nemotronToken: env.NEMOTRON_TOKEN,
+    nemotronToken: env.NEMOTRON_TOKEN ?? env.NEBIUS_TOKEN,
     webBundlePath: env.WEB_BUNDLE_PATH,
   });
   if (!parsed.success) {

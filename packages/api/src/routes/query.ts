@@ -1,3 +1,4 @@
+import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { NemotronProvider } from '../agent/nemotron.js';
@@ -30,7 +31,7 @@ const QueryResponse = z.object({
   evidence: z.array(z.unknown()),
 });
 
-export const queryRoutes: FastifyPluginAsync = async (app) => {
+export const queryRoutes = fp(async (app: Parameters<Parameters<typeof fp>[0]>[0]) => {
   app.post(
     '/api/query',
     {
@@ -62,4 +63,4 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       return result;
     },
   );
-};
+}, { name: 'query' });
