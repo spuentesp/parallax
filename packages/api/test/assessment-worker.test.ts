@@ -6,7 +6,6 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import * as schema from '../src/db/schema.js';
-import { createLainMock } from '../src/lain-adapter/mock.js';
 import { AssessmentWorker } from '../src/worker/assessment-worker.js';
 import { canTransition, computeInputDigest } from '../src/worker/state.js';
 
@@ -27,7 +26,7 @@ describe('AssessmentWorker', () => {
     dir = mkdtempSync(join(tmpdir(), 'parallax-worker-'));
     db = makeDb(dir);
     await db.insert(schema.org).values({ id: 'org_demo', name: 'Demo', createdAt: Date.now() });
-    worker = new AssessmentWorker(db, createLainMock());
+    worker = new AssessmentWorker(db);
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
@@ -121,7 +120,7 @@ describe('AssessmentWorker', () => {
     });
     await worker.transition(assessment.id, 'SNAPSHOTTING');
     // Simulate restart: create a new worker on the same db
-    const worker2 = new AssessmentWorker(db, createLainMock());
+    const worker2 = new AssessmentWorker(db);
     const recovered = await worker2.recover();
     expect(recovered).toContain(assessment.id);
     const after = await worker2.get(assessment.id);

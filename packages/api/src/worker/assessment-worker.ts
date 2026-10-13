@@ -6,7 +6,7 @@ import type { AssessmentId, OrgId } from '@parallax/shared/domain';
 import { desc, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
-import type { LainAdapter } from '../lain-adapter/types.js';
+
 import {
   type AssessmentEvent,
   type AssessmentRecord,
@@ -35,9 +35,8 @@ export class AssessmentWorker {
   private readonly db: Db;
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
 
-  constructor(db: Db, lain: LainAdapter) {
+  constructor(db: Db) {
     this.db = db;
-    this.lain = lain;
   }
 
   // P INV 4: same input_digest → same assessment, no duplicate.

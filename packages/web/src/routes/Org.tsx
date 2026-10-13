@@ -27,20 +27,34 @@ export function Org(): React.ReactElement {
   const handleSend = (text: string) => {
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setLoading(true);
-    // In subproject 5, this calls the QueryAgent via the API.
-    // For now, return a static response with the sample topology.
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: `Analizando "${text}"… Encontré 4 servicios en la organización. La topología muestra orders como servicio central, con billing y reports como consumidores. La visualización adjunta muestra las relaciones de datos (customer_id, created_at, invoice_id).`,
-          topology: SAMPLE_TOPOLOGY,
-        },
-      ]);
-      setTopology(SAMPLE_TOPOLOGY);
-      setLoading(false);
-    }, 1000);
+    // Call the QueryAgent API
+    fetch('/api/query', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${localStorage.getItem('parallax_token') ?? ''}`,
+      },
+      body: JSON.stringify({ question: text, orgId: orgId ?? 'default' }),
+    })
+      .then((r) => r.json())
+      .then((data: { answer: string; topology?: unknown }) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: data.answer,
+            topology: data.topology as { nodes: unknown[]; edges: unknown[] },
+          },
+        ]);
+        if (data.topology) setTopology(data.topology as TopologyViewData);
+      })
+      .catch(() => {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: 'Error al consultar el agente. Intenta de nuevo.' },
+        ]);
+      })
+      .finally(() => setLoading(false));
   };
 
   return (
