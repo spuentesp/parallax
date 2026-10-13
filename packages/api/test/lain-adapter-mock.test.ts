@@ -31,15 +31,15 @@ describe('LainAdapter mock', () => {
   it('prepareSnapshot then getSnapshot transitions pending → ready', async () => {
     const m = createLainMock();
     const prep = await m.prepareSnapshot({ repos: { orders: 'b5bf29a' } });
-    expect(prep.status).toBe('pending');
+    expect(prep.state).toBe('pending');
     await new Promise((r) => setTimeout(r, 150));
-    const got = await m.getSnapshot({ snapshotId: prep.snapshotId });
-    expect(got.status).toBe('ready');
+    const got = await m.getSnapshot({ snapshot: prep.snapshot });
+    expect(got.state).toBe('ready');
   });
 
   it('diffContracts on s1-remove-customer-id returns FieldRemoved', async () => {
     const m = createLainMock();
-    const r = await m.diffContracts({ baseId: 'b', headId: 'h' });
+    const r = await m.diffContracts({ base: 'b', head: 'h' });
     expect(r.changes.some((c) => c.kind === 'FieldRemoved' && c.field === 'customer_id')).toBe(
       true,
     );
@@ -47,13 +47,13 @@ describe('LainAdapter mock', () => {
 
   it('traceImpact returns findings with classification', async () => {
     const m = createLainMock();
-    const r = await m.traceImpact({ snapshotId: 'snap_head_s1' });
+    const r = await m.traceImpact({ snapshot: 'snap_head_s1', from: { field: 'customer_id' } });
     expect(r.findings[0]?.classification).toBe('Verified');
   });
 
   it('getCoverage surfaces omitted repos with cause', async () => {
     const m = createLainMock();
-    const r = await m.getCoverage({ snapshotId: 's' });
+    const r = await m.getCoverage({ snapshot: 's' });
     expect(r.omitted.some((o) => o.repo === 'reports')).toBe(true);
   });
 

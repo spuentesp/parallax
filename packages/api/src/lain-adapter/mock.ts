@@ -30,8 +30,8 @@ import { getLainMockCalls, recordMockCall, resetLainMock } from './record.js';
 import type { LainAdapter } from './types.js';
 
 interface PendingSnapshot {
-  snapshotId: string;
-  status: 'pending' | 'ready' | 'failed';
+  snapshot: string;
+  state: 'pending' | 'ready' | 'failed';
   readyAt: number;
   manifestDigest: string;
   configHash?: string;
@@ -41,9 +41,9 @@ interface PendingSnapshot {
 const snapshots = new Map<string, PendingSnapshot>();
 let snapshotCounter = 0;
 
-function pickScenario(snapshotId: string | undefined) {
-  if (!snapshotId) return s1RemoveCustomerId;
-  if (snapshotId.includes('s2')) return s2AddCurrency;
+function pickScenario(snapshot: string | undefined) {
+  if (!snapshot) return s1RemoveCustomerId;
+  if (snapshot.includes('s2')) return s2AddCurrency;
   return s1RemoveCustomerId;
 }
 
@@ -85,34 +85,34 @@ export function createLainMock(): LainAdapter {
       const id = `snap_${++snapshotCounter}_${Date.now().toString(36)}`;
       const manifestDigest = `digest_${id}`;
       const pending: PendingSnapshot = {
-        snapshotId: id,
-        status: 'pending',
+        snapshot: id,
+        state: 'pending',
         readyAt: Date.now() + 100,
         manifestDigest,
         analyzerVersion,
       };
       if (req.configHash !== undefined) pending.configHash = req.configHash;
       snapshots.set(id, pending);
-      return { snapshotId: id, status: 'pending', manifestDigest };
+      return { snapshot: id, state: 'pending' as const };
     },
 
     async getSnapshot(req: GetSnapshotArgs): Promise<GetSnapshotResponse> {
       recordMockCall({ tool: 'get_snapshot', args: req });
-      const s = snapshots.get(req.snapshotId);
+      const s = snapshots.get(req.snapshot);
       if (!s) {
         throw LainCallError.parse({
           code: 'SnapshotNotReady',
           message: 'unknown snapshot',
-          snapshotId: req.snapshotId,
+          snapshot: req.snapshot,
         });
       }
       if (Date.now() < s.readyAt) {
-        return { snapshotId: s.snapshotId, status: 'pending' };
+        return { snapshot: s.snapshot, state: 'pending' };
       }
-      s.status = 'ready';
+      s.state = 'ready';
       return {
-        snapshotId: s.snapshotId,
-        status: 'ready',
+        snapshot: s.snapshot,
+        state: 'ready',
         analyzerVersion: s.analyzerVersion,
         configHash: s.configHash,
         manifestDigest: s.manifestDigest,
@@ -121,17 +121,17 @@ export function createLainMock(): LainAdapter {
 
     async diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse> {
       recordMockCall({ tool: 'diff_contracts', args: req });
-      return pickScenario(req.headId).diffContracts;
+      return pickScenario(req.head).diffContracts;
     },
 
     async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {
       recordMockCall({ tool: 'trace_impact', args: req });
-      return pickScenario(req.snapshotId).traceImpact;
+      return pickScenario(req.snapshot).traceImpact;
     },
 
     async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {
       recordMockCall({ tool: 'get_coverage', args: req });
-      return pickScenario(req.snapshotId).coverage;
+      return pickScenario(req.snapshot).coverage;
     },
 
     async resolveEvidence(req: ResolveEvidenceArgs): Promise<ResolveEvidenceResponse> {

@@ -200,7 +200,7 @@ export type TraceImpactArgs = z.infer<typeof TraceImpactArgs>;
 export type TraceImpactResponse = z.infer<typeof TraceImpactResponse>;
 
 // 7. get_coverage
-export const GetCoverageArgs = z.object({ snapshotId: z.string().min(1) });
+export const GetCoverageArgs = z.object({ snapshot: z.string().min(1) });
 export const GetCoverageResponse = z.object({
   reviewed: z.array(z.string().min(1)),
   omitted: z.array(z.object({ repo: z.string().min(1), cause: z.string().min(1) })),

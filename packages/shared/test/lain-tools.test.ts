@@ -88,9 +88,7 @@ describe('lain tool schemas', () => {
 
   it('GetSnapshot: status pending|ready|failed', () => {
     expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'ready' }).state).toBe('ready');
-    expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'pending' }).state).toBe(
-      'pending',
-    );
+    expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'pending' }).state).toBe('pending');
     expect(GetSnapshotResponse.parse({ snapshot: 's1', state: 'failed' }).state).toBe('failed');
     expect(() => GetSnapshotResponse.parse({ snapshot: 's1', status: 'oops' })).toThrow();
   });

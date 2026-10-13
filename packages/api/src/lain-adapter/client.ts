@@ -41,20 +41,6 @@ interface JsonRpcResponse {
   error?: { code: number; message: string; data?: unknown };
 }
 
-interface LainEnvelope {
-  structuredContent?: unknown;
-  text?: string;
-  apiVersion?: string;
-  analyzerVersion?: string;
-  snapshot?: { id: string; reproducible: boolean; view: string };
-  cursor?: string | null;
-  limit?: number;
-  cap?: number;
-  truncated?: boolean;
-  data?: unknown;
-  error?: unknown;
-}
-
 function _pickRateLimit(headers: Headers): {
   remainingRequests?: number;
   remainingTokens?: number;
@@ -155,11 +141,13 @@ export class RealLainAdapter implements LainAdapter {
         // Real lain wraps the payload in { _meta, content: [{ text: "<JSON>" }] }.
         // The `text` field is a JSON string with analyzer_version, api_version,
         // data, meta. We return `data` (the domain payload) plus `_meta`.
-        const envelope = body.result as {
-          _meta?: Record<string, unknown>;
-          content?: Array<{ text?: string }>;
-          structuredContent?: Record<string, unknown>;
-        } | undefined;
+        const envelope = body.result as
+          | {
+              _meta?: Record<string, unknown>;
+              content?: Array<{ text?: string }>;
+              structuredContent?: Record<string, unknown>;
+            }
+          | undefined;
         if (!envelope) {
           throw LainCallError.parse({
             code: 'LainUnavailable',
