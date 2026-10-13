@@ -2,13 +2,19 @@ import fp from 'fastify-plugin';
 
 const EXEMPT_PATHS = new Set(['/health']);
 
+function isExempt(url: string): boolean {
+  if (EXEMPT_PATHS.has(url)) return true;
+  // Static web bundle is public; everything else requires a bearer token.
+  return url === '/app' || url.startsWith('/app/');
+}
+
 export default fp(
   async (fastify) => {
     const tokensByValue = new Map(fastify.config.authTokens.map((t) => [t.token, t]));
 
     fastify.addHook('onRequest', async (request, reply) => {
       const url = request.routeOptions?.url ?? request.url;
-      if (EXEMPT_PATHS.has(url)) return;
+      if (isExempt(url)) return;
 
       const header = request.headers.authorization;
       if (!header || !header.startsWith('Bearer ')) {
