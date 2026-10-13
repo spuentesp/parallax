@@ -32,7 +32,9 @@ export const orgsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async () => {
-      throw notImpl('POST /orgs lands in subproject 2 (OrgManifest resolution + repos.yaml onboarding)');
+      throw notImpl(
+        'POST /orgs lands in subproject 2 (OrgManifest resolution + repos.yaml onboarding)',
+      );
     },
   );
 

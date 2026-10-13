@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import Fastify from 'fastify';
-import authPlugin from '../src/plugins/auth.js';
+import { describe, expect, it } from 'vitest';
 import type { AppConfig } from '../src/config.js';
+import authPlugin from '../src/plugins/auth.js';
 
 const cfg: AppConfig = {
   port: 8080,

@@ -36,7 +36,10 @@ export function buildMcpServer(): McpServer {
   const server = new McpServer({ name: 'parallax', version: '0.1.0' });
   for (const t of productTools) {
     const schema = inputSchemas[t.name] ?? z.object({});
-    server.tool(t.name, t.description, schema.shape ?? {}, async () => {
+    // MCP SDK's server.tool() expects a record of Zod schemas (one per field).
+    // Build it from the schema's shape when possible; fall back to empty.
+    const shape: Record<string, z.ZodTypeAny> = schema instanceof z.ZodObject ? schema.shape : {};
+    server.tool(t.name, t.description, shape, async () => {
       const err = {
         code: 'ApiEndpointNotImplemented',
         message: `${t.name} is registered but lands in a later subproject.`,

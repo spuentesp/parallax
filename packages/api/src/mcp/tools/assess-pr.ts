@@ -31,5 +31,4 @@ export const AssessPrArgs = z.union([
 ]);
 export type AssessPrArgs = z.infer<typeof AssessPrArgs>;
 
-export const assessPrNotImpl = () =>
-  apiNotImplemented('parallax_assess_pr lands in subproject 3');
+export const assessPrNotImpl = () => apiNotImplemented('parallax_assess_pr lands in subproject 3');

@@ -2,8 +2,7 @@ import type * as React from 'react';
 
 export function ServiceMap(): React.ReactElement {
   return (
-    <div
-      role="region"
+    <section
       aria-label="Service map"
       style={{
         minHeight: 320,
@@ -15,6 +14,6 @@ export function ServiceMap(): React.ReactElement {
       }}
     >
       Mapa de servicios (subproject 4)
-    </div>
+    </section>
   );
 }

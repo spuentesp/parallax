@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 
 export function AppShell(): ReactNode {
   return (

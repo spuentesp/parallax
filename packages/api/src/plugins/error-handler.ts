@@ -1,6 +1,6 @@
+import { randomBytes } from 'node:crypto';
 import fp from 'fastify-plugin';
 import { ZodError } from 'zod';
-import { randomBytes } from 'node:crypto';
 import { LainCallError } from '../lain-adapter/errors.js';
 
 const lainCodeToStatus: Record<string, number> = {

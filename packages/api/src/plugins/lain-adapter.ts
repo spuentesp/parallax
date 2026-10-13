@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin';
-import { createLainMock } from '../lain-adapter/mock.js';
 import { createLainClient } from '../lain-adapter/client.js';
+import { createLainMock } from '../lain-adapter/mock.js';
 
 export default fp(
   async (fastify) => {

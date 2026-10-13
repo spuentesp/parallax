@@ -8,9 +8,7 @@ export function Assessment(): React.ReactElement {
   if (!assessmentId) return <p>Assessment id missing</p>;
   return (
     <section>
-      <CoverageBadge
-        coverage={{ reviewed: [], omitted: [], refsUnresolved: [], truncated: [] }}
-      />
+      <CoverageBadge coverage={{ reviewed: [], omitted: [], refsUnresolved: [], truncated: [] }} />
       <AssessmentView assessmentId={assessmentId} />
     </section>
   );

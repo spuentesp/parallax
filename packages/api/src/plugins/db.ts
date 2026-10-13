@@ -1,10 +1,10 @@
-import Database from 'better-sqlite3';
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import Database from 'better-sqlite3';
+import { type BetterSQLite3Database, drizzle } from 'drizzle-orm/better-sqlite3';
 import fp from 'fastify-plugin';
-import * as schema from '../db/schema.js';
 import { runMigrations } from '../db/migrate.js';
+import * as schema from '../db/schema.js';
 
 declare module 'fastify' {
   interface FastifyInstance {

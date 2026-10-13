@@ -38,3 +38,13 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Build web
+        run: pnpm --filter @parallax/web build
+
+      - name: Smoke
+        run: pnpm smoke
+        env:
+          PARALLAX_TOKENS: '[{"token":"smoke_t","orgId":"org_smoke","scopes":["read","write","publish"]}]'
+          LAIN_ADAPTER: mock
+          PARALLAX_MCP_TRANSPORT: http-sse

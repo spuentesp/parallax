@@ -17,24 +17,33 @@ export default fp(
       if (isExempt(url)) return;
 
       const header = request.headers.authorization;
-      if (!header || !header.startsWith('Bearer ')) {
-        reply
-          .code(401)
-          .send({ type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'missing bearer token' });
+      if (!header?.startsWith('Bearer ')) {
+        reply.code(401).send({
+          type: 'about:blank',
+          title: 'Unauthorized',
+          status: 401,
+          detail: 'missing bearer token',
+        });
         return reply;
       }
       const token = header.slice('Bearer '.length).trim();
       if (token.length === 0) {
-        reply
-          .code(401)
-          .send({ type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'empty bearer token' });
+        reply.code(401).send({
+          type: 'about:blank',
+          title: 'Unauthorized',
+          status: 401,
+          detail: 'empty bearer token',
+        });
         return reply;
       }
       const found = tokensByValue.get(token);
       if (!found) {
-        reply
-          .code(401)
-          .send({ type: 'about:blank', title: 'Unauthorized', status: 401, detail: 'unknown token' });
+        reply.code(401).send({
+          type: 'about:blank',
+          title: 'Unauthorized',
+          status: 401,
+          detail: 'unknown token',
+        });
         return reply;
       }
       request.authToken = found;
@@ -44,9 +53,12 @@ export default fp(
         required &&
         !required.every((s) => found.scopes.includes(s as (typeof found.scopes)[number]))
       ) {
-        reply
-          .code(403)
-          .send({ type: 'about:blank', title: 'Forbidden', status: 403, detail: 'insufficient scope' });
+        reply.code(403).send({
+          type: 'about:blank',
+          title: 'Forbidden',
+          status: 403,
+          detail: 'insufficient scope',
+        });
         return reply;
       }
     });

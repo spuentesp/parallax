@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { Orgs } from '../routes/Orgs.js';
-import { Org } from '../routes/Org.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Assessment } from '../routes/Assessment.js';
+import { Org } from '../routes/Org.js';
+import { Orgs } from '../routes/Orgs.js';
 
 afterEach(() => {
   cleanup();
@@ -41,10 +41,7 @@ describe('routes render in isolation', () => {
     render(
       <MemoryRouter initialEntries={['/orgs/acme/assessments/a_1']}>
         <Routes>
-          <Route
-            path="/orgs/:orgId/assessments/:assessmentId"
-            element={<Assessment />}
-          />
+          <Route path="/orgs/:orgId/assessments/:assessmentId" element={<Assessment />} />
         </Routes>
       </MemoryRouter>,
     );

@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
-import { ServiceMap } from '../components/ServiceMap.js';
-import { EvidencePanel } from '../components/EvidencePanel.js';
+import { afterEach, describe, expect, it } from 'vitest';
 import { AssessmentView } from '../components/AssessmentView.js';
+import { EvidencePanel } from '../components/EvidencePanel.js';
+import { ServiceMap } from '../components/ServiceMap.js';
 
 afterEach(() => cleanup());
 

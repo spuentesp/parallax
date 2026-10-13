@@ -1,10 +1,6 @@
 import type * as React from 'react';
 
-export function AssessmentView({
-  assessmentId,
-}: {
-  assessmentId: string;
-}): React.ReactElement {
+export function AssessmentView({ assessmentId }: { assessmentId: string }): React.ReactElement {
   return (
     <article>
       <h2>Assessment {assessmentId}</h2>

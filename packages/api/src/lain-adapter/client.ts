@@ -9,7 +9,9 @@ export interface LainClientConfig {
 
 class NotImplementedError extends Error {
   constructor() {
-    super('LainAdapter real client is not implemented in subproject 1; subproject 2 will fill it in');
+    super(
+      'LainAdapter real client is not implemented in subproject 1; subproject 2 will fill it in',
+    );
     this.name = 'NotImplementedError';
   }
 }

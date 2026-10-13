@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type Database from 'better-sqlite3';
 
 export function runMigrations(db: Database.Database, migrationsDir: string): void {
   const init = readFileSync(join(migrationsDir, '0000_init.sql'), 'utf8');

@@ -1,6 +1,6 @@
-import type { FastifyPluginAsync } from 'fastify';
-import { existsSync, statSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, normalize, resolve, sep } from 'node:path';
+import type { FastifyPluginAsync } from 'fastify';
 
 const DOC = 'https://github.com/spuentesp/parallax#run-dev-mode';
 
@@ -11,7 +11,8 @@ export const appRoutes: FastifyPluginAsync = async (fastify) => {
     if (!existsSync(root) || !statSync(root).isDirectory()) {
       return reply.code(404).send({
         code: 'WebBundleNotBuilt',
-        message: 'web bundle not built; run `pnpm --filter @parallax/web build` and restart the api',
+        message:
+          'web bundle not built; run `pnpm --filter @parallax/web build` and restart the api',
         doc: DOC,
       });
     }
@@ -20,9 +21,7 @@ export const appRoutes: FastifyPluginAsync = async (fastify) => {
     const requested = normalize(wildcard).replace(/^[/\\]+/, '');
     const abs = resolve(root, requested);
     if (!abs.startsWith(root + sep) && abs !== root) {
-      return reply
-        .code(400)
-        .send({ type: 'about:blank', title: 'Bad Request', status: 400 });
+      return reply.code(400).send({ type: 'about:blank', title: 'Bad Request', status: 400 });
     }
     const filePath = join(root, requested || 'index.html');
     // SPA fallback: if the exact file doesn't exist, serve index.html.
@@ -67,8 +66,6 @@ export const appRoutes: FastifyPluginAsync = async (fastify) => {
         doc: DOC,
       });
     }
-    return reply
-      .code(404)
-      .send({ type: 'about:blank', title: 'Not Found', status: 404 });
+    return reply.code(404).send({ type: 'about:blank', title: 'Not Found', status: 404 });
   });
 };

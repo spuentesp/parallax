@@ -4,18 +4,18 @@ import {
   validatorCompiler,
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
+import type { AppConfig } from './config.js';
 import authPlugin from './plugins/auth.js';
 import dbPlugin from './plugins/db.js';
 import errorHandler from './plugins/error-handler.js';
 import lainAdapterPlugin from './plugins/lain-adapter.js';
-import { healthRoutes } from './routes/health.js';
-import { orgsRoutes } from './routes/orgs.js';
+import { appRoutes } from './routes/app.js';
 import { assessmentRoutes } from './routes/assessments.js';
+import { healthRoutes } from './routes/health.js';
+import { mcpRoutes } from './routes/mcp.js';
+import { orgsRoutes } from './routes/orgs.js';
 import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
-import { mcpRoutes } from './routes/mcp.js';
-import { appRoutes } from './routes/app.js';
-import type { AppConfig } from './config.js';
 import './plugins/db.js';
 
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {

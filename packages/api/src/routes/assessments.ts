@@ -1,6 +1,6 @@
+import { AssessmentInput } from '@parallax/shared/domain';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { AssessmentInput } from '@parallax/shared/domain';
 import { LainCallError } from '../lain-adapter/errors.js';
 
 const SPEC_DOC =

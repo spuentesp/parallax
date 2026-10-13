@@ -1,8 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
-import lainAdapterPlugin from '../src/plugins/lain-adapter.js';
-import { resetLainMock } from '../src/lain-adapter/mock.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppConfig } from '../src/config.js';
+import { resetLainMock } from '../src/lain-adapter/mock.js';
+import lainAdapterPlugin from '../src/plugins/lain-adapter.js';
 
 const baseConfig: AppConfig = {
   port: 8080,
@@ -28,9 +28,7 @@ describe('lain-adapter plugin', () => {
   });
 
   it('probes LAIN_URL when LAIN_ADAPTER=real (Review Focus #2)', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockRejectedValueOnce(new Error('ECONNREFUSED'));
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('ECONNREFUSED'));
     const app = Fastify();
     app.decorate('config', {
       ...baseConfig,

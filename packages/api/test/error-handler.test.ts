@@ -1,8 +1,8 @@
+import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import Fastify from 'fastify';
-import errorHandler from '../src/plugins/error-handler.js';
 import { LainCallError } from '../src/lain-adapter/errors.js';
+import errorHandler from '../src/plugins/error-handler.js';
 
 async function makeApp() {
   const app = Fastify();

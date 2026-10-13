@@ -1,5 +1,5 @@
-import type * as React from 'react';
 import type { Coverage } from '@parallax/shared/domain';
+import type * as React from 'react';
 
 export function CoverageBadge({ coverage }: { coverage: Coverage }): React.ReactElement {
   const reviewed = coverage.reviewed.length;

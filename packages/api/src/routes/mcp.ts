@@ -6,7 +6,7 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
 
   const server = buildMcpServer();
   const transport = buildTransport();
-  await server.connect(transport);
+  await server.connect(transport as Parameters<typeof server.connect>[0]);
 
   app.post('/mcp', async (req, reply) => {
     await transport.handleRequest(req.raw, reply.raw, req.body);
