@@ -12,6 +12,8 @@
 - **License:** MIT.
 - **Public repo target:** `github.com/spuentesp/parallax` (to be created; the local mirror at `/data/agents/orca/parallax` is the source of truth).
 
+**Agent stack:** LangGraph (TypeScript) for agentic flows, LangSmith for tracing (hackathon key provided), Nemotron via Nebius Token Factory. See §2.6.
+
 ---
 
 ## 1. Context and framing
