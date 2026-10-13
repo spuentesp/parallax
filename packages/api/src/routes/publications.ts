@@ -5,12 +5,9 @@ import { LainCallError } from '../lain-adapter/errors.js';
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
 
-const notImpl = (what: string) =>
-  LainCallError.parse({ code: 'NotImplemented', message: what, doc: SPEC_DOC });
-
 export const publicationRoutes: FastifyPluginAsync = async (app) => {
   app.post(
-    '/publications',
+    '/api/publications',
     {
       config: { scopes: ['publish'] },
       schema: {
@@ -18,7 +15,11 @@ export const publicationRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async () => {
-      throw notImpl('POST /publications lands in subproject 6 (outbox + GitHub reconciliation)');
+      throw LainCallError.parse({
+        code: 'NotImplemented',
+        message: 'POST /api/publications lands in subproject 6',
+        doc: SPEC_DOC,
+      });
     },
   );
 };

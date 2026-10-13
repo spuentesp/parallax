@@ -6,39 +6,44 @@ import { LainCallError } from '../lain-adapter/errors.js';
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
 
-const notImpl = (what: string) =>
-  LainCallError.parse({ code: 'NotImplemented', message: what, doc: SPEC_DOC });
+const notImpl = (msg: string) =>
+  LainCallError.parse({ code: 'NotImplemented', message: msg, doc: SPEC_DOC });
 
 export const assessmentRoutes: FastifyPluginAsync = async (app) => {
   app.post(
-    '/assessments',
+    '/api/assessments',
     {
       config: { scopes: ['write'] },
-      schema: {
-        body: AssessmentInput,
-        response: { 501: z.unknown() },
-      },
+      schema: { body: AssessmentInput },
     },
     async () => {
-      throw notImpl('POST /assessments lands in subproject 3 (AssessmentWorker state machine)');
+      throw notImpl('POST /api/assessments lands in subproject 3');
     },
   );
 
   app.get(
-    '/assessments/:id',
-    { config: { scopes: ['read'] }, schema: { params: z.object({ id: z.string().min(1) }) } },
+    '/api/assessments/:id',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
     async (req) => {
-      const id = (req.params as { id: string }).id;
-      throw notImpl(`GET /assessments/${id} lands in subproject 3`);
+      throw notImpl(
+        `GET /api/assessments/${(req.params as { id: string }).id} lands in subproject 3`,
+      );
     },
   );
 
   app.get(
-    '/assessments/:id/events',
-    { config: { scopes: ['read'] }, schema: { params: z.object({ id: z.string().min(1) }) } },
+    '/api/assessments/:id/events',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
     async (req) => {
-      const id = (req.params as { id: string }).id;
-      throw notImpl(`GET /assessments/${id}/events (SSE) lands in subproject 3`);
+      throw notImpl(
+        `GET /api/assessments/${(req.params as { id: string }).id}/events lands in subproject 3`,
+      );
     },
   );
 };

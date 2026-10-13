@@ -9,18 +9,12 @@ import * as schema from '../db/schema.js';
 declare module 'fastify' {
   interface FastifyInstance {
     db: BetterSQLite3Database<typeof schema>;
-    config: import('../config.js').AppConfig;
-    lain: import('../lain-adapter/types.js').LainAdapter;
-    authToken?: import('../config.js').AuthToken;
-  }
-  interface FastifyRequest {
-    authToken?: import('../config.js').AuthToken;
   }
 }
 
 export default fp(
   async (fastify) => {
-    const dbPath = resolve(fastify.config?.databasePath ?? "./data/parallax.db");
+    const dbPath = resolve(fastify.config.databasePath);
     mkdirSync(dirname(dbPath), { recursive: true });
     const sqlite = new Database(dbPath);
     sqlite.pragma('journal_mode = WAL');
@@ -30,9 +24,7 @@ export default fp(
 
     const db = drizzle(sqlite, { schema });
     fastify.decorate('db', db);
-    fastify.addHook('onClose', async () => {
-      sqlite.close();
-    });
+    fastify.addHook('onClose', async () => sqlite.close());
   },
   { name: 'db' },
 );

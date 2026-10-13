@@ -27,7 +27,7 @@ describe('buildApp', () => {
 
   it('boots all plugins and answers /health', async () => {
     const app = await buildApp(makeCfg());
-    const r = await app.inject({ method: 'GET', url: '/health' });
+    const r = await app.inject({ method: 'GET', url: '/api/health' });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe('ok');
     expect(r.json().lainAdapter).toBe('mock');
@@ -38,7 +38,7 @@ describe('buildApp', () => {
 
   it('rejects a protected route without a bearer token', async () => {
     const app = await buildApp(makeCfg());
-    const r = await app.inject({ method: 'GET', url: '/orgs' });
+    const r = await app.inject({ method: 'GET', url: '/api/orgs' });
     expect(r.statusCode).toBe(401);
     await app.close();
   });

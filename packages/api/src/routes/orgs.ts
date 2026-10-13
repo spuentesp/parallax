@@ -5,16 +5,12 @@ import { LainCallError } from '../lain-adapter/errors.js';
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
 
-const notImpl = (what: string) =>
-  LainCallError.parse({
-    code: 'NotImplemented',
-    message: what,
-    doc: SPEC_DOC,
-  });
+const notImpl = (msg: string) =>
+  LainCallError.parse({ code: 'NotImplemented', message: msg, doc: SPEC_DOC });
 
 export const orgsRoutes: FastifyPluginAsync = async (app) => {
   app.get(
-    '/orgs',
+    '/api/orgs',
     {
       config: { scopes: ['read'] },
       schema: { response: { 200: z.object({ orgs: z.array(z.unknown()) }) } },
@@ -23,30 +19,28 @@ export const orgsRoutes: FastifyPluginAsync = async (app) => {
   );
 
   app.post(
-    '/orgs',
+    '/api/orgs',
     {
       config: { scopes: ['write'] },
       schema: {
         body: z.object({ name: z.string().min(1), lainUrl: z.string().url().optional() }),
-        response: { 501: z.unknown() },
       },
     },
     async () => {
-      throw notImpl(
-        'POST /orgs lands in subproject 2 (OrgManifest resolution + repos.yaml onboarding)',
-      );
+      throw notImpl('POST /api/orgs lands in subproject 2');
     },
   );
 
   app.get(
-    '/orgs/:orgId',
+    '/api/orgs/:orgId',
     {
       config: { scopes: ['read'] },
       schema: { params: z.object({ orgId: z.string().min(1) }) },
     },
     async (req) => {
-      const orgId = (req.params as { orgId: string }).orgId;
-      throw notImpl(`GET /orgs/${orgId} lands in subproject 2`);
+      throw notImpl(
+        `GET /api/orgs/${(req.params as { orgId: string }).orgId} lands in subproject 2`,
+      );
     },
   );
 };

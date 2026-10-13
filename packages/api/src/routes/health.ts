@@ -3,8 +3,9 @@ import { z } from 'zod';
 
 export const healthRoutes: FastifyPluginAsync = async (app) => {
   app.get(
-    '/health',
+    '/api/health',
     {
+      config: { public: true },
       schema: {
         response: {
           200: z.object({

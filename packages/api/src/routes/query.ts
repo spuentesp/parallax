@@ -1,4 +1,3 @@
-import fp from 'fastify-plugin';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { NemotronProvider } from '../agent/nemotron.js';
@@ -12,13 +11,7 @@ const QueryRequest = z.object({
 const QueryResponse = z.object({
   answer: z.string(),
   topology: z.object({
-    nodes: z.array(
-      z.object({
-        id: z.string(),
-        label: z.string(),
-        kind: z.string(),
-      }),
-    ),
+    nodes: z.array(z.object({ id: z.string(), label: z.string(), kind: z.string() })),
     edges: z.array(
       z.object({
         source: z.string(),
@@ -31,18 +24,15 @@ const QueryResponse = z.object({
   evidence: z.array(z.unknown()),
 });
 
-export const queryRoutes = fp(async (app: Parameters<Parameters<typeof fp>[0]>[0]) => {
+export const queryRoutes: FastifyPluginAsync = async (app) => {
   app.post(
     '/api/query',
     {
       config: { scopes: ['read'] },
-      schema: {
-        body: QueryRequest,
-        response: { 200: QueryResponse },
-      },
+      schema: { body: QueryRequest, response: { 200: QueryResponse } },
     },
     async (req) => {
-      const { question } = req.body as { question: string; orgId: string };
+      const { question } = req.body as { question: string };
       const nemotronToken = app.config.nemotronToken;
       if (!nemotronToken) {
         return {
@@ -59,8 +49,7 @@ export const queryRoutes = fp(async (app: Parameters<Parameters<typeof fp>[0]>[0
         workerModel: 'nvidia/Nemotron-3_5-Lightning',
       });
 
-      const result = await runQuery({ nemotron, lain: app.lain }, question);
-      return result;
+      return runQuery({ nemotron, lain: app.lain }, question);
     },
   );
-}, { name: 'query' });
+};

@@ -1,11 +1,13 @@
 import fp from 'fastify-plugin';
 
-const EXEMPT_PATHS = new Set(['/health']);
-
-function isExempt(url: string): boolean {
-  if (EXEMPT_PATHS.has(url)) return true;
-  // Static web bundle is public; everything else requires a bearer token.
-  return url === '/app' || url.startsWith('/app/');
+declare module 'fastify' {
+  interface FastifyInstance {
+    config: import('../config.js').AppConfig;
+    lain: import('../lain-adapter/types.js').LainAdapter;
+  }
+  interface FastifyRequest {
+    authToken?: import('../config.js').AuthToken;
+  }
 }
 
 export default fp(
@@ -13,53 +15,43 @@ export default fp(
     const tokensByValue = new Map(fastify.config.authTokens.map((t) => [t.token, t]));
 
     fastify.addHook('onRequest', async (request, reply) => {
-      const url = request.routeOptions?.url ?? request.url;
-      if (isExempt(url)) return;
+      const routeConfig = request.routeOptions?.config as
+        | { public?: boolean; scopes?: string[] }
+        | undefined;
+      if (routeConfig?.public) return;
+      // Non-API, non-MCP routes are public (SPA, assets).
+      const url = request.url;
+      if (!url.startsWith('/api/') && !url.startsWith('/mcp')) return;
 
       const header = request.headers.authorization;
       if (!header?.startsWith('Bearer ')) {
-        reply.code(401).send({
+        return reply.code(401).send({
           type: 'about:blank',
           title: 'Unauthorized',
           status: 401,
           detail: 'missing bearer token',
         });
-        return reply;
       }
-      const token = header.slice('Bearer '.length).trim();
-      if (token.length === 0) {
-        reply.code(401).send({
-          type: 'about:blank',
-          title: 'Unauthorized',
-          status: 401,
-          detail: 'empty bearer token',
-        });
-        return reply;
-      }
+      const token = header.slice(7).trim();
       const found = tokensByValue.get(token);
       if (!found) {
-        reply.code(401).send({
+        return reply.code(401).send({
           type: 'about:blank',
           title: 'Unauthorized',
           status: 401,
           detail: 'unknown token',
         });
-        return reply;
       }
       request.authToken = found;
 
-      const required = (request.routeOptions?.config as { scopes?: string[] } | undefined)?.scopes;
-      if (
-        required &&
-        !required.every((s) => found.scopes.includes(s as (typeof found.scopes)[number]))
-      ) {
-        reply.code(403).send({
+      const required = routeConfig?.scopes;
+      if (required && !required.every((s) => found.scopes.includes(s as never))) {
+        return reply.code(403).send({
           type: 'about:blank',
           title: 'Forbidden',
           status: 403,
           detail: 'insufficient scope',
         });
-        return reply;
       }
     });
   },

@@ -26,7 +26,7 @@ describe('orgs routes', () => {
   const auth = { authorization: 'Bearer t' };
 
   it('GET /orgs returns 200 with empty list', async () => {
-    const r = await app.inject({ method: 'GET', url: '/orgs', headers: auth });
+    const r = await app.inject({ method: 'GET', url: '/api/orgs', headers: auth });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toEqual({ orgs: [] });
   });
@@ -34,7 +34,7 @@ describe('orgs routes', () => {
   it('POST /orgs returns 501 with NotImplemented + doc', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/orgs',
+      url: '/api/orgs',
       headers: auth,
       payload: { name: 'acme' },
     });
@@ -45,7 +45,7 @@ describe('orgs routes', () => {
   });
 
   it('GET /orgs/:id returns 501 with NotImplemented', async () => {
-    const r = await app.inject({ method: 'GET', url: '/orgs/abc', headers: auth });
+    const r = await app.inject({ method: 'GET', url: '/api/orgs/abc', headers: auth });
     expect(r.statusCode).toBe(501);
     expect(r.json().code).toBe('NotImplemented');
   });

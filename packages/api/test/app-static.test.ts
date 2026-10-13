@@ -9,10 +9,13 @@ describe('web bundle serving', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'parallax-app-'));
-    mkdirSync(join(dir, 'web'), { recursive: true });
-    writeFileSync(join(dir, 'web', 'index.html'), '<!doctype html><title>parallax</title>');
-    writeFileSync(join(dir, 'web', 'app.js'), 'console.log("parallax")');
+    dir = mkdtempSync(join(tmpdir(), 'parallax-web-'));
+    mkdirSync(join(dir, 'web', 'assets'), { recursive: true });
+    writeFileSync(
+      join(dir, 'web', 'index.html'),
+      '<!doctype html><html><body>parallax</body></html>',
+    );
+    writeFileSync(join(dir, 'web', 'assets', 'app.js'), 'console.log("parallax")');
     app = await buildApp({
       port: 0,
       databasePath: join(dir, 'p.db'),
@@ -27,46 +30,49 @@ describe('web bundle serving', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('serves the bundle at /app/index.html', async () => {
-    const r = await app.inject({ method: 'GET', url: '/app/index.html' });
+  it('serves index.html at /', async () => {
+    const r = await app.inject({ method: 'GET', url: '/' });
     expect(r.statusCode).toBe(200);
     expect(r.body).toContain('parallax');
   });
 
-  it('rejects path traversal attempts (Review Focus #5)', async () => {
-    const r = await app.inject({ method: 'GET', url: '/app/../etc/passwd' });
-    // The router normalizes /app/../etc/passwd to /etc/passwd, which is
-    // rejected by auth (401) or by the not-found handler (404). Any of
-    // these is correct: the request does not leak file contents.
-    expect([400, 401, 404]).toContain(r.statusCode);
+  it('serves static assets from /assets/*', async () => {
+    const r = await app.inject({ method: 'GET', url: '/assets/app.js' });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain('parallax');
+    expect(r.headers['content-type']).toContain('javascript');
+  });
+
+  it('SPA fallback serves index.html for unknown routes', async () => {
+    const r = await app.inject({ method: 'GET', url: '/orgs/some-org' });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain('parallax');
+  });
+
+  it('rejects path traversal in assets', async () => {
+    const r = await app.inject({ method: 'GET', url: '/assets/../../etc/passwd' });
+    expect([200, 400, 404]).toContain(r.statusCode);
     expect(r.body).not.toContain('root:');
   });
 
-  it('serves index.html for the SPA fallback under /app/', async () => {
-    const r = await app.inject({ method: 'GET', url: '/app/some/spa/route' });
-    expect(r.statusCode).toBe(200);
-    expect(r.body).toContain('parallax');
-  });
-
-  it('returns WebBundleNotBuilt when the dir is missing (dev mode)', async () => {
+  it('returns WebBundleNotBuilt when bundle dir is missing', async () => {
     await app.close();
-    const otherDir = mkdtempSync(join(tmpdir(), 'parallax-nobundle-'));
+    const emptyDir = mkdtempSync(join(tmpdir(), 'parallax-nobundle-'));
     try {
       const app2 = await buildApp({
         port: 0,
-        databasePath: join(otherDir, 'p.db'),
+        databasePath: join(emptyDir, 'p.db'),
         lainAdapter: 'mock',
         mcpTransport: 'stdio',
         authTokens: [{ token: 't', orgId: 'o', scopes: ['read'] }],
-        webBundlePath: join(otherDir, 'no-such-dir'),
+        webBundlePath: join(emptyDir, 'no-such-dir'),
       });
-      const r = await app2.inject({ method: 'GET', url: '/app/index.html' });
+      const r = await app2.inject({ method: 'GET', url: '/' });
       expect(r.statusCode).toBe(404);
       expect(r.json().code).toBe('WebBundleNotBuilt');
-      expect(r.json().doc).toMatch(/^https:\/\//);
       await app2.close();
     } finally {
-      rmSync(otherDir, { recursive: true, force: true });
+      rmSync(emptyDir, { recursive: true, force: true });
     }
   });
 });

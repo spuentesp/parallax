@@ -13,41 +13,22 @@ const lainCodeToStatus: Record<string, number> = {
   IncompatibleView: 400,
 };
 
-function traceId(): string {
-  return randomBytes(8).toString('hex');
-}
-
 export default fp(
   async (fastify) => {
     fastify.setErrorHandler((err, req, reply) => {
-      const tid = traceId();
+      const tid = randomBytes(8).toString('hex');
       req.log.error({ err, traceId: tid }, 'request error');
 
-      if (err instanceof ZodError) {
+      if (err instanceof ZodError || (err as { validation?: unknown }).validation) {
         return reply.code(400).send({
           type: 'about:blank',
           title: 'Bad Request',
           status: 400,
           detail: 'request validation failed',
-          errors: err.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-          traceId: tid,
-        });
-      }
-      if ((err as { validation?: unknown }).validation) {
-        return reply.code(400).send({
-          type: 'about:blank',
-          title: 'Bad Request',
-          status: 400,
-          detail: (err as Error).message,
-          traceId: tid,
-        });
-      }
-      if (err instanceof SyntaxError && 'body' in (err as object)) {
-        return reply.code(400).send({
-          type: 'about:blank',
-          title: 'Bad Request',
-          status: 400,
-          detail: 'malformed JSON body (Review Focus #4)',
+          errors:
+            err instanceof ZodError
+              ? err.issues.map((i) => ({ path: i.path.join('.'), message: i.message }))
+              : [(err as Error).message],
           traceId: tid,
         });
       }

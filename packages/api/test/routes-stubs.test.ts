@@ -28,7 +28,7 @@ describe('stub routes (assessments, proposals, publications)', () => {
   it('POST /assessments with valid input returns 501 with NotImplemented', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/assessments',
+      url: '/api/assessments',
       headers: auth,
       payload: { prUrl: 'https://github.com/org/repo/pull/1', orgId: 'o' },
     });
@@ -39,7 +39,7 @@ describe('stub routes (assessments, proposals, publications)', () => {
   it('POST /assessments with invalid body returns 400 (Problem Details)', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/assessments',
+      url: '/api/assessments',
       headers: auth,
       payload: {},
     });
@@ -47,19 +47,23 @@ describe('stub routes (assessments, proposals, publications)', () => {
   });
 
   it('GET /assessments/:id returns 501', async () => {
-    const r = await app.inject({ method: 'GET', url: '/assessments/a_1', headers: auth });
+    const r = await app.inject({ method: 'GET', url: '/api/assessments/a_1', headers: auth });
     expect(r.statusCode).toBe(501);
   });
 
   it('GET /assessments/:id/events returns 501', async () => {
-    const r = await app.inject({ method: 'GET', url: '/assessments/a_1/events', headers: auth });
+    const r = await app.inject({
+      method: 'GET',
+      url: '/api/assessments/a_1/events',
+      headers: auth,
+    });
     expect(r.statusCode).toBe(501);
   });
 
   it('POST /proposals returns 501', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/proposals',
+      url: '/api/proposals',
       headers: auth,
       payload: { question: 'add a BFF', orgId: 'o' },
     });
@@ -67,14 +71,14 @@ describe('stub routes (assessments, proposals, publications)', () => {
   });
 
   it('GET /proposals/:id returns 501', async () => {
-    const r = await app.inject({ method: 'GET', url: '/proposals/p_1', headers: auth });
+    const r = await app.inject({ method: 'GET', url: '/api/proposals/p_1', headers: auth });
     expect(r.statusCode).toBe(501);
   });
 
   it('POST /publications returns 501', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/publications',
+      url: '/api/publications',
       headers: auth,
       payload: { assessmentId: 'a_1', target: 'orders' },
     });

@@ -31,7 +31,7 @@ describe('smoke', () => {
   });
 
   it('api: /health is ok', async () => {
-    const r = await app.inject({ method: 'GET', url: '/health' });
+    const r = await app.inject({ method: 'GET', url: '/api/health' });
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe('ok');
   });
@@ -39,7 +39,7 @@ describe('smoke', () => {
   it('api: /orgs returns 200 [] with a valid bearer', async () => {
     const r = await app.inject({
       method: 'GET',
-      url: '/orgs',
+      url: '/api/orgs',
       headers: { authorization: 'Bearer t' },
     });
     expect(r.statusCode).toBe(200);
