@@ -412,22 +412,51 @@ coverage/
 
 If anything is missing, add it with Edit.
 
-- [ ] **Step 11: Run pnpm install to materialize the lockfile**
+- [ ] **Step 11: Create `.env.example` (no secrets, all env vars documented)**
+
+```bash
+# Auth (required). JSON array of {token, orgId, scopes: ["read","write","publish"]}
+PARALLAX_TOKENS=[{"token":"px_dev_change_me","orgId":"org_demo","scopes":["read","write"]}]
+
+# Port for the api
+PORT=8080
+
+# Path to the SQLite file (the api will create the parent dir on boot)
+DATABASE_PATH=./data/parallax.db
+
+# Lain adapter: "mock" (default) or "real" (subproject 2 fills in the real client)
+LAIN_ADAPTER=mock
+LAIN_URL=http://localhost:9999/mcp
+
+# MCP transport: "stdio" (dev) or "http-sse" (production / dev with /mcp route)
+PARALLAX_MCP_TRANSPORT=http-sse
+
+# Nemotron via Nebius Token Factory. Used by subproject 5.
+# Create a key at https://tokenfactory.nebius.com and paste the bearer value here.
+NEMOTRON_TOKEN=
+
+# Path to the built web bundle. Run `pnpm --filter @parallax/web build` first.
+WEB_BUNDLE_PATH=./packages/web/dist
+```
+
+- [ ] **Step 12: Run pnpm install to materialize the lockfile**
 
 Run: `cd /data/agents/orca/parallax && pnpm install`
 Expected: completes successfully, `pnpm-lock.yaml` is created.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 13: Commit**
 
 ```bash
 cd /data/agents/orca/parallax
 git add .
-git commit -m "chore: bootstrap monorepo, LICENSE, README, CI
+git commit -m "chore: bootstrap monorepo, LICENSE, README, CI, .env.example
 
 Pnpm workspace with 4 future packages. MIT license. Substantive README
-with hackathon track, Nemotron usage, and stack pinned. GitHub Actions
-runs typecheck/lint/format/test/build against Node 26.11.1 and pnpm
-12.11.2. TypeScript 7.0.2 strict, Biome 2.5.15, Vitest 5.0.4."
+with hackathon track, Nemotron usage, and stack pinned. .env.example
+documents every AppConfig var (PARALLAX_TOKENS, LAIN_URL, NEMOTRON_TOKEN,
+WEB_BUNDLE_PATH, etc.). GitHub Actions runs typecheck/lint/format/test/
+build against Node 26.11.1 and pnpm 12.11.2. TypeScript 7.0.2 strict,
+Biome 2.5.15, Vitest 5.0.4."
 ```
 
 ---
