@@ -6,6 +6,12 @@
 **Source spec:** `design/Parallax_Diseno.docx` (v0.2, 2026-10-13)
 **Base dependency:** [lain](https://github.com/spuentesp/lain) at the commit pinned by PR #319 (`0abcd968fd78cc807b829e6877455eef616232c7`); PR #317 and #318 must be merged before subproject 2 starts.
 
+**Hackathon:** [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/rules), submission window ends 2026-10-30 10:00 PT.
+- **Primary track:** Coding and Agentic Engineering (developer tools, agents that read/investigate code in Token Factory).
+- **Secondary track candidate:** Best Apps and Agents (Nemotron-powered app, Serverless Endpoints/Jobs encouraged).
+- **License:** MIT.
+- **Public repo target:** `github.com/spuentesp/parallax` (to be created; the local mirror at `/data/agents/orca/parallax` is the source of truth).
+
 ---
 
 ## 1. Context and framing
@@ -93,6 +99,17 @@ Parallax is a server, not a CLI. Production runs the same `api` and `mcp` binari
 Local development (`pnpm dev`) is dev mode: it runs the same binaries on `localhost` so a developer can iterate. Stdio MCP transport is the dev default. In production, the same MCP server runs behind HTTP/SSE so agents over the network can connect.
 
 The MCP transport is selected by env: `PARALLAX_MCP_TRANSPORT=stdio|http-sse` (default `http-sse`). Both transports compile in this subproject; the smoke test verifies both are wired correctly.
+
+### 2.5 Nebius platform fit (hackathon requirement)
+
+The hackathon requires the project to make a runtime call to **Nebius Token Factory** or run on **Nebius AI Cloud** compute. Parallax satisfies both:
+
+- **Token Factory**: the Nemotron investigator (subproject 5) calls Token Factory's inference API for `nvidia/nvidia-nemotron-3-nano-30b-a3b` (default) and `nvidia/nvidia-nemotron-3-ultra` (heavy reasoning). The Nemotron SDK key is read from the `NEMOTRON_TOKEN` env var (already in the user's local `.env`).
+- **Nebius AI Cloud — DevPod**: the `api` and `mcp` containers run on a DevPod (subproject 6). The same binaries are used in dev mode locally.
+- **Nebius Serverless Jobs**: the **Nemotron investigator** (subproject 5) is the natural Serverless Job target. Each assessment's explanation step has bounded work (8 tool calls, 120s) and a clear input/output contract, which fits the Serverless Job model. Subproject 5 implements both a synchronous mode (for the demo) and a Serverless Job entrypoint; the Job mode is enabled in production via `NEMOTRON_RUN_MODE=serverless-job`.
+- **Nebius Serverless Endpoints**: not used in MVP. The Nemotron models are consumed via Token Factory directly, not via a hosted endpoint.
+
+This split (Token Factory for the model, AI Cloud DevPod for the app, Serverless Jobs for the bounded investigator work) is intentional: it matches the track's encouragement to use multiple Nebius surfaces and makes the architecture legible in the submission video.
 
 ---
 
@@ -421,8 +438,8 @@ Excludes `node_modules/`, `dist/`, `build/`, `coverage/`, `data/*.db*`, `.parall
 | Real MCP client against a lain binary, handshake validation, `cursor`/`limit`/`truncated` handling, fixtures run against a real lain | **2 — LainAdapter & Fixture** |
 | `AssessmentWorker` state machine, idempotency by `input_digest`, SSE event stream, recovery after restart | **3 — Assessment Worker & Persistencia** |
 | `OrgProjection` (services as nodes, `consumers[].uses` as edges), real map visualization, change view with SHA and coverage | **4 — Map UI & MCP de producto** |
-| Nemotron loop with tool-calling, budget (8 calls / 120s), `explanation` persistence with `revision` and `prompt_version`, `ArchitectureProposal` separated from findings | **5 — Nemotron Investigator** |
-| GitHubAdapter, publication outbox with marker, 175s demo runbook, clean-host install, recording | **6 — PR Flow, Publicación & Demo** |
+| Nemotron loop with tool-calling via Token Factory, budget (8 calls / 120s), `explanation` persistence with `revision` and `prompt_version`, `ArchitectureProposal` separated from findings, Serverless Job entrypoint | **5 — Nemotron Investigator** |
+| GitHubAdapter, publication outbox with marker, 175s demo runbook, clean-host install on a Nebius AI Cloud DevPod, recording of the ≤3-min demo video, public URL of the deployed app, push to public GitHub repo, Devpost submission form | **6 — PR Flow, Publicación & Demo & Submission** |
 | Decision memory, assisted comparison of alternatives, real publication with reconciliation | **7 — Post-MVP (P1)** |
 
 ### 7.4 Risks
