@@ -1,4 +1,3 @@
-import type { LainView } from '@parallax/shared/lain';
 import type {
   DiffContractsArgs,
   DiffContractsResponse,
@@ -8,7 +7,7 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
-  ListServicesArgs,
+  LainView,
   ListServicesResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,

@@ -1,23 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ListServicesArgs,
-  ListServicesResponse,
-  GetServiceArgs,
-  GetServiceResponse,
-  PrepareSnapshotArgs,
-  PrepareSnapshotResponse,
-  GetSnapshotArgs,
-  GetSnapshotResponse,
   DiffContractsArgs,
   DiffContractsResponse,
-  TraceImpactArgs,
-  TraceImpactResponse,
   GetCoverageArgs,
   GetCoverageResponse,
-  ResolveEvidenceArgs,
-  ResolveEvidenceResponse,
+  GetServiceArgs,
+  GetServiceResponse,
+  GetSnapshotResponse,
+  ListServicesArgs,
+  ListServicesResponse,
+  PrepareSnapshotArgs,
+  PrepareSnapshotResponse,
   ReadSourceArgs,
   ReadSourceResponse,
+  ResolveEvidenceArgs,
+  ResolveEvidenceResponse,
+  TraceImpactResponse,
 } from '../src/lain/tools.js';
 
 describe('lain tool schemas', () => {
@@ -68,7 +66,9 @@ describe('lain tool schemas', () => {
 
   it('GetSnapshot: status pending|ready|failed', () => {
     expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'ready' }).status).toBe('ready');
-    expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'pending' }).status).toBe('pending');
+    expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'pending' }).status).toBe(
+      'pending',
+    );
     expect(GetSnapshotResponse.parse({ snapshotId: 's1', status: 'failed' }).status).toBe('failed');
     expect(() => GetSnapshotResponse.parse({ snapshotId: 's1', status: 'oops' })).toThrow();
   });

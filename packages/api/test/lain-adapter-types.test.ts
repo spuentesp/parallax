@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LainAdapter } from '../src/lain-adapter/index.js';
-import { LainCallError, isLainCallError } from '../src/lain-adapter/index.js';
-import type { LainCallErrorCode } from '../src/lain-adapter/index.js';
+import type { LainAdapter, LainCallErrorCode } from '../src/lain-adapter/index.js';
+import { isLainCallError, LainCallError } from '../src/lain-adapter/index.js';
 
 describe('LainCallError', () => {
   it('lists every documented code', () => {
@@ -19,7 +18,11 @@ describe('LainCallError', () => {
     }
   });
   it('isLainCallError narrows correctly', () => {
-    const e = LainCallError.parse({ code: 'SnapshotNotReady', message: 'pending', snapshotId: 's1' });
+    const e = LainCallError.parse({
+      code: 'SnapshotNotReady',
+      message: 'pending',
+      snapshotId: 's1',
+    });
     expect(isLainCallError(e)).toBe(true);
     expect(isLainCallError(new Error('nope'))).toBe(false);
   });

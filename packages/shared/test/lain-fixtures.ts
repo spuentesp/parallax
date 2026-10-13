@@ -1,9 +1,9 @@
 import type {
   DiffContractsResponse,
+  GetCoverageResponse,
   GetServiceResponse,
   ListServicesResponse,
   TraceImpactResponse,
-  GetCoverageResponse,
 } from '../src/lain/tools.js';
 
 export const apiVersion = '1' as const;

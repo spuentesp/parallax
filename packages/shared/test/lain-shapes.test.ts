@@ -1,23 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import {
-  LainFinding,
-  LainChangeType,
-  Binding,
-  Match,
-} from '../src/lain/findings.js';
-import {
-  LainCoverage,
-  RepoOmission,
-  Truncation,
-} from '../src/lain/coverage.js';
-import {
-  LainEvidence,
-  LainEvidenceRef,
-  paginate,
-} from '../src/lain/evidence.js';
+import { LainCoverage, type RepoOmission, type Truncation } from '../src/lain/coverage.js';
+import { LainEvidence, type LainEvidenceRef, paginate } from '../src/lain/evidence.js';
+import { type Binding, LainChangeType, LainFinding, type Match } from '../src/lain/findings.js';
 
 describe('lain findings', () => {
-  it('LainChangeType enumerates the design\'s change kinds', () => {
+  it("LainChangeType enumerates the design's change kinds", () => {
     for (const k of [
       'FieldRemoved',
       'FieldAdded',
@@ -86,7 +73,7 @@ describe('lain evidence', () => {
   it('paginate slices a list and reports truncation', () => {
     const items = Array.from({ length: 250 }, (_, i) => i);
     const page1 = paginate(items, 0, 100);
-    const page2 = paginate(items, 100, 100);
+    const _page2 = paginate(items, 100, 100);
     const page3 = paginate(items, 200, 100);
     expect(page1.items).toHaveLength(100);
     expect(page3.items).toHaveLength(50);

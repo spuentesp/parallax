@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { Finding } from '../src/domain/finding.js';
-import { EvidenceRef } from '../src/domain/evidence-ref.js';
+import { ArchitectureProposal, type ProposalOption } from '../src/domain/architecture-proposal.js';
 import { Coverage } from '../src/domain/coverage.js';
-import {
-  ArchitectureProposal,
-  ProposalOption,
-} from '../src/domain/architecture-proposal.js';
-import { Publication, PublicationState } from '../src/domain/publication.js';
+import { EvidenceRef } from '../src/domain/evidence-ref.js';
+import { Finding } from '../src/domain/finding.js';
 import { asAssessmentId, asEvidenceId, asProposalId } from '../src/domain/ids.js';
+import { Publication, PublicationState } from '../src/domain/publication.js';
 
 describe('Finding', () => {
   it('captures the motor classification (never promoted by the model)', () => {

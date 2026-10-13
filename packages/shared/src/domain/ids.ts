@@ -10,12 +10,12 @@ export declare const orgIdBrand: unique symbol;
 export declare const proposalIdBrand: unique symbol;
 export declare const snapshotIdBrand: unique symbol;
 
-export type AssessmentId = string & { [assessmentIdBrand]: void };
-export type EvidenceId = string & { [evidenceIdBrand]: void };
-export type ExplanationId = string & { [explanationIdBrand]: void };
-export type OrgId = string & { [orgIdBrand]: void };
-export type ProposalId = string & { [proposalIdBrand]: void };
-export type SnapshotId = string & { [snapshotIdBrand]: void };
+export type AssessmentId = string & { [assessmentIdBrand]: undefined };
+export type EvidenceId = string & { [evidenceIdBrand]: undefined };
+export type ExplanationId = string & { [explanationIdBrand]: undefined };
+export type OrgId = string & { [orgIdBrand]: undefined };
+export type ProposalId = string & { [proposalIdBrand]: undefined };
+export type SnapshotId = string & { [snapshotIdBrand]: undefined };
 
 const nonEmptyString = (input: unknown, brand: string): string => {
   if (typeof input !== 'string' || input.length === 0) {

@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   AssessmentId,
-  EvidenceId,
-  OrgId,
   asAssessmentId,
   asEvidenceId,
   asExplanationId,
   asOrgId,
   asProposalId,
   asSnapshotId,
+  EvidenceId,
+  OrgId,
 } from '../src/domain/ids.js';
 
 describe('branded ids', () => {

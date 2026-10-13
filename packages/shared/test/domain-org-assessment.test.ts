@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { Org, OrgManifest, OrgRepo, OrgService } from '../src/domain/org.js';
 import {
   Assessment,
-  AssessmentStatus,
-  AssessmentManifest,
   AssessmentInput,
+  AssessmentManifest,
+  AssessmentStatus,
 } from '../src/domain/assessment.js';
-import { asOrgId, asAssessmentId } from '../src/domain/ids.js';
+import { asAssessmentId, asOrgId } from '../src/domain/ids.js';
+import { Org, OrgManifest, OrgRepo, OrgService } from '../src/domain/org.js';
 
 describe('org types', () => {
   it('Org has id, name, createdAt', () => {

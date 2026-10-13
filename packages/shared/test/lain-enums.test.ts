@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
-import { FindingClass, EdgeType, LainView } from '../src/lain/enums.js';
+import type { z } from 'zod';
+import { EdgeType, FindingClass, LainView } from '../src/lain/enums.js';
 
 describe('lain enums', () => {
   describe('FindingClass', () => {

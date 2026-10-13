@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { DiffContractsResponse, ListServicesResponse } from '../src/lain/tools.js';
 import {
   analyzerVersion,
   apiVersion,
-  services,
-  scenarios,
   s1RemoveCustomerId,
   s2AddCurrency,
+  scenarios,
+  services,
 } from './lain-fixtures.js';
-import { ListServicesResponse, DiffContractsResponse } from '../src/lain/tools.js';
 
 describe('lain fixtures', () => {
   it('declares apiVersion=1 and a non-empty analyzerVersion', () => {
