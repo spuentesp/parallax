@@ -1,6 +1,7 @@
+import type * as React from 'react';
 import type { Coverage } from '@parallax/shared/domain';
 
-export function CoverageBadge({ coverage }: { coverage: Coverage }): JSX.Element {
+export function CoverageBadge({ coverage }: { coverage: Coverage }): React.ReactElement {
   const reviewed = coverage.reviewed.length;
   const omitted = coverage.omitted.length;
   const truncated = coverage.truncated.length;
