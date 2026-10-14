@@ -23,7 +23,7 @@ describe('db migrations', () => {
     const names = tableNames(db);
     expect(names).toEqual(
       expect.arrayContaining([
-        'org',
+        'workspace',
         'assessment',
         'explanation',
         'evidence',

@@ -1,8 +1,20 @@
-CREATE TABLE IF NOT EXISTS org (
+CREATE TABLE IF NOT EXISTS workspace (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  description TEXT,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS repo (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspace(id),
+  uri TEXT NOT NULL,
+  sha TEXT,
+  local TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_repo_workspace ON repo(workspace_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_repo_uri ON repo(workspace_id, uri);
 
 CREATE TABLE IF NOT EXISTS assessment (
   id TEXT PRIMARY KEY,
@@ -13,7 +25,7 @@ CREATE TABLE IF NOT EXISTS assessment (
   manifest_json TEXT NOT NULL,
   engine_json TEXT,
   coverage_json TEXT,
-  org_id TEXT NOT NULL REFERENCES org(id),
+  org_id TEXT NOT NULL REFERENCES workspace(id),
   created_at INTEGER NOT NULL,
   completed_at INTEGER
 );

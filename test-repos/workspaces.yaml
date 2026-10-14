@@ -1,0 +1,29 @@
+# Parallax workspaces — each workspace is an org (one or more git repos).
+# URI can be a local path (./repos/name) or a web URL (https://github.com/...).
+
+workspaces:
+  - id: saleor
+    name: "Saleor"
+    description: "E-commerce platform: API + Dashboard + Storefront (multi-repo)"
+    repos:
+      - id: saleor-api
+        uri: https://github.com/saleor/saleor.git
+        sha: a31848549f5dc5843fe9e66422bf34a915559ee5
+        local: ./test-repos/saleor
+      - id: saleor-dashboard
+        uri: https://github.com/saleor/saleor-dashboard.git
+        sha: e34cd91db8cd51ed9cbd69374b4f3bdb61c0285f
+        local: ./test-repos/saleor-dashboard
+      - id: saleor-storefront
+        uri: https://github.com/saleor/storefront.git
+        sha: 05641e1fa8b87a6ba0a403d2d323164872422fa5
+        local: ./test-repos/storefront
+
+  - id: online-boutique
+    name: "Online Boutique"
+    description: "Google microservices demo: 11 services, gRPC/Protobuf (monorepo)"
+    repos:
+      - id: microservices-demo
+        uri: https://github.com/GoogleCloudPlatform/microservices-demo.git
+        sha: 38e7348eb289eb5b87c0c6e8cb19ced0449dc389
+        local: ./test-repos/microservices-demo

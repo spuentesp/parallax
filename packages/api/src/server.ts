@@ -20,6 +20,7 @@ import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
 import { queryRoutes } from './routes/query.js';
 import { webRoutes } from './routes/web.js';
+import { workspaceRoutes } from './routes/workspaces.js';
 
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
@@ -43,6 +44,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(proposalRoutes);
   await app.register(publicationRoutes);
   await app.register(queryRoutes);
+  await app.register(workspaceRoutes);
 
   // MCP (http-sse transport).
   await app.register(mcpRoutes);

@@ -103,7 +103,7 @@ describe('smoke', () => {
     const names = tableNames(db.session.client);
     expect(names).toEqual(
       expect.arrayContaining([
-        'org',
+        'workspace',
         'assessment',
         'explanation',
         'evidence',

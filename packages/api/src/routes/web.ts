@@ -37,7 +37,7 @@ export const webRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // SPA fallback: any non-API, non-asset URL serves index.html.
-  app.setNotFoundHandler({ config: { public: true } }, (req, reply) => {
+  app.setNotFoundHandler((req, reply) => {
     const url = req.url;
     const isApi = url.startsWith('/api/') || url.startsWith('/mcp');
     if (isApi) {

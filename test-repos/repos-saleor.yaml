@@ -1,0 +1,24 @@
+data_dir: /data/agents/orca/parallax/test-repos/.lain-data-saleor
+
+repos:
+  - id: saleor
+    source:
+      type: workspace_dir
+      path: /data/agents/orca/parallax/test-repos/saleor
+  - id: saleor-dashboard
+    source:
+      type: workspace_dir
+      path: /data/agents/orca/parallax/test-repos/saleor-dashboard
+  - id: storefront
+    source:
+      type: workspace_dir
+      path: /data/agents/orca/parallax/test-repos/storefront
+
+services:
+  - name: saleor-api
+    repo: saleor
+    paths: ["saleor"]
+  - name: saleor-dashboard
+    repo: saleor-dashboard
+  - name: saleor-storefront
+    repo: storefront

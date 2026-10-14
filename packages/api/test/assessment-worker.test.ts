@@ -25,7 +25,9 @@ describe('AssessmentWorker', () => {
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'parallax-worker-'));
     db = makeDb(dir);
-    await db.insert(schema.org).values({ id: 'org_demo', name: 'Demo', createdAt: Date.now() });
+    await db
+      .insert(schema.workspace)
+      .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
     worker = new AssessmentWorker(db);
   });
   afterEach(() => {

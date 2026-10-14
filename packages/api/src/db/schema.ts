@@ -1,10 +1,29 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-export const org = sqliteTable('org', {
+export const workspace = sqliteTable('workspace', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  description: text('description'),
   createdAt: integer('created_at').notNull(),
 });
+
+export const repo = sqliteTable(
+  'repo',
+  {
+    id: text('id').primaryKey(),
+    workspaceId: text('workspace_id')
+      .notNull()
+      .references(() => workspace.id),
+    uri: text('uri').notNull(),
+    sha: text('sha'),
+    local: text('local'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    workspaceIdx: index('idx_repo_workspace').on(t.workspaceId),
+    uriIdx: uniqueIndex('idx_repo_uri').on(t.workspaceId, t.uri),
+  }),
+);
 
 export const assessment = sqliteTable(
   'assessment',
@@ -19,7 +38,7 @@ export const assessment = sqliteTable(
     coverageJson: text('coverage_json'),
     orgId: text('org_id')
       .notNull()
-      .references(() => org.id),
+      .references(() => workspace.id),
     createdAt: integer('created_at').notNull(),
     completedAt: integer('completed_at'),
   },
