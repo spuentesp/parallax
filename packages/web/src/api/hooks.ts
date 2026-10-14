@@ -19,10 +19,20 @@ export function useOrgs() {
   });
 }
 
+export function useAssessmentList(orgId?: string) {
+  return useQuery({
+    queryKey: ['assessments', orgId ?? 'all'],
+    queryFn: () =>
+      client.get<{ assessments: AssessmentSummary[] }>(
+        orgId ? `/api/assessments?orgId=${encodeURIComponent(orgId)}` : '/api/assessments',
+      ),
+  });
+}
+
 export function useAssessment(id: string | null) {
   return useQuery({
     queryKey: ['assessment', id],
-    queryFn: () => client.get(`/api/assessments/${id}`),
+    queryFn: () => client.get<{ assessment: AssessmentReport }>(`/api/assessments/${id}`),
     enabled: id != null,
     retry: (count, err) => {
       if (err instanceof ApiEndpointNotImplemented) return false;
@@ -33,9 +43,81 @@ export function useAssessment(id: string | null) {
 
 export function useCreateAssessment() {
   return useMutation({
-    mutationFn: (body: unknown) => client.post('/api/assessments', body),
+    mutationFn: (body: AssessmentRequest) =>
+      client.post<{ assessment: AssessmentReport; created: boolean }>('/api/assessments', body),
   });
 }
+
+// ── Evaluaciones (§13: el informe persistido) ───────────────────────────────
+
+export interface AssessmentSummary {
+  id: string;
+  orgId: string;
+  status: string;
+  inputDigest: string;
+  findingCount: number;
+  coverageComplete: boolean;
+  coverageSummary: string | null;
+  createdAt: number;
+  completedAt: number | null;
+}
+
+export interface AssessmentFinding {
+  kind: string;
+  side?: string;
+  field?: string;
+  route?: string;
+  compat?: string;
+  service?: string;
+  endpoint?: { key?: string; service?: string };
+  impact?: { class?: string; reasons?: string[] | string };
+  affected?: Array<{ service?: string; class?: string; consumer?: string }>;
+}
+
+export interface AssessmentReport {
+  id: string;
+  orgId: string;
+  inputDigest: string;
+  status: string;
+  baseId: string | null;
+  headId: string | null;
+  manifest: unknown;
+  findings: AssessmentFinding[];
+  engine: unknown;
+  coverage: {
+    complete?: boolean;
+    summary?: string;
+    scope?: {
+      reviewed?: string[];
+      unreviewed?: Array<{ repo: string; reason: string } | string>;
+      excluded?: Array<{ repo: string; reason: string } | string>;
+    };
+  } | null;
+  evidence: Array<{
+    id: string;
+    viewId: string;
+    repo: string;
+    sha: string;
+    path: string;
+    range: unknown;
+    hash: string;
+  }>;
+  explanation: { status: string; revision: number | null; model: string | null };
+  createdAt: number;
+  completedAt: number | null;
+}
+
+export type AssessmentRequest =
+  | { prUrl: string; orgId: string; configHash?: string; idempotencyKey?: string }
+  | {
+      repo: string;
+      base: string;
+      head: string;
+      orgId: string;
+      configHash?: string;
+      excludeRepos?: string[];
+      idempotencyKey?: string;
+    };
 
 // ── Workspaces (control plane) ──────────────────────────────────────────────
 

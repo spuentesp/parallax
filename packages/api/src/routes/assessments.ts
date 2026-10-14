@@ -6,6 +6,7 @@ import {
   NotFoundError,
   createAssessment,
   getAssessmentReport,
+  listAssessments,
 } from '../services/assessments.js';
 
 // §15 G2: el informe se persiste una sola vez y se sirve igual desde web y
@@ -47,6 +48,21 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
         }
         throw e;
       }
+    },
+  );
+
+  // Listado de informes persistidos; opcionalmente por organización.
+  app.get(
+    '/api/assessments',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        querystring: z.object({ orgId: z.string().min(1).optional() }).loose(),
+      },
+    },
+    async (req) => {
+      const { orgId } = req.query as { orgId?: string };
+      return { assessments: await listAssessments(app.db, orgId ? { orgId } : {}) };
     },
   );
 

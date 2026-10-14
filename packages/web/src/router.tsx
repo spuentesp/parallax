@@ -17,16 +17,13 @@ export const router = createBrowserRouter([
     children: [
       { path: 'workspaces', element: <Workspaces /> },
       { path: 'workspaces/:id', element: <WorkspaceDetail /> },
+      { path: 'assessments', element: <Assessments /> },
+      { path: 'assessments/:assessmentId', element: <Assessment /> },
       { path: 'orgs', element: <Orgs /> },
       {
         path: 'orgs/:orgId',
         element: <Org />,
-        children: [
-          { path: 'services/:serviceId', element: <Service /> },
-          { path: 'assessments', element: <Assessments /> },
-          { path: 'assessments/:assessmentId', element: <Assessment /> },
-          { path: 'proposals/:proposalId', element: <Proposal /> },
-        ],
+        children: [{ path: 'services/:serviceId', element: <Service /> }],
       },
     ],
   },

@@ -199,6 +199,51 @@ function parseJson(text: string | null): unknown {
   }
 }
 
+// Resumen para el listado: sin el output crudo del motor, que pesa y sólo
+// hace falta al abrir un informe.
+export async function listAssessments(
+  db: Db,
+  opts: { orgId?: string } = {},
+): Promise<
+  Array<{
+    id: string;
+    orgId: string;
+    status: string;
+    inputDigest: string;
+    findingCount: number;
+    coverageComplete: boolean;
+    coverageSummary: string | null;
+    createdAt: number;
+    completedAt: number | null;
+  }>
+> {
+  const rows = opts.orgId
+    ? await db
+        .select()
+        .from(schema.assessment)
+        .where(eq(schema.assessment.orgId, opts.orgId))
+        .orderBy(schema.assessment.createdAt)
+    : await db.select().from(schema.assessment).orderBy(schema.assessment.createdAt);
+
+  return rows.map((r) => {
+    const engine = parseJson(r.engineJson) as { diff?: { changes?: unknown[] } } | null;
+    const coverage = parseJson(r.coverageJson) as
+      | { complete?: boolean; summary?: string }
+      | null;
+    return {
+      id: r.id,
+      orgId: r.orgId,
+      status: r.status,
+      inputDigest: r.inputDigest,
+      findingCount: Array.isArray(engine?.diff?.changes) ? engine.diff.changes.length : 0,
+      coverageComplete: coverage?.complete ?? false,
+      coverageSummary: coverage?.summary ?? null,
+      createdAt: r.createdAt,
+      completedAt: r.completedAt,
+    };
+  });
+}
+
 export async function getAssessmentRecord(db: Db, id: string): Promise<AssessmentRecord | null> {
   const row = await db.select().from(schema.assessment).where(eq(schema.assessment.id, id)).limit(1);
   return row[0]
