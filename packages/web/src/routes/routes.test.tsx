@@ -10,11 +10,20 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const useAssessmentMock = vi.fn(() => ({ data: null, isPending: false, isError: false }));
+type UseAssessmentResult = {
+  data: { assessment: unknown } | null;
+  isPending: boolean;
+  isError: boolean;
+};
+const useAssessmentMock = vi.fn<() => UseAssessmentResult>(() => ({
+  data: null,
+  isPending: false,
+  isError: false,
+}));
 
 vi.mock('../api/hooks.js', () => ({
   useOrgs: () => ({ data: { orgs: [] }, isPending: false, isError: false }),
-  useAssessment: (...args: unknown[]) => useAssessmentMock(...args),
+  useAssessment: () => useAssessmentMock(),
   useAssessmentList: () => ({ data: { assessments: [] }, isPending: false, isError: false }),
   useCreateAssessment: () => ({ mutate: () => {} }),
 }));

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import * as schema from '../db/schema.js';
 import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
-import { buildServiceTopology } from '../topology.js';
+import { buildEndpointTopology } from '../topology.js';
 
 const WorkspaceInput = z.object({
   name: z.string().min(1),
@@ -249,12 +249,24 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // Service topology for a workspace, built from its LAIN server.
+  // Topología a nivel de endpoint para un workspace, desde su servidor LAIN.
+  // Acepta filtros: kind (http/topic/graphql/…), service, binding y
+  // minConfidence.
   app.get(
     '/api/workspaces/:id/topology',
     {
       config: { scopes: ['read'] },
-      schema: { params: z.object({ id: z.string().min(1) }) },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            kind: z.string().min(1).optional(),
+            service: z.string().min(1).optional(),
+            binding: z.enum(['static', 'heuristic']).optional(),
+            minConfidence: z.coerce.number().min(0).max(1).optional(),
+          })
+          .loose(),
+      },
     },
     async (req) => {
       const ws = await app.db
@@ -262,6 +274,19 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         .from(schema.workspace)
         .where(eq(schema.workspace.id, (req.params as { id: string }).id))
         .limit(1);
+      const q = req.query as {
+        kind?: string;
+        service?: string;
+        binding?: 'static' | 'heuristic';
+        minConfidence?: number;
+      };
+      const emptyStats = {
+        services: 0,
+        endpoints: 0,
+        dependencies: 0,
+        repos: [] as string[],
+        byKind: {} as Record<string, number>,
+      };
       if (!ws[0]) return { topology: null, source: 'none' as const, stats: null };
       const repos = await app.db
         .select()
@@ -272,7 +297,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         return {
           topology: { nodes: [], edges: [] },
           source: 'unconfigured' as const,
-          stats: { services: 0, dependencies: 0, repos: [], unresolvedInbound: 0 },
+          stats: emptyStats,
           workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
         };
       }
@@ -283,12 +308,18 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           apiVersion: '1',
           timeoutMs: 20_000,
         });
-        const topology = await buildServiceTopology(client);
+        const topology = await buildEndpointTopology(client, {
+          ...(q.kind ? { kind: q.kind } : {}),
+          ...(q.service ? { service: q.service } : {}),
+          ...(q.binding ? { binding: q.binding } : {}),
+          ...(q.minConfidence !== undefined ? { minConfidence: q.minConfidence } : {}),
+        });
         return {
           topology: { nodes: topology.nodes, edges: topology.edges },
           stats: topology.stats,
           source: 'lain' as const,
           lainUrl: ws[0].lainUrl,
+          filters: q,
           workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
         };
       } catch (e) {
@@ -299,7 +330,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           : `lain unreachable at ${ws[0].lainUrl}`;
         return {
           topology: { nodes: [], edges: [] },
-          stats: { services: 0, dependencies: 0, repos: [], unresolvedInbound: 0 },
+          stats: emptyStats,
           source: 'error' as const,
           error: detail,
           workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },

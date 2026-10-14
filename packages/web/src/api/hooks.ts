@@ -140,7 +140,7 @@ export interface Workspace {
 export interface TopologyNode {
   id: string;
   label: string;
-  kind: 'service' | 'symbol' | 'contract';
+  kind: 'service' | 'endpoint';
   meta?: Record<string, unknown>;
 }
 
@@ -148,17 +148,25 @@ export interface TopologyEdge {
   source: string;
   target: string;
   label?: string;
-  kind: 'consumes' | 'calls' | 'has_field' | 'binds';
+  kind: 'provides' | 'consumes';
   meta?: Record<string, unknown>;
+}
+
+export interface TopologyFilters {
+  kind?: string | undefined;
+  service?: string | undefined;
+  binding?: 'static' | 'heuristic' | undefined;
+  minConfidence?: number | undefined;
 }
 
 export interface TopologyResponse {
   topology: { nodes: TopologyNode[]; edges: TopologyEdge[] } | null;
   stats: {
     services: number;
+    endpoints: number;
     dependencies: number;
     repos: string[];
-    unresolvedInbound: number;
+    byKind: Record<string, number>;
   } | null;
   source: 'lain' | 'unconfigured' | 'error' | 'none';
   error?: string;
@@ -181,10 +189,16 @@ export function useWorkspace(id: string | undefined) {
   });
 }
 
-export function useWorkspaceTopology(id: string | undefined) {
+export function useWorkspaceTopology(id: string | undefined, filters: TopologyFilters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.kind) qs.set('kind', filters.kind);
+  if (filters.service) qs.set('service', filters.service);
+  if (filters.binding) qs.set('binding', filters.binding);
+  if (filters.minConfidence !== undefined) qs.set('minConfidence', String(filters.minConfidence));
+  const suffix = qs.size > 0 ? `?${qs.toString()}` : '';
   return useQuery({
-    queryKey: ['workspace-topology', id],
-    queryFn: () => client.get<TopologyResponse>(`/api/workspaces/${id}/topology`),
+    queryKey: ['workspace-topology', id, filters],
+    queryFn: () => client.get<TopologyResponse>(`/api/workspaces/${id}/topology${suffix}`),
     enabled: id != null,
   });
 }

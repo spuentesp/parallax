@@ -1,15 +1,23 @@
 import type * as React from 'react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useEvidence, useWorkspace, useWorkspaceTopology } from '../api/hooks.js';
+import {
+  useEvidence,
+  useWorkspace,
+  useWorkspaceTopology,
+  type TopologyFilters,
+} from '../api/hooks.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
-import { TopologyView } from '../components/TopologyView.js';
+import { TopologyLegend, TopologyView } from '../components/TopologyView.js';
+
+const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
 
 export function WorkspaceDetail(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
+  const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
-  const topoQuery = useWorkspaceTopology(id);
+  const topoQuery = useWorkspaceTopology(id, filters);
   const evidence = useEvidence();
   const [cited, setCited] = useState<EvidenceItem[] | null>(null);
 
@@ -53,29 +61,38 @@ export function WorkspaceDetail(): React.ReactElement {
       </div>
 
       {/* Stats strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Services" value={stats?.services ?? 0} />
+        <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
         <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
         <Stat label="Repositories" value={ws.repoCount} />
-        <Stat label="Unresolved inbound" value={stats?.unresolvedInbound ?? 0} />
+        <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
       </div>
 
-      {/* Topology graph */}
+      {/* Topology graph + filtros */}
       <div>
         <div className="flex items-baseline justify-between mb-2">
-          <h2 className="font-semibold">Service topology</h2>
+          <h2 className="font-semibold">Contract topology</h2>
           <span className="text-xs text-muted">
             {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
             {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
           </span>
         </div>
-        {topoQuery.isLoading ? (
-          <div className="h-[520px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
-            Loading topology from LAIN…
-          </div>
-        ) : (
-          <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
-        )}
+
+        <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
+
+        <div className="mt-2">
+          {topoQuery.isLoading ? (
+            <div className="h-[560px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
+              Loading topology from LAIN…
+            </div>
+          ) : (
+            <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
+          )}
+        </div>
+        <div className="mt-2">
+          <TopologyLegend />
+        </div>
         {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
       </div>
 
@@ -166,5 +183,82 @@ function SourceBadge({
     <span className={`text-xs px-2.5 py-1 rounded-full whitespace-nowrap ${style}`} title={error}>
       {label}
     </span>
+  );
+}
+
+function FilterBar({
+  filters,
+  onChange,
+  byKind,
+}: {
+  filters: TopologyFilters;
+  onChange: (f: TopologyFilters) => void;
+  byKind: Record<string, number>;
+}): React.ReactElement {
+  const chip = (active: boolean) =>
+    `px-2.5 py-1 rounded-full text-xs transition-colors ${
+      active ? 'bg-accent text-accent-fg' : 'bg-bg text-muted hover:bg-border'
+    }`;
+  const has = Object.keys(filters).some((k) => filters[k as keyof TopologyFilters] !== undefined);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" data-testid="topology-filters">
+      <span className="text-xs text-muted">Contract:</span>
+      <button
+        type="button"
+        onClick={() => onChange({})}
+        className={chip(!filters.kind)}
+        title="Todos los tipos de contrato"
+      >
+        all
+      </button>
+      {CONTRACT_KINDS.map((k) => (
+        <button
+          key={k}
+          type="button"
+          onClick={() => onChange({ ...filters, kind: filters.kind === k ? undefined : k })}
+          className={chip(filters.kind === k)}
+        >
+          {k}
+          {byKind[k] !== undefined ? ` (${byKind[k]})` : ''}
+        </button>
+      ))}
+
+      <span className="text-xs text-muted ml-2">Binding:</span>
+      {(['static', 'heuristic'] as const).map((b) => (
+        <button
+          key={b}
+          type="button"
+          onClick={() => onChange({ ...filters, binding: filters.binding === b ? undefined : b })}
+          className={chip(filters.binding === b)}
+        >
+          {b}
+        </button>
+      ))}
+
+      <span className="text-xs text-muted ml-2">Min conf:</span>
+      {[0.3, 0.6, 1].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() =>
+            onChange({ ...filters, minConfidence: filters.minConfidence === v ? undefined : v })
+          }
+          className={chip(filters.minConfidence === v)}
+        >
+          {v.toFixed(1)}
+        </button>
+      ))}
+
+      {has && (
+        <button
+          type="button"
+          onClick={() => onChange({})}
+          className="text-xs text-accent hover:underline ml-1"
+        >
+          clear
+        </button>
+      )}
+    </div>
   );
 }
