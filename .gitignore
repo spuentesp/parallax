@@ -17,3 +17,6 @@ build/
 coverage/
 **/*.tsbuildinfo
 .DS_Store
+
+# Test repos (cloned for LAIN integration testing, not source)
+test-repos/
