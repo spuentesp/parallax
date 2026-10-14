@@ -1,7 +1,16 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiClient, ApiEndpointNotImplemented } from './client.js';
 
-const client = new ApiClient();
+// Token source: localStorage (set by user), URL hash (?token=...), or empty.
+function getToken(): string | null {
+  const fromStorage = localStorage.getItem('parallax_token');
+  if (fromStorage) return fromStorage;
+  const params = new URLSearchParams(window.location.search);
+  return params.get('token');
+}
+const token = getToken();
+if (token) localStorage.setItem('parallax_token', token);
+const client = new ApiClient(token ? { token } : {});
 
 export function useOrgs() {
   return useQuery({

@@ -1,6 +1,10 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
     "ignoreUnknown": true,
     "includes": [
@@ -24,8 +28,12 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
-      "correctness": { "noUnusedImports": "error" },
-      "style": { "useImportType": "error" }
+      "correctness": {
+        "noUnusedImports": "error"
+      },
+      "style": {
+        "useImportType": "error"
+      }
     }
   },
   "javascript": {
@@ -33,6 +41,11 @@
       "quoteStyle": "single",
       "trailingCommas": "all",
       "semicolons": "always"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
     }
   }
 }

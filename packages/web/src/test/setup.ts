@@ -1,11 +1,12 @@
-// jsdom does not provide canvas; cytoscape needs it. Mock getContext
-// so cytoscape can initialize in tests.
+// jsdom does not provide canvas or ResizeObserver; reagraph/three.js need both.
+// Mock the minimum surface so components can initialize in tests.
+
 if (typeof HTMLCanvasElement !== 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (HTMLCanvasElement.prototype as any).getContext = () => ({
+  // @ts-expect-error -- test-only canvas mock
+  HTMLCanvasElement.prototype.getContext = () => ({
     fillRect: () => {},
     clearRect: () => {},
-    getImageData: (_x: number, _y: number, w: number, h: number) => ({
+    getImageData: (x: number, y: number, w: number, h: number) => ({
       data: new Uint8ClampedArray(w * h * 4),
     }),
     putImageData: () => {},
@@ -30,4 +31,23 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     rect: () => {},
     clip: () => {},
   });
+}
+
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  // @ts-expect-error -- test-only ResizeObserver polyfill
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+}
+
+if (typeof globalThis.IntersectionObserver === 'undefined') {
+  // @ts-expect-error -- test-only IntersectionObserver polyfill
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+    takeRecords() { return []; }
+  };
 }

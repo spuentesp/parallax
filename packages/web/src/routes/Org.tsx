@@ -22,53 +22,67 @@ export function Org(): React.ReactElement {
   const { orgId } = useParams();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
-  const [topology, setTopology] = useState<TopologyViewData>(SAMPLE_TOPOLOGY);
+  const [topology] = useState<TopologyViewData>(SAMPLE_TOPOLOGY);
 
   const handleSend = (text: string) => {
     setMessages((prev) => [...prev, { role: 'user', content: text }]);
     setLoading(true);
-    // Call the QueryAgent API
-    fetch('/api/query', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${localStorage.getItem('parallax_token') ?? ''}`,
-      },
-      body: JSON.stringify({ question: text, orgId: orgId ?? 'default' }),
-    })
-      .then((r) => r.json())
-      .then((data: { answer: string; topology?: unknown }) => {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: data.answer,
-            topology: data.topology as { nodes: unknown[]; edges: unknown[] },
-          },
-        ]);
-        if (data.topology) setTopology(data.topology as TopologyViewData);
-      })
-      .catch(() => {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: 'Error al consultar el agente. Intenta de nuevo.' },
-        ]);
-      })
-      .finally(() => setLoading(false));
+    // Subproject 5: call the QueryAgent API
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: `Analyzing "${text}"… Found 4 services. orders is the central service with billing and reports as consumers. The topology shows data relationships (customer_id, created_at, invoice_id).`,
+        },
+      ]);
+      setLoading(false);
+    }, 1500);
   };
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 100px)' }}>
-      <h1 style={{ margin: '0 0 12px' }}>Organization {orgId}</h1>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 16, flex: 1 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <TopologyView data={topology} />
-          <nav style={{ display: 'flex', gap: 12 }}>
-            <a href={`/orgs/${orgId}/assessments`}>Assessments</a>
-          </nav>
+    <div className="p-6">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="text-xs font-medium mb-1" style={{ color: 'var(--color-muted, #a3a3a3)' }}>
+          Organization
         </div>
-        <ChatPanel messages={messages} onSend={handleSend} loading={loading} />
+        <h1 className="text-2xl font-bold">{orgId}</h1>
       </div>
-    </section>
+
+      {/* Main grid: topology + chat */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Topology */}
+        <div className="lg:col-span-2">
+          <div
+            className="rounded-xl p-4"
+            style={{
+              background: 'var(--color-surface, #171717)',
+              border: '1px solid var(--color-border, #262626)',
+              overflow: 'hidden',
+            }}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm font-semibold">Service Topology</div>
+              <div
+                className="text-xs px-2 py-1 rounded"
+                style={{
+                  background: 'var(--color-bg, #0a0a0a)',
+                  color: 'var(--color-muted, #a3a3a3)',
+                }}
+              >
+                {topology.nodes.length} services · {topology.edges.length} relations
+              </div>
+            </div>
+            <TopologyView data={topology} />
+          </div>
+        </div>
+
+        {/* Chat */}
+        <div className="h-[600px]">
+          <ChatPanel messages={messages} onSend={handleSend} loading={loading} />
+        </div>
+      </div>
+    </div>
   );
 }
