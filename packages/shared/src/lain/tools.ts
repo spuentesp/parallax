@@ -256,14 +256,35 @@ export const ListUnresolvedResponse = z.object({
 });
 export type ListUnresolvedResponse = z.infer<typeof ListUnresolvedResponse>;
 
-// `check_binding` no devuelve el YAML del binding, sino el diagnóstico de por
-// qué un vínculo propuesto es o no válido (§12).
-export const CheckBindingResponse = z.object({
-  valid: z.boolean(),
-  method_match: z.boolean().optional(),
-  template_match: z.string().optional(),
-  reasons: z.array(z.string()).optional(),
-});
+// `check_binding` diagnostica un vínculo propuesto y, cuando es válido,
+// devuelve `bindings_entry`: el YAML de `repos.yaml#bindings` listo para
+// copiar. Hay que usarlo verbatim — su symbol/key están calibrados para que
+// el matcher del motor (repo + path + symbol) encuentre el nodo.
+export const CheckBindingReason = z.enum([
+  'not_a_consumer',
+  'method_mismatch',
+  'template_mismatch',
+  'same_service',
+  'already_bound',
+  // Del motor nuevo (bindings GraphQL): la llave no coincide en op o en el
+  // campo raíz. El 0.9 no los emite porque rechaza las llaves graphql:.
+  'op_mismatch',
+  'field_mismatch',
+]);
+export type CheckBindingReason = z.infer<typeof CheckBindingReason>;
+
+export const TemplateMatch = z.enum(['exact', 'pattern', 'prefix_stripped', 'none']);
+export type TemplateMatch = z.infer<typeof TemplateMatch>;
+
+export const CheckBindingResponse = z
+  .object({
+    valid: z.boolean(),
+    reasons: z.array(CheckBindingReason),
+    method_match: z.boolean(),
+    template_match: TemplateMatch,
+    bindings_entry: z.string().optional(),
+  })
+  .loose();
 export type CheckBindingResponse = z.infer<typeof CheckBindingResponse>;
 
 // 9. diff_contracts — base/head deben ser snapshots `ready`; `live` se rechaza

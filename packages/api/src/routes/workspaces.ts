@@ -1,6 +1,8 @@
+import type { LainView } from '@parallax/shared/lain';
 import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { runAdvisor } from '../advisor/index.js';
 import * as schema from '../db/schema.js';
 import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
@@ -335,6 +337,79 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           error: detail,
           workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
         };
+      }
+    },
+  );
+
+  // Config advisor (§10): cierra huecos de configuración de LAIN con
+  // propuestas validadas + evidencia. Escanea los checkouts locales del
+  // workspace, correlaciona con list_unresolved/list_contracts (paginados al
+  // agotamiento) y emite el YAML del §6. No aplica nada: el operador aplica.
+  app.get(
+    '/api/workspaces/:id/advisor',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            emit: z.enum(['yaml']).optional(),
+            snapshot: z.string().min(1).optional(),
+          })
+          .loose(),
+      },
+    },
+    async (req) => {
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return { advisor: null };
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const q = req.query as { emit?: 'yaml'; snapshot?: string };
+      const workspace = { id: ws[0].id, name: ws[0].name, repoCount: repos.length };
+
+      if (!ws[0].lainUrl) {
+        return { advisor: null, source: 'unconfigured' as const, workspace };
+      }
+
+      // El escaneo necesita el checkout en disco: sólo los repos con `local`.
+      const scanRepos = repos
+        .map((r) => ({ id: r.id, root: r.local }))
+        .filter(
+          (r): r is { id: string; root: string } => typeof r.root === 'string' && r.root !== '',
+        );
+      const scanIds = new Set(scanRepos.map((r) => r.id));
+      const skipped = repos
+        .filter((r) => !scanIds.has(r.id))
+        .map((r) => `${r.id}: sin checkout local (repo.local); el escaneo lo omite`);
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 60_000,
+        });
+        const report = await runAdvisor(
+          client,
+          scanRepos,
+          (q.snapshot as LainView | undefined) ?? 'live',
+        );
+        const advisor =
+          skipped.length > 0 ? { ...report, notes: [...report.notes, ...skipped] } : report;
+        if (q.emit === 'yaml') {
+          return { yaml: advisor.yaml, workspace, source: 'lain' as const };
+        }
+        return { advisor, source: 'lain' as const, lainUrl: ws[0].lainUrl, workspace };
+      } catch (e) {
+        const detail = isLainCallError(e)
+          ? e.message
+          : `advisor failed: ${e instanceof Error ? e.message : String(e)}`;
+        return { advisor: null, source: 'error' as const, error: detail, workspace };
       }
     },
   );

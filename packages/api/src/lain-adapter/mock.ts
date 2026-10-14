@@ -192,6 +192,16 @@ export function createLainMock(): LainAdapter {
         method_match: true,
         template_match: 'exact',
         reasons: [],
+        bindings_entry: [
+          `- consumer:`,
+          `    repo: ${req.consumer.split(':')[0]}`,
+          `    path: mock/path.graphql`,
+          `    symbol: graphql-call:${req.endpoint.key.replace(/^graphql:/, '')}`,
+          `    key: "${req.endpoint.key}"`,
+          `  provider:`,
+          `    service: ${req.endpoint.service}`,
+          `    key: "${req.endpoint.key}"`,
+        ].join('\n'),
       };
     },
   };
