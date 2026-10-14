@@ -4,16 +4,24 @@
 // in the plan: a bad URL must fail fast, not on the first request).
 
 import type {
+  CheckBindingArgs,
+  CheckBindingResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  GetContractArgs,
+  GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
+  ListContractsArgs,
+  ListContractsResponse,
   ListServicesArgs,
   ListServicesResponse,
+  ListUnresolvedArgs,
+  ListUnresolvedResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
   ReadSourceArgs,
@@ -265,6 +273,31 @@ export class RealLainAdapter implements LainAdapter {
 
   async readSource(req: ReadSourceArgs): Promise<ReadSourceResponse> {
     return this.call<ReadSourceResponse>('read_source', req as unknown as Record<string, unknown>);
+  }
+
+  async listContracts(req: ListContractsArgs): Promise<ListContractsResponse> {
+    return this.call<ListContractsResponse>(
+      'list_contracts',
+      req as unknown as Record<string, unknown>,
+    );
+  }
+
+  async getContract(req: GetContractArgs): Promise<GetContractResponse> {
+    return this.call<GetContractResponse>('get_contract', req as unknown as Record<string, unknown>);
+  }
+
+  async listUnresolved(req: ListUnresolvedArgs): Promise<ListUnresolvedResponse> {
+    return this.call<ListUnresolvedResponse>(
+      'list_unresolved',
+      req as unknown as Record<string, unknown>,
+    );
+  }
+
+  async checkBinding(req: CheckBindingArgs): Promise<CheckBindingResponse> {
+    return this.call<CheckBindingResponse>(
+      'check_binding',
+      req as unknown as Record<string, unknown>,
+    );
   }
 }
 

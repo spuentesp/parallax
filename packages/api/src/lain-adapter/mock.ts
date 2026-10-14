@@ -1,14 +1,22 @@
 import type {
+  CheckBindingArgs,
+  CheckBindingResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  GetContractArgs,
+  GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
+  ListContractsArgs,
+  ListContractsResponse,
   ListServicesArgs,
   ListServicesResponse,
+  ListUnresolvedArgs,
+  ListUnresolvedResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
   ReadSourceArgs,
@@ -142,6 +150,48 @@ export function createLainMock(): LainAdapter {
         commit: s1RemoveCustomerId.baseSha,
         total_lines: req.end + 40,
         source: req.snapshot,
+      };
+    },
+
+    async listContracts(req: ListContractsArgs): Promise<ListContractsResponse> {
+      recordMockCall({ tool: 'list_contracts', snapshot: req.snapshot, args: req });
+      return {
+        items: [
+          {
+            endpoint: { key: 'http:GET /api/orders/{}', service: 'orders' },
+            has_schema: true,
+            bound_consumers: 1,
+          },
+          {
+            endpoint: { key: 'http:GET /invoices/{}', service: 'billing' },
+            has_schema: false,
+            bound_consumers: 1,
+          },
+        ],
+      };
+    },
+
+    async getContract(req: GetContractArgs): Promise<GetContractResponse> {
+      recordMockCall({ tool: 'get_contract', snapshot: req.snapshot, args: req });
+      return { items: [{ key: req.key, service: req.service, consumers: [] }] };
+    },
+
+    async listUnresolved(req: ListUnresolvedArgs): Promise<ListUnresolvedResponse> {
+      recordMockCall({ tool: 'list_unresolved', snapshot: req.snapshot, args: req });
+      return {
+        items: [],
+        ambiguous: [],
+        scope: { configured_only: true, reviewed: [], unreviewed: [] },
+      };
+    },
+
+    async checkBinding(req: CheckBindingArgs): Promise<CheckBindingResponse> {
+      recordMockCall({ tool: 'check_binding', snapshot: req.snapshot, args: req });
+      return {
+        valid: true,
+        method_match: true,
+        template_match: 'exact',
+        reasons: [],
       };
     },
   };

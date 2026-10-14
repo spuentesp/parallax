@@ -220,6 +220,52 @@ export const CheckBindingArgs = z
   .strict();
 export type CheckBindingArgs = z.infer<typeof CheckBindingArgs>;
 
+// Respuestas de las tools de catálogo. Se modelan sólo las señales que el
+// producto consume; los blobs de evidencia pasan con .loose().
+export const ListContractsResponse = z.object({
+  items: z.array(
+    z
+      .object({
+        endpoint: EndpointRef,
+        has_schema: z.boolean().optional(),
+        bound_consumers: z.number().int().nonnegative().optional(),
+      })
+      .loose(),
+  ),
+  cursor: z.string().nullable().optional(),
+});
+export type ListContractsResponse = z.infer<typeof ListContractsResponse>;
+
+export const GetContractResponse = z.object({
+  items: z.array(z.looseObject({})),
+});
+export type GetContractResponse = z.infer<typeof GetContractResponse>;
+
+const UnresolvedScope = z
+  .object({
+    configured_only: z.boolean().optional(),
+    reviewed: z.array(z.looseObject({})).optional(),
+    unreviewed: z.array(z.looseObject({})).optional(),
+  })
+  .loose();
+
+export const ListUnresolvedResponse = z.object({
+  items: z.array(z.looseObject({})),
+  ambiguous: z.array(z.looseObject({})),
+  scope: UnresolvedScope,
+});
+export type ListUnresolvedResponse = z.infer<typeof ListUnresolvedResponse>;
+
+// `check_binding` no devuelve el YAML del binding, sino el diagnóstico de por
+// qué un vínculo propuesto es o no válido (§12).
+export const CheckBindingResponse = z.object({
+  valid: z.boolean(),
+  method_match: z.boolean().optional(),
+  template_match: z.string().optional(),
+  reasons: z.array(z.string()).optional(),
+});
+export type CheckBindingResponse = z.infer<typeof CheckBindingResponse>;
+
 // 9. diff_contracts — base/head deben ser snapshots `ready`; `live` se rechaza
 // en el motor con invalid_argument / live_not_supported.
 export const DiffContractsArgs = z
