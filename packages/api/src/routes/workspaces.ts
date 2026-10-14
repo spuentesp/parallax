@@ -3,6 +3,12 @@ import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { runAdvisor } from '../advisor/index.js';
+import {
+  buildGraphChildren,
+  buildGraphRoot,
+  deriveLainRepoId,
+  resolveSymbolSnippet,
+} from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
@@ -336,6 +342,171 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           source: 'error' as const,
           error: detail,
           workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
+        };
+      }
+    },
+  );
+
+  // Grafo de código expandible (paquete raw de lain vía query_graph). La raíz
+  // trae la estructura de alto nivel de cada repo; la expansión de un nodo se
+  // pide a /graph/children y devuelve lo que CONTIENE (Contains saliente) más
+  // sus vecinos de comunicación agrupados por arista — el motor nunca devuelve
+  // aristas, así que no se sintetizan pares (INV 3).
+  app.get(
+    '/api/workspaces/:id/graph',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req) => {
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return { graph: null, source: 'none' as const };
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const workspace = { id: ws[0].id, name: ws[0].name, repoCount: repos.length };
+
+      if (!ws[0].lainUrl) {
+        return { graph: { repos: [] }, source: 'unconfigured' as const, workspace };
+      }
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        // repo_id de LAIN se deriva del checkout local (orders, saleor, …),
+        // no del id interno del workspace.
+        const repoIds = repos.map((r) => deriveLainRepoId(r));
+        const graph = await buildGraphRoot(client, repoIds);
+        return { graph, source: 'lain' as const, lainUrl: ws[0].lainUrl, workspace };
+      } catch (e) {
+        return {
+          graph: { repos: [] },
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+          workspace,
+        };
+      }
+    },
+  );
+
+  // Expansión de un nodo: hijos (Contains saliente) + vecinos de comunicación
+  // (Calls/Uses/Imports/Produces/Consumes/CallsHttp, ambos sentidos). El nodo
+  // se dirige por type+name: el filtro `id` de find es inerte en el motor.
+  app.get(
+    '/api/workspaces/:id/graph/children',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            type: z.string().min(1),
+            name: z.string().min(1),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, type, name } = req.query as { repo: string; type: string; name: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+
+      // Scoping: sólo repos del propio workspace.
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { children: null, source: 'unconfigured' as const };
+      }
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const result = await buildGraphChildren(client, { repo, type, name });
+        return { ...result, source: 'lain' as const };
+      } catch (e) {
+        return {
+          children: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
+  // Fuente de un símbolo vía explain_symbol (aporta el path) + get_code_snippet.
+  app.get(
+    '/api/workspaces/:id/graph/snippet',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            symbol: z.string().min(1),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, symbol } = req.query as { repo: string; symbol: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { snippet: null, source: 'unconfigured' as const };
+      }
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const snippet = await resolveSymbolSnippet(client, repo, symbol);
+        return { snippet, source: 'lain' as const };
+      } catch (e) {
+        return {
+          snippet: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
         };
       }
     },

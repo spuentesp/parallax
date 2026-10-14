@@ -2,11 +2,15 @@ import type * as React from 'react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
+  fetchGraphChildren,
+  fetchGraphSnippet,
   useEvidence,
   useWorkspace,
+  useWorkspaceGraph,
   useWorkspaceTopology,
   type TopologyFilters,
 } from '../api/hooks.js';
+import { CodeGraphTree } from '../components/CodeGraphTree.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
 import { HierarchyTree } from '../components/HierarchyTree.js';
@@ -16,9 +20,11 @@ const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket']
 
 export function WorkspaceDetail(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
+  const [tab, setTab] = useState<'contracts' | 'graph'>('contracts');
   const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id, filters);
+  const graphQuery = useWorkspaceGraph(tab === 'graph' ? id : undefined);
   const evidence = useEvidence();
   const [cited, setCited] = useState<EvidenceItem[] | null>(null);
 
@@ -61,69 +67,120 @@ export function WorkspaceDetail(): React.ReactElement {
         </div>
       </div>
 
-      {/* Stats strip */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        <Stat label="Services" value={stats?.services ?? 0} />
-        <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
-        <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
-        <Stat label="Repositories" value={ws.repoCount} />
-        <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
+      {/* Pestañas: contratos (topología de endpoints) vs grafo de código */}
+      <div className="flex items-center gap-2" data-testid="workspace-tabs">
+        {(
+          [
+            ['contracts', 'Contracts'],
+            ['graph', 'Code graph'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
+              tab === key ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-border'
+            }`}
+            data-testid={`tab-${key}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Topology graph + filtros */}
-      <div>
-        <div className="flex items-baseline justify-between mb-2">
-          <h2 className="font-semibold">Contract topology</h2>
-          <span className="text-xs text-muted">
-            {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
-            {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
-          </span>
-        </div>
-
-        <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
-
-        <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <HierarchyTree
-            nodes={topo?.topology?.nodes ?? []}
-            edges={topo?.topology?.edges ?? []}
-          />
-          <div>
-            {topoQuery.isLoading ? (
-              <div className="h-[560px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
-                Loading topology from LAIN…
-              </div>
-            ) : (
-              <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
-            )}
+      {tab === 'contracts' && (
+        <>
+          {/* Stats strip */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <Stat label="Services" value={stats?.services ?? 0} />
+            <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
+            <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
+            <Stat label="Repositories" value={ws.repoCount} />
+            <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
           </div>
-        </div>
-        <div className="mt-2">
-          <TopologyLegend />
-        </div>
-        {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
-      </div>
 
-      {/* Navegación por dependencias + panel de evidencia (§2, §10) */}
-      <div>
-        <div className="flex items-baseline justify-between mb-2">
-          <h2 className="font-semibold">Dependencies &amp; evidence</h2>
-          <span className="text-xs text-muted">
-            Cada call-site abre el código en la vista del motor
-          </span>
+          {/* Topology graph + filtros */}
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="font-semibold">Contract topology</h2>
+              <span className="text-xs text-muted">
+                {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
+                {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
+              </span>
+            </div>
+
+            <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
+
+            <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <HierarchyTree
+                nodes={topo?.topology?.nodes ?? []}
+                edges={topo?.topology?.edges ?? []}
+              />
+              <div>
+                {topoQuery.isLoading ? (
+                  <div className="h-[560px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
+                    Loading topology from LAIN…
+                  </div>
+                ) : (
+                  <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
+                )}
+              </div>
+            </div>
+            <div className="mt-2">
+              <TopologyLegend />
+            </div>
+            {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
+          </div>
+
+          {/* Navegación por dependencias + panel de evidencia (§2, §10) */}
+          <div>
+            <div className="flex items-baseline justify-between mb-2">
+              <h2 className="font-semibold">Dependencies &amp; evidence</h2>
+              <span className="text-xs text-muted">
+                Cada call-site abre el código en la vista del motor
+              </span>
+            </div>
+            <DependencyList
+              edges={topo?.topology?.edges ?? []}
+              loading={evidence.isPending}
+              evidence={cited}
+              onLoadEvidence={(refs) => {
+                if (!id) return;
+                evidence.mutate(
+                  { workspaceId: id, refs, contextLines: 6 },
+                  { onSuccess: (res) => setCited(res.items) },
+                );
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {tab === 'graph' && (
+        <div>
+          <div className="flex items-baseline justify-between mb-2">
+            <h2 className="font-semibold">Code graph</h2>
+            <span className="text-xs text-muted">
+              Expands node by node from LAIN&apos;s knowledge graph
+              {graphQuery.data?.lainUrl ? ` · ${graphQuery.data.lainUrl}` : ''}
+            </span>
+          </div>
+          {graphQuery.isLoading ? (
+            <div className="h-[320px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
+              Loading code graph from LAIN…
+            </div>
+          ) : (
+            <CodeGraphTree
+              data={
+                graphQuery.data ?? { graph: { repos: [] }, source: 'none' as const }
+              }
+              fetchChildren={(ref) => fetchGraphChildren(id ?? '', ref)}
+              fetchSnippet={(repo, symbol) => fetchGraphSnippet(id ?? '', repo, symbol)}
+            />
+          )}
         </div>
-        <DependencyList
-          edges={topo?.topology?.edges ?? []}
-          loading={evidence.isPending}
-          evidence={cited}
-          onLoadEvidence={(refs) => {
-            if (!id) return;
-            evidence.mutate(
-              { workspaceId: id, refs, contextLines: 6 },
-              { onSuccess: (res) => setCited(res.items) },
-            );
-          }}
-        />
-      </div>
+      )}
 
       {/* Repositories */}
       <div>

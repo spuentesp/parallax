@@ -48,9 +48,35 @@ describe('LainAdapter real client', () => {
         headers: { 'content-type': 'application/json' },
       }),
     );
+    // El boot opta por raw/arch/workspace de forma defensiva: cada carga
+    // responde already_loaded y un fallo no debe romper el arranque.
+    for (const pkg of ['raw', 'arch', 'workspace']) {
+      fetchSpy.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: {
+              content: [
+                {
+                  text: JSON.stringify({ package: pkg, loaded: true, already_loaded: false }),
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    }
     const a = await createLainClient({ lainUrl: 'http://lain:9999/mcp', apiVersion: '1' });
     expect(a.apiVersion).toBe('1');
     expect(typeof a.analyzerVersion).toBe('string');
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+    const loadBody = JSON.parse(
+      (fetchSpy.mock.calls[1]?.[1]?.body as string) ?? '{}',
+    ) as { params?: { name?: string; arguments?: { package?: string } } };
+    expect(loadBody.params?.name).toBe('load_package');
+    expect(loadBody.params?.arguments?.package).toBe('raw');
   });
 
   it('rejects when lain returns HTTP 503 at handshake', async () => {

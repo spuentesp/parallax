@@ -6,8 +6,13 @@
 import type {
   CheckBindingArgs,
   CheckBindingResponse,
+  DescribeSchemaArgs,
+  DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainSymbolArgs,
+  GetCallSitesArgs,
+  GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
@@ -16,14 +21,19 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
+  LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
   ListUnresolvedResponse,
+  LoadPackageArgs,
+  LoadPackageResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
+  QueryGraphArgs,
+  QueryGraphResponse,
   ReadSourceArgs,
   ReadSourceResponse,
   ResolveEvidenceArgs,
@@ -47,6 +57,12 @@ interface JsonRpcResponse {
   id: number | string | null;
   result?: unknown;
   error?: { code: number; message: string; data?: unknown };
+}
+
+interface McpEnvelope {
+  _meta?: Record<string, unknown>;
+  content?: Array<{ text?: string }>;
+  structuredContent?: Record<string, unknown>;
 }
 
 function _pickRateLimit(headers: Headers): {
@@ -90,7 +106,10 @@ export class RealLainAdapter implements LainAdapter {
     this.fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
-  private async call<T>(tool: string, args: Record<string, unknown>): Promise<T> {
+  private async request(
+    tool: string,
+    args: Record<string, unknown>,
+  ): Promise<McpEnvelope> {
     let attempt = 0;
     let lastError: unknown = null;
     while (attempt <= this.maxRetries) {
@@ -146,51 +165,14 @@ export class RealLainAdapter implements LainAdapter {
             message: `JSON-RPC error ${body.error.code}: ${body.error.message}`,
           });
         }
-        // Real lain wraps the payload in { _meta, content: [{ text: "<JSON>" }] }.
-        // The `text` field is a JSON string with analyzer_version, api_version,
-        // data, meta. We return `data` (the domain payload) plus `_meta`.
-        const envelope = body.result as
-          | {
-              _meta?: Record<string, unknown>;
-              content?: Array<{ text?: string }>;
-              structuredContent?: Record<string, unknown>;
-            }
-          | undefined;
+        const envelope = body.result as McpEnvelope | undefined;
         if (!envelope) {
           throw LainCallError.parse({
             code: 'LainUnavailable',
             message: 'no result in JSON-RPC response',
           });
         }
-        // Prefer structuredContent (already parsed); fall back to content[0].text.
-        let parsed: Record<string, unknown> | undefined;
-        if (envelope.structuredContent && typeof envelope.structuredContent === 'object') {
-          parsed = envelope.structuredContent as Record<string, unknown>;
-        } else if (envelope.content?.[0]?.text) {
-          try {
-            parsed = JSON.parse(envelope.content[0].text) as Record<string, unknown>;
-          } catch {
-            throw LainCallError.parse({
-              code: 'LainUnavailable',
-              message: `lain returned unparseable content[0].text for ${tool}`,
-            });
-          }
-        }
-        if (!parsed) {
-          throw LainCallError.parse({
-            code: 'LainUnavailable',
-            message: `lain returned no parseable payload for ${tool}`,
-          });
-        }
-        if (parsed.error !== undefined && parsed.error !== null) {
-          throw LainCallError.parse({
-            code: 'LainUnavailable',
-            message: `lain returned error in envelope: ${JSON.stringify(parsed.error)}`,
-          });
-        }
-        // Return the `data` field (domain payload) merged with `_meta`.
-        const data = parsed.data ?? parsed;
-        return data as T;
+        return envelope;
       } catch (e) {
         clearTimeout(timer);
         if (e instanceof Error && e.name === 'AbortError') {
@@ -212,6 +194,61 @@ export class RealLainAdapter implements LainAdapter {
     throw lastError instanceof Error
       ? lastError
       : LainCallError.parse({ code: 'LainUnavailable', message: 'exhausted retries' });
+  }
+
+  // Real lain wraps the payload in { _meta, content: [{ text: "<JSON>" }] }.
+  // The `text` field is a JSON string with analyzer_version, api_version,
+  // data, meta. We return `data` (the domain payload) plus `_meta`.
+  private parsePayload<T>(tool: string, envelope: McpEnvelope): T {
+    // Prefer structuredContent (already parsed); fall back to content[0].text.
+    let parsed: Record<string, unknown> | undefined;
+    if (envelope.structuredContent && typeof envelope.structuredContent === 'object') {
+      parsed = envelope.structuredContent as Record<string, unknown>;
+    } else if (envelope.content?.[0]?.text) {
+      try {
+        parsed = JSON.parse(envelope.content[0].text) as Record<string, unknown>;
+      } catch {
+        throw LainCallError.parse({
+          code: 'LainUnavailable',
+          message: `lain returned unparseable content[0].text for ${tool}`,
+        });
+      }
+    }
+    if (!parsed) {
+      throw LainCallError.parse({
+        code: 'LainUnavailable',
+        message: `lain returned no parseable payload for ${tool}`,
+      });
+    }
+    if (parsed.error !== undefined && parsed.error !== null) {
+      throw LainCallError.parse({
+        code: 'LainUnavailable',
+        message: `lain returned error in envelope: ${JSON.stringify(parsed.error)}`,
+      });
+    }
+    // Return the `data` field (domain payload) merged with `_meta`.
+    const data = parsed.data ?? parsed;
+    return data as T;
+  }
+
+  private async call<T>(tool: string, args: Record<string, unknown>): Promise<T> {
+    const envelope = await this.request(tool, args);
+    return this.parsePayload<T>(tool, envelope);
+  }
+
+  // Tools del paquete raw que devuelven markdown plano (get_code_snippet,
+  // explain_symbol, get_call_sites): no hay JSON que parsear, se devuelve el
+  // texto tal cual envuelto en {text}.
+  private async callText(tool: string, args: Record<string, unknown>): Promise<LainTextResponse> {
+    const envelope = await this.request(tool, args);
+    const text = envelope.content?.[0]?.text;
+    if (typeof text !== 'string') {
+      throw LainCallError.parse({
+        code: 'LainUnavailable',
+        message: `lain returned no text payload for ${tool}`,
+      });
+    }
+    return { text };
   }
 
   async listServices(req: ListServicesArgs): Promise<ListServicesResponse> {
@@ -299,6 +336,52 @@ export class RealLainAdapter implements LainAdapter {
       req as unknown as Record<string, unknown>,
     );
   }
+
+  async queryGraph(req: QueryGraphArgs): Promise<QueryGraphResponse> {
+    // El argumento es `query` (los docs de lain dicen `spec`, mal para este
+    // build). Se envía verbatim: el pipeline lo valida el motor.
+    const res = await this.call<QueryGraphResponse>('query_graph', {
+      query: req.query,
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+    // El motor omite `nodes` entero cuando count=0: se normaliza a [] sin
+    // inventar nada (un vacío sigue siendo un vacío).
+    return { ...res, nodes: res.nodes ?? [] };
+  }
+
+  async describeSchema(req: DescribeSchemaArgs): Promise<DescribeSchemaResponse> {
+    return this.call<DescribeSchemaResponse>(
+      'describe_schema',
+      req as unknown as Record<string, unknown>,
+    );
+  }
+
+  async loadPackage(req: LoadPackageArgs): Promise<LoadPackageResponse> {
+    return this.call<LoadPackageResponse>('load_package', { package: req.package });
+  }
+
+  async getCodeSnippet(req: GetCodeSnippetArgs): Promise<LainTextResponse> {
+    return this.callText('get_code_snippet', {
+      path: req.path,
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+      ...(req.line !== undefined ? { line: req.line } : {}),
+      ...(req.context_lines !== undefined ? { context_lines: req.context_lines } : {}),
+    });
+  }
+
+  async explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse> {
+    return this.callText('explain_symbol', {
+      symbol: req.symbol,
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
+
+  async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {
+    return this.callText('get_call_sites', {
+      symbol: req.symbol,
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
 }
 
 export async function createLainClient(config: LainClientConfig): Promise<LainAdapter> {
@@ -378,7 +461,20 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
 
   // analyzerVersion is populated by the first tools/call response; until then
   // we expose the version from config or the handshake.
-  return new RealLainAdapter(config, '0.9.0');
+  const adapter = new RealLainAdapter(config, '0.9.0');
+
+  // query_graph vive en el paquete `raw`, que no viene cargado por defecto.
+  // Se opta por él (y por arch/workspace, que aportan las vistas de capas) de
+  // forma defensiva: la carga es idempotente (already_loaded) y un fallo aquí
+  // no debe tumbar el arranque — las tools de contratos siguen funcionando.
+  for (const pkg of ['raw', 'arch', 'workspace']) {
+    try {
+      await adapter.loadPackage({ package: pkg });
+    } catch {
+      // Server sin ese paquete o ya sin sesión: se ignora (INV 3: nada inventado).
+    }
+  }
+  return adapter;
 }
 
 // One handshake per LAIN endpoint, not per request. Failures are not cached,

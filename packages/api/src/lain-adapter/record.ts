@@ -12,7 +12,13 @@ export interface MockCall {
     | 'trace_impact'
     | 'get_coverage'
     | 'resolve_evidence'
-    | 'read_source';
+    | 'read_source'
+    | 'query_graph'
+    | 'describe_schema'
+    | 'load_package'
+    | 'get_code_snippet'
+    | 'explain_symbol'
+    | 'get_call_sites';
   readonly args: unknown;
   readonly snapshot?: string;
   readonly at: number;

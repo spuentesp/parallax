@@ -204,6 +204,91 @@ export function useWorkspaceTopology(id: string | undefined, filters: TopologyFi
   });
 }
 
+// ── Code graph (query_graph: repo → archivo → símbolo, expandible) ──────────
+
+export type CodeNodeKind = 'container' | 'symbol' | 'route' | 'schema' | 'other';
+
+export interface CodeGraphNode {
+  id: string;
+  name: string;
+  type: string;
+  kind: CodeNodeKind;
+}
+
+export interface CodeGraphRepoRoot {
+  repo: string;
+  nodes: CodeGraphNode[];
+  truncated: boolean;
+  error?: string;
+}
+
+export interface GraphRootResponse {
+  graph: { repos: CodeGraphRepoRoot[] } | null;
+  source: 'lain' | 'unconfigured' | 'error' | 'none';
+  error?: string;
+  lainUrl?: string;
+  workspace?: { id: string; name: string; repoCount: number };
+}
+
+export interface CodeGraphCommGroup {
+  edge: string;
+  nodes: CodeGraphNode[];
+  error?: string;
+}
+
+export interface CodeGraphChildrenResponse {
+  node?: { repo: string; type: string; name: string };
+  children?: CodeGraphNode[];
+  childrenTruncated?: boolean;
+  communications?: CodeGraphCommGroup[];
+  hasCommunication?: boolean;
+  source?: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+}
+
+export interface GraphSnippetResponse {
+  snippet: {
+    symbol: string;
+    repo: string;
+    path: string | null;
+    text: string | null;
+    error?: string;
+  } | null;
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+}
+
+export function codeNodeKey(repo: string, type: string, name: string): string {
+  return `${repo}|${type}|${name}`;
+}
+
+export function useWorkspaceGraph(id: string | undefined) {
+  return useQuery({
+    queryKey: ['workspace-graph', id],
+    queryFn: () => client.get<GraphRootResponse>(`/api/workspaces/${id}/graph`),
+    enabled: id != null,
+  });
+}
+
+// La expansión es imperativa (no un hook por fila): cada nodo abierto tiene
+// su propia caché en el árbol y varias filas pueden estar expandidas a la vez.
+export function fetchGraphChildren(
+  workspaceId: string,
+  ref: { repo: string; type: string; name: string },
+): Promise<CodeGraphChildrenResponse> {
+  const qs = new URLSearchParams({ repo: ref.repo, type: ref.type, name: ref.name });
+  return client.get<CodeGraphChildrenResponse>(`/api/workspaces/${workspaceId}/graph/children?${qs}`);
+}
+
+export function fetchGraphSnippet(
+  workspaceId: string,
+  repo: string,
+  symbol: string,
+): Promise<GraphSnippetResponse> {
+  const qs = new URLSearchParams({ repo, symbol });
+  return client.get<GraphSnippetResponse>(`/api/workspaces/${workspaceId}/graph/snippet?${qs}`);
+}
+
 export function useCreateWorkspace() {
   return useMutation({
     mutationFn: (body: {

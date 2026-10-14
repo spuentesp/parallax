@@ -1,8 +1,13 @@
 import type {
   CheckBindingArgs,
   CheckBindingResponse,
+  DescribeSchemaArgs,
+  DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainSymbolArgs,
+  GetCallSitesArgs,
+  GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
@@ -11,14 +16,19 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
+  LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
   ListUnresolvedResponse,
+  LoadPackageArgs,
+  LoadPackageResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
+  QueryGraphArgs,
+  QueryGraphResponse,
   ReadSourceArgs,
   ReadSourceResponse,
   ResolveEvidenceArgs,
@@ -203,6 +213,123 @@ export function createLainMock(): LainAdapter {
           `    key: "${req.endpoint.key}"`,
         ].join('\n'),
       };
+    },
+
+    // Grafo crudo: un diminuto grafo de mentira FIJO (no se sintetiza nada en
+    // runtime) con la forma exacta del motor, incluida la omisión de `nodes`
+    // cuando count=0. Sirve para probar el builder sin servidor.
+    async queryGraph(req: QueryGraphArgs): Promise<QueryGraphResponse> {
+      recordMockCall({ tool: 'query_graph', args: req });
+      const ops = req.query.ops as Array<Record<string, unknown>>;
+      const find = (ops.find((o) => o.op === 'find') ?? {}) as {
+        type?: string | string[];
+        name?: string | { exact?: string };
+      };
+      const connect = (ops.find((o) => o.op === 'connect') ?? {}) as {
+        edge?: string | string[];
+        direction?: string;
+      };
+      const limit = (ops.find((o) => o.op === 'limit') ?? {}) as { count?: number };
+      // El builder envía {exact}; el motor también acepta string plano.
+      const name = typeof find.name === 'object' ? (find.name.exact ?? '') : (find.name ?? '');
+
+      const rootTypes = ['File', 'Namespace', 'Module', 'HttpRoute', 'Topic'];
+      const types = Array.isArray(find.type) ? find.type : find.type ? [find.type] : [];
+      let nodes: QueryGraphResponse['nodes'] = [];
+
+      if (!name && types.length > 0 && types.some((t) => rootTypes.includes(t))) {
+        // Raíz: estructura de alto nivel del repo orders.
+        nodes = [
+          { id: 'n-file-main', name: 'main.rs', type: 'File' },
+          { id: 'n-ns-src', name: 'src', type: 'Namespace' },
+          { id: 'n-mod-orders', name: 'orders', type: 'Module' },
+          { id: 'n-route-post', name: 'POST /api/orders', type: 'HttpRoute' },
+          { id: 'n-topic', name: 'kafka/orders.created', type: 'Topic' },
+        ].filter((n) => types.includes(n.type));
+      } else if (find.type === 'File' && name === 'main.rs') {
+        const edge = Array.isArray(connect.edge) ? connect.edge[0] : connect.edge;
+        if (edge === 'Contains' && connect.direction === 'outgoing') {
+          nodes = [
+            { id: 'n-fn-main', name: 'main', type: 'Function' },
+            { id: 'n-mod-orders', name: 'orders', type: 'Module' },
+          ];
+        }
+      } else if (find.type === 'Function' && name === 'create_order') {
+        const edge = Array.isArray(connect.edge) ? connect.edge[0] : connect.edge;
+        if (edge === 'Uses' && connect.direction === 'both') {
+          nodes = [{ id: 'n-struct-create', name: 'CreateOrder', type: 'Struct' }];
+        } else if (edge === 'CallsHttp' && connect.direction === 'both') {
+          nodes = [{ id: 'n-route-post', name: 'POST /api/orders', type: 'HttpRoute' }];
+        }
+      }
+      // El motor omite `nodes` entero cuando no hay resultados.
+      if (limit.count !== undefined && nodes.length > limit.count) {
+        nodes = nodes.slice(0, limit.count);
+      }
+      return { count: nodes.length, legacy: false, nodes };
+    },
+
+    async describeSchema(_req: DescribeSchemaArgs): Promise<DescribeSchemaResponse> {
+      recordMockCall({ tool: 'describe_schema', args: _req });
+      return {
+        node_types: [
+          { name: 'File', indexed: true },
+          { name: 'Namespace', indexed: true },
+          { name: 'Module', indexed: true },
+          { name: 'Package', indexed: true },
+          { name: 'Function', indexed: true },
+          { name: 'Method', indexed: true },
+          { name: 'Struct', indexed: true },
+          { name: 'Enum', indexed: true },
+          { name: 'Trait', indexed: true },
+          { name: 'Class', indexed: true },
+          { name: 'Interface', indexed: true },
+          { name: 'HttpRoute', indexed: true },
+          { name: 'Topic', indexed: true },
+          { name: 'Schema', indexed: true },
+        ],
+        edge_types: [
+          { name: 'Contains', indexed: true },
+          { name: 'Calls', indexed: true },
+          { name: 'Uses', indexed: true },
+          { name: 'Imports', indexed: false },
+          { name: 'Produces', indexed: true },
+          { name: 'Consumes', indexed: true },
+          { name: 'CallsHttp', indexed: true },
+        ],
+      };
+    },
+
+    async loadPackage(req: LoadPackageArgs): Promise<LoadPackageResponse> {
+      recordMockCall({ tool: 'load_package', args: req });
+      return { package: req.package, loaded: true, already_loaded: true };
+    },
+
+    async getCodeSnippet(req: GetCodeSnippetArgs): Promise<LainTextResponse> {
+      recordMockCall({ tool: 'get_code_snippet', args: req });
+      return {
+        text: `File: mock/${req.path}\nShowing lines 1-2\n\n   1: mock line 1\n   2: mock line 2`,
+      };
+    },
+
+    async explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse> {
+      recordMockCall({ tool: 'explain_symbol', args: req });
+      return {
+        text: [
+          `## Explanation for '${req.symbol}' (Function)`,
+          `**Path:** mock/${req.symbol}.rs`,
+          '',
+          '### Source',
+          '```',
+          `fn ${req.symbol}() {}`,
+          '```',
+        ].join('\n'),
+      };
+    },
+
+    async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {
+      recordMockCall({ tool: 'get_call_sites', args: req });
+      return { text: `No call sites found for '${req.symbol}' (${req.symbol} is a leaf)` };
     },
   };
 }
