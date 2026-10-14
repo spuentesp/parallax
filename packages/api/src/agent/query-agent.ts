@@ -116,6 +116,7 @@ export function buildQueryAgent(deps: QueryAgentDeps) {
           id: (obj.service as string) ?? 'unknown',
           label: (obj.service as string) ?? 'unknown',
           kind: 'service' as const,
+          parent: null,
         };
       });
       const edges: TopologyViewData['edges'] = [];

@@ -140,7 +140,8 @@ export interface Workspace {
 export interface TopologyNode {
   id: string;
   label: string;
-  kind: 'service' | 'endpoint';
+  kind: 'repo' | 'service' | 'endpoint';
+  parent: string | null;
   meta?: Record<string, unknown>;
 }
 
@@ -148,7 +149,7 @@ export interface TopologyEdge {
   source: string;
   target: string;
   label?: string;
-  kind: 'provides' | 'consumes';
+  kind: 'contains' | 'consumes' | 'servedBy';
   meta?: Record<string, unknown>;
 }
 
@@ -162,10 +163,10 @@ export interface TopologyFilters {
 export interface TopologyResponse {
   topology: { nodes: TopologyNode[]; edges: TopologyEdge[] } | null;
   stats: {
+    repos: number;
     services: number;
     endpoints: number;
     dependencies: number;
-    repos: string[];
     byKind: Record<string, number>;
   } | null;
   source: 'lain' | 'unconfigured' | 'error' | 'none';
