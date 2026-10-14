@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EdgeType, FindingClass, LainView } from './enums.js';
+import { FindingClass, LainView } from './enums.js';
 
 // Real response envelope from a running lain server:
 // { _meta: { revision, static_graph_generation, view: { git_commits, kind, snapshot_id } },
@@ -45,24 +45,54 @@ export const ListServicesResponse = z.object({
 export type ListServicesArgs = z.infer<typeof ListServicesArgs>;
 export type ListServicesResponse = z.infer<typeof ListServicesResponse>;
 
-// 2. get_service — data.service + data.consumers[]
+// 2. get_service — data.service + data.consumers[] + data.endpoints[]
+//
+// Real lain (analyzer 0.9.1) names the consumer by `service` (plus its `repo`),
+// and each `uses[]` entry carries a `binding` object with a confidence and a
+// kind, and the consumed `endpoint` key. `caller`/`site` are evidence anchors
+// (repo/path/line/commit) that we pass through without modelling in depth.
+const Binding = z.object({
+  confidence: z.number().min(0).max(1),
+  kind: z.string().min(1),
+  source: z.string().optional(),
+  detector: z.string().optional(),
+});
+
+const Anchor = z
+  .object({
+    id: z.string().optional(),
+    repo: z.string().optional(),
+    path: z.string().optional(),
+    line: z.number().int().optional(),
+    commit: z.string().optional(),
+    name: z.string().optional(),
+    text: z.string().optional(),
+  })
+  .loose();
+
 const Use = z.object({
-  field: z.string().min(1).optional(),
-  route: z.string().min(1).optional(),
-  binding: EdgeType,
-  source: z.string().min(1).optional(),
+  binding: Binding,
+  endpoint: z
+    .object({ key: z.string().min(1), service: z.string().min(1) })
+    .optional(),
+  fields: z.array(z.string()).default([]),
+  match: z.string().optional(),
+  caller: Anchor.optional(),
+  site: Anchor.optional(),
 });
 
 const Consumer = z.object({
-  consumer: z.string().min(1),
+  service: z.string().min(1),
+  repo: z.string().min(1),
   uses: z.array(Use),
 });
 
 export const GetServiceArgs = z.object({ view: LainView, service: z.string().min(1) });
 export const GetServiceResponse = z.object({
-  service: z.object({ id: z.string().min(1), name: z.string().min(1) }),
+  service: z.string().min(1),
   consumers: z.array(Consumer),
-  usedByTruncated: z.boolean(),
+  endpoints: z.array(z.string()).default([]),
+  usedByTruncated: z.boolean().optional(),
 });
 export type GetServiceArgs = z.infer<typeof GetServiceArgs>;
 export type GetServiceResponse = z.infer<typeof GetServiceResponse>;

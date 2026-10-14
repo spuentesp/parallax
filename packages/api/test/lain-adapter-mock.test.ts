@@ -25,7 +25,7 @@ describe('LainAdapter mock', () => {
   it('getService returns consumers for orders', async () => {
     const m = createLainMock();
     const r = await m.getService('live', { view: 'live', service: 'orders' });
-    expect(r.consumers[0]?.consumer).toBe('billing');
+    expect(r.consumers[0]?.service).toBe('billing');
   });
 
   it('prepareSnapshot then getSnapshot transitions pending → ready', async () => {

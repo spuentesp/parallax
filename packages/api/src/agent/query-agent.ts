@@ -122,13 +122,13 @@ export function buildQueryAgent(deps: QueryAgentDeps) {
       const symbols = state.discovered?.symbols ?? [];
       for (const sym of symbols) {
         const svc = sym as {
-          service?: { id?: string };
-          consumers?: Array<{ consumer: string }>;
+          service?: string;
+          consumers?: Array<{ service: string }>;
         };
         for (const c of svc.consumers ?? []) {
           edges.push({
-            source: c.consumer,
-            target: svc.service?.id ?? 'unknown',
+            source: c.service,
+            target: svc.service ?? 'unknown',
             label: 'consumes',
             kind: 'consumes' as const,
           });

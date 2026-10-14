@@ -1,11 +1,14 @@
 // TopologyView — reagraph-based service topology visualization.
+// Node/edge data comes from LAIN via GET /api/workspaces/:id/topology.
 
+import type * as React from 'react';
 import { GraphCanvas } from 'reagraph';
 
 export interface TopologyNode {
   id: string;
   label: string;
   kind: 'service' | 'symbol' | 'contract';
+  meta?: Record<string, unknown>;
 }
 
 export interface TopologyEdge {
@@ -13,6 +16,7 @@ export interface TopologyEdge {
   target: string;
   label?: string;
   kind: 'consumes' | 'calls' | 'has_field' | 'binds';
+  meta?: Record<string, unknown>;
 }
 
 export interface TopologyViewData {
@@ -20,50 +24,42 @@ export interface TopologyViewData {
   edges: TopologyEdge[];
 }
 
-const _NODE_COLORS: Record<TopologyNode['kind'], string> = {
+const NODE_COLORS: Record<TopologyNode['kind'], string> = {
   service: '#3b82f6',
   symbol: '#8b5cf6',
   contract: '#f59e0b',
 };
 
-export function TopologyView({ data }: { data: TopologyViewData }): React.ReactElement {
+export function TopologyView({
+  data,
+  height = 520,
+}: {
+  data: TopologyViewData;
+  height?: number;
+}): React.ReactElement {
   const nodes = data.nodes.map((n) => ({
     id: n.id,
     label: n.label,
+    fill: NODE_COLORS[n.kind] ?? NODE_COLORS.service,
   }));
 
   const edges = data.edges.map((e, i) => ({
     id: `e${i}`,
     source: e.source,
     target: e.target,
+    ...(e.label !== undefined ? { label: e.label } : {}),
   }));
 
   return (
     <div
       data-testid="topology-view"
-      style={{
-        width: '100%',
-        height: 500,
-        background: '#0f172a',
-        borderRadius: 12,
-        border: '1px solid #1e293b',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
+      className="w-full rounded-xl overflow-hidden border border-border bg-bg"
+      style={{ height }}
     >
       {nodes.length > 0 ? (
-        <GraphCanvas nodes={nodes} edges={edges} />
+        <GraphCanvas nodes={nodes} edges={edges} labelType="all" />
       ) : (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            color: '#64748b',
-            fontSize: 14,
-          }}
-        >
+        <div className="flex items-center justify-center h-full text-sm text-muted">
           No services discovered yet
         </div>
       )}

@@ -1,7 +1,13 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Values flip with the `.dark` class on <html> (see Theme.tsx),
+ * so utilities like `bg-surface` / `text-muted` follow the theme without any
+ * `dark:` variant.
+ */
 @theme {
   --color-bg: #fafafa;
+  --color-surface: #ffffff;
   --color-fg: #171717;
   --color-muted: #737373;
   --color-border: #e5e5e5;
@@ -14,6 +20,7 @@
 
 .dark {
   --color-bg: #0a0a0a;
+  --color-surface: #171717;
   --color-fg: #fafafa;
   --color-muted: #a3a3a3;
   --color-border: #262626;

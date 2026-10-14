@@ -349,3 +349,21 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
   // we expose the version from config or the handshake.
   return new RealLainAdapter(config, '0.9.0');
 }
+
+// One handshake per LAIN endpoint, not per request. Failures are not cached,
+// so a server that comes up later is picked up on the next call.
+const clientPool = new Map<string, Promise<LainAdapter>>();
+
+export function getLainClient(config: LainClientConfig): Promise<LainAdapter> {
+  const key = config.lainUrl;
+  const cached = clientPool.get(key);
+  if (cached) return cached;
+  const created = createLainClient(config);
+  created.catch(() => clientPool.delete(key));
+  clientPool.set(key, created);
+  return created;
+}
+
+export function resetLainClientPool(): void {
+  clientPool.clear();
+}

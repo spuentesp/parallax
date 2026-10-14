@@ -2,10 +2,14 @@ import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import * as schema from '../db/schema.js';
+import { getLainClient } from '../lain-adapter/client.js';
+import { isLainCallError } from '../lain-adapter/errors.js';
+import { buildServiceTopology } from '../topology.js';
 
 const WorkspaceInput = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
+  lainUrl: z.string().url().optional(),
 });
 
 const RepoInput = z.object({
@@ -37,15 +41,22 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       schema: { body: WorkspaceInput },
     },
     async (req) => {
-      const { name, description } = req.body as { name: string; description?: string };
+      const { name, description, lainUrl } = req.body as {
+        name: string;
+        description?: string;
+        lainUrl?: string;
+      };
       const id = `ws_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       await app.db.insert(schema.workspace).values({
         id,
         name,
         description: description ?? null,
+        lainUrl: lainUrl ?? null,
         createdAt: Date.now(),
       });
-      return { workspace: { id, name, description, repos: [], repoCount: 0 } };
+      return {
+        workspace: { id, name, description, lainUrl: lainUrl ?? null, repos: [], repoCount: 0 },
+      };
     },
   );
 
@@ -157,6 +168,65 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         config: lines.join('\n'),
         workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
       };
+    },
+  );
+
+  // Service topology for a workspace, built from its LAIN server.
+  app.get(
+    '/api/workspaces/:id/topology',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req) => {
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return { topology: null, source: 'none' as const, stats: null };
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+
+      if (!ws[0].lainUrl) {
+        return {
+          topology: { nodes: [], edges: [] },
+          source: 'unconfigured' as const,
+          stats: { services: 0, dependencies: 0, repos: [], unresolvedInbound: 0 },
+          workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
+        };
+      }
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const topology = await buildServiceTopology(client);
+        return {
+          topology: { nodes: topology.nodes, edges: topology.edges },
+          stats: topology.stats,
+          source: 'lain' as const,
+          lainUrl: ws[0].lainUrl,
+          workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
+        };
+      } catch (e) {
+        const detail = isLainCallError(e)
+          ? e.code === 'LainUnavailable'
+            ? e.message
+            : `${e.code}: ${'message' in e ? e.message : ''}`
+          : `lain unreachable at ${ws[0].lainUrl}`;
+        return {
+          topology: { nodes: [], edges: [] },
+          stats: { services: 0, dependencies: 0, repos: [], unresolvedInbound: 0 },
+          source: 'error' as const,
+          error: detail,
+          workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
+        };
+      }
     },
   );
 };

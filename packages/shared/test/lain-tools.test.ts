@@ -58,22 +58,30 @@ describe('lain tool schemas', () => {
     expect(r.scope.reviewed).toHaveLength(2);
   });
 
-  it('GetService: requires service and view; consumers[] is a list of uses', () => {
+  it('GetService: requires service and view; consumers[] lists uses per consumer', () => {
     const r = GetServiceArgs.parse({ view: 'live', service: 'orders' });
     expect(r.service).toBe('orders');
 
     const resp = GetServiceResponse.parse({
-      view: 'live',
-      service: { id: 'orders', name: 'orders' },
+      service: 'orders',
       consumers: [
         {
-          consumer: 'billing',
-          uses: [{ field: 'customer_id', binding: 'confirmed', source: 'http' }],
+          service: 'billing',
+          repo: 'billing',
+          uses: [
+            {
+              binding: { confidence: 1, kind: 'static', source: 'Regex' },
+              endpoint: { key: 'graphql:query:orders', service: 'orders' },
+              fields: ['customer_id'],
+              match: 'exact',
+            },
+          ],
         },
       ],
-      usedByTruncated: false,
+      endpoints: ['graphql:query:orders'],
     });
-    expect(resp.consumers[0]?.uses[0]?.field).toBe('customer_id');
+    expect(resp.consumers[0]?.service).toBe('billing');
+    expect(resp.consumers[0]?.uses[0]?.endpoint?.key).toBe('graphql:query:orders');
   });
 
   it('PrepareSnapshot: requires repos map and returns a snapshot id', () => {

@@ -53,35 +53,64 @@ const getService = (svc: { service: string; repo: string }): GetServiceResponse 
   const consumers: Record<string, GetServiceResponse['consumers']> = {
     orders: [
       {
-        consumer: 'billing',
+        service: 'billing',
+        repo: 'billing',
         uses: [
-          { field: 'customer_id', binding: 'confirmed', source: 'http' },
-          { field: 'total', binding: 'confirmed', source: 'http' },
+          {
+            binding: { confidence: 1, kind: 'static', source: 'Regex' },
+            endpoint: { key: 'graphql:query:orders', service: 'orders' },
+            fields: ['customer_id', 'total'],
+            match: 'exact',
+          },
         ],
       },
       {
-        consumer: 'reports',
-        uses: [{ field: 'created_at', binding: 'heuristic', source: 'db' }],
+        service: 'reports',
+        repo: 'reports',
+        uses: [
+          {
+            binding: { confidence: 0.4, kind: 'heuristic', detector: 'ambiguous' },
+            endpoint: { key: 'table:orders', service: 'orders' },
+            fields: ['created_at'],
+            match: 'pattern',
+          },
+        ],
       },
     ],
     billing: [
       {
-        consumer: 'platform/shipping',
-        uses: [{ field: 'invoice_id', binding: 'confirmed', source: 'http' }],
+        service: 'platform/shipping',
+        repo: 'platform',
+        uses: [
+          {
+            binding: { confidence: 1, kind: 'static', source: 'Regex' },
+            endpoint: { key: 'http:GET /invoices/:id', service: 'billing' },
+            fields: ['invoice_id'],
+            match: 'exact',
+          },
+        ],
       },
     ],
     reports: [],
     platform: [
       {
-        consumer: 'platform/inventory',
-        uses: [{ route: '/api/inventory', binding: 'confirmed', source: 'http' }],
+        service: 'platform/inventory',
+        repo: 'platform',
+        uses: [
+          {
+            binding: { confidence: 1, kind: 'static', source: 'Regex' },
+            endpoint: { key: 'http:GET /api/inventory', service: 'platform' },
+            fields: [],
+            match: 'exact',
+          },
+        ],
       },
     ],
   };
   return {
-    service: { id: svc.service, name: svc.service },
+    service: svc.service,
     consumers: consumers[svc.service] ?? [],
-    usedByTruncated: false,
+    endpoints: [],
   };
 };
 
