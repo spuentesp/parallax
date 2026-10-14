@@ -127,12 +127,25 @@ export async function buildEndpointTopology(
   snapshot: LainView = 'live',
 ): Promise<TopologyResult> {
   const services = await adapter.listServices({ snapshot });
-  const contracts = await adapter.listContracts({
-    snapshot,
-    ...(filters.kind ? { kind: filters.kind as never } : {}),
-    ...(filters.service ? { service: filters.service } : {}),
-  });
-  const items = (contracts.items ?? []) as unknown as ContractItem[];
+
+  // list_contracts pagina: hay que seguir el cursor o el grafo queda mudo
+  // (en Saleor, la primera página trae 50 de 500 contratos y ninguna
+  // dependencia).
+  const allContracts: ContractItem[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await adapter.listContracts({
+      snapshot,
+      ...(filters.kind ? { kind: filters.kind as never } : {}),
+      ...(filters.service ? { service: filters.service } : {}),
+      ...(cursor ? { cursor } : {}),
+      limit: 500,
+    });
+    allContracts.push(...((page.items ?? []) as unknown as ContractItem[]));
+    cursor = (page as { cursor?: string | null }).cursor ?? undefined;
+  } while (cursor);
+
+  const items = allContracts;
 
   const nodes = new Map<string, TopologyNode>();
   const edges: TopologyEdge[] = [];
@@ -219,40 +232,78 @@ export async function buildEndpointTopology(
       });
     }
 
-    // Cadena de dependencia: consumidor → endpoint → proveedor.
-    const detail = (await adapter.getContract({ snapshot, key })) as unknown as {
-      items?: ContractDetail[];
-    };
-    for (const d of detail.items ?? []) {
-      for (const c of d.consumers ?? []) {
-        const callerRepo = c.caller?.repo ?? '';
-        // Lectura interna del propio servicio: no es dependencia.
-        if (callerRepo && callerRepo === owner) continue;
+  }
 
-        const confidence = c.binding?.confidence ?? 1;
-        const bindingKind = c.binding?.kind ?? 'static';
+  // Consumos: una pasada por SERVICIO con get_service. Es donde LAIN
+  // resuelve los vínculos (en Saleor, 762 usos graphql de dashboard a api),
+  // mientras que get_contract por endpoint no devuelve consumidores.
+  for (const s of services.items) {
+    const detail = await adapter.getService({ snapshot, service: s.service });
+    for (const c of detail.consumers) {
+      const callerRepo = c.repo ?? '';
+      // Lectura interna del propio servicio: no es dependencia.
+      if (callerRepo && callerRepo === s.service) continue;
+
+      const consumerService =
+        resolveServiceForPath(c.uses[0]?.caller?.path, serviceIndex) ??
+        c.service ??
+        callerRepo ??
+        'unknown';
+      const consumerId = serviceNodeId(consumerService);
+      const consumerRepoId = ensureRepo(callerRepo || null);
+      if (!nodes.has(consumerId)) {
+        nodes.set(consumerId, {
+          id: consumerId,
+          label: consumerService,
+          kind: 'service',
+          parent: consumerRepoId,
+          meta: { repo: callerRepo || null },
+        });
+      }
+
+      // Agrupa por endpoint consumido: un consumidor puede tocar varios.
+      const byEndpoint = new Map<string, { fields: string[]; binding: string; confidence: number; useCount: number }>();
+      for (const u of c.uses) {
+        const ekey = u.endpoint?.key;
+        if (!ekey) continue;
+        const ownerOfKey = u.endpoint?.service ?? s.service;
+        const bindingKind = u.binding?.kind ?? 'static';
+        const confidence = u.binding?.confidence ?? 1;
         if (filters.binding && bindingKind !== filters.binding) continue;
         if (filters.minConfidence !== undefined && confidence < filters.minConfidence) continue;
 
-        // El consumidor es el servicio dueño del archivo que llama, no el
-        // repo: en un monorepo, services/shipping/main.py llama a inventory y
-        // nombrar la dependencia "platform → inventory" esconde el módulo.
-        const consumerService = resolveServiceForPath(c.caller?.path, serviceIndex) ?? callerRepo ?? c.caller?.name ?? 'unknown';
-        const consumerId = serviceNodeId(consumerService);
-        const consumerRepoId = ensureRepo(callerRepo || null);
-        if (!nodes.has(consumerId)) {
-          nodes.set(consumerId, {
-            id: consumerId,
-            label: consumerService,
-            kind: 'service',
-            parent: consumerRepoId,
-            meta: { repo: callerRepo || null },
-          });
-        }
+        const acc = byEndpoint.get(ekey) ?? {
+          fields: [] as string[],
+          binding: bindingKind,
+          confidence,
+          useCount: 0,
+        };
+        acc.useCount++;
+        acc.confidence = Math.max(acc.confidence, confidence);
+        for (const f of u.fields ?? []) if (f && !acc.fields.includes(f)) acc.fields.push(f);
+        byEndpoint.set(ekey, acc);
 
-        const fields = (c.reads ?? [])
-          .map((r) => r.json_path)
-          .filter((v): v is string => typeof v === 'string' && v.length > 0);
+        // El endpoint puede ser de otro servicio (cross-service); si no está
+        // en el inventario, lo damos de alta para no perder la arista.
+        const epId = endpointNodeId(ekey, ownerOfKey);
+        if (!nodes.has(epId)) {
+          nodes.set(epId, {
+            id: epId,
+            label: ekey,
+            kind: 'endpoint',
+            parent: serviceNodeId(ownerOfKey),
+            meta: { service: ownerOfKey, contractKind: contractKind(ekey) },
+          });
+          byKind[contractKind(ekey)] = (byKind[contractKind(ekey)] ?? 0) + 1;
+        }
+      }
+
+      for (const [ekey, acc] of byEndpoint) {
+        const ownerOfKey = [...nodes.values()].find(
+          (n) => n.id === endpointNodeId(ekey, n.meta?.service as string) ||
+            (n.kind === 'endpoint' && n.label === ekey),
+        )?.meta?.service as string | undefined;
+        const epId = endpointNodeId(ekey, ownerOfKey ?? s.service);
 
         // 1) consumidor → endpoint
         const eKey = `consumes:${consumerId}->${epId}`;
@@ -262,28 +313,24 @@ export async function buildEndpointTopology(
             source: consumerId,
             target: epId,
             kind: 'consumes',
-            label: fields.length > 0 ? fields.slice(0, 3).join(', ') : (c.match ?? 'uses'),
+            label: acc.fields.length > 0 ? acc.fields.slice(0, 3).join(', ') : 'uses',
             meta: {
-              binding: bindingKind,
-              confidence,
-              source: c.binding?.source ?? null,
-              match: c.match ?? null,
-              fields,
-              callSite: c.caller?.id ?? null,
-              callerPath: c.caller?.path ?? null,
-              callerLine: c.caller?.line ?? null,
+              binding: acc.binding,
+              confidence: acc.confidence,
+              fields: acc.fields,
+              useCount: acc.useCount,
             },
           });
         }
 
-        // 2) endpoint → proveedor: es lo que cierra la cadena y convierte el
-        //    radio en red.
-        const servedKey = `servedBy:${epId}->${ownerId}`;
+        // 2) endpoint → proveedor: cierra la cadena y convierte el radio en red.
+        const targetService = ownerOfKey ?? s.service;
+        const servedKey = `servedBy:${epId}->${serviceNodeId(targetService)}`;
         if (!edgeKeys.has(servedKey)) {
           edgeKeys.add(servedKey);
           edges.push({
             source: epId,
-            target: ownerId,
+            target: serviceNodeId(targetService),
             kind: 'servedBy',
             label: 'served by',
             meta: { relation: 'servedBy' },

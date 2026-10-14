@@ -78,27 +78,38 @@ describe('buildEndpointTopology', () => {
           bound_consumers: 1,
         },
       ],
+      cursor: null,
     }),
-    getContract: async () => ({
-      items: [
-        {
-          endpoint: { key: 'http:GET /api/orders/{}', service: 'orders' },
-          consumers: [
-            {
-              caller: {
-                repo: 'platform',
-                path: 'services/shipping/main.py',
-                line: 12,
-                id: 'shipping:call:12',
+    // Los consumos salen de get_service: es donde LAIN resuelve los vínculos.
+    getService: async (req: { service: string }) => {
+      if (req.service !== 'orders') {
+        return { service: req.service, consumers: [], endpoints: [] };
+      }
+      return {
+        service: 'orders',
+        consumers: [
+          {
+            service: 'shipping',
+            repo: 'platform',
+            uses: [
+              {
+                binding: { confidence: 1, kind: 'static', source: 'TreeSitter' },
+                endpoint: { key: 'http:GET /api/orders/{}', service: 'orders' },
+                fields: ['customer_id'],
+                match: 'exact',
+                caller: {
+                  repo: 'platform',
+                  path: 'services/shipping/main.py',
+                  line: 12,
+                  id: 'shipping:call:12',
+                },
               },
-              binding: { confidence: 1, kind: 'static', source: 'TreeSitter' },
-              match: 'exact',
-              reads: [{ json_path: 'customer_id' }],
-            },
-          ],
-        },
-      ],
-    }),
+            ],
+          },
+        ],
+        endpoints: [],
+      };
+    },
   } as unknown as LainAdapter;
 
   it('builds the chain consumer → endpoint → provider', async () => {
