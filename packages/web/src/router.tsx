@@ -5,6 +5,7 @@ import { Assessments } from './routes/Assessments.js';
 import { Org } from './routes/Org.js';
 import { Orgs } from './routes/Orgs.js';
 import { Proposal } from './routes/Proposal.js';
+import { Workspaces } from './routes/Workspaces.js';
 import { Service } from './routes/Service.js';
 
 export const router = createBrowserRouter([
@@ -13,6 +14,7 @@ export const router = createBrowserRouter([
     path: '/',
     element: <AppShell />,
     children: [
+      { path: 'workspaces', element: <Workspaces /> },
       { path: 'orgs', element: <Orgs /> },
       {
         path: 'orgs/:orgId',

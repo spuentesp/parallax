@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './Theme.js';
 
 const NAV_ITEMS = [
+  { to: '/workspaces', label: 'Workspaces', icon: '⬡' },
   { to: '/orgs', label: 'Organizations', icon: '⬡' },
   { to: '/assessments', label: 'Assessments', icon: '◉' },
   { to: '/proposals', label: 'Proposals', icon: '◈' },
