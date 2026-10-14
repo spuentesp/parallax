@@ -2,7 +2,7 @@
 // Node/edge data comes from LAIN via GET /api/workspaces/:id/topology.
 
 import type * as React from 'react';
-import { GraphCanvas } from 'reagraph';
+import { GraphCanvas, darkTheme } from 'reagraph';
 
 export interface TopologyNode {
   id: string;
@@ -53,11 +53,17 @@ export function TopologyView({
   return (
     <div
       data-testid="topology-view"
-      className="w-full rounded-xl overflow-hidden border border-border bg-bg"
+      className="relative w-full rounded-xl overflow-hidden border border-border bg-bg"
       style={{ height }}
     >
       {nodes.length > 0 ? (
-        <GraphCanvas nodes={nodes} edges={edges} labelType="all" />
+        <GraphCanvas
+          nodes={nodes}
+          edges={edges}
+          labelType="all"
+          theme={darkTheme}
+          layoutType="forceDirected2d"
+        />
       ) : (
         <div className="flex items-center justify-center h-full text-sm text-muted">
           No services discovered yet
