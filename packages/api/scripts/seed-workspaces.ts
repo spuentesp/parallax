@@ -27,6 +27,7 @@ interface SeedWorkspace {
 
 const SALEOR_LAIN = process.env.SALEOR_LAIN_URL ?? 'http://localhost:9999/mcp';
 const BOUTIQUE_LAIN = process.env.BOUTIQUE_LAIN_URL ?? 'http://localhost:9998/mcp';
+const FIXTURE_LAIN = process.env.FIXTURE_LAIN_URL ?? 'http://localhost:9997/mcp';
 
 const WORKSPACES: SeedWorkspace[] = [
   {
@@ -68,6 +69,39 @@ const WORKSPACES: SeedWorkspace[] = [
         uri: 'https://github.com/GoogleCloudPlatform/microservices-demo.git',
         sha: '38e7348eb289eb5b87c0c6e8cb19ced0449dc389',
         local: './test-repos/microservices-demo',
+      },
+    ],
+  },
+  {
+    id: 'ws_fixture',
+    name: 'Contracts Fixture',
+    description:
+      'Deterministic 4-repo fixture (orders/billing/reports/platform) with ground truth for P01–P10.',
+    lainUrl: FIXTURE_LAIN,
+    repos: [
+      {
+        id: 'repo_fixture_orders',
+        uri: 'fixture://contracts/orders',
+        sha: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
+        local: './test-repos/contracts-fixture/orders',
+      },
+      {
+        id: 'repo_fixture_billing',
+        uri: 'fixture://contracts/billing',
+        sha: '972651746b73f234031e3eae3c7b71b5d255d0ef',
+        local: './test-repos/contracts-fixture/billing',
+      },
+      {
+        id: 'repo_fixture_reports',
+        uri: 'fixture://contracts/reports',
+        sha: '06f27bd72248a3c8513bc58807d98de15c286b8c',
+        local: './test-repos/contracts-fixture/reports',
+      },
+      {
+        id: 'repo_fixture_platform',
+        uri: 'fixture://contracts/platform',
+        sha: 'efec0ee36e7b76d47d1810c14cd3574c3c75292c',
+        local: './test-repos/contracts-fixture/platform',
       },
     ],
   },

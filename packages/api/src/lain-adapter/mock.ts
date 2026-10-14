@@ -7,6 +7,7 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
+  ListServicesArgs,
   ListServicesResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
@@ -33,9 +34,6 @@ interface PendingSnapshot {
   snapshot: string;
   state: 'pending' | 'ready' | 'failed';
   readyAt: number;
-  manifestDigest: string;
-  configHash?: string;
-  analyzerVersion: string;
 }
 
 const snapshots = new Map<string, PendingSnapshot>();
@@ -55,20 +53,19 @@ export function createLainMock(): LainAdapter {
     analyzerVersion,
     apiVersion,
 
-    async listServices(view, opts) {
-      recordMockCall({ tool: 'list_services', view, args: opts ?? {} });
-      const filtered = opts?.repo
-        ? services.filter((s: { repo: string }) => s.repo === opts.repo)
+    async listServices(req: ListServicesArgs): Promise<ListServicesResponse> {
+      recordMockCall({ tool: 'list_services', snapshot: req.snapshot, args: req });
+      const filtered = req.repo
+        ? services.filter((s: { repo: string }) => s.repo === req.repo)
         : services;
-      const r: ListServicesResponse = {
+      return {
         items: filtered,
         scope: { configured_only: true, reviewed: [], unreviewed: [] },
       };
-      return r;
     },
 
-    async getService(view: string, req: GetServiceArgs): Promise<GetServiceResponse> {
-      recordMockCall({ tool: 'get_service', view, args: req });
+    async getService(req: GetServiceArgs): Promise<GetServiceResponse> {
+      recordMockCall({ tool: 'get_service', snapshot: req.snapshot, args: req });
       try {
         return getServiceById(req.service);
       } catch {
@@ -82,22 +79,13 @@ export function createLainMock(): LainAdapter {
 
     async prepareSnapshot(req: PrepareSnapshotArgs): Promise<PrepareSnapshotResponse> {
       recordMockCall({ tool: 'prepare_snapshot', args: req });
-      const id = `snap_${++snapshotCounter}_${Date.now().toString(36)}`;
-      const manifestDigest = `digest_${id}`;
-      const pending: PendingSnapshot = {
-        snapshot: id,
-        state: 'pending',
-        readyAt: Date.now() + 100,
-        manifestDigest,
-        analyzerVersion,
-      };
-      if (req.configHash !== undefined) pending.configHash = req.configHash;
-      snapshots.set(id, pending);
+      const id = `snap_${(++snapshotCounter).toString(16).padStart(16, '0')}`;
+      snapshots.set(id, { snapshot: id, state: 'pending', readyAt: Date.now() + 100 });
       return { snapshot: id, state: 'pending' as const };
     },
 
     async getSnapshot(req: GetSnapshotArgs): Promise<GetSnapshotResponse> {
-      recordMockCall({ tool: 'get_snapshot', args: req });
+      recordMockCall({ tool: 'get_snapshot', snapshot: req.snapshot, args: req });
       const s = snapshots.get(req.snapshot);
       if (!s) {
         throw LainCallError.parse({
@@ -110,13 +98,7 @@ export function createLainMock(): LainAdapter {
         return { snapshot: s.snapshot, state: 'pending' };
       }
       s.state = 'ready';
-      return {
-        snapshot: s.snapshot,
-        state: 'ready',
-        analyzerVersion: s.analyzerVersion,
-        configHash: s.configHash,
-        manifestDigest: s.manifestDigest,
-      };
+      return { snapshot: s.snapshot, state: 'ready' };
     },
 
     async diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse> {
@@ -125,31 +107,41 @@ export function createLainMock(): LainAdapter {
     },
 
     async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {
-      recordMockCall({ tool: 'trace_impact', args: req });
+      recordMockCall({ tool: 'trace_impact', snapshot: req.snapshot, args: req });
       return pickScenario(req.snapshot).traceImpact;
     },
 
     async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {
-      recordMockCall({ tool: 'get_coverage', args: req });
+      recordMockCall({ tool: 'get_coverage', snapshot: req.snapshot, args: req });
       return pickScenario(req.snapshot).coverage;
     },
 
     async resolveEvidence(req: ResolveEvidenceArgs): Promise<ResolveEvidenceResponse> {
-      recordMockCall({ tool: 'resolve_evidence', view: req.view, args: req });
+      recordMockCall({ tool: 'resolve_evidence', snapshot: req.snapshot, args: req });
       return {
-        repo: 'orders',
-        sha: s1RemoveCustomerId.baseSha,
-        path: 'src/main.rs',
-        range: { start: 1, end: 10 },
+        items: req.refs.map((ref) => ({
+          exists: true,
+          ref,
+          snippet: `// mock evidence for ${ref}`,
+        })),
       };
     },
 
     async readSource(req: ReadSourceArgs): Promise<ReadSourceResponse> {
-      recordMockCall({ tool: 'read_source', view: req.view, args: req });
+      recordMockCall({ tool: 'read_source', snapshot: req.snapshot, args: req });
+      const lineCount = Math.max(1, req.end - req.start);
+      const text = Array.from(
+        { length: lineCount },
+        (_, i) => `${req.path}:${req.start + i + 1}: mock line`,
+      ).join('\n');
       return {
-        text: `// stub of ${req.path}@${req.sha.slice(0, 7)}`,
-        cap: 2000,
-        truncated: false,
+        text,
+        path: req.path,
+        start: req.start,
+        end: req.end,
+        commit: s1RemoveCustomerId.baseSha,
+        total_lines: req.end + 40,
+        source: req.snapshot,
       };
     },
   };

@@ -12,7 +12,7 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
-  LainView,
+  ListServicesArgs,
   ListServicesResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
@@ -206,17 +206,15 @@ export class RealLainAdapter implements LainAdapter {
       : LainCallError.parse({ code: 'LainUnavailable', message: 'exhausted retries' });
   }
 
-  async listServices(view: LainView, opts?: { repo?: string }): Promise<ListServicesResponse> {
-    const args: Record<string, unknown> = { view };
-    if (opts?.repo) args.repo = opts.repo;
-    return this.call<ListServicesResponse>('list_services', args);
+  async listServices(req: ListServicesArgs): Promise<ListServicesResponse> {
+    return this.call<ListServicesResponse>(
+      'list_services',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
-  async getService(view: LainView, req: GetServiceArgs): Promise<GetServiceResponse> {
-    return this.call<GetServiceResponse>('get_service', {
-      view,
-      service: req.service,
-    });
+  async getService(req: GetServiceArgs): Promise<GetServiceResponse> {
+    return this.call<GetServiceResponse>('get_service', req as unknown as Record<string, unknown>);
   }
 
   async prepareSnapshot(req: PrepareSnapshotArgs): Promise<PrepareSnapshotResponse> {

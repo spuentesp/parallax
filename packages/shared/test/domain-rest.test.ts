@@ -25,14 +25,14 @@ describe('EvidenceRef', () => {
     const e = EvidenceRef.parse({
       id: asEvidenceId('e1'),
       assessmentId: asAssessmentId('a_1'),
-      view: 'snapshot:abc',
+      view: 'snap_abc123',
       repo: 'orders',
       sha: 'b5bf29a',
       path: 'src/main.rs',
       range: { start: 10, end: 20 },
       hash: 'h_1',
     });
-    expect(e.view).toBe('snapshot:abc');
+    expect(e.view).toBe('snap_abc123');
     expect(e.range?.start).toBe(10);
   });
 });

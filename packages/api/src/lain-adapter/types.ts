@@ -7,7 +7,7 @@ import type {
   GetServiceResponse,
   GetSnapshotArgs,
   GetSnapshotResponse,
-  LainView,
+  ListServicesArgs,
   ListServicesResponse,
   PrepareSnapshotArgs,
   PrepareSnapshotResponse,
@@ -19,12 +19,15 @@ import type {
   TraceImpactResponse,
 } from '@parallax/shared/lain';
 
+// Firmas alineadas con las tools reales de lain 0.9.1: todas reciben
+// `snapshot` (o `base`/`head` en diff_contracts) y los argumentos homónimos
+// de docs/lain-tool-schemas.json.
 export interface LainAdapter {
   readonly analyzerVersion: string;
   readonly apiVersion: '1';
 
-  listServices(view: LainView, opts?: { repo?: string }): Promise<ListServicesResponse>;
-  getService(view: LainView, req: GetServiceArgs): Promise<GetServiceResponse>;
+  listServices(req: ListServicesArgs): Promise<ListServicesResponse>;
+  getService(req: GetServiceArgs): Promise<GetServiceResponse>;
   prepareSnapshot(req: PrepareSnapshotArgs): Promise<PrepareSnapshotResponse>;
   getSnapshot(req: GetSnapshotArgs): Promise<GetSnapshotResponse>;
   diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse>;

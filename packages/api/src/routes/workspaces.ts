@@ -171,6 +171,84 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     },
   );
 
+  // Evidence panel: resolve citation refs, then open the code they point at
+  // in the same view. A ref that does not resolve stays visible as
+  // exists:false — never silently dropped (INV 3).
+  app.post(
+    '/api/workspaces/:id/evidence',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        body: z.object({
+          refs: z.array(z.string().min(1)).min(1).max(50),
+          contextLines: z.number().int().min(0).max(20).optional(),
+          snapshot: z.string().min(1).optional(),
+        }),
+      },
+    },
+    async (req) => {
+      const { refs, contextLines, snapshot } = req.body as {
+        refs: string[];
+        contextLines?: number;
+        snapshot?: string;
+      };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]?.lainUrl) {
+        return { items: [], source: 'unconfigured' as const, view: null };
+      }
+
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const view = snapshot ?? 'live';
+        const window_ = contextLines ?? 8;
+
+        const resolved = await client.resolveEvidence({
+          snapshot: view,
+          refs,
+          ...(contextLines !== undefined ? { context_lines: contextLines } : {}),
+        });
+
+        const items = [];
+        for (const item of resolved.items) {
+          const anchor = item.node?.ref;
+          let source: unknown = null;
+          if (item.exists && anchor?.repo && anchor.path && anchor.line != null) {
+            try {
+              source = await client.readSource({
+                snapshot: view,
+                repo: anchor.repo,
+                path: anchor.path,
+                start: Math.max(0, anchor.line - window_ - 1),
+                end: anchor.line + window_,
+              });
+            } catch (e) {
+              source = {
+                error: isLainCallError(e) ? e.message : 'read_source failed',
+              };
+            }
+          }
+          items.push({ ...item, source });
+        }
+        return { items, source: 'lain' as const, view, lainUrl: ws[0].lainUrl };
+      } catch (e) {
+        return {
+          items: [],
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
   // Service topology for a workspace, built from its LAIN server.
   app.get(
     '/api/workspaces/:id/topology',

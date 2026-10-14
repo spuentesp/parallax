@@ -10,7 +10,7 @@ const REPO_ROOT = resolve(process.cwd(), '../..');
 
 async function check(label: string, url: string, service: string, localRoot: string): Promise<void> {
   const c = await createLainClient({ lainUrl: url, apiVersion: '1', timeoutMs: 30000 });
-  const r = await c.getService('live', { view: 'live', service });
+  const r = await c.getService({ snapshot: 'live', service });
   console.log(`\n=== ${label} · get_service(${service}) ===`);
   let shown = 0;
   for (const cons of r.consumers) {

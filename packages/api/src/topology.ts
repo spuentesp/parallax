@@ -43,9 +43,9 @@ export interface TopologyResult extends TopologyViewData {
  */
 export async function buildServiceTopology(
   adapter: LainAdapter,
-  view: LainView = 'live',
+  snapshot: LainView = 'live',
 ): Promise<TopologyResult> {
-  const listed = await adapter.listServices(view);
+  const listed = await adapter.listServices({ snapshot });
 
   const nodes: TopologyNode[] = listed.items.map((s) => ({
     id: s.service,
@@ -68,7 +68,7 @@ export async function buildServiceTopology(
   for (const s of listed.items) {
     repos.add(s.repo);
     unresolvedInbound += s.unresolved_inbound;
-    const detail = await adapter.getService(view, { view, service: s.service });
+    const detail = await adapter.getService({ snapshot, service: s.service });
     for (const c of detail.consumers) {
       // A consumer that is the service itself is an internal read (e.g. a
       // table: endpoint used inside its own code), not a topology edge.
@@ -80,10 +80,24 @@ export async function buildServiceTopology(
         .map((u) => u.endpoint?.key)
         .filter((v): v is string => typeof v === 'string' && v.length > 0);
       const kinds = new Set(c.uses.map((u) => u.binding.kind));
-      const maxConfidence = c.uses.reduce(
-        (acc, u) => Math.max(acc, u.binding.confidence),
-        0,
-      );
+      const maxConfidence = c.uses.reduce((acc, u) => Math.max(acc, u.binding.confidence), 0);
+      // Cada uso conserva su evidencia resoluble: es lo que permite que la
+      // conclusión "lleve al código" (§10) en vez de quedarse en la arista.
+      const uses = c.uses.slice(0, 25).map((u) => {
+        const anchor = u.site ?? u.caller;
+        return {
+          endpoint: u.endpoint?.key ?? null,
+          binding: u.binding.kind,
+          confidence: u.binding.confidence,
+          detector: u.binding.detector ?? null,
+          fields: u.fields,
+          ref: anchor?.id ?? null,
+          repo: anchor?.repo ?? null,
+          path: anchor?.path ?? null,
+          line: anchor?.line ?? null,
+          commit: anchor?.commit ?? null,
+        };
+      });
       edges.push({
         source: c.service,
         target: s.service,
@@ -95,6 +109,7 @@ export async function buildServiceTopology(
           useCount: c.uses.length,
           surfaces,
           repo: c.repo,
+          uses,
         },
       });
     }

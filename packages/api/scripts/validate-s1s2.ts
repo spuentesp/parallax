@@ -36,10 +36,7 @@ async function prepareAndWait(
   repos: Record<string, string>,
   label: string,
 ): Promise<string> {
-  const prep = (await adapter.prepareSnapshot({
-    repos,
-    configHash: undefined,
-  })) as PrepareSnapshotResponse;
+  const prep = (await adapter.prepareSnapshot({ repos })) as PrepareSnapshotResponse;
   ok(`${label}: prepare_snapshot → ${prep.snapshot} (${prep.state})`);
   if (prep.state === 'ready') {
     ok(`${label}: snapshot ready immediately`);
@@ -88,7 +85,7 @@ async function main() {
     base: s1BaseId,
     head: s1HeadId,
   })) as DiffContractsResponse;
-  ok(`s1: diff_contracts → ${s1Diff.changes.length} changes (truncated=${s1Diff.truncated}, cap=${s1Diff.cap})`);
+  ok(`s1: diff_contracts → ${s1Diff.changes.length} changes`);
 
   const s1FieldRemoved = s1Diff.changes.find(
     (c) => c.kind === 'FieldRemoved' && c.field === 'customer_id',

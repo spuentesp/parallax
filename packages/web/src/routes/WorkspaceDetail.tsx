@@ -1,12 +1,17 @@
 import type * as React from 'react';
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useWorkspace, useWorkspaceTopology } from '../api/hooks.js';
+import { useEvidence, useWorkspace, useWorkspaceTopology } from '../api/hooks.js';
+import { DependencyList } from '../components/DependencyList.js';
+import type { EvidenceItem } from '../components/EvidencePanel.js';
 import { TopologyView } from '../components/TopologyView.js';
 
 export function WorkspaceDetail(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id);
+  const evidence = useEvidence();
+  const [cited, setCited] = useState<EvidenceItem[] | null>(null);
 
   const ws = wsQuery.data?.workspace ?? null;
   const topo = topoQuery.data ?? null;
@@ -72,6 +77,28 @@ export function WorkspaceDetail(): React.ReactElement {
           <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
         )}
         {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
+      </div>
+
+      {/* Navegación por dependencias + panel de evidencia (§2, §10) */}
+      <div>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="font-semibold">Dependencies &amp; evidence</h2>
+          <span className="text-xs text-muted">
+            Cada call-site abre el código en la vista del motor
+          </span>
+        </div>
+        <DependencyList
+          edges={topo?.topology?.edges ?? []}
+          loading={evidence.isPending}
+          evidence={cited}
+          onLoadEvidence={(refs) => {
+            if (!id) return;
+            evidence.mutate(
+              { workspaceId: id, refs, contextLines: 6 },
+              { onSuccess: (res) => setCited(res.items) },
+            );
+          }}
+        />
       </div>
 
       {/* Repositories */}

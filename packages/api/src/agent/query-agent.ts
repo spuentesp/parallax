@@ -25,8 +25,8 @@ const _LAIN_TOOLS: ToolSpec[] = [
       description: 'List all services in the organization.',
       parameters: {
         type: 'object',
-        properties: { view: { type: 'string' } },
-        required: ['view'],
+        properties: { snapshot: { type: 'string' } },
+        required: ['snapshot'],
       },
     },
   },
@@ -37,8 +37,8 @@ const _LAIN_TOOLS: ToolSpec[] = [
       description: 'Get a service with its consumers.',
       parameters: {
         type: 'object',
-        properties: { view: { type: 'string' }, service: { type: 'string' } },
-        required: ['view', 'service'],
+        properties: { snapshot: { type: 'string' }, service: { type: 'string' } },
+        required: ['snapshot', 'service'],
       },
     },
   },
@@ -75,13 +75,13 @@ export function buildQueryAgent(deps: QueryAgentDeps) {
       for (const q of state.plan ?? []) {
         if (state.budget && state.budget.toolCalls <= 0) break;
         if (q.startsWith('list_services')) {
-          const r = await deps.lain.listServices('live');
+          const r = await deps.lain.listServices({ snapshot: 'live' });
           discovered.services = r.items;
         } else if (q.startsWith('get_service(')) {
           const svc = q.match(/get_service\((.+)\)/)?.[1];
           if (svc) {
             try {
-              const r = await deps.lain.getService('live', { view: 'live', service: svc });
+              const r = await deps.lain.getService({ snapshot: 'live', service: svc });
               discovered.symbols.push({ service: r.service, consumers: r.consumers });
             } catch {
               // skip

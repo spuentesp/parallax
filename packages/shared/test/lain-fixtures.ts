@@ -134,27 +134,36 @@ export const s1RemoveCustomerId: Scenario = {
   baseSha: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
   headSha: 'afece2321df86647a31d073a2e3cadb50e13d42e',
   diffContracts: {
-    baseId: 'snap_base_s1',
-    headId: 'snap_head_s1',
     changes: [{ kind: 'FieldRemoved', service: 'orders', field: 'customer_id' }],
-    truncated: false,
-    cap: 1000,
+    compatible_changes: 0,
   },
   traceImpact: {
-    snapshot: 'snap_head_s1',
-    findings: [
+    paths: [
       {
-        id: 'f_s1_1',
-        change: { kind: 'FieldRemoved', service: 'orders', field: 'customer_id' },
-        classification: 'Verified',
-        consumers: [{ consumer: 'billing', field: 'customer_id' }],
+        start: 'orders:Field:openapi.yaml:customer_id:27',
+        min_confidence: 1,
+        hops: [
+          {
+            edge: 'Calls',
+            node: 'billing:Function:src/main.py:fetch_me:35',
+            node_type: 'Function',
+          },
+        ],
       },
     ],
+    truncated: false,
   },
   coverage: {
-    reviewed: ['orders', 'billing', 'platform'],
-    omitted: [{ repo: 'reports', cause: 'no-resolved-evidence' }],
-    truncated: [],
+    complete: false,
+    scope: {
+      configured_only: true,
+      reviewed: [
+        { repo: 'orders', commit: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf', dirty: true },
+        { repo: 'billing', commit: '972651746b73f234031e3eae3c7b71b5d255d0ef', dirty: false },
+        { repo: 'platform', commit: 'efec0ee36e7b76d47d1810c14cd3574c3c75292c', dirty: false },
+      ],
+      unreviewed: ['reports'],
+    },
   },
 };
 
@@ -163,27 +172,25 @@ export const s2AddCurrency: Scenario = {
   baseSha: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
   headSha: 'b5bf29b0000000000000000000000000000abcdef',
   diffContracts: {
-    baseId: 'snap_base_s2',
-    headId: 'snap_head_s2',
     changes: [{ kind: 'FieldAdded', service: 'orders', field: 'currency' }],
-    truncated: false,
-    cap: 1000,
+    compatible_changes: 1,
   },
   traceImpact: {
-    snapshot: 'snap_head_s2',
-    findings: [
-      {
-        id: 'f_s2_1',
-        change: { kind: 'FieldAdded', service: 'orders', field: 'currency' },
-        classification: 'NoKnownImpact',
-        consumers: [],
-      },
-    ],
+    paths: [],
+    truncated: false,
   },
   coverage: {
-    reviewed: ['orders', 'billing', 'platform', 'reports'],
-    omitted: [],
-    truncated: [],
+    complete: true,
+    scope: {
+      configured_only: true,
+      reviewed: [
+        { repo: 'orders', commit: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf', dirty: false },
+        { repo: 'billing', commit: '972651746b73f234031e3eae3c7b71b5d255d0ef', dirty: false },
+        { repo: 'platform', commit: 'efec0ee36e7b76d47d1810c14cd3574c3c75292c', dirty: false },
+        { repo: 'reports', commit: '06f27bd72248a3c8513bc58807d98de15c286b8c', dirty: false },
+      ],
+      unreviewed: [],
+    },
   },
 };
 

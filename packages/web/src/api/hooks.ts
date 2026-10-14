@@ -139,4 +139,45 @@ export function useAddRepo() {
   });
 }
 
+// ── Evidence (resolve_evidence + read_source contra la misma vista) ─────────
+
+export interface EvidenceItemShape {
+  exists: boolean;
+  ref: string;
+  reason?: string | undefined;
+  snippet?: string | null | undefined;
+  node?: {
+    id: string;
+    name?: string | undefined;
+    node_type: string;
+    ref: { commit: string; id: string; line: number; path: string; repo: string };
+  } | undefined;
+  source?: {
+    text: string;
+    path: string;
+    start: number;
+    end: number;
+    commit: string;
+    total_lines: number;
+    error?: string | undefined;
+  } | null | undefined;
+}
+
+export function useEvidence() {
+  return useMutation({
+    mutationFn: (vars: {
+      workspaceId: string;
+      refs: string[];
+      contextLines?: number;
+    }) =>
+      client.post<{ items: EvidenceItemShape[]; source: string; error?: string }>(
+        `/api/workspaces/${vars.workspaceId}/evidence`,
+        {
+          refs: vars.refs,
+          ...(vars.contextLines !== undefined ? { contextLines: vars.contextLines } : {}),
+        },
+      ),
+  });
+}
+
 export { client };

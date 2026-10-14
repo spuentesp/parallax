@@ -13,7 +13,7 @@ describe('LainAdapter mock', () => {
 
   it('listServices returns the four fixture services', async () => {
     const m = createLainMock();
-    const r = await m.listServices('live');
+    const r = await m.listServices({ snapshot: 'live' });
     expect(r.items.map((s: { service: string }) => s.service)).toEqual([
       'orders',
       'billing',
@@ -24,7 +24,7 @@ describe('LainAdapter mock', () => {
 
   it('getService returns consumers for orders', async () => {
     const m = createLainMock();
-    const r = await m.getService('live', { view: 'live', service: 'orders' });
+    const r = await m.getService({ snapshot: 'live', service: 'orders' });
     expect(r.consumers[0]?.service).toBe('billing');
   });
 
@@ -32,6 +32,7 @@ describe('LainAdapter mock', () => {
     const m = createLainMock();
     const prep = await m.prepareSnapshot({ repos: { orders: 'b5bf29a' } });
     expect(prep.state).toBe('pending');
+    expect(prep.snapshot).toMatch(/^snap_[0-9a-f]+$/);
     await new Promise((r) => setTimeout(r, 150));
     const got = await m.getSnapshot({ snapshot: prep.snapshot });
     expect(got.state).toBe('ready');
@@ -39,40 +40,51 @@ describe('LainAdapter mock', () => {
 
   it('diffContracts on s1-remove-customer-id returns FieldRemoved', async () => {
     const m = createLainMock();
-    const r = await m.diffContracts({ base: 'b', head: 'h' });
+    const r = await m.diffContracts({ base: 'snap_deadbeef', head: 'snap_cafebabe' });
     expect(r.changes.some((c) => c.kind === 'FieldRemoved' && c.field === 'customer_id')).toBe(
       true,
     );
   });
 
-  it('traceImpact returns findings with classification', async () => {
+  it('traceImpact returns impact paths', async () => {
     const m = createLainMock();
-    const r = await m.traceImpact({ snapshot: 'snap_head_s1', from: { field: 'customer_id' } });
-    expect(r.findings[0]?.classification).toBe('Verified');
+    const r = await m.traceImpact({
+      snapshot: 'live',
+      from: { field: { json_path: 'customer_id' } },
+    });
+    expect(r.paths[0]?.start).toContain('customer_id');
   });
 
-  it('getCoverage surfaces omitted repos with cause', async () => {
+  it('getCoverage surfaces unreviewed repos in scope', async () => {
     const m = createLainMock();
-    const r = await m.getCoverage({ snapshot: 's' });
-    expect(r.omitted.some((o) => o.repo === 'reports')).toBe(true);
+    const r = await m.getCoverage({ snapshot: 'live' });
+    expect(r.complete).toBe(false);
+    expect(r.scope?.unreviewed).toContain('reports');
   });
 
-  it('resolveEvidence returns a resolvable record', async () => {
+  it('resolveEvidence returns one item per requested ref', async () => {
     const m = createLainMock();
-    const r = await m.resolveEvidence({ view: 'live', evidenceId: 'e1' });
-    expect(r.sha).toMatch(/[0-9a-f]{7,}/);
+    const ref = 'orders@b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf:src/main.rs:12';
+    const r = await m.resolveEvidence({ snapshot: 'live', refs: [ref, 'not-a-ref'] });
+    expect(r.items).toHaveLength(2);
+    expect(r.items[0]?.exists).toBe(true);
+    expect(r.items[0]?.ref).toBe(ref);
+    expect(r.items[0]?.snippet).toContain('src/main.rs');
   });
 
-  it('readSource returns text + cap + truncated', async () => {
+  it('readSource returns text for the requested line range', async () => {
     const m = createLainMock();
     const r = await m.readSource({
-      view: 'live',
+      snapshot: 'live',
       repo: 'orders',
-      sha: 'b5bf29a',
       path: 'src/main.rs',
+      start: 10,
+      end: 13,
     });
-    expect(r.cap).toBeGreaterThan(0);
-    expect(typeof r.truncated).toBe('boolean');
+    expect(r.text).toContain('src/main.rs:11');
+    expect(r.start).toBe(10);
+    expect(r.end).toBe(13);
+    expect(r.total_lines).toBeGreaterThan(0);
   });
 
   it('records calls so the smoke can assert ordering', async () => {
@@ -84,9 +96,7 @@ describe('LainAdapter mock', () => {
 
   it('returns NotImplemented for unknown service', async () => {
     const m = createLainMock();
-    const err = await m
-      .getService('live', { view: 'live', service: 'nope' })
-      .catch((e: unknown) => e);
+    const err = await m.getService({ snapshot: 'live', service: 'nope' }).catch((e: unknown) => e);
     expect(err).toHaveProperty('code', 'NotImplemented');
   });
 });

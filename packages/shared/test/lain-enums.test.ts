@@ -28,17 +28,21 @@ describe('lain enums', () => {
     it('accepts live', () => {
       expect(LainView.parse('live')).toBe('live');
     });
-    it('accepts snapshot:<id>', () => {
-      expect(LainView.parse('snapshot:abc123')).toBe('snapshot:abc123');
+    it('accepts snap_<hex> ids', () => {
+      expect(LainView.parse('snap_25817a1b18dee5c6b29d745b5be7f7a1')).toBe(
+        'snap_25817a1b18dee5c6b29d745b5be7f7a1',
+      );
+      expect(LainView.parse('snap_abc')).toBe('snap_abc');
     });
     it('rejects malformed snapshot ids', () => {
-      expect(() => LainView.parse('snapshot:')).toThrow();
+      expect(() => LainView.parse('snap_')).toThrow();
+      expect(() => LainView.parse('snap_xyz')).toThrow();
+      expect(() => LainView.parse('snapshot:abc123')).toThrow();
       expect(() => LainView.parse('live:something')).toThrow();
-      expect(() => LainView.parse('snapshot')).toThrow();
     });
-    it('infers the literal type for the snapshot variant', () => {
-      const v: z.infer<typeof LainView> = 'snapshot:xyz';
-      expect(v).toBe('snapshot:xyz');
+    it('infers the snapshot variant', () => {
+      const v: z.infer<typeof LainView> = 'snap_abc123';
+      expect(v).toBe('snap_abc123');
     });
   });
 });

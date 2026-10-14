@@ -10,7 +10,7 @@ export interface MockCall {
     | 'resolve_evidence'
     | 'read_source';
   readonly args: unknown;
-  readonly view?: string;
+  readonly snapshot?: string;
   readonly at: number;
 }
 
