@@ -9,6 +9,7 @@ import {
 } from '../api/hooks.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
+import { HierarchyTree } from '../components/HierarchyTree.js';
 import { TopologyLegend, TopologyView } from '../components/TopologyView.js';
 
 const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
@@ -81,14 +82,20 @@ export function WorkspaceDetail(): React.ReactElement {
 
         <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
 
-        <div className="mt-2">
-          {topoQuery.isLoading ? (
-            <div className="h-[560px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
-              Loading topology from LAIN…
-            </div>
-          ) : (
-            <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
-          )}
+        <div className="mt-2 grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <HierarchyTree
+            nodes={topo?.topology?.nodes ?? []}
+            edges={topo?.topology?.edges ?? []}
+          />
+          <div>
+            {topoQuery.isLoading ? (
+              <div className="h-[560px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
+                Loading topology from LAIN…
+              </div>
+            ) : (
+              <TopologyView data={topo?.topology ?? { nodes: [], edges: [] }} />
+            )}
+          </div>
         </div>
         <div className="mt-2">
           <TopologyLegend />
