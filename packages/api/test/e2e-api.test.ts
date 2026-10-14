@@ -118,7 +118,7 @@ describe('E2E API', () => {
 
   // ── Assessments ────────────────────────────────────────────────
   describe('assessments', () => {
-    it('create returns 501', async () => {
+    it('create with prUrl returns 501 (GitHub adapter lands in G4)', async () => {
       const r = await app.inject({
         method: 'POST',
         url: '/api/assessments',
@@ -136,17 +136,17 @@ describe('E2E API', () => {
       });
       expect(r.statusCode).toBe(400);
     });
-    it('get returns 501', async () => {
+    it('get returns 404 for unknown id', async () => {
       const r = await app.inject({ method: 'GET', url: '/api/assessments/a_1', headers: auth });
-      expect(r.statusCode).toBe(501);
+      expect(r.statusCode).toBe(404);
     });
-    it('events returns 501', async () => {
+    it('events returns 404 for unknown id', async () => {
       const r = await app.inject({
         method: 'GET',
         url: '/api/assessments/a_1/events',
         headers: auth,
       });
-      expect(r.statusCode).toBe(501);
+      expect(r.statusCode).toBe(404);
     });
   });
 

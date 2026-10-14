@@ -6,6 +6,7 @@ import {
 } from 'fastify-type-provider-zod';
 import type { AppConfig } from './config.js';
 // Plugins
+import assessmentWorkerPlugin from './plugins/assessment-worker.js';
 import authPlugin from './plugins/auth.js';
 import dbPlugin from './plugins/db.js';
 import errorHandler from './plugins/error-handler.js';
@@ -36,6 +37,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(authPlugin);
   await app.register(dbPlugin);
   await app.register(lainAdapterPlugin);
+  await app.register(assessmentWorkerPlugin);
 
   // API routes.
   await app.register(healthRoutes);

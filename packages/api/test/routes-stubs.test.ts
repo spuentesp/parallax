@@ -46,18 +46,18 @@ describe('stub routes (assessments, proposals, publications)', () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it('GET /assessments/:id returns 501', async () => {
+  it('GET /assessments/:id returns 404 for an unknown assessment', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/assessments/a_1', headers: auth });
-    expect(r.statusCode).toBe(501);
+    expect(r.statusCode).toBe(404);
   });
 
-  it('GET /assessments/:id/events returns 501', async () => {
+  it('GET /assessments/:id/events returns 404 for an unknown assessment', async () => {
     const r = await app.inject({
       method: 'GET',
       url: '/api/assessments/a_1/events',
       headers: auth,
     });
-    expect(r.statusCode).toBe(501);
+    expect(r.statusCode).toBe(404);
   });
 
   it('POST /proposals returns 501', async () => {

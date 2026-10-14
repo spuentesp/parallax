@@ -18,8 +18,11 @@ export interface LainCoverage {
   scope?: {
     configured_only?: boolean;
     reviewed?: Array<{ repo?: string; commit?: string; dirty?: boolean } | string>;
-    unreviewed?: Array<Record<string, unknown>>;
-    excluded?: Array<Record<string, unknown>>;
+    // El motor 0.9.x entrega unreviewed como strings; versiones previas como
+    // objetos {repo, reason}. Ambas formas se aceptan y se normalizan.
+    unreviewed?: Array<Record<string, unknown> | string>;
+    excluded?: Array<Record<string, unknown> | string>;
+    failed?: Array<Record<string, unknown> | string>;
   };
   [k: string]: unknown;
 }
@@ -49,21 +52,33 @@ function repoName(r: { repo?: string } | string): string {
   return typeof r === 'string' ? r : (r.repo ?? '');
 }
 
+function toNote(entry: Record<string, unknown> | string, fallbackReason: string): CoverageRepoNote {
+  if (typeof entry === 'string') return { repo: entry, reason: fallbackReason };
+  const repo = typeof entry.repo === 'string' ? entry.repo : '';
+  const reason = typeof entry.reason === 'string' ? entry.reason : fallbackReason;
+  return { repo, reason };
+}
+
 export function presentCoverage(lain: LainCoverage, manifest: Manifest): PresentedCoverage {
-  const reviewed = (lain.scope?.reviewed ?? []).map(repoName).filter(Boolean);
+  // §6: el manifiesto es la autoridad sobre qué código fue revisado. Un repo
+  // excluido nunca figura como revisado, aunque el motor lo afirme.
+  const excludedSet = new Set(manifest.excluded);
+  const reviewed = (lain.scope?.reviewed ?? [])
+    .map(repoName)
+    .filter((repo) => repo.length > 0 && !excludedSet.has(repo));
   const excludedNotes: CoverageRepoNote[] = manifest.excluded.map((repo) => ({
     repo,
     reason: 'excluded',
   }));
 
-  // Lo que el motor declaró no revisado se respeta tal cual; sólo agregamos
-  // las omisiones que el motor no puede ver porque el repo no entró al snapshot.
-  const engineUnreviewed: CoverageRepoNote[] = (lain.scope?.unreviewed ?? [])
-    .map((u) => {
-      const o = u as { repo?: string; reason?: string };
-      return { repo: o.repo ?? '', reason: o.reason ?? 'not_ready' };
-    })
-    .filter((n) => n.repo.length > 0);
+  // Lo que el motor declaró no revisado (o que falló al indexar) se respeta
+  // tal cual; sólo agregamos las omisiones que el motor no puede ver porque
+  // el repo no entró al snapshot.
+  const engineUnreviewed: CoverageRepoNote[] = [
+    ...(lain.scope?.unreviewed ?? []).map((u) => toNote(u, 'unreviewed')),
+    ...(lain.scope?.failed ?? []).map((u) => toNote(u, 'failed')),
+    ...(lain.scope?.excluded ?? []).map((u) => toNote(u, 'excluded')),
+  ].filter((n) => n.repo.length > 0);
 
   const known = new Set([...reviewed, ...engineUnreviewed.map((n) => n.repo)]);
   const unreviewed = [...engineUnreviewed, ...excludedNotes.filter((n) => !known.has(n.repo))];

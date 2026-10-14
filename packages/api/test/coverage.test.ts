@@ -60,6 +60,35 @@ describe('presentCoverage', () => {
     expect(repos).toContain('reports');
   });
 
+  it('accepts the engine 0.9.x string form of unreviewed (INV 3: never dropped)', () => {
+    const stringForm = {
+      ...lain,
+      scope: {
+        ...lain.scope,
+        unreviewed: ['reports'],
+      },
+    };
+    const c = presentCoverage(stringForm, { configured: ['orders', 'billing', 'reports'], excluded: [] });
+    const reports = c.scope.unreviewed.find((n) => n.repo === 'reports');
+    expect(reports?.reason).toBe('unreviewed');
+    expect(c.complete).toBe(false);
+    expect(c.summary).toContain('reports');
+  });
+
+  it('surfaces engine-side failed repos as unreviewed with cause', () => {
+    const withFailure = {
+      ...lain,
+      complete: false,
+      scope: {
+        ...lain.scope,
+        failed: [{ repo: 'platform', reason: 'index_error' }],
+      },
+    };
+    const c = presentCoverage(withFailure, { configured: ['orders', 'billing', 'platform'], excluded: [] });
+    const failed = c.scope.unreviewed.find((n) => n.repo === 'platform');
+    expect(failed?.reason).toBe('index_error');
+  });
+
   it('inherits complete:false from the engine even without exclusions', () => {
     const incomplete = { ...lain, complete: false };
     const c = presentCoverage(incomplete, { configured: ['orders', 'billing'], excluded: [] });
