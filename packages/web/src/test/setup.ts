@@ -1,16 +1,26 @@
 // jsdom does not provide canvas or ResizeObserver; reagraph/three.js need both.
 // Mock the minimum surface so components can initialize in tests.
 
+/* biome-ignore-all lint/suspicious/noExplicitAny: test-only mock */
+/* biome-ignore-all lint/correctness/noUnusedImports: polyfill */
+
 if (typeof HTMLCanvasElement !== 'undefined') {
-  // @ts-expect-error -- test-only canvas mock
-  HTMLCanvasElement.prototype.getContext = () => ({
+  (HTMLCanvasElement.prototype as any).getContext = () => ({
     fillRect: () => {},
     clearRect: () => {},
     getImageData: (_x: number, _y: number, w: number, h: number) => ({
       data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+      colorSpace: 'srgb',
     }),
     putImageData: () => {},
-    createImageData: () => ({ data: new Uint8ClampedArray(4) }),
+    createImageData: (w: number, h: number) => ({
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+      colorSpace: 'srgb',
+    }),
     setTransform: () => {},
     drawImage: () => {},
     save: () => {},
@@ -26,7 +36,15 @@ if (typeof HTMLCanvasElement !== 'undefined') {
     rotate: () => {},
     arc: () => {},
     fill: () => {},
-    measureText: () => ({ width: 0 }),
+    measureText: () => ({
+      width: 0,
+      actualBoundingBoxAscent: 0,
+      actualBoundingBoxDescent: 0,
+      actualBoundingBoxLeft: 0,
+      actualBoundingBoxRight: 0,
+      fontBoundingBoxAscent: 0,
+      fontBoundingBoxDescent: 0,
+    }),
     transform: () => {},
     rect: () => {},
     clip: () => {},
@@ -34,8 +52,7 @@ if (typeof HTMLCanvasElement !== 'undefined') {
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
-  // @ts-expect-error -- test-only ResizeObserver polyfill
-  globalThis.ResizeObserver = class {
+  (globalThis as any).ResizeObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
@@ -43,13 +60,10 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 }
 
 if (typeof globalThis.IntersectionObserver === 'undefined') {
-  // @ts-expect-error -- test-only IntersectionObserver polyfill
-  globalThis.IntersectionObserver = class {
+  (globalThis as any).IntersectionObserver = class {
     observe() {}
     unobserve() {}
     disconnect() {}
-    takeRecords() {
-      return [];
-    }
+    takeRecords() { return []; }
   };
 }
