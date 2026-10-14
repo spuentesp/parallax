@@ -70,7 +70,7 @@ describe('AssessmentWorker', () => {
     await db
       .insert(schema.workspace)
       .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
-    worker = new AssessmentWorker(db, { lain: createLainMock() });
+    worker = new AssessmentWorker(db, { getLain: async () => createLainMock() });
   });
   afterEach(() => {
     rmSync(dir, { recursive: true, force: true });
@@ -201,7 +201,7 @@ describe('AssessmentWorker', () => {
     );
     await worker.transition(assessment.id, 'SNAPSHOTTING');
     // Simulate restart: fresh worker (and fresh engine client) on the same DB.
-    const worker2 = new AssessmentWorker(db, { lain: createLainMock() });
+    const worker2 = new AssessmentWorker(db, { getLain: async () => createLainMock() });
     const recovered = await worker2.recover();
     expect(recovered).toContain(assessment.id);
     const after = await worker2.get(assessment.id);
@@ -217,7 +217,7 @@ describe('AssessmentWorker', () => {
       resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
     );
     const done = await worker.run(assessment.id);
-    const worker2 = new AssessmentWorker(db, { lain: createLainMock() });
+    const worker2 = new AssessmentWorker(db, { getLain: async () => createLainMock() });
     const recovered = await worker2.recover();
     expect(recovered).not.toContain(assessment.id);
     const after = await worker2.get(assessment.id);
@@ -230,7 +230,7 @@ describe('AssessmentWorker', () => {
     const { assessment } = await bare.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
     const final = await bare.run(assessment.id);
     expect(final.status).toBe('FAILED');
-    expect(final.engineJson).toContain('no Lain adapter');
+    expect(final.engineJson).toContain('no LAIN configured for workspace');
   });
 
   it('canTransition returns correct values', () => {

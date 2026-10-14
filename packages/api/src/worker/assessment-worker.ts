@@ -52,7 +52,13 @@ export interface CreateResult {
 }
 
 export interface AssessmentWorkerDeps {
-  lain?: LainAdapter;
+  /**
+   * Cada organización es un workspace con su propio servidor LAIN. Sin este
+   * resolvedor el worker analiza contra el adapter global (hoy, mock) y el
+   * informe sale de datos inventados — por eso los snapshots aparecían como
+   * snap_0000000000000001.
+   */
+  getLain?: (orgId: string) => Promise<LainAdapter | undefined>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -65,25 +71,39 @@ function sha256Hex(text: string): string {
 
 export class AssessmentWorker {
   private readonly db: Db;
-  private readonly lain: LainAdapter | undefined;
+  private readonly getLain: ((orgId: string) => Promise<LainAdapter | undefined>) | undefined;
+  private readonly lainByOrg = new Map<string, LainAdapter>();
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
   private readonly inFlight = new Map<string, Promise<AssessmentRecord>>();
 
   constructor(db: Db, deps?: AssessmentWorkerDeps) {
     this.db = db;
-    this.lain = deps?.lain;
+    this.getLain = deps?.getLain;
+  }
+
+  // Un adaptador por organización; dos evaluaciones del mismo workspace
+  // comparten la conexión y su handshake.
+  private async lainFor(orgId: string): Promise<LainAdapter | undefined> {
+    const cached = this.lainByOrg.get(orgId);
+    if (cached) return cached;
+    const resolved = await this.getLain?.(orgId);
+    if (resolved) this.lainByOrg.set(orgId, resolved);
+    return resolved;
   }
 
   // P INV 4: mismo manifiesto resuelto → misma evaluación, nunca un segundo
   // trabajo activo. El digest no contiene nada derivado del modelo (§4).
   async create(input: ResolvedAssessmentRequest): Promise<CreateResult> {
+    // La versión del motor entra en el digest (§4), así que hay que resolver el
+    // LAIN del workspace antes de calcularlo.
+    const adapter = await this.lainFor(input.orgId);
     const digest = computeInputDigest({
       manifest: {
         base: input.manifest.base.repos,
         head: input.manifest.head.repos,
       },
       configHash: input.manifest.configHash,
-      analyzerVersion: this.lain?.analyzerVersion ?? 'unknown',
+      analyzerVersion: adapter?.analyzerVersion ?? 'unknown',
       policyVersion: PARALLAX_POLICY_VERSION,
     });
     const existing = await this.db
@@ -276,8 +296,12 @@ export class AssessmentWorker {
     let rec = await this.get(id);
     if (!rec) throw new Error(`assessment ${id} not found`);
     if (isTerminal(rec.status)) return rec;
-    if (!this.lain) {
-      return this.fail(rec, 'no Lain adapter configured for the worker');
+    const lain = await this.lainFor(rec.orgId);
+    if (!lain) {
+      return this.fail(
+        rec,
+        `no LAIN configured for workspace ${rec.orgId} — declare its lainUrl`,
+      );
     }
 
     try {
@@ -326,8 +350,9 @@ export class AssessmentWorker {
   ): Promise<AssessmentRecord> {
     const attempt = await this.beginStep(id, 'snapshot');
     try {
-      const base = await this.awaitSnapshot(manifest.base.repos);
-      const head = await this.awaitSnapshot(manifest.head.repos);
+      const lain = await this.lainFor(rec.orgId);
+      const base = await this.awaitSnapshot(lain, manifest.base.repos);
+      const head = await this.awaitSnapshot(lain, manifest.head.repos);
       const updated: ResolvedManifest = { ...manifest, snapshots: { base, head } };
       await this.db
         .update(schema.assessment)
@@ -351,7 +376,7 @@ export class AssessmentWorker {
     rec: AssessmentRecord,
     manifest: ResolvedManifest,
   ): Promise<AssessmentRecord> {
-    const lain = this.lain;
+    const lain = await this.lainFor(rec.orgId);
     if (!lain || !rec.baseId || !rec.headId) {
       throw new Error('analysis requires ready snapshots and a Lain adapter');
     }
@@ -475,7 +500,8 @@ export class AssessmentWorker {
     manifest: ResolvedManifest,
     gaps: string[],
   ): Promise<number> {
-    const lain = this.lain;
+    const current = await this.get(id);
+    const lain = current ? await this.lainFor(current.orgId) : undefined;
     if (!lain) return 0;
     const services = [
       ...new Set(
@@ -522,9 +548,11 @@ export class AssessmentWorker {
     return inserted;
   }
 
-  private async awaitSnapshot(repos: Record<string, string>): Promise<string> {
-    const lain = this.lain;
-    if (!lain) throw new Error('no Lain adapter configured');
+  private async awaitSnapshot(
+    lain: LainAdapter | undefined,
+    repos: Record<string, string>,
+  ): Promise<string> {
+    if (!lain) throw new Error(`no LAIN configured for the workspace of ${JSON.stringify(repos)}`);
     const prepared = await lain.prepareSnapshot({ repos, wait_ms: SNAPSHOT_WAIT_MS });
     if (prepared.state === 'ready') return prepared.snapshot;
     if (prepared.state === 'failed') throw new Error(`snapshot ${prepared.snapshot} failed`);
