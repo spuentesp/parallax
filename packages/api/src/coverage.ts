@@ -63,9 +63,15 @@ export function presentCoverage(lain: LainCoverage, manifest: Manifest): Present
   // §6: el manifiesto es la autoridad sobre qué código fue revisado. Un repo
   // excluido nunca figura como revisado, aunque el motor lo afirme.
   const excludedSet = new Set(manifest.excluded);
-  const reviewed = (lain.scope?.reviewed ?? [])
-    .map(repoName)
-    .filter((repo) => repo.length > 0 && !excludedSet.has(repo));
+  // El mismo repo puede llegar en forma string y objeto; se normaliza y se
+  // presenta una sola vez (conservando el orden del motor).
+  const reviewed = [
+    ...new Set(
+      (lain.scope?.reviewed ?? [])
+        .map(repoName)
+        .filter((repo) => repo.length > 0 && !excludedSet.has(repo)),
+    ),
+  ];
   const excludedNotes: CoverageRepoNote[] = manifest.excluded.map((repo) => ({
     repo,
     reason: 'excluded',
