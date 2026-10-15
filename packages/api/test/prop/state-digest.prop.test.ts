@@ -65,12 +65,9 @@ describe('computeInputDigest properties (INV 4)', () => {
   it('treats an omitted configHash like an explicit null', () => {
     fc.assert(
       fc.property(arbDigestInput, (input: DigestInput) => {
-        const withUndefined: DigestInput = {
-          manifest: input.manifest,
-          analyzerVersion: input.analyzerVersion,
-          policyVersion: input.policyVersion,
-        };
-        const withNull: DigestInput = { ...input, configHash: null };
+        const { configHash: _configHash, ...withoutConfigHash } = input;
+        const withUndefined: DigestInput = withoutConfigHash;
+        const withNull: DigestInput = { ...withoutConfigHash, configHash: null };
         expect(computeInputDigest(withUndefined)).toBe(computeInputDigest(withNull));
       }),
       fcDefaults(),
