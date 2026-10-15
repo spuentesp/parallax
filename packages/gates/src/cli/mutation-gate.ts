@@ -2,10 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  type AllowlistEntry,
   gateDecision,
   parseMutationReport,
   validateAllowlist,
-  type AllowlistEntry,
 } from '../mutation-gate.js';
 
 const base = process.env.GATE_BASE ?? 'origin/main';

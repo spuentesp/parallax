@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type AllowlistEntry,
   gateDecision,
   parseMutationReport,
   validateAllowlist,
-  type AllowlistEntry,
 } from '../src/mutation-gate.js';
 
 const REPORT = {
