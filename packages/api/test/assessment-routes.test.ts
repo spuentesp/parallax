@@ -109,7 +109,7 @@ describe('assessment routes (G2 flow)', () => {
     expect(manifest.configured).toEqual(['billing', 'orders', 'reports']);
   });
 
-  it('GET serves the persisted report: findings, coverage and skipped explanation', async () => {
+  it('GET serves the persisted report: findings, coverage and visible explanation failure', async () => {
     const created = await app.inject({
       method: 'POST',
       url: '/api/assessments',
@@ -133,8 +133,9 @@ describe('assessment routes (G2 flow)', () => {
     expect(coverage.complete).toBe(false);
     // INV 3: el motor no revisó reports y el informe lo dice.
     expect(coverage.scope?.unreviewed?.some((n) => n.repo === 'reports')).toBe(true);
-    // G2 sin modelo (G3): la explicación queda como skipped, no como evidencia.
-    expect(report.assessment.explanation.status).toBe('skipped');
+    // G2 sin modelo (P08): la explicación registra un fallo visible, no un
+    // silencio que finja explicar; el informe estructural sigue completo.
+    expect(report.assessment.explanation.status).toBe('failed:no_model_configured');
   });
 
   it('GET /events returns the persisted event log', async () => {

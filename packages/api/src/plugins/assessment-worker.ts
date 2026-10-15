@@ -1,9 +1,9 @@
 import fp from 'fastify-plugin';
-import { eq } from 'drizzle-orm';
-import * as schema from '../db/schema.js';
-import { getLainClient } from '../lain-adapter/client.js';
-import type { LainAdapter } from '../lain-adapter/types.js';
-import { AssessmentWorker } from '../worker/assessment-worker.js';
+import { investigate, serializeExplanation } from '../agent/investigator.js';
+import { NemotronProvider } from '../agent/nemotron.js';
+import { investigatorSettings } from '../config.js';
+import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
+import { AssessmentWorker, type ExplainOutcome } from '../worker/assessment-worker.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -14,25 +14,69 @@ declare module 'fastify' {
 // Un solo worker por proceso. Cada organización es un workspace con su propio
 // servidor LAIN, así que el worker resuelve el adaptador por org en vez de
 // usar uno global: analizar contra el adapter global (hoy, mock) producía
-// informes con datos inventados.
+// informes con datos inventados. La explicación (G3) usa el MISMO LAIN del
+// workspace y el modelo efectivo configurado — nunca ejecuta MCP el modelo.
 export default fp(
   async (fastify) => {
-    const worker = new AssessmentWorker(fastify.db, {
-      getLain: async (orgId: string): Promise<LainAdapter | undefined> => {
-        const rows = await fastify.db
-          .select()
-          .from(schema.workspace)
-          .where(eq(schema.workspace.id, orgId))
-          .limit(1);
-        const lainUrl = rows[0]?.lainUrl;
-        if (!lainUrl) {
-          // Un workspace sin LAIN propio usa el adapter configurado por defecto
-          // (mock en desarrollo, real si LAIN_ADAPTER=real). Es lo que permite
-          // probar el flujo completo sin levantar un motor por org.
-          return fastify.lain;
+    const getLain = createWorkspaceLainResolver({
+      db: fastify.db,
+      defaultAdapter: fastify.lain,
+    });
+
+    // Sin token Nemotron no se inyecta explain: el paso registra
+    // failed:no_model_configured y el informe estructural sale igual (P08).
+    const nemotronToken = fastify.config.nemotronToken;
+    const settings = investigatorSettings(fastify.config);
+    const explain = nemotronToken
+      ? async (args: {
+          orgId: string;
+          viewId: string;
+          question: string;
+          engineFindings: unknown[];
+        }): Promise<ExplainOutcome> => {
+          const lain = await getLain(args.orgId);
+          if (!lain) {
+            return {
+              status: 'failed:no_workspace_lain',
+              model: 'none',
+              payload: null,
+            };
+          }
+          const nemotron = new NemotronProvider({
+            baseUrl: settings.baseUrl,
+            apiKey: nemotronToken,
+            plannerModel: settings.plannerModel,
+            workerModel: settings.workerModel,
+            timeoutMs: Math.min(60_000, settings.maxModelMs),
+          });
+          const result = await investigate({
+            question: args.question,
+            lain,
+            model: nemotron,
+            view: args.viewId,
+            budget: {
+              maxToolCalls: settings.maxToolCalls,
+              maxModelMs: settings.maxModelMs,
+            },
+            engineFindings: args.engineFindings,
+            endpointLabel: settings.baseUrl,
+          });
+          const payload = serializeExplanation(result, {
+            question: args.question,
+            endpointLabel: settings.baseUrl,
+            engineFindings: args.engineFindings,
+          });
+          return {
+            status: result.explanationStatus,
+            model: result.effectiveModel ?? 'unknown',
+            payload,
+          };
         }
-        return getLainClient({ lainUrl, apiVersion: '1', timeoutMs: 30_000 });
-      },
+      : undefined;
+
+    const worker = new AssessmentWorker(fastify.db, {
+      getLain,
+      ...(explain ? { explain } : {}),
     });
     fastify.decorate('assessmentWorker', worker);
 

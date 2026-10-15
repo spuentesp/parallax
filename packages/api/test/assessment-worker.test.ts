@@ -181,7 +181,8 @@ describe('AssessmentWorker', () => {
       .from(schema.explanation)
       .where(eq(schema.explanation.assessmentId, assessment.id));
     expect(explanations).toHaveLength(1);
-    expect(explanations[0]?.status).toBe('skipped');
+    // Sin modelo configurado (P08): el fallo es visible, no un silencio.
+    expect(explanations[0]?.status).toBe('failed:no_model_configured');
     expect(explanations[0]?.model).toBe('none');
   });
 
@@ -193,6 +194,76 @@ describe('AssessmentWorker', () => {
     const second = await worker.run(assessment.id);
     expect(second.status).toBe(first.status);
     expect(second.completedAt).toBe(first.completedAt);
+  });
+
+  it('G3: an injected explain runs in EXPLAINING and engine findings stay untouched (INV 2)', async () => {
+    const seen: Array<{ viewId: string; engineFindings: unknown[] }> = [];
+    const g3worker = new AssessmentWorker(db, {
+      getLain: async () => createLainMock(),
+      explain: async (args) => {
+        seen.push({ viewId: args.viewId, engineFindings: args.engineFindings });
+        return {
+          status: 'available',
+          model: 'fake/nemotron',
+          payload: {
+            narrative: 'Todo Verified',
+            engine_finding_classes: [],
+          },
+        };
+      },
+    });
+    const { assessment } = await g3worker.create(
+      resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
+    );
+    const final = await g3worker.run(assessment.id);
+    expect(['READY', 'PARTIAL']).toContain(final.status);
+    expect(seen).toHaveLength(1);
+    // La vista de la explicación es el head fijado por el análisis.
+    expect(seen[0]?.viewId).toBe(final.headId);
+
+    const explanations = await db
+      .select()
+      .from(schema.explanation)
+      .where(eq(schema.explanation.assessmentId, assessment.id));
+    expect(explanations[0]?.status).toBe('available');
+    expect(explanations[0]?.model).toBe('fake/nemotron');
+    expect(explanations[0]?.payload).toContain('Todo Verified');
+
+    // INV 2: el engine_json del motor sigue intacto — la prosa "Todo Verified"
+    // no reescribe ninguna clasificación: los cambios son exactamente los del
+    // motor (FieldRemoved sin impacto promovido).
+    const rec = await g3worker.get(assessment.id);
+    const engine = JSON.parse(rec?.engineJson ?? '{}') as {
+      diff?: { changes?: Array<{ kind?: string; impact?: { class?: string } }> };
+    };
+    const changes = engine.diff?.changes ?? [];
+    expect(changes.length).toBeGreaterThan(0);
+    expect(changes.every((c) => c.kind === 'FieldRemoved')).toBe(true);
+    expect(changes.every((c) => c.impact?.class !== 'Verified')).toBe(true);
+    // El payload del modelo y el artefacto del motor viven en columnas distintas.
+    expect(rec?.engineJson).not.toContain('Todo Verified');
+  });
+
+  it('G3: an explain failure is recorded as failed status, never destroying the report', async () => {
+    const g3worker = new AssessmentWorker(db, {
+      getLain: async () => createLainMock(),
+      explain: async () => {
+        throw new Error('Nemotron HTTP 500');
+      },
+    });
+    const { assessment } = await g3worker.create(
+      resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
+    );
+    const final = await g3worker.run(assessment.id);
+    expect(['READY', 'PARTIAL']).toContain(final.status);
+    const explanations = await db
+      .select()
+      .from(schema.explanation)
+      .where(eq(schema.explanation.assessmentId, assessment.id));
+    expect(explanations[0]?.status).toBe('failed:explain_error');
+    expect(explanations[0]?.payload).toContain('Nemotron HTTP 500');
+    // El informe estructural existe pese al fallo del modelo (P08).
+    expect(final.engineJson).toBeTruthy();
   });
 
   it('recovery resumes non-terminal assessments through the runner (INV 5)', async () => {

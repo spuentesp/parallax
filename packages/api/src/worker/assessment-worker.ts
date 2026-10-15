@@ -6,18 +6,18 @@ import { createHash } from 'node:crypto';
 import type { AssessmentId, OrgId } from '@parallax/shared/domain';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { type LainCoverage, presentCoverage } from '../coverage.js';
 import * as schema from '../db/schema.js';
-import { presentCoverage, type LainCoverage } from '../coverage.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 
 import {
   type AssessmentEvent,
   type AssessmentRecord,
   type AssessmentStatus,
-  PARALLAX_POLICY_VERSION,
   canTransition,
   computeInputDigest,
   isTerminal,
+  PARALLAX_POLICY_VERSION,
 } from './state.js';
 
 export type { AssessmentEvent, AssessmentRecord } from './state.js';
@@ -59,6 +59,24 @@ export interface AssessmentWorkerDeps {
    * snap_0000000000000001.
    */
   getLain?: (orgId: string) => Promise<LainAdapter | undefined>;
+  /**
+   * Explicación del modelo (G3). Si no se inyecta (sin token Nemotron), el
+   * paso EXPLAINING registra failed:no_model_configured: un fallo visible,
+   * nunca un silencio que finja explicación (P08). El informe estructural
+   * sigue completándose igual.
+   */
+  explain?: (args: {
+    orgId: string;
+    viewId: string;
+    question: string;
+    engineFindings: unknown[];
+  }) => Promise<ExplainOutcome>;
+}
+
+export interface ExplainOutcome {
+  status: string; // 'available' | 'failed:<reason>'
+  model: string;
+  payload: unknown | null;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -72,6 +90,7 @@ function sha256Hex(text: string): string {
 export class AssessmentWorker {
   private readonly db: Db;
   private readonly getLain: ((orgId: string) => Promise<LainAdapter | undefined>) | undefined;
+  private readonly explain: AssessmentWorkerDeps['explain'];
   private readonly lainByOrg = new Map<string, LainAdapter>();
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
   private readonly inFlight = new Map<string, Promise<AssessmentRecord>>();
@@ -79,6 +98,7 @@ export class AssessmentWorker {
   constructor(db: Db, deps?: AssessmentWorkerDeps) {
     this.db = db;
     this.getLain = deps?.getLain;
+    this.explain = deps?.explain;
   }
 
   // Un adaptador por organización; dos evaluaciones del mismo workspace
@@ -177,7 +197,10 @@ export class AssessmentWorker {
   }
 
   async findIdempotencyKey(key: string): Promise<{ assessmentId: string; digest: string } | null> {
-    const rows = await this.db.select().from(schema.event).where(eq(schema.event.type, 'idempotency'));
+    const rows = await this.db
+      .select()
+      .from(schema.event)
+      .where(eq(schema.event.type, 'idempotency'));
     for (const row of rows) {
       if (!row.payload) continue;
       const payload = JSON.parse(row.payload) as { key?: string; digest?: string };
@@ -260,7 +283,9 @@ export class AssessmentWorker {
     const pending = await this.db
       .select()
       .from(schema.assessment)
-      .where(inArray(schema.assessment.status, ['QUEUED', 'SNAPSHOTTING', 'ANALYZING', 'EXPLAINING']));
+      .where(
+        inArray(schema.assessment.status, ['QUEUED', 'SNAPSHOTTING', 'ANALYZING', 'EXPLAINING']),
+      );
     const resumed: string[] = [];
     for (const row of pending) {
       resumed.push(row.id);
@@ -298,10 +323,7 @@ export class AssessmentWorker {
     if (isTerminal(rec.status)) return rec;
     const lain = await this.lainFor(rec.orgId);
     if (!lain) {
-      return this.fail(
-        rec,
-        `no LAIN configured for workspace ${rec.orgId} — declare its lainUrl`,
-      );
+      return this.fail(rec, `no LAIN configured for workspace ${rec.orgId} — declare its lainUrl`);
     }
 
     try {
@@ -426,18 +448,18 @@ export class AssessmentWorker {
 
       // Evidencia estructural: anclas de get_service sobre el proveedor de
       // cada hallazgo principal, en la vista evaluada.
-      await this.db
-        .delete(schema.evidence)
-        .where(eq(schema.evidence.assessmentId, id));
+      await this.db.delete(schema.evidence).where(eq(schema.evidence.assessmentId, id));
       const harvested = await this.harvestEvidence(id, head, traceTargets, manifest, gaps);
 
       const scope = coverageRaw.scope;
       for (const entry of scope?.unreviewed ?? []) {
-        const repo = typeof entry === 'string' ? entry : String((entry as { repo?: unknown }).repo ?? '');
+        const repo =
+          typeof entry === 'string' ? entry : String((entry as { repo?: unknown }).repo ?? '');
         if (repo) gaps.push(`engine unreviewed: ${repo}`);
       }
       for (const entry of scope?.failed ?? []) {
-        const repo = typeof entry === 'string' ? entry : String((entry as { repo?: unknown }).repo ?? '');
+        const repo =
+          typeof entry === 'string' ? entry : String((entry as { repo?: unknown }).repo ?? '');
         if (repo) gaps.push(`engine indexing failed: ${repo}`);
       }
 
@@ -465,26 +487,71 @@ export class AssessmentWorker {
     }
   }
 
-  // EXPLAINING: el modelo llega en G3. El informe estructural se completa sin
-  // LLM; la explicación queda registrada como 'skipped', nunca como evidencia.
+  // EXPLAINING (G3): el investigador Nemotron explora los hallazgos dentro del
+  // presupuesto y su explicación se serializa con campos del motor y del
+  // modelo separados (INV 2). Sin modelo configurado el paso registra
+  // failed:no_model_configured — fallo visible, no un silencio (P08). El
+  // informe estructural (engine_json/coverage_json) no se toca aquí.
   private async stepExplain(id: string, rec: AssessmentRecord): Promise<AssessmentRecord> {
     const attempt = await this.beginStep(id, 'explain');
     try {
       await this.db.delete(schema.explanation).where(eq(schema.explanation.assessmentId, id));
+
+      const engine = rec.engineJson
+        ? (JSON.parse(rec.engineJson) as {
+            diff?: { changes?: unknown[] };
+            analyzerVersion?: string;
+          })
+        : null;
+      const changes = engine?.diff?.changes;
+      const engineFindings = Array.isArray(changes) ? changes : [];
+      const viewId = rec.headId ?? 'live';
+
+      let outcome: ExplainOutcome;
+      if (!this.explain) {
+        outcome = {
+          status: 'failed:no_model_configured',
+          model: 'none',
+          payload: null,
+        };
+      } else {
+        try {
+          outcome = await this.explain({
+            orgId: rec.orgId,
+            viewId,
+            question:
+              'Explain, for an architect, the impact of these contract changes. ' +
+              'Keep engine classifications as they are, cite evidence ids you receive, ' +
+              'and separate what is known from what remains unknown.',
+            engineFindings,
+          });
+        } catch (e) {
+          // Un fallo del modelo nunca destruye el informe estructural: queda
+          // como estado de explicación con causa, separado del resultado.
+          outcome = {
+            status: 'failed:explain_error',
+            model: 'none',
+            payload: { error: e instanceof Error ? e.message : String(e) },
+          };
+        }
+      }
+
       await this.db.insert(schema.explanation).values({
         id: `ex_${id}`,
         assessmentId: id,
         revision: 0,
-        model: 'none',
-        status: 'skipped',
-        payload: null,
+        model: outcome.model,
+        status: outcome.status,
+        payload: outcome.payload != null ? JSON.stringify(outcome.payload) : null,
         createdAt: Date.now(),
       });
-      const coverage = rec.coverageJson ? (JSON.parse(rec.coverageJson) as { missing?: string[] }) : null;
+      const coverage = rec.coverageJson
+        ? (JSON.parse(rec.coverageJson) as { missing?: string[] })
+        : null;
       const missing = coverage?.missing ?? [];
       const final: AssessmentStatus = missing.length > 0 ? 'PARTIAL' : 'READY';
       const next = await this.transition(id, final);
-      await this.endStep(id, 'explain', attempt, 'done', null);
+      await this.endStep(id, 'explain', attempt, 'done', sha256Hex(outcome.status));
       return next;
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);

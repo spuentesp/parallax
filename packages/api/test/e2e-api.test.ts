@@ -152,7 +152,7 @@ describe('E2E API', () => {
 
   // ── Query Agent ────────────────────────────────────────────────
   describe('query agent', () => {
-    it('returns fallback without Nemotron', async () => {
+    it('P08: structural topology stays available and the explanation failure is visible', async () => {
       const r = await app.inject({
         method: 'POST',
         url: '/api/query',
@@ -161,8 +161,12 @@ describe('E2E API', () => {
       });
       expect(r.statusCode).toBe(200);
       const body = r.json();
-      expect(body.answer).toBeTruthy();
-      expect(body.topology).toBeDefined();
+      // El análisis estructural (mock LAIN) sigue accesible sin modelo.
+      expect(body.topology.nodes.length).toBeGreaterThan(0);
+      // La falta de modelo es un fallo VISIBLE, no un silencio (P08).
+      expect(body.explanation_status).toBe('failed:no_model_configured');
+      expect(body.model).toBeNull();
+      expect(body.answer).toContain('Nemotron');
     });
     it('validates body', async () => {
       const r = await app.inject({ method: 'POST', url: '/api/query', headers: auth, payload: {} });
