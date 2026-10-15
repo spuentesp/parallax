@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "build": "pnpm -r --filter=!./packages/shared run build",
     "smoke": "pnpm --filter @parallax/api run smoke",
+    "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
     "dev:api": "pnpm --filter @parallax/api dev",
     "dev:web": "pnpm --filter @parallax/web dev",
     "dev:mcp": "pnpm --filter @parallax/mcp dev"
