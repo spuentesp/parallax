@@ -277,7 +277,9 @@ export function fetchGraphChildren(
   ref: { repo: string; type: string; name: string },
 ): Promise<CodeGraphChildrenResponse> {
   const qs = new URLSearchParams({ repo: ref.repo, type: ref.type, name: ref.name });
-  return client.get<CodeGraphChildrenResponse>(`/api/workspaces/${workspaceId}/graph/children?${qs}`);
+  return client.get<CodeGraphChildrenResponse>(
+    `/api/workspaces/${workspaceId}/graph/children?${qs}`,
+  );
 }
 
 export function fetchGraphSnippet(
@@ -298,16 +300,14 @@ export function useCreateWorkspace() {
       repos?: Array<{ uri: string; sha?: string; local?: string }>;
     }) => {
       const { repos, ...ws } = body;
-      return client
-        .post<{ workspace: Workspace }>('/api/workspaces', ws)
-        .then(async (res) => {
-          for (const repo of repos ?? []) {
-            if (repo.uri.trim()) {
-              await client.post(`/api/workspaces/${res.workspace.id}/repos`, repo);
-            }
+      return client.post<{ workspace: Workspace }>('/api/workspaces', ws).then(async (res) => {
+        for (const repo of repos ?? []) {
+          if (repo.uri.trim()) {
+            await client.post(`/api/workspaces/${res.workspace.id}/repos`, repo);
           }
-          return res;
-        });
+        }
+        return res;
+      });
     },
   });
 }
@@ -328,30 +328,31 @@ export interface EvidenceItemShape {
   ref: string;
   reason?: string | undefined;
   snippet?: string | null | undefined;
-  node?: {
-    id: string;
-    name?: string | undefined;
-    node_type: string;
-    ref: { commit: string; id: string; line: number; path: string; repo: string };
-  } | undefined;
-  source?: {
-    text: string;
-    path: string;
-    start: number;
-    end: number;
-    commit: string;
-    total_lines: number;
-    error?: string | undefined;
-  } | null | undefined;
+  node?:
+    | {
+        id: string;
+        name?: string | undefined;
+        node_type: string;
+        ref: { commit: string; id: string; line: number; path: string; repo: string };
+      }
+    | undefined;
+  source?:
+    | {
+        text: string;
+        path: string;
+        start: number;
+        end: number;
+        commit: string;
+        total_lines: number;
+        error?: string | undefined;
+      }
+    | null
+    | undefined;
 }
 
 export function useEvidence() {
   return useMutation({
-    mutationFn: (vars: {
-      workspaceId: string;
-      refs: string[];
-      contextLines?: number;
-    }) =>
+    mutationFn: (vars: { workspaceId: string; refs: string[]; contextLines?: number }) =>
       client.post<{ items: EvidenceItemShape[]; source: string; error?: string }>(
         `/api/workspaces/${vars.workspaceId}/evidence`,
         {

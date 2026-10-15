@@ -6,7 +6,10 @@ describe('presentCoverage', () => {
     complete: true,
     scope: {
       configured_only: true,
-      reviewed: [{ repo: 'orders', commit: 'b5bf29a' }, { repo: 'billing', commit: '9726517' }],
+      reviewed: [
+        { repo: 'orders', commit: 'b5bf29a' },
+        { repo: 'billing', commit: '9726517' },
+      ],
       unreviewed: [],
       excluded: [],
     },
@@ -68,7 +71,10 @@ describe('presentCoverage', () => {
         unreviewed: ['reports'],
       },
     };
-    const c = presentCoverage(stringForm, { configured: ['orders', 'billing', 'reports'], excluded: [] });
+    const c = presentCoverage(stringForm, {
+      configured: ['orders', 'billing', 'reports'],
+      excluded: [],
+    });
     const reports = c.scope.unreviewed.find((n) => n.repo === 'reports');
     expect(reports?.reason).toBe('unreviewed');
     expect(c.complete).toBe(false);
@@ -84,7 +90,10 @@ describe('presentCoverage', () => {
         failed: [{ repo: 'platform', reason: 'index_error' }],
       },
     };
-    const c = presentCoverage(withFailure, { configured: ['orders', 'billing', 'platform'], excluded: [] });
+    const c = presentCoverage(withFailure, {
+      configured: ['orders', 'billing', 'platform'],
+      excluded: [],
+    });
     const failed = c.scope.unreviewed.find((n) => n.repo === 'platform');
     expect(failed?.reason).toBe('index_error');
   });

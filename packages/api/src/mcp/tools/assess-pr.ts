@@ -1,13 +1,13 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { z } from 'zod';
-import * as schema from '../../db/schema.js';
+import type * as schema from '../../db/schema.js';
 import { isLainCallError } from '../../lain-adapter/errors.js';
 import type { LainAdapter } from '../../lain-adapter/types.js';
 import {
   AssessmentRequestBody,
+  createAssessment,
   IdempotencyConflictError,
   NotFoundError,
-  createAssessment,
 } from '../../services/assessments.js';
 import type { AssessmentWorker } from '../../worker/assessment-worker.js';
 import { errorResult, jsonResult } from './explore.js';

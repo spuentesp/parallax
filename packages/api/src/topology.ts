@@ -107,20 +107,6 @@ interface ContractItem {
   providers?: Array<{ repo?: string; path?: string; line?: number }>;
 }
 
-interface ContractConsumer {
-  caller?: { repo?: string; name?: string; path?: string; line?: number; id?: string };
-  binding?: { confidence?: number; kind?: string; source?: string };
-  match?: string;
-  reads?: Array<{ json_path?: string }>;
-}
-
-interface ContractDetail {
-  endpoint?: { key: string; service: string };
-  consumers?: ContractConsumer[];
-  providers?: Array<{ repo?: string; path?: string; line?: number; id?: string }>;
-  schemas?: unknown[];
-}
-
 export async function buildEndpointTopology(
   adapter: LainAdapter,
   filters: TopologyFilters = {},
@@ -231,7 +217,6 @@ export async function buildEndpointTopology(
         meta: { relation: 'exposes' },
       });
     }
-
   }
 
   // Consumos: una pasada por SERVICIO con get_service. Es donde LAIN
@@ -262,7 +247,10 @@ export async function buildEndpointTopology(
       }
 
       // Agrupa por endpoint consumido: un consumidor puede tocar varios.
-      const byEndpoint = new Map<string, { fields: string[]; binding: string; confidence: number; useCount: number }>();
+      const byEndpoint = new Map<
+        string,
+        { fields: string[]; binding: string; confidence: number; useCount: number }
+      >();
       for (const u of c.uses) {
         const ekey = u.endpoint?.key;
         if (!ekey) continue;
@@ -300,7 +288,8 @@ export async function buildEndpointTopology(
 
       for (const [ekey, acc] of byEndpoint) {
         const ownerOfKey = [...nodes.values()].find(
-          (n) => n.id === endpointNodeId(ekey, n.meta?.service as string) ||
+          (n) =>
+            n.id === endpointNodeId(ekey, n.meta?.service as string) ||
             (n.kind === 'endpoint' && n.label === ekey),
         )?.meta?.service as string | undefined;
         const epId = endpointNodeId(ekey, ownerOfKey ?? s.service);

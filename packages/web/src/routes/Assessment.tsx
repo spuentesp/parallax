@@ -4,7 +4,7 @@
 
 import type * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useAssessment, type AssessmentFinding } from '../api/hooks.js';
+import { type AssessmentFinding, useAssessment } from '../api/hooks.js';
 import { StatusBadge } from './Assessments.js';
 
 export function Assessment(): React.ReactElement {
@@ -58,8 +58,11 @@ export function Assessment(): React.ReactElement {
           </div>
         ) : (
           <div className="space-y-2">
-            {report.findings.map((f, i) => (
-              <FindingCard key={i} f={f} />
+            {report.findings.map((f) => (
+              <FindingCard
+                key={`${f.service ?? f.endpoint?.key ?? f.kind}-${f.field ?? f.route ?? ''}-${f.impact?.class ?? ''}`}
+                f={f}
+              />
             ))}
           </div>
         )}
@@ -80,9 +83,7 @@ export function Assessment(): React.ReactElement {
               {report.coverage?.complete ? 'complete' : 'incomplete'}
             </span>
           </div>
-          {report.coverage?.summary && (
-            <p className="text-sm text-fg">{report.coverage.summary}</p>
-          )}
+          {report.coverage?.summary && <p className="text-sm text-fg">{report.coverage.summary}</p>}
           <ScopeList
             label="Reviewed"
             items={report.coverage?.scope?.reviewed ?? []}
@@ -93,11 +94,7 @@ export function Assessment(): React.ReactElement {
             items={report.coverage?.scope?.unreviewed ?? []}
             tone="warning"
           />
-          <ScopeList
-            label="Excluded"
-            items={report.coverage?.scope?.excluded ?? []}
-            tone="muted"
-          />
+          <ScopeList label="Excluded" items={report.coverage?.scope?.excluded ?? []} tone="muted" />
         </div>
       </section>
 
@@ -117,9 +114,7 @@ export function Assessment(): React.ReactElement {
                 {report.evidence.map((e) => (
                   <tr key={e.id} className="border-t border-border first:border-t-0">
                     <td className="px-4 py-2 text-muted whitespace-nowrap">{e.repo}</td>
-                    <td className="px-4 py-2 text-muted whitespace-nowrap">
-                      {e.sha.slice(0, 10)}
-                    </td>
+                    <td className="px-4 py-2 text-muted whitespace-nowrap">{e.sha.slice(0, 10)}</td>
                     <td className="px-4 py-2 text-accent break-all">{e.path}</td>
                   </tr>
                 ))}
@@ -189,8 +184,11 @@ function FindingCard({ f }: { f: AssessmentFinding }): React.ReactElement {
         <div className="mt-3 text-xs text-muted">
           <div className="uppercase tracking-wide mb-1">Affected</div>
           <ul className="space-y-0.5">
-            {impacted.map((a, i) => (
-              <li key={i} className="font-mono">
+            {impacted.map((a) => (
+              <li
+                key={`${a.service ?? ''}-${a.consumer ?? ''}-${a.class ?? ''}`}
+                className="font-mono"
+              >
                 {a.service ?? '—'}
                 {a.consumer ? ` · ${a.consumer}` : ''}
                 {a.class ? ` · ${a.class}` : ''}
@@ -214,20 +212,16 @@ function ScopeList({
 }): React.ReactElement | null {
   if (items.length === 0) return null;
   const cls =
-    tone === 'success'
-      ? 'text-success'
-      : tone === 'warning'
-        ? 'text-warning'
-        : 'text-muted';
+    tone === 'success' ? 'text-success' : tone === 'warning' ? 'text-warning' : 'text-muted';
   return (
     <div>
       <div className="text-xs uppercase tracking-wide text-muted mb-1">{label}</div>
       <ul className={`text-xs font-mono ${cls}`}>
-        {items.map((it, i) => {
+        {items.map((it) => {
           const repo = typeof it === 'string' ? it : it.repo;
           const reason = typeof it === 'string' ? '' : it.reason;
           return (
-            <li key={i}>
+            <li key={repo}>
               {repo}
               {reason ? ` (${reason})` : ''}
             </li>

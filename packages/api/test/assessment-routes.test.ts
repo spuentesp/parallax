@@ -4,7 +4,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.js';
 import { buildApp } from '../src/server.js';
@@ -61,7 +60,13 @@ describe('assessment routes (G2 flow)', () => {
     await app.assessmentWorker.run(id);
     const r = await app.inject({ method: 'GET', url: `/api/assessments/${id}`, headers: auth });
     return r.json() as {
-      assessment: { id: string; status: string; findings: Array<Record<string, unknown>>; coverage: Record<string, unknown>; explanation: { status: string } };
+      assessment: {
+        id: string;
+        status: string;
+        findings: Array<Record<string, unknown>>;
+        coverage: Record<string, unknown>;
+        explanation: { status: string };
+      };
     };
   }
 
@@ -73,7 +78,10 @@ describe('assessment routes (G2 flow)', () => {
       payload: body,
     });
     expect(first.statusCode).toBe(201);
-    const created = first.json() as { assessment: { id: string; inputDigest: string }; created: boolean };
+    const created = first.json() as {
+      assessment: { id: string; inputDigest: string };
+      created: boolean;
+    };
     expect(created.created).toBe(true);
     expect(created.assessment.inputDigest).toMatch(/^sha256_[0-9a-f]{64}$/);
 

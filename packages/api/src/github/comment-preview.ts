@@ -64,14 +64,15 @@ export function buildCommentPreview(
   const name = (x: { repo?: string } | string | undefined): string =>
     typeof x === 'string' ? x : (x?.repo ?? '');
   const reviewed = (cov.scope?.reviewed ?? []).map(name).filter(Boolean);
-  const notReviewed = [
-    ...(cov.scope?.unreviewed ?? []),
-    ...(cov.scope?.excluded ?? []),
-  ]
-    .map((x) => (typeof x === 'string' ? { repo: x, reason: 'not_reviewed' } : {
-      repo: x.repo ?? '',
-      reason: x.reason ?? 'not_reviewed',
-    }))
+  const notReviewed = [...(cov.scope?.unreviewed ?? []), ...(cov.scope?.excluded ?? [])]
+    .map((x) =>
+      typeof x === 'string'
+        ? { repo: x, reason: 'not_reviewed' }
+        : {
+            repo: x.repo ?? '',
+            reason: x.reason ?? 'not_reviewed',
+          },
+    )
     .filter((n) => n.repo.length > 0);
 
   const complete = cov.complete === true;

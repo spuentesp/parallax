@@ -9,7 +9,7 @@
 
 import type * as React from 'react';
 import { useMemo, useState } from 'react';
-import { GraphCanvas, darkTheme } from 'reagraph';
+import { darkTheme, GraphCanvas } from 'reagraph';
 
 export interface TopologyNode {
   id: string;
@@ -46,16 +46,17 @@ const NODE_SIZE: Record<TopologyNode['kind'], number> = {
 
 // La jerarquía se dibuja tenue pero visible: si se pierde del todo, el repo
 // queda como punto suelto y no se lee como contenedor de sus servicios.
-const EDGE_STYLE: Record<
-  TopologyEdge['kind'],
-  { fill: string; strokeWidth: number }
-> = {
+const EDGE_STYLE: Record<TopologyEdge['kind'], { fill: string; strokeWidth: number }> = {
   contains: { fill: 'rgba(167, 139, 250, 0.45)', strokeWidth: 1.5 },
   servedBy: { fill: 'rgba(167, 139, 250, 0.8)', strokeWidth: 2 },
   consumes: { fill: 'rgba(59, 130, 246, 0.9)', strokeWidth: 2.5 },
 };
 
-function isVisible(n: TopologyNode, byId: Map<string, TopologyNode>, collapsed: Set<string>): boolean {
+function isVisible(
+  n: TopologyNode,
+  byId: Map<string, TopologyNode>,
+  collapsed: Set<string>,
+): boolean {
   let cur: TopologyNode | undefined = n;
   const guard = new Set<string>();
   while (cur) {
@@ -82,7 +83,7 @@ export function TopologyView({
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [layout, setLayout] = useState<(typeof LAYOUTS)[number]['id']>('forceDirected2d');
 
-  const { nodes, edges, childCounts } = useMemo(() => {
+  const { nodes, edges } = useMemo(() => {
     const byId = new Map(data.nodes.map((n) => [n.id, n]));
     const counts = new Map<string, number>();
     for (const n of data.nodes) {

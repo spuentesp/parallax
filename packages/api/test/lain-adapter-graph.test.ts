@@ -80,7 +80,10 @@ describe('LainAdapter graph methods (real client)', () => {
 
     const last = fetchSpy.mock.calls.at(-1)?.[1] as { body: string };
     const body = JSON.parse(last.body) as {
-      params: { name: string; arguments: { query: { ops: unknown[] }; repo_id: string; spec?: unknown } };
+      params: {
+        name: string;
+        arguments: { query: { ops: unknown[] }; repo_id: string; spec?: unknown };
+      };
     };
     expect(body.params.name).toBe('query_graph');
     expect(body.params.arguments.repo_id).toBe('orders');

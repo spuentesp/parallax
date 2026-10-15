@@ -40,9 +40,7 @@ describe('QueryGraphArgs', () => {
   });
 
   it('rejects an empty ops pipeline', () => {
-    expect(QueryGraphArgs.safeParse({ query: { ops: [] }, repo_id: 'orders' }).success).toBe(
-      false,
-    );
+    expect(QueryGraphArgs.safeParse({ query: { ops: [] }, repo_id: 'orders' }).success).toBe(false);
   });
 });
 

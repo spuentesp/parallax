@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildCommentPreview } from '../src/github/comment-preview.js';
-import { GitHubReader, parsePrUrl, PrUrlError } from '../src/github/reader.js';
+import { GitHubReader, PrUrlError, parsePrUrl } from '../src/github/reader.js';
 import type { AssessmentApiModel } from '../src/services/assessments.js';
 
 describe('parsePrUrl', () => {
@@ -103,7 +103,15 @@ function report(over: Partial<AssessmentApiModel> = {}): AssessmentApiModel {
       },
     },
     evidence: [
-      { id: 'e1', viewId: 'live', repo: 'billing', sha: 'abcdef123456', path: 'src/main.py', range: null, hash: 'h' },
+      {
+        id: 'e1',
+        viewId: 'live',
+        repo: 'billing',
+        sha: 'abcdef123456',
+        path: 'src/main.py',
+        range: null,
+        hash: 'h',
+      },
     ],
     explanation: { status: 'skipped', revision: 0, model: 'none' },
     createdAt: 1,

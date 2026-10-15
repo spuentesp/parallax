@@ -107,9 +107,9 @@ export function HierarchyTree({
                               onToggle={onSelect ? () => onSelect(ep.node.id) : undefined}
                               muted={ep.consumers.length === 0}
                             />
-                            {ep.consumers.map((c, i) => (
+                            {ep.consumers.map((c) => (
                               <div
-                                key={i}
+                                key={c.from}
                                 className="flex items-start gap-2 pl-[3.75rem] pr-4 py-0.5 text-xs"
                               >
                                 <span className="text-accent shrink-0">←</span>
@@ -117,7 +117,9 @@ export function HierarchyTree({
                                 <span className="text-muted truncate">
                                   {c.label ?? 'uses'}
                                   {c.binding ? ` · ${c.binding}` : ''}
-                                  {c.confidence !== undefined ? ` · ${c.confidence.toFixed(2)}` : ''}
+                                  {c.confidence !== undefined
+                                    ? ` · ${c.confidence.toFixed(2)}`
+                                    : ''}
                                 </span>
                               </div>
                             ))}
@@ -152,8 +154,7 @@ function TreeRow({
   muted?: boolean;
 }): React.ReactElement {
   const isLeaf = kind === 'endpoint';
-  const dot =
-    kind === 'repo' ? '#a78bfa' : kind === 'service' ? '#3b82f6' : '#f59e0b';
+  const dot = kind === 'repo' ? '#a78bfa' : kind === 'service' ? '#3b82f6' : '#f59e0b';
   return (
     <button
       type="button"
@@ -164,16 +165,16 @@ function TreeRow({
       }`}
       style={{ paddingLeft: `${1 + depth * 1.5}rem` }}
     >
-      <span className="w-3 text-muted text-xs">
-        {isLeaf ? '•' : open ? '▾' : '▸'}
-      </span>
+      <span className="w-3 text-muted text-xs">{isLeaf ? '•' : open ? '▾' : '▸'}</span>
       <span
         className="inline-block rounded-full shrink-0"
-        style={{ background: dot, width: kind === 'repo' ? 10 : 7, height: kind === 'repo' ? 10 : 7 }}
+        style={{
+          background: dot,
+          width: kind === 'repo' ? 10 : 7,
+          height: kind === 'repo' ? 10 : 7,
+        }}
       />
-      <span
-        className={`truncate ${kind === 'endpoint' ? 'font-mono text-xs' : 'font-medium'}`}
-      >
+      <span className={`truncate ${kind === 'endpoint' ? 'font-mono text-xs' : 'font-medium'}`}>
         {label}
       </span>
       <span className="ml-auto text-xs text-muted whitespace-nowrap">
@@ -194,7 +195,10 @@ export function groupHierarchy(
   const byId = new Map(nodes.map((n) => [n.id, n]));
 
   // Quién consume cada endpoint, con la superficie usada.
-  const consumers = new Map<string, Grouped['services'][number]['endpoints'][number]['consumers']>();
+  const consumers = new Map<
+    string,
+    Grouped['services'][number]['endpoints'][number]['consumers']
+  >();
   for (const e of edges) {
     if (e.kind !== 'consumes') continue;
     const meta = (e.meta ?? {}) as { binding?: string; confidence?: number };

@@ -106,10 +106,7 @@ export class RealLainAdapter implements LainAdapter {
     this.fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
-  private async request(
-    tool: string,
-    args: Record<string, unknown>,
-  ): Promise<McpEnvelope> {
+  private async request(tool: string, args: Record<string, unknown>): Promise<McpEnvelope> {
     let attempt = 0;
     let lastError: unknown = null;
     while (attempt <= this.maxRetries) {
@@ -320,7 +317,10 @@ export class RealLainAdapter implements LainAdapter {
   }
 
   async getContract(req: GetContractArgs): Promise<GetContractResponse> {
-    return this.call<GetContractResponse>('get_contract', req as unknown as Record<string, unknown>);
+    return this.call<GetContractResponse>(
+      'get_contract',
+      req as unknown as Record<string, unknown>,
+    );
   }
 
   async listUnresolved(req: ListUnresolvedArgs): Promise<ListUnresolvedResponse> {

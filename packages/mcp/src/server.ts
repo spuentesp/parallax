@@ -46,7 +46,22 @@ export function buildMcpServer(api: ApiClient): McpServer {
     async (args) => {
       const body = args.prUrl
         ? { prUrl: args.prUrl, orgId: args.orgId }
-        : { repo: args.repo!, base: args.base!, head: args.head!, orgId: args.orgId };
+        : args.repo && args.base && args.head
+          ? { repo: args.repo, base: args.base, head: args.head, orgId: args.orgId }
+          : null;
+      if (body === null) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                error: 'repo, base and head are required when prUrl is absent',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
       try {
         const data = await api.post('/assessments', body);
         return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };

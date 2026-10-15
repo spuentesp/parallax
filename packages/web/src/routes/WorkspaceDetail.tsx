@@ -4,11 +4,11 @@ import { Link, useParams } from 'react-router-dom';
 import {
   fetchGraphChildren,
   fetchGraphSnippet,
+  type TopologyFilters,
   useEvidence,
   useWorkspace,
   useWorkspaceGraph,
   useWorkspaceTopology,
-  type TopologyFilters,
 } from '../api/hooks.js';
 import { CodeGraphTree } from '../components/CodeGraphTree.js';
 import { DependencyList } from '../components/DependencyList.js';
@@ -172,9 +172,7 @@ export function WorkspaceDetail(): React.ReactElement {
             </div>
           ) : (
             <CodeGraphTree
-              data={
-                graphQuery.data ?? { graph: { repos: [] }, source: 'none' as const }
-              }
+              data={graphQuery.data ?? { graph: { repos: [] }, source: 'none' as const }}
               fetchChildren={(ref) => fetchGraphChildren(id ?? '', ref)}
               fetchSnippet={(repo, symbol) => fetchGraphSnippet(id ?? '', repo, symbol)}
             />

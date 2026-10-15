@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type Database from 'better-sqlite3';
 
@@ -17,9 +17,7 @@ export function runMigrations(db: Database.Database, migrationsDir: string): voi
       .all()
       .map((r: { name: string }) => r.name),
   );
-  const record = db.prepare(
-    'INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)',
-  );
+  const record = db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)');
   const files = readdirSync(migrationsDir)
     .filter((f) => f.endsWith('.sql'))
     .sort();

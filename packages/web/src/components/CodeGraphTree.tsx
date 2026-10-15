@@ -50,9 +50,12 @@ export function CodeGraphTree({
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [children, setChildren] = useState<Record<string, ChildEntry>>({});
-  const [snippet, setSnippet] = useState<
-    { loading: boolean; repo: string; symbol: string; data?: GraphSnippetResponse } | null
-  >(null);
+  const [snippet, setSnippet] = useState<{
+    loading: boolean;
+    repo: string;
+    symbol: string;
+    data?: GraphSnippetResponse;
+  } | null>(null);
 
   const repos = data.graph?.repos ?? [];
 
@@ -180,7 +183,7 @@ export function CodeGraphTree({
                       node={node}
                       depth={1}
                       expanded={expanded}
-                      children={children}
+                      childMap={children}
                       onToggle={toggleNode}
                       onViewSource={viewSource}
                     />
@@ -201,7 +204,7 @@ function NodeRow({
   node,
   depth,
   expanded,
-  children: childMap,
+  childMap,
   onToggle,
   onViewSource,
 }: {
@@ -209,7 +212,7 @@ function NodeRow({
   node: CodeGraphNode;
   depth: number;
   expanded: Set<string>;
-  children: Record<string, ChildEntry>;
+  childMap: Record<string, ChildEntry>;
   onToggle: (repo: string, node: CodeGraphNode) => void;
   onViewSource: (repo: string, symbol: string) => void;
 }): React.ReactElement {
@@ -288,7 +291,7 @@ function NodeRow({
               node={child}
               depth={depth + 1}
               expanded={expanded}
-              children={childMap}
+              childMap={childMap}
               onToggle={onToggle}
               onViewSource={onViewSource}
             />
@@ -304,7 +307,10 @@ function NodeRow({
           {entry.data.communications?.map((group) => (
             <div key={group.edge}>
               {group.error ? (
-                <p className="text-xs text-warning" style={{ paddingLeft: `${2 + depth * 1.25}rem` }}>
+                <p
+                  className="text-xs text-warning"
+                  style={{ paddingLeft: `${2 + depth * 1.25}rem` }}
+                >
                   {group.edge}: query failed ({group.error})
                 </p>
               ) : (
@@ -347,7 +353,10 @@ function SnippetPanel({
   const res = snippet.data;
   const s = res?.snippet;
   return (
-    <div data-testid="snippet-panel" className="rounded-xl border border-border bg-surface overflow-hidden">
+    <div
+      data-testid="snippet-panel"
+      className="rounded-xl border border-border bg-surface overflow-hidden"
+    >
       <div className="px-4 py-2.5 border-b border-border flex items-center justify-between">
         <h3 className="text-xs font-medium uppercase tracking-wide text-muted font-mono">
           {snippet.repo} · {snippet.symbol}
@@ -359,9 +368,7 @@ function SnippetPanel({
         {!snippet.loading && res?.source === 'error' && (
           <p className="text-sm text-error">Could not load snippet: {res.error}</p>
         )}
-        {!snippet.loading && s?.error && (
-          <p className="text-sm text-warning">{s.error}</p>
-        )}
+        {!snippet.loading && s?.error && <p className="text-sm text-warning">{s.error}</p>}
         {!snippet.loading && s?.text && (
           <pre className="text-xs font-mono whitespace-pre-wrap text-muted">{s.text}</pre>
         )}

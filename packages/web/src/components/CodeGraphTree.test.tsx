@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CodeGraphTree } from './CodeGraphTree.js';
 import type {
   CodeGraphChildrenResponse,
   GraphRootResponse,
   GraphSnippetResponse,
 } from '../api/hooks.js';
+import { CodeGraphTree } from './CodeGraphTree.js';
 
 afterEach(() => cleanup());
 
@@ -97,7 +97,11 @@ describe('CodeGraphTree', () => {
   it('fetches children on demand and nests them under the node', async () => {
     const fetchChildren = mkFetchChildren();
     render(
-      <CodeGraphTree data={rootData} fetchChildren={fetchChildren} fetchSnippet={mkFetchSnippet()} />,
+      <CodeGraphTree
+        data={rootData}
+        fetchChildren={fetchChildren}
+        fetchSnippet={mkFetchSnippet()}
+      />,
     );
     expect(fetchChildren).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('graph-node-orders|File|main.rs'));
@@ -158,7 +162,9 @@ describe('CodeGraphTree', () => {
     const sourceButtons = screen.getAllByText('source');
     fireEvent.click(sourceButtons[0] as HTMLElement);
     await waitFor(() => expect(fetchSnippet).toHaveBeenCalledWith('orders', 'main'));
-    await waitFor(() => expect(screen.getByTestId('snippet-panel').textContent).toContain('fn main'));
+    await waitFor(() =>
+      expect(screen.getByTestId('snippet-panel').textContent).toContain('fn main'),
+    );
   });
 
   it('surfaces an expansion error instead of silently collapsing', async () => {
@@ -172,9 +178,7 @@ describe('CodeGraphTree', () => {
       />,
     );
     fireEvent.click(screen.getByTestId('graph-node-orders|File|main.rs'));
-    await waitFor(() =>
-      expect(screen.getByText(/expansion failed/i)).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText(/expansion failed/i)).toBeTruthy());
   });
 
   it('shows the unconfigured state when the workspace has no LAIN', () => {

@@ -8,10 +8,10 @@ import { z } from 'zod';
 import * as schema from '../db/schema.js';
 import type { GitHubReader, PrSummary } from '../github/reader.js';
 import { LainCallError } from '../lain-adapter/errors.js';
-import {
-  type AssessmentRecord,
+import type {
+  AssessmentRecord,
   AssessmentWorker,
-  type ResolvedAssessmentRequest,
+  ResolvedAssessmentRequest,
 } from '../worker/assessment-worker.js';
 import { computeInputDigest } from '../worker/state.js';
 
@@ -93,7 +93,7 @@ export function repoDisplayName(repo: { uri: string; local: string | null }): st
   return raw.endsWith('.git') ? raw.slice(0, -4) : raw;
 }
 
-function notImplemented(what: string): never {
+function _notImplemented(what: string): never {
   throw LainCallError.parse({ code: 'NotImplemented', message: what, doc: SPEC_DOC });
 }
 
@@ -126,9 +126,7 @@ export async function resolveAssessmentRequest(
       return uri.includes(slug) || repoDisplayName(r).toLowerCase() === pr.ref.repo.toLowerCase();
     });
     if (!match) {
-      throw new NotFoundError(
-        `PR repo ${slug} is not configured in workspace ${body.orgId}`,
-      );
+      throw new NotFoundError(`PR repo ${slug} is not configured in workspace ${body.orgId}`);
     }
     return resolveAssessmentRequest(
       db,
@@ -267,9 +265,7 @@ export async function listAssessments(
 
   return rows.map((r) => {
     const engine = parseJson(r.engineJson) as { diff?: { changes?: unknown[] } } | null;
-    const coverage = parseJson(r.coverageJson) as
-      | { complete?: boolean; summary?: string }
-      | null;
+    const coverage = parseJson(r.coverageJson) as { complete?: boolean; summary?: string } | null;
     return {
       id: r.id,
       orgId: r.orgId,
@@ -285,7 +281,11 @@ export async function listAssessments(
 }
 
 export async function getAssessmentRecord(db: Db, id: string): Promise<AssessmentRecord | null> {
-  const row = await db.select().from(schema.assessment).where(eq(schema.assessment.id, id)).limit(1);
+  const row = await db
+    .select()
+    .from(schema.assessment)
+    .where(eq(schema.assessment.id, id))
+    .limit(1);
   return row[0]
     ? {
         id: row[0].id as AssessmentRecord['id'],
@@ -305,16 +305,14 @@ export async function getAssessmentRecord(db: Db, id: string): Promise<Assessmen
 
 // El informe completo y persistido: identidad, hallazgos del motor, cobertura
 // presentada y evidencia. Es lo único que HTTP y MCP sirven (P09).
-export async function getAssessmentReport(
-  db: Db,
-  id: string,
-): Promise<AssessmentApiModel | null> {
+export async function getAssessmentReport(db: Db, id: string): Promise<AssessmentApiModel | null> {
   const rec = await getAssessmentRecord(db, id);
   if (!rec) return null;
 
-  const engine = parseJson(rec.engineJson) as
-    | { diff?: { changes?: unknown[] }; error?: string }
-    | null;
+  const engine = parseJson(rec.engineJson) as {
+    diff?: { changes?: unknown[] };
+    error?: string;
+  } | null;
   const coverage = parseJson(rec.coverageJson);
   const manifest = parseJson(rec.manifestJson);
 
@@ -354,7 +352,11 @@ export async function getAssessmentReport(
       hash: e.hash,
     })),
     explanation: latestExplanation
-      ? { status: latestExplanation.status, revision: latestExplanation.revision, model: latestExplanation.model }
+      ? {
+          status: latestExplanation.status,
+          revision: latestExplanation.revision,
+          model: latestExplanation.model,
+        }
       : { status: 'pending', revision: null, model: null },
     createdAt: rec.createdAt,
     completedAt: rec.completedAt,

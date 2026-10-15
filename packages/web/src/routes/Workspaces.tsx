@@ -66,7 +66,15 @@ function WorkspaceCard({ workspace: w }: { workspace: Workspace }): React.ReactE
             {w.repos.length > 0 && (
               <span>
                 {' '}
-                · {w.repos.map((r) => r.uri.split('/').pop()?.replace(/\.git$/, '')).join(', ')}
+                ·{' '}
+                {w.repos
+                  .map((r) =>
+                    r.uri
+                      .split('/')
+                      .pop()
+                      ?.replace(/\.git$/, ''),
+                  )
+                  .join(', ')}
               </span>
             )}
           </div>
@@ -125,6 +133,7 @@ function CreateWorkspace({ onCreated }: { onCreated: () => void }): React.ReactE
 
         <div className="text-sm font-medium mt-4">Repositories</div>
         {repos.map((repo, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: filas editables sin id estable; una key por contenido perdería foco al escribir el uri
           <div key={i} className="flex gap-2 items-center">
             <input
               value={repo.uri}

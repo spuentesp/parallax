@@ -26,10 +26,15 @@ describe('classifyNode', () => {
 
 describe('deriveLainRepoId', () => {
   it('takes the basename of the local checkout', () => {
-    expect(deriveLainRepoId({ uri: 'fixture://contracts/orders', local: './test-repos/contracts-fixture/orders' })).toBe(
-      'orders',
+    expect(
+      deriveLainRepoId({
+        uri: 'fixture://contracts/orders',
+        local: './test-repos/contracts-fixture/orders',
+      }),
+    ).toBe('orders');
+    expect(deriveLainRepoId({ uri: 'https://github.com/x/y.git', local: './test-repos/y' })).toBe(
+      'y',
     );
-    expect(deriveLainRepoId({ uri: 'https://github.com/x/y.git', local: './test-repos/y' })).toBe('y');
   });
 
   it('falls back to the URI basename without .git', () => {

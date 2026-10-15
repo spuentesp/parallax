@@ -108,7 +108,7 @@ function EvidenceCard({ item }: { item: EvidenceItem }): React.ReactElement {
 
       {src && typeof src.text === 'string' ? (
         <CodeBlock source={src} highlightLine={anchor?.line ?? null} />
-      ) : src && src.error ? (
+      ) : src?.error ? (
         <div className="px-4 py-3 text-xs text-warning">No se pudo leer la fuente: {src.error}</div>
       ) : item.snippet ? (
         <pre className="px-4 py-3 text-xs font-mono overflow-x-auto text-muted whitespace-pre">

@@ -1,14 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { buildCommentPreview } from '../github/comment-preview.js';
-import { GitHubReader, parsePrUrl, PrUrlError } from '../github/reader.js';
+import { GitHubReader, PrUrlError, parsePrUrl } from '../github/reader.js';
 import {
   AssessmentRequestBody,
-  IdempotencyConflictError,
-  NotFoundError,
   createAssessment,
   getAssessmentReport,
+  IdempotencyConflictError,
   listAssessments,
+  NotFoundError,
 } from '../services/assessments.js';
 
 // §15 G2: el informe se persiste una sola vez y se sirve igual desde web y
@@ -84,9 +84,12 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as { id: string };
       const report = await getAssessmentReport(app.db, id);
       if (!report) {
-        return reply
-          .code(404)
-          .send({ type: 'about:blank', title: 'Not Found', status: 404, detail: `assessment ${id} not found` });
+        return reply.code(404).send({
+          type: 'about:blank',
+          title: 'Not Found',
+          status: 404,
+          detail: `assessment ${id} not found`,
+        });
       }
       return { assessment: report };
     },
@@ -102,9 +105,12 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
       const { id } = req.params as { id: string };
       const exists = await app.assessmentWorker.get(id);
       if (!exists) {
-        return reply
-          .code(404)
-          .send({ type: 'about:blank', title: 'Not Found', status: 404, detail: `assessment ${id} not found` });
+        return reply.code(404).send({
+          type: 'about:blank',
+          title: 'Not Found',
+          status: 404,
+          detail: `assessment ${id} not found`,
+        });
       }
       return { events: await app.assessmentWorker.events(id) };
     },
@@ -127,9 +133,12 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
       const { evidence } = req.query as { evidence?: boolean };
       const report = await getAssessmentReport(app.db, id);
       if (!report) {
-        return reply
-          .code(404)
-          .send({ type: 'about:blank', title: 'Not Found', status: 404, detail: `assessment ${id} not found` });
+        return reply.code(404).send({
+          type: 'about:blank',
+          title: 'Not Found',
+          status: 404,
+          detail: `assessment ${id} not found`,
+        });
       }
       return { preview: buildCommentPreview(report, { includeEvidence: evidence === true }) };
     },

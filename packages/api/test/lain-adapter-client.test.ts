@@ -72,9 +72,9 @@ describe('LainAdapter real client', () => {
     expect(a.apiVersion).toBe('1');
     expect(typeof a.analyzerVersion).toBe('string');
     expect(fetchSpy).toHaveBeenCalledTimes(4);
-    const loadBody = JSON.parse(
-      (fetchSpy.mock.calls[1]?.[1]?.body as string) ?? '{}',
-    ) as { params?: { name?: string; arguments?: { package?: string } } };
+    const loadBody = JSON.parse((fetchSpy.mock.calls[1]?.[1]?.body as string) ?? '{}') as {
+      params?: { name?: string; arguments?: { package?: string } };
+    };
     expect(loadBody.params?.name).toBe('load_package');
     expect(loadBody.params?.arguments?.package).toBe('raw');
   });

@@ -72,7 +72,9 @@ describe('web/MCP parity (P09)', () => {
     authorization: 'Bearer t',
   };
 
-  async function mcp(payload: Record<string, unknown>): Promise<{ statusCode: number; body: string }> {
+  async function mcp(
+    payload: Record<string, unknown>,
+  ): Promise<{ statusCode: number; body: string }> {
     const r = await app.inject({
       method: 'POST',
       url: '/mcp',
@@ -89,7 +91,12 @@ describe('web/MCP parity (P09)', () => {
   }
 
   async function mcpCall(name: string, args: unknown): Promise<unknown> {
-    const r = await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
+    const r = await mcp({
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    });
     expect(r.statusCode).toBe(200);
     const envelope = parseSse(r.body) as {
       result?: { content?: Array<{ text?: string }>; isError?: boolean };
@@ -103,12 +110,21 @@ describe('web/MCP parity (P09)', () => {
 
   it('parallax_get_assessment returns the same report as GET /api/assessments/:id', async () => {
     const body = { repo: 'orders', base: SHAS.ordersBase, head: SHAS.ordersS1, orgId: 'org_demo' };
-    const created = await app.inject({ method: 'POST', url: '/api/assessments', headers: authHeaders, payload: body });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/assessments',
+      headers: authHeaders,
+      payload: body,
+    });
     expect(created.statusCode).toBe(201);
     const id = (created.json() as { assessment: { id: string } }).assessment.id;
     await app.assessmentWorker.run(id);
 
-    const http = await app.inject({ method: 'GET', url: `/api/assessments/${id}`, headers: authHeaders });
+    const http = await app.inject({
+      method: 'GET',
+      url: `/api/assessments/${id}`,
+      headers: authHeaders,
+    });
     expect(http.statusCode).toBe(200);
     const httpReport = (http.json() as { assessment: Record<string, unknown> }).assessment;
 
@@ -123,12 +139,19 @@ describe('web/MCP parity (P09)', () => {
     expect(JSON.stringify(viaMcp.assessment.findings)).toBe(JSON.stringify(httpReport.findings));
     expect(JSON.stringify(viaMcp.assessment.coverage)).toBe(JSON.stringify(httpReport.coverage));
     expect(JSON.stringify(viaMcp.assessment.manifest)).toBe(JSON.stringify(httpReport.manifest));
-    expect(JSON.stringify(viaMcp.assessment.explanation)).toBe(JSON.stringify(httpReport.explanation));
+    expect(JSON.stringify(viaMcp.assessment.explanation)).toBe(
+      JSON.stringify(httpReport.explanation),
+    );
   });
 
   it('parallax_assess_pr reuses the same assessment as POST /api/assessments (INV 4)', async () => {
     const body = { repo: 'orders', base: SHAS.ordersBase, head: SHAS.ordersS1, orgId: 'org_demo' };
-    const created = await app.inject({ method: 'POST', url: '/api/assessments', headers: authHeaders, payload: body });
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/assessments',
+      headers: authHeaders,
+      payload: body,
+    });
     const id = (created.json() as { assessment: { id: string } }).assessment.id;
 
     const viaMcp = (await mcpCall('parallax_assess_pr', body)) as {

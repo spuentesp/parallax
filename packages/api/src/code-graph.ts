@@ -304,10 +304,7 @@ export async function resolveSymbolSnippet(
  * repo_id de LAIN para un repo del workspace: el basename del checkout local
  * (./test-repos/contracts-fixture/orders → orders), o del URI sin .git.
  */
-export function deriveLainRepoId(repo: {
-  uri: string;
-  local?: string | null;
-}): string {
+export function deriveLainRepoId(repo: { uri: string; local?: string | null }): string {
   const base = (p: string): string => {
     const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
     return parts[parts.length - 1] ?? p;

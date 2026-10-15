@@ -1,18 +1,18 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
 import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import * as schema from '../src/db/schema.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import {
-  type ResolvedAssessmentRequest,
   AssessmentWorker,
+  type ResolvedAssessmentRequest,
 } from '../src/worker/assessment-worker.js';
-import { PARALLAX_POLICY_VERSION, canTransition, computeInputDigest } from '../src/worker/state.js';
+import { canTransition, computeInputDigest, PARALLAX_POLICY_VERSION } from '../src/worker/state.js';
 
 function makeDb(dir: string) {
   const sqlite = new Database(join(dir, 'test.db'));
@@ -170,7 +170,10 @@ describe('AssessmentWorker', () => {
       expect(coverage.missing?.length).toBeGreaterThan(0);
     }
 
-    const steps = await db.select().from(schema.jobStep).where(eq(schema.jobStep.assessmentId, assessment.id));
+    const steps = await db
+      .select()
+      .from(schema.jobStep)
+      .where(eq(schema.jobStep.assessmentId, assessment.id));
     const byStep = new Map(steps.map((s) => [s.step, s.state]));
     expect(byStep.get('snapshot')).toBe('done');
     expect(byStep.get('analyze')).toBe('done');

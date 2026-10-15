@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { Link } from 'react-router-dom';
-import { useAssessmentList, type AssessmentSummary } from '../api/hooks.js';
+import { type AssessmentSummary, useAssessmentList } from '../api/hooks.js';
 
 export function Assessments(): React.ReactElement {
   const { data, isLoading, error } = useAssessmentList();

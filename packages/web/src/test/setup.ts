@@ -64,6 +64,8 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     observe() {}
     unobserve() {}
     disconnect() {}
-    takeRecords() { return []; }
+    takeRecords() {
+      return [];
+    }
   };
 }

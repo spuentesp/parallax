@@ -27,3 +27,6 @@ test-repos/
 # Mutation testing artifacts
 packages/*/reports/
 packages/*/.stryker-tmp/
+
+# Temp scratch (TMPDIR for local test runs)
+.tmp/

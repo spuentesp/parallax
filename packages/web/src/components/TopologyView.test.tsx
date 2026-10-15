@@ -8,9 +8,9 @@ const emptyData: TopologyViewData = { nodes: [], edges: [] };
 
 const sampleData: TopologyViewData = {
   nodes: [
-    { id: 'orders', label: 'orders', kind: 'service' , parent: null },
-    { id: 'billing', label: 'billing', kind: 'service' , parent: null },
-    { id: 'reports', label: 'reports', kind: 'service' , parent: null },
+    { id: 'orders', label: 'orders', kind: 'service', parent: null },
+    { id: 'billing', label: 'billing', kind: 'service', parent: null },
+    { id: 'reports', label: 'reports', kind: 'service', parent: null },
   ],
   edges: [
     { source: 'billing', target: 'orders', label: 'customer_id', kind: 'consumes' },

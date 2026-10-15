@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { LainAdapter } from '../src/lain-adapter/types.js';
 import {
   buildEndpointTopology,
   contractKind,
@@ -6,7 +7,6 @@ import {
   resolveServiceForPath,
   serviceNodeId,
 } from '../src/topology.js';
-import type { LainAdapter } from '../src/lain-adapter/types.js';
 
 describe('resolveServiceForPath', () => {
   // En un monorepo, el consumidor es el módulo dueño del archivo, no el repo.

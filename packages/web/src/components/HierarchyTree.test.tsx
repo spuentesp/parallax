@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { HierarchyTree, groupHierarchy } from './HierarchyTree.js';
+import { groupHierarchy, HierarchyTree } from './HierarchyTree.js';
 import type { TopologyEdge, TopologyNode } from './TopologyView.js';
 
 afterEach(() => cleanup());

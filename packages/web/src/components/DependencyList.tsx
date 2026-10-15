@@ -4,7 +4,7 @@
 import type * as React from 'react';
 import { useState } from 'react';
 import type { TopologyEdge } from '../api/hooks.js';
-import { EvidencePanel, type EvidenceItem } from './EvidencePanel.js';
+import { type EvidenceItem, EvidencePanel } from './EvidencePanel.js';
 
 interface UseRef {
   endpoint: string | null;
@@ -52,7 +52,10 @@ export function DependencyList({
         };
         const isOpen = open === `${e.source}->${e.target}`;
         return (
-          <div key={`${e.source}->${e.target}`} className="rounded-xl border border-border bg-surface">
+          <div
+            key={`${e.source}->${e.target}`}
+            className="rounded-xl border border-border bg-surface"
+          >
             <button
               type="button"
               onClick={() => setOpen(isOpen ? null : `${e.source}->${e.target}`)}

@@ -1,11 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import {
-  type AssessmentToolDeps,
-  assessPrShape,
-  makeAssessPrHandler,
-} from '../tools/assess-pr.js';
+import { type AssessmentToolDeps, assessPrShape, makeAssessPrHandler } from '../tools/assess-pr.js';
 import { getAssessmentShape, makeGetAssessmentHandler } from '../tools/get-assessment.js';
 
 const SPEC_DOC =

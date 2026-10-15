@@ -166,7 +166,8 @@ export class AssessmentWorker {
       .from(schema.assessment)
       .where(eq(schema.assessment.id, id))
       .limit(1);
-    const record = this.toRecord(row[0]!);
+    const record = row[0] ? this.toRecord(row[0]) : null;
+    if (record === null) throw new Error(`failed to read back assessment ${id}`);
     this.emit(record.id, {
       seq: await this.nextSeq(record.id),
       type: 'created',
@@ -252,7 +253,9 @@ export class AssessmentWorker {
       createdAt: Date.now(),
     });
 
-    return (await this.get(id))!;
+    const updated = await this.get(id);
+    if (!updated) throw new Error(`assessment ${id} vanished during transition`);
+    return updated;
   }
 
   // Ejecuta el protocolo hasta un estado terminal. Reentrada segura: dos
