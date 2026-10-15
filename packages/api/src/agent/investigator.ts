@@ -188,7 +188,7 @@ export function detectClassificationConflicts(
     .map((s) => s.trim())
     .filter(Boolean);
   for (const raw of engineFindings) {
-    const finding = raw as {
+    const finding = (raw ?? {}) as {
       endpoint?: { key?: string; service?: string };
       impact?: { class?: string };
     };
@@ -458,7 +458,7 @@ export function serializeExplanation(
   opts: { question: string; endpointLabel?: string; engineFindings?: unknown[] },
 ): ExplanationPayload {
   const engineClasses = (opts.engineFindings ?? []).flatMap((raw) => {
-    const finding = raw as {
+    const finding = (raw ?? {}) as {
       endpoint?: { key?: string; service?: string };
       impact?: { class?: string };
     };
