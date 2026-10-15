@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { z } from 'zod';
 import * as schema from '../db/schema.js';
+import type { GitHubReader, PrSummary } from '../github/reader.js';
 import { LainCallError } from '../lain-adapter/errors.js';
 import {
   type AssessmentRecord,
@@ -103,11 +104,46 @@ export async function resolveAssessmentRequest(
   db: Db,
   body: AssessmentRequestBody,
   analyzerVersion: string,
-): Promise<{ request: ResolvedAssessmentRequest; digest: string }> {
+  deps: { github?: GitHubReader } = {},
+): Promise<{ request: ResolvedAssessmentRequest; digest: string; pr?: PrSummary }> {
   if ('prUrl' in body) {
-    notImplemented(
-      'PR URL resolution requires the GitHub adapter (G4); send repo + resolved base/head SHAs',
-    );
+    // Dry run: el adapter sólo lee. Resuelve la URL a SHAs, nunca publica.
+    if (!deps.github) {
+      throw new NotFoundError(
+        'PR URL resolution needs the GitHub reader; it is read-only and posts nothing',
+      );
+    }
+    const pr = await deps.github.fetchPr(body.prUrl);
+    // El PR identifica el repo como owner/repo; el manifiesto usa el nombre
+    // del workspace. Se resuelve aquí para que no haya dos vocabularios.
+    const repoRows = await db
+      .select()
+      .from(schema.repo)
+      .where(eq(schema.repo.workspaceId, body.orgId));
+    const slug = `${pr.ref.owner}/${pr.ref.repo}`.toLowerCase();
+    const match = repoRows.find((r) => {
+      const uri = r.uri.toLowerCase();
+      return uri.includes(slug) || repoDisplayName(r).toLowerCase() === pr.ref.repo.toLowerCase();
+    });
+    if (!match) {
+      throw new NotFoundError(
+        `PR repo ${slug} is not configured in workspace ${body.orgId}`,
+      );
+    }
+    return resolveAssessmentRequest(
+      db,
+      {
+        repo: repoDisplayName(match),
+        base: pr.baseSha,
+        head: pr.headSha,
+        orgId: body.orgId,
+        ...(body.configHash !== undefined ? { configHash: body.configHash } : {}),
+        ...(body.excludeRepos !== undefined ? { excludeRepos: body.excludeRepos } : {}),
+        ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
+      },
+      analyzerVersion,
+      deps,
+    ).then((r) => ({ ...r, pr }));
   }
 
   const ws = await db
@@ -166,9 +202,13 @@ export async function createAssessment(deps: {
   worker: AssessmentWorker;
   body: AssessmentRequestBody;
   analyzerVersion: string;
-}): Promise<{ assessment: AssessmentRecord; created: boolean }> {
-  const { db, worker, body, analyzerVersion } = deps;
-  const { request, digest } = await resolveAssessmentRequest(db, body, analyzerVersion);
+  /** Lector de GitHub, sólo para resolver una URL de PR a SHAs. Nunca escribe. */
+  github?: GitHubReader;
+}): Promise<{ assessment: AssessmentRecord; created: boolean; pr?: PrSummary }> {
+  const { db, worker, body, analyzerVersion, github } = deps;
+  const { request, digest, pr } = await resolveAssessmentRequest(db, body, analyzerVersion, {
+    ...(github ? { github } : {}),
+  });
 
   if (body.idempotencyKey) {
     const bound = await worker.findIdempotencyKey(body.idempotencyKey);
@@ -179,7 +219,7 @@ export async function createAssessment(deps: {
         );
       }
       const existing = await worker.get(bound.assessmentId);
-      if (existing) return { assessment: existing, created: false };
+      if (existing) return { assessment: existing, created: false, ...(pr ? { pr } : {}) };
     }
   }
 
@@ -187,7 +227,7 @@ export async function createAssessment(deps: {
   if (body.idempotencyKey && result.created) {
     await worker.recordIdempotencyKey(result.assessment.id, body.idempotencyKey, digest);
   }
-  return result;
+  return { ...result, ...(pr ? { pr } : {}) };
 }
 
 function parseJson(text: string | null): unknown {

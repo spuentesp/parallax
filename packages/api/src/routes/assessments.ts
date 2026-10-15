@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { buildCommentPreview } from '../github/comment-preview.js';
+import { GitHubReader, parsePrUrl, PrUrlError } from '../github/reader.js';
 import {
   AssessmentRequestBody,
   IdempotencyConflictError,
@@ -22,11 +24,12 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
     async (req, reply) => {
       const body = req.body as z.infer<typeof AssessmentRequestBody>;
       try {
-        const { assessment, created } = await createAssessment({
+        const { assessment, created, pr } = await createAssessment({
           db: app.db,
           worker: app.assessmentWorker,
           body,
           analyzerVersion: app.lain.analyzerVersion,
+          github: new GitHubReader(),
         });
         // El runner trabaja en segundo plano; el cliente observa el progreso
         // por GET y los eventos. La segunda llamada reutiliza la promesa en
@@ -34,7 +37,12 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
         void app.assessmentWorker.run(assessment.id).catch((err: unknown) => {
           req.log.error({ err, assessmentId: assessment.id }, 'assessment run failed');
         });
-        return reply.code(created ? 201 : 200).send({ assessment, created });
+        return reply.code(created ? 201 : 200).send({
+          assessment,
+          created,
+          ...(pr ? { pr } : {}),
+          dryRun: true,
+        });
       } catch (e) {
         if (e instanceof IdempotencyConflictError) {
           return reply
@@ -99,6 +107,71 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
           .send({ type: 'about:blank', title: 'Not Found', status: 404, detail: `assessment ${id} not found` });
       }
       return { events: await app.assessmentWorker.events(id) };
+    },
+  );
+
+  // Preview del comentario que se publicaría. DRY RUN: se genera localmente y
+  // NUNCA se envía a GitHub. Conserva el SHA evaluado y los límites de
+  // cobertura (§2), que es lo que hace revisable el informe antes de decidir.
+  app.get(
+    '/api/assessments/:id/comment-preview',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z.object({ evidence: z.coerce.boolean().optional() }).loose(),
+      },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const { evidence } = req.query as { evidence?: boolean };
+      const report = await getAssessmentReport(app.db, id);
+      if (!report) {
+        return reply
+          .code(404)
+          .send({ type: 'about:blank', title: 'Not Found', status: 404, detail: `assessment ${id} not found` });
+      }
+      return { preview: buildCommentPreview(report, { includeEvidence: evidence === true }) };
+    },
+  );
+
+  // Resolver una URL de PR antes de iniciar nada: repositorio, base, head y
+  // alcance (§2). Sólo lectura; no crea la evaluación.
+  app.post(
+    '/api/pr/resolve',
+    {
+      config: { scopes: ['read'] },
+      schema: { body: z.object({ url: z.string().url() }) },
+    },
+    async (req, reply) => {
+      const { url } = req.body as { url: string };
+      try {
+        parsePrUrl(url);
+      } catch (e) {
+        return reply.code(400).send({
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: 400,
+          detail: e instanceof Error ? e.message : 'invalid PR url',
+        });
+      }
+      const reader = new GitHubReader();
+      try {
+        const pr = await reader.fetchPr(url);
+        return {
+          pr,
+          dryRun: true,
+          note: 'Read-only. Parallax never posts comments or opens PRs; the comment is a local preview.',
+        };
+      } catch (e) {
+        const code = e instanceof PrUrlError ? e.code : 'http_error';
+        return reply.code(code === 'not_found' ? 404 : 502).send({
+          type: 'about:blank',
+          title: code === 'not_found' ? 'Not Found' : 'Upstream Error',
+          status: code === 'not_found' ? 404 : 502,
+          detail: e instanceof Error ? e.message : 'GitHub read failed',
+        });
+      }
     },
   );
 };

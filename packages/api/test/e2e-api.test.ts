@@ -118,14 +118,16 @@ describe('E2E API', () => {
 
   // ── Assessments ────────────────────────────────────────────────
   describe('assessments', () => {
-    it('create with prUrl returns 501 (GitHub adapter lands in G4)', async () => {
+    it('publication is refused: dry run never touches GitHub', async () => {
       const r = await app.inject({
         method: 'POST',
-        url: '/api/assessments',
+        url: '/api/publications',
         headers: auth,
-        payload: { prUrl: 'https://github.com/org/repo/pull/1', orgId: 'org_demo' },
+        payload: { assessmentId: 'a_1', target: 'github:saleor/saleor#1' },
       });
       expect(r.statusCode).toBe(501);
+      expect(r.json().code).toBe('NotImplemented');
+      expect(r.body).toMatch(/dry run/i);
     });
     it('invalid body returns 400', async () => {
       const r = await app.inject({

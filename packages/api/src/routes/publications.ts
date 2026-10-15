@@ -1,3 +1,14 @@
+// Publicación de comentarios.
+//
+// DRY RUN: esta superficie NO publica nada. El usuario pidió explícitamente
+// "no se te ocurra hacer un PR real", así que la publicación no está
+// implementada y no puede contactar GitHub. Lo que sí existe es la vista
+// previa (GET /api/assessments/:id/comment-preview), que se genera localmente.
+//
+// Cuando se decida implementarla, será una operación explícita autorizada por
+// repositorio (§6), con marcador estable por assessment y destino, y estado
+// UNCERTAIN si la respuesta se pierde (§13) — nunca automática.
+
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { LainCallError } from '../lain-adapter/errors.js';
@@ -17,7 +28,8 @@ export const publicationRoutes: FastifyPluginAsync = async (app) => {
     async () => {
       throw LainCallError.parse({
         code: 'NotImplemented',
-        message: 'POST /api/publications lands in subproject 6',
+        message:
+          'publication is out of scope for the dry run: nothing is ever sent to GitHub. Use GET /api/assessments/:id/comment-preview instead.',
         doc: SPEC_DOC,
       });
     },
