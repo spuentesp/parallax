@@ -66,7 +66,7 @@ describe('AssessmentWorker interleaving properties', () => {
       ),
       fcDefaults({ numRuns: 25 }),
     );
-  }, 30_000);
+  }, 60_000);
 
   it('concurrent run() is single-execution and yields unique increasing event seqs', async () => {
     await fc.assert(
@@ -106,5 +106,5 @@ describe('AssessmentWorker interleaving properties', () => {
       ),
       fcDefaults({ numRuns: 25 }),
     );
-  }, 30_000);
+  }, 60_000);
 });

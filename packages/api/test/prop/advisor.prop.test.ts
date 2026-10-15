@@ -6,6 +6,47 @@ import { maskGraphqlSource } from '../../src/advisor/scan.js';
 import { fcDefaults } from './harness.js';
 
 describe('maskGraphqlSource properties', () => {
+  it('actually blanks comment and string content', () => {
+    const src = 'query Q # top secret\n  field(arg: "hidden value")';
+    const masked = maskGraphqlSource(src);
+    expect(masked).not.toContain('top secret');
+    expect(masked).not.toContain('hidden value');
+  });
+
+  it('comment tokens never survive masking', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ unit: 'grapheme-ascii', minLength: 1, maxLength: 20 }),
+        (token: string) => {
+          if (token.trim().length === 0 || token.includes('\n')) return;
+          // El comentario arranca en el offset 4 ("x # "); esa región debe
+          // quedar totalmente blanqueada, sin importar qué contuviera.
+          const masked = maskGraphqlSource(`x # ${token}`);
+          expect(masked.slice(4)).toBe(' '.repeat(token.length));
+        },
+      ),
+      fcDefaults(),
+    );
+  });
+
+  it('string literal tokens never survive masking', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ unit: 'grapheme-ascii', minLength: 1, maxLength: 20 }),
+        (token: string) => {
+          if (token.includes('\n') || token.includes('"') || token.includes('\\')) return;
+          // El contenido del literal empieza en el offset 8 ('f(arg: "');
+          // la comilla misma también se blanquea, por eso el prefijo se
+          // comprueba sólo hasta el offset 7.
+          const masked = maskGraphqlSource(`f(arg: "${token}")`);
+          expect(masked.slice(0, 7)).toBe('f(arg: ');
+          expect(masked.slice(8, 8 + token.length)).toBe(' '.repeat(token.length));
+        },
+      ),
+      fcDefaults(),
+    );
+  });
+
   it('preserves length and newline positions', () => {
     fc.assert(
       fc.property(arbText, (text: string) => {

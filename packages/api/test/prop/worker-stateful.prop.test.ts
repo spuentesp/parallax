@@ -11,7 +11,12 @@ import {
   AssessmentWorker,
   type ResolvedAssessmentRequest,
 } from '../../src/worker/assessment-worker.js';
-import { type AssessmentStatus, canonicalJson, isTerminal } from '../../src/worker/state.js';
+import {
+  type AssessmentStatus,
+  canonicalJson,
+  canTransition,
+  isTerminal,
+} from '../../src/worker/state.js';
 import { arbRequest } from './arbitraries.js';
 import { fcDefaults } from './harness.js';
 import { createInstantLain } from './worker-lain-stub.js';
@@ -97,31 +102,46 @@ class CreateCmd implements fc.AsyncCommand<Model, Real> {
 
 class RunCmd implements fc.AsyncCommand<Model, Real> {
   check(model: Model): boolean {
-    return [...model.statusById.values()].some((s) => !isTerminal(s));
+    return model.statusById.size > 0;
   }
   async run(model: Model, real: Real): Promise<void> {
     const open = [...model.statusById.entries()].find(([, s]) => !isTerminal(s));
-    if (open === undefined) return;
-    const id = open[0];
+    const target = open ?? [...model.statusById.entries()][0];
+    if (target === undefined) return;
+    const id = target[0];
     const before = await real.worker.get(id);
+    const eventsBefore = (await real.worker.events(id)).length;
     const record = await real.worker.run(id);
-    // Invariante de spec: el run termina en un estado terminal.
-    expect(isTerminal(record.status)).toBe(true);
-    if (model.terminalIds.has(id) && before !== null) {
-      // INV 5: un registro terminal no se re-ejecuta (READY queda legible).
-      expect(record.status).toBe(before.status);
-      expect(record.completedAt).toBe(before.completedAt);
+    if (model.terminalIds.has(id)) {
+      // INV 5: un registro terminal no se re-ejecuta (READY queda legible):
+      // mismo status, mismo completedAt, ni un evento nuevo.
+      expect(record.status).toBe(before?.status);
+      expect(record.completedAt).toBe(before?.completedAt);
+      expect((await real.worker.events(id)).length).toBe(eventsBefore);
+    } else {
+      // Invariante de spec: el run termina en un estado terminal sano.
+      expect(isTerminal(record.status)).toBe(true);
+      expect(['READY', 'PARTIAL']).toContain(record.status);
     }
-    // Sólo transiciones legales en el log; seqs estrictamente crecientes y únicas.
-    const events = await real.worker.events(id);
-    const seqs = events.map((e) => e.seq);
-    expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
-    expect(new Set(seqs).size).toBe(seqs.length);
+    assertLegalEventLog(await real.worker.events(id));
     model.statusById.set(id, record.status);
-    model.terminalIds.add(id);
+    if (isTerminal(record.status)) model.terminalIds.add(id);
   }
   toString(): string {
     return 'run()';
+  }
+}
+
+// El log de eventos debe ser una cadena de transiciones legales con seqs
+// únicos y estrictamente crecientes (specs de la máquina de estados).
+function assertLegalEventLog(events: Array<{ seq: number; type: string; payload: unknown }>): void {
+  const seqs = events.map((e) => e.seq);
+  expect([...seqs].sort((a, b) => a - b)).toEqual(seqs);
+  expect(new Set(seqs).size).toBe(seqs.length);
+  for (const e of events) {
+    if (e.type !== 'transition') continue;
+    const p = e.payload as { from: AssessmentStatus; to: AssessmentStatus };
+    expect(canTransition(p.from, p.to)).toBe(true);
   }
 }
 
@@ -134,6 +154,15 @@ class RecoverCmd implements fc.AsyncCommand<Model, Real> {
     // Sólo se reanudan ids creados por este modelo (nunca ajenos).
     for (const id of resumed) {
       expect([...model.byRequest.values()]).toContain(id);
+    }
+    // INV 5: recover() deja TODO lo no terminal en estado terminal.
+    for (const id of model.byRequest.values()) {
+      const rec = await real.worker.get(id);
+      if (rec === null) continue;
+      assertLegalEventLog(await real.worker.events(id));
+      if (isTerminal(rec.status)) model.terminalIds.add(id);
+      model.statusById.set(id, rec.status);
+      expect(isTerminal(rec.status)).toBe(true);
     }
   }
   toString(): string {
@@ -166,5 +195,5 @@ describe('AssessmentWorker stateful model-based properties', () => {
       ),
       fcDefaults({ numRuns: 20 }),
     );
-  }, 30_000);
+  }, 60_000);
 });

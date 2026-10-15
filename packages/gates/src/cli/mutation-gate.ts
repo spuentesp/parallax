@@ -60,7 +60,9 @@ for (const pkg of skipped) {
   console.warn(`mutation-gate: skipping @parallax/${pkg} — no stryker.config.json`);
 }
 if (runnable.size === 0) {
-  console.log('mutation-gate: no changed src files in mutation-tested packages — nothing to mutate');
+  console.log(
+    'mutation-gate: no changed src files in mutation-tested packages — nothing to mutate',
+  );
   process.exit(0);
 }
 

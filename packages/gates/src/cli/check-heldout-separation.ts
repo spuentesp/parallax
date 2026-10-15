@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { evaluateCommitSeries, type CommitChange } from '../heldout-separation.js';
+import { type CommitChange, evaluateCommitSeries } from '../heldout-separation.js';
 
 const base = process.env.GATE_BASE ?? 'origin/main';
 
@@ -7,12 +7,21 @@ const base = process.env.GATE_BASE ?? 'origin/main';
 // es legal sólo si implementación y oráculo viajan en commits separados y los
 // commits de oráculo declaran `red-team` en el asunto.
 function changedCommits(): CommitChange[] {
-  const out = execFileSync('git', ['log', '--reverse', '--format=%x00%s', '--name-only', `${base}...HEAD`], {
-    encoding: 'utf8',
-  });
+  const out = execFileSync(
+    'git',
+    ['log', '--reverse', '--format=%x00%s', '--name-only', `${base}...HEAD`],
+    {
+      encoding: 'utf8',
+    },
+  );
   return out
     .split('\u0000')
-    .map((chunk) => chunk.split('\n').map((l) => l.trim()).filter((l) => l.length > 0))
+    .map((chunk) =>
+      chunk
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0),
+    )
     .filter((lines) => lines.length > 0)
     .map((lines) => ({ subject: lines[0] ?? '', files: lines.slice(1) }));
 }
