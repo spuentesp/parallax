@@ -20,3 +20,6 @@ coverage/
 
 # Test repos (cloned for LAIN integration testing, not source)
 test-repos/
+
+# Local git worktrees
+.worktrees/
