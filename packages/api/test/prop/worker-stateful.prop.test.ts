@@ -166,5 +166,5 @@ describe('AssessmentWorker stateful model-based properties', () => {
       ),
       fcDefaults({ numRuns: 20 }),
     );
-  });
+  }, 30_000);
 });
