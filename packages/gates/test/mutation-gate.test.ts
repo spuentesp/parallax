@@ -3,6 +3,7 @@ import {
   type AllowlistEntry,
   gateDecision,
   parseMutationReport,
+  partitionRunnable,
   validateAllowlist,
 } from '../src/mutation-gate.js';
 
@@ -96,5 +97,24 @@ describe('validateAllowlist', () => {
 
   it('accepts fully specified entries', () => {
     expect(validateAllowlist([])).toEqual([]);
+  });
+});
+
+describe('partitionRunnable', () => {
+  it('skips packages without a stryker config instead of crashing', () => {
+    const byPackage = new Map([
+      ['api', ['src/coverage.ts']],
+      ['gates', ['src/mutation-gate.ts']],
+    ]);
+    const result = partitionRunnable(byPackage, new Set(['api']));
+    expect([...result.runnable.keys()]).toEqual(['api']);
+    expect(result.skipped).toEqual(['gates']);
+  });
+
+  it('returns everything as runnable when all packages are configured', () => {
+    const byPackage = new Map([['shared', ['src/lain/evidence.ts']]]);
+    const result = partitionRunnable(byPackage, new Set(['shared']));
+    expect(result.skipped).toEqual([]);
+    expect(result.runnable.get('shared')).toEqual(['src/lain/evidence.ts']);
   });
 });

@@ -5,6 +5,7 @@ import {
   type AllowlistEntry,
   gateDecision,
   parseMutationReport,
+  partitionRunnable,
   validateAllowlist,
 } from '../mutation-gate.js';
 
@@ -47,8 +48,24 @@ if (byPackage.size === 0) {
   process.exit(0);
 }
 
+// Sólo se mutan paquetes con stryker.config.json; el resto se salta con aviso
+// (antes el gate reventaba en cuanto un PR tocaba gates/mcp/web).
+const configured = new Set(
+  [...byPackage.keys()].filter((pkg) =>
+    existsSync(join(repoRoot, 'packages', pkg, 'stryker.config.json')),
+  ),
+);
+const { runnable, skipped } = partitionRunnable(byPackage, configured);
+for (const pkg of skipped) {
+  console.warn(`mutation-gate: skipping @parallax/${pkg} — no stryker.config.json`);
+}
+if (runnable.size === 0) {
+  console.log('mutation-gate: no changed src files in mutation-tested packages — nothing to mutate');
+  process.exit(0);
+}
+
 let failed = false;
-for (const [pkg, files] of byPackage) {
+for (const [pkg, files] of runnable) {
   const args = [
     'exec',
     'stryker',

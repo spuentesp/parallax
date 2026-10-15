@@ -72,3 +72,21 @@ export function validateAllowlist(entries: readonly AllowlistEntry[]): string[] 
   }
   return problems;
 }
+
+/**
+ * Sólo los paquetes con stryker.config.json se mutan; el resto se salta con
+ * aviso en vez de reventar el gate (que es lo que hacía falta para que el PR
+ * que introduce el gate pueda correr el gate).
+ */
+export function partitionRunnable(
+  byPackage: ReadonlyMap<string, readonly string[]>,
+  configured: ReadonlySet<string>,
+): { runnable: Map<string, string[]>; skipped: string[] } {
+  const runnable = new Map<string, string[]>();
+  const skipped: string[] = [];
+  for (const [pkg, files] of byPackage) {
+    if (configured.has(pkg)) runnable.set(pkg, [...files]);
+    else skipped.push(pkg);
+  }
+  return { runnable, skipped };
+}

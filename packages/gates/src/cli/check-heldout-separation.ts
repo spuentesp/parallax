@@ -1,23 +1,28 @@
 import { execFileSync } from 'node:child_process';
-import { evaluateDiff } from '../heldout-separation.js';
+import { evaluateCommitSeries, type CommitChange } from '../heldout-separation.js';
 
 const base = process.env.GATE_BASE ?? 'origin/main';
 
-function changedFiles(): string[] {
-  const out = execFileSync('git', ['diff', '--name-only', `${base}...HEAD`], { encoding: 'utf8' });
+// Un commit por entrada: asunto + archivos. El bootstrap de la suite held-out
+// es legal sólo si implementación y oráculo viajan en commits separados y los
+// commits de oráculo declaran `red-team` en el asunto.
+function changedCommits(): CommitChange[] {
+  const out = execFileSync('git', ['log', '--reverse', '--format=%x00%s', '--name-only', `${base}...HEAD`], {
+    encoding: 'utf8',
+  });
   return out
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .split('\u0000')
+    .map((chunk) => chunk.split('\n').map((l) => l.trim()).filter((l) => l.length > 0))
+    .filter((lines) => lines.length > 0)
+    .map((lines) => ({ subject: lines[0] ?? '', files: lines.slice(1) }));
 }
 
-const report = evaluateDiff(changedFiles());
+const report = evaluateCommitSeries(changedCommits());
 if (report.violation) {
-  console.error('HELDOUT SEPARATION VIOLATION: un changeset toca implementación y test-heldout.');
-  console.error(`  implementación: ${report.implFiles.join(', ')}`);
-  console.error(`  held-out: ${report.heldoutFiles.join(', ')}`);
+  console.error('HELDOUT SEPARATION VIOLATION:');
+  for (const reason of report.reasons) console.error(`  - ${reason}`);
   console.error(
-    '  El oráculo de aceptación sólo cambia en changesets red-team (docs/testing/red-team-protocol.md).',
+    '  El oráculo de aceptación sólo cambia en commits red-team (docs/testing/red-team-protocol.md).',
   );
   process.exit(1);
 }

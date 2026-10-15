@@ -18,6 +18,7 @@
     "test": "pnpm -r --parallel run test",
     "test:watch": "vitest",
     "test:heldout": "pnpm --filter @parallax/api run test:heldout",
+    "gate:mutation": "pnpm --filter @parallax/gates run gate:mutation",
     "build": "pnpm -r --filter=!./packages/shared run build",
     "smoke": "pnpm --filter @parallax/api run smoke",
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
