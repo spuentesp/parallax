@@ -20,10 +20,13 @@ describe('canonicalJson properties', () => {
     );
   });
 
-  it('round-trips through JSON.parse', () => {
+  it('round-trips like plain JSON.stringify/parse (canonical form)', () => {
+    // Oráculo diferencial contra JSON.stringify: canonicalJson debe ser
+    // equivalente a serializar/parsear con JSON estándar (JSON colapsa -0 a 0,
+    // así que comparar contra el valor crudo sería más fuerte que el contrato).
     fc.assert(
       fc.property(arbJson, (value: unknown) => {
-        expect(JSON.parse(canonicalJson(value))).toEqual(value);
+        expect(JSON.parse(canonicalJson(value))).toEqual(JSON.parse(JSON.stringify(value)));
       }),
       fcDefaults(),
     );
