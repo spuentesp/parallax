@@ -3,7 +3,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type AllowlistEntry,
+  findStaleEntries,
   gateDecision,
+  parseAllowlistFile,
   parseMutationReport,
   partitionRunnable,
   validateAllowlist,
@@ -24,9 +26,15 @@ function changedFiles(): string[] {
 }
 
 const allowlistPath = join(repoRoot, 'mutation-allowlist.json');
-const allowlist: AllowlistEntry[] = existsSync(allowlistPath)
-  ? (JSON.parse(readFileSync(allowlistPath, 'utf8')) as { entries: AllowlistEntry[] }).entries
-  : [];
+let allowlist: AllowlistEntry[] = [];
+if (existsSync(allowlistPath)) {
+  const parsed = parseAllowlistFile(readFileSync(allowlistPath, 'utf8'));
+  if (!parsed.ok) {
+    console.error(parsed.error);
+    process.exit(1);
+  }
+  allowlist = parsed.entries;
+}
 const problems = validateAllowlist(allowlist);
 if (problems.length > 0) {
   for (const p of problems) console.error(p);
@@ -91,6 +99,11 @@ for (const [pkg, files] of runnable) {
   );
   for (const m of decision.allowlisted) {
     console.log(`  allowlisted ${m.file}:${m.line} ${m.mutator} (${m.status})`);
+  }
+  for (const stale of findStaleEntries(allowlist, relevant, `@parallax/${pkg}`)) {
+    console.warn(
+      `  warning: stale allowlist entry ${stale.file} ${stale.mutator} — matched no mutant; remove or rewrite it`,
+    );
   }
   for (const m of decision.blocked) {
     console.error(`  BLOCKED ${m.file}:${m.line} ${m.mutator} (${m.status}) ${m.description}`);

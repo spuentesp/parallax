@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   type AllowlistEntry,
+  findStaleEntries,
   gateDecision,
+  parseAllowlistFile,
   parseMutationReport,
   partitionRunnable,
   validateAllowlist,
@@ -55,8 +57,8 @@ describe('gateDecision', () => {
       package: '@parallax/api',
       file: 'src/coverage.ts',
       mutator: 'BlockStatement',
-      line: 68,
-      reason: 'equivalent: filter redundancy covered by Task 4 property',
+      description: 'block statement was removed',
+      reason: 'equivalent: filter redundancy covered by the coverage property',
     },
   ];
 
@@ -67,11 +69,27 @@ describe('gateDecision', () => {
     expect(decision.allowlisted).toEqual([]);
   });
 
-  it('moves allowlisted survivors out of the blocked set', () => {
+  it('matches by file+mutator+description so line shifts do not un-allowlist', () => {
     const mutants = parseMutationReport(REPORT);
     const decision = gateDecision(mutants, allowlist, '@parallax/api');
     expect(decision.blocked).toEqual([]);
     expect(decision.allowlisted.map((m) => m.line)).toEqual([68]);
+  });
+
+  it('does not match the same file and mutator with a different description', () => {
+    const mutants = parseMutationReport(REPORT);
+    const wrongDescription: AllowlistEntry[] = [
+      {
+        package: '@parallax/api',
+        file: 'src/coverage.ts',
+        mutator: 'BlockStatement',
+        description: 'something else',
+        reason: 'equivalent',
+      },
+    ];
+    const decision = gateDecision(mutants, wrongDescription, '@parallax/api');
+    expect(decision.blocked.map((m) => m.line)).toEqual([68]);
+    expect(decision.allowlisted).toEqual([]);
   });
 
   it('does not apply an allowlist entry to another package', () => {
@@ -86,17 +104,73 @@ describe('gateDecision', () => {
   });
 });
 
+describe('findStaleEntries', () => {
+  it('reports allowlist entries that matched nothing in the run', () => {
+    const mutants = parseMutationReport(REPORT);
+    const stale = findStaleEntries(
+      [
+        {
+          package: '@parallax/api',
+          file: 'src/coverage.ts',
+          mutator: 'BlockStatement',
+          description: 'block statement was removed',
+          reason: 'equivalent',
+        },
+        {
+          package: '@parallax/api',
+          file: 'src/gone.ts',
+          mutator: 'BlockStatement',
+          description: 'from a deleted file',
+          reason: 'equivalent',
+        },
+      ],
+      mutants,
+      '@parallax/api',
+    );
+    expect(stale.map((e) => e.file)).toEqual(['src/gone.ts']);
+  });
+});
+
 describe('validateAllowlist', () => {
-  it('rejects entries without a reason', () => {
+  it('rejects entries without a reason or without a description', () => {
     const problems = validateAllowlist([
-      { package: '@parallax/api', file: 'src/a.ts', mutator: 'X', line: 1, reason: '' },
-      { package: '@parallax/api', file: 'src/a.ts', mutator: 'X', line: 2, reason: '   ' },
+      {
+        package: '@parallax/api',
+        file: 'src/a.ts',
+        mutator: 'X',
+        description: 'd',
+        reason: '',
+      },
+      {
+        package: '@parallax/api',
+        file: 'src/a.ts',
+        mutator: 'X',
+        description: '  ',
+        reason: 'equivalent',
+      },
     ]);
     expect(problems).toHaveLength(2);
   });
 
   it('accepts fully specified entries', () => {
     expect(validateAllowlist([])).toEqual([]);
+  });
+});
+
+describe('parseAllowlistFile', () => {
+  it('parses a well-formed allowlist', () => {
+    const parsed = parseAllowlistFile('{"entries": []}');
+    expect(parsed).toEqual({ ok: true, entries: [] });
+  });
+
+  it('returns a clean error for malformed JSON instead of throwing', () => {
+    const parsed = parseAllowlistFile('{not json');
+    expect(parsed.ok).toBe(false);
+  });
+
+  it('returns a clean error when the entries key is missing', () => {
+    const parsed = parseAllowlistFile('{}');
+    expect(parsed.ok).toBe(false);
   });
 });
 

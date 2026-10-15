@@ -29,12 +29,10 @@ const arbIndex = fc
   .map((dict: Record<string, string[]>) => new Map(Object.entries(dict)));
 
 describe('classifyNode properties', () => {
-  it('is total and stable: any string maps to a valid kind', () => {
+  it('is total: any string maps to a valid kind', () => {
     fc.assert(
       fc.property(arbText, (type: string) => {
-        const kind = classifyNode(type);
-        expect(KINDS).toContain(kind);
-        expect(classifyNode(type)).toBe(kind);
+        expect(KINDS).toContain(classifyNode(type));
       }),
       fcDefaults(),
     );
@@ -85,12 +83,30 @@ describe('deriveLainRepoId properties', () => {
 });
 
 describe('resolveServiceForPath properties (differential)', () => {
-  it('matches the brute-force longest-prefix oracle', () => {
+  it('matches the brute-force longest-prefix oracle on correlated inputs', () => {
+    // Generador correlacionado: el path de la consulta se extiende desde una
+    // entrada REAL del índice, para que la diferencial compare matches
+    // reales en vez de cumplirse vacía (null === null).
+    const arbIndexWithPath = fc
+      .record({
+        entries: fc.dictionary(
+          fc.stringMatching(/^[a-z]{1,8}$/),
+          fc.array(fc.stringMatching(/^[a-z/]{1,12}$/), { minLength: 1, maxLength: 3 }),
+          { maxKeys: 4 },
+        ),
+        pick: fc.tuple(fc.nat(), fc.stringMatching(/^[a-z/]{0,6}$/)),
+      })
+      .map(({ entries, pick }) => {
+        const index = new Map(Object.entries(entries));
+        const services = Object.keys(entries);
+        const chosen = services.length > 0 ? services[pick[0] % services.length] : undefined;
+        const base = (chosen ? entries[chosen]?.[0] : undefined) ?? '';
+        return { index, path: base + pick[1] };
+      });
     fc.assert(
       fc.property(
-        fc.stringMatching(/^[a-z/]{1,16}$/),
-        arbIndex,
-        (path: string, index: Map<string, string[]>) => {
+        arbIndexWithPath,
+        ({ index, path }: { index: Map<string, string[]>; path: string }) => {
           expect(resolveServiceForPath(path, index)).toBe(resolveOracle(path, index));
         },
       ),

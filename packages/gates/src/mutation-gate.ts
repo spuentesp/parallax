@@ -10,7 +10,7 @@ export interface AllowlistEntry {
   package: string;
   file: string;
   mutator: string;
-  line: number;
+  description: string;
   reason: string;
 }
 
@@ -43,16 +43,19 @@ export function parseMutationReport(report: unknown): MutantSummary[] {
   return out;
 }
 
+const matchesEntry = (m: MutantSummary, e: AllowlistEntry, pkg: string): boolean =>
+  e.package === pkg &&
+  e.file === m.file &&
+  e.mutator === m.mutator &&
+  e.description === m.description;
+
 /** Survived/NoCoverage bloquean salvo que estén en el allowlist del paquete. */
 export function gateDecision(
   mutants: readonly MutantSummary[],
   allowlist: readonly AllowlistEntry[],
   pkg: string,
 ): { blocked: MutantSummary[]; allowlisted: MutantSummary[] } {
-  const isAllowed = (m: MutantSummary): boolean =>
-    allowlist.some(
-      (e) => e.package === pkg && e.file === m.file && e.mutator === m.mutator && e.line === m.line,
-    );
+  const isAllowed = (m: MutantSummary): boolean => allowlist.some((e) => matchesEntry(m, e, pkg));
   const survivors = mutants.filter((m) => m.status === 'Survived' || m.status === 'NoCoverage');
   return {
     blocked: survivors.filter((m) => !isAllowed(m)),
@@ -60,14 +63,47 @@ export function gateDecision(
   };
 }
 
+/**
+ * Entradas del allowlist que no emparejaron con NINGÚN mutante de la corrida:
+ * quedaron obsoletas (el código cambió o el mutante desapareció) y se avisan
+ * para que un humano las retire o reescriba.
+ */
+export function findStaleEntries(
+  allowlist: readonly AllowlistEntry[],
+  mutants: readonly MutantSummary[],
+  pkg: string,
+): AllowlistEntry[] {
+  return allowlist.filter(
+    (e) => e.package === pkg && !mutants.some((m) => matchesEntry(m, e, pkg)),
+  );
+}
+
+export type AllowlistParse = { ok: true; entries: AllowlistEntry[] } | { ok: false; error: string };
+
+/** Parseo del archivo de allowlist: error limpio en vez de excepción cruda. */
+export function parseAllowlistFile(content: string): AllowlistParse {
+  let data: unknown;
+  try {
+    data = JSON.parse(content);
+  } catch (e) {
+    return { ok: false, error: `mutation-allowlist.json is not valid JSON: ${String(e)}` };
+  }
+  const entries = (data as { entries?: unknown }).entries;
+  if (!Array.isArray(entries)) {
+    return { ok: false, error: 'mutation-allowlist.json must contain an "entries" array' };
+  }
+  return { ok: true, entries: entries as AllowlistEntry[] };
+}
+
 /** Un allowlist sin justificación es una puerta falsa: se rechaza. */
 export function validateAllowlist(entries: readonly AllowlistEntry[]): string[] {
   const problems: string[] = [];
   for (const e of entries) {
     if (!e.reason || e.reason.trim().length === 0) {
-      problems.push(
-        `allowlist entry without reason: ${e.package} ${e.file}:${e.line} ${e.mutator}`,
-      );
+      problems.push(`allowlist entry without reason: ${e.package} ${e.file} ${e.mutator}`);
+    }
+    if (!e.description || e.description.trim().length === 0) {
+      problems.push(`allowlist entry without description: ${e.package} ${e.file} ${e.mutator}`);
     }
   }
   return problems;

@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { type Page, paginate } from '../../src/lain/evidence.js';
+import { fcDefaults } from './arbitraries.js';
 
 // Oráculo: paginar es cortar. La concatenación de todas las páginas debe
 // reconstruir la lista original (contrato de cursor completo).
@@ -25,7 +26,7 @@ describe('paginate properties', () => {
           expect(collected).toEqual(items);
         },
       ),
-      { numRuns: 50, endOnFailure: true },
+      fcDefaults({ numRuns: 50 }),
     );
   });
 
@@ -37,7 +38,7 @@ describe('paginate properties', () => {
         expect(page.nextCursor).toBeNull();
         expect(page.truncated).toBe(false);
       }),
-      { numRuns: 50, endOnFailure: true },
+      fcDefaults({ numRuns: 50 }),
     );
   });
 });

@@ -48,8 +48,12 @@ describe('AssessmentWorker interleaving properties', () => {
             .insert(schema.workspace)
             .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
           // El punto de intercalación es la costura inyectada getLain.
+          let seamCalls = 0;
           const scheduledGetLain = sched.scheduleFunction(
-            async (_orgId: string): Promise<LainAdapter> => createInstantLain(),
+            async (_orgId: string): Promise<LainAdapter> => {
+              seamCalls += 1;
+              return createInstantLain();
+            },
           );
           const worker = new AssessmentWorker(db, { getLain: scheduledGetLain });
 
@@ -59,6 +63,7 @@ describe('AssessmentWorker interleaving properties', () => {
 
           const createdCount = [a, b].filter((r) => r.created).length;
           expect(createdCount).toBe(1);
+          expect(seamCalls).toBeGreaterThan(0); // el seam programado se usó de verdad
           expect(a.assessment.id).toBe(b.assessment.id);
           expect(a.assessment.status).toBe('QUEUED');
           await worker.drain();
@@ -79,8 +84,12 @@ describe('AssessmentWorker interleaving properties', () => {
           await db
             .insert(schema.workspace)
             .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
+          let seamCalls = 0;
           const scheduledGetLain = sched.scheduleFunction(
-            async (_orgId: string): Promise<LainAdapter> => createInstantLain(),
+            async (_orgId: string): Promise<LainAdapter> => {
+              seamCalls += 1;
+              return createInstantLain();
+            },
           );
           const worker = new AssessmentWorker(db, { getLain: scheduledGetLain });
           const created = await sched.waitFor(worker.create(request));
@@ -89,6 +98,7 @@ describe('AssessmentWorker interleaving properties', () => {
             Promise.all([worker.run(created.assessment.id), worker.run(created.assessment.id)]),
           );
 
+          expect(seamCalls).toBeGreaterThan(0); // el seam programado se usó de verdad
           expect(r1.status).toBe(r2.status);
           expect(isTerminal(r1.status)).toBe(true);
           // Un run sano sobre el mock nunca termina FAILED: READY o PARTIAL.
