@@ -2,3 +2,11 @@ packages:
   - 'packages/*'
 minimumReleaseAgeExclude:
   - fastify@5.12.7
+# Stryker hace `import('typescript')` sin declararlo (fantasma) y topa con el
+# typescript@7 del workspace, que ya no trae parseConfigFileTextToJson. Se le
+# inyecta su propio TS 5.x para que su preprocessor de tsconfig funcione.
+packageExtensions:
+  '@stryker-mutator/core':
+    dependencies:
+      typescript: 5.9.3
+      '@stryker-mutator/vitest-runner': 10.0.0

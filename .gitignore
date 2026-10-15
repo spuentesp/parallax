@@ -23,3 +23,7 @@ test-repos/
 
 # Local git worktrees
 .worktrees/
+
+# Mutation testing artifacts
+packages/*/reports/
+packages/*/.stryker-tmp/
