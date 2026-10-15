@@ -89,6 +89,11 @@ parallax/
 └─ .github/     CI
 ```
 
+Testing follows an anti-reward-hacking protocol: property-based and model-based
+tests (`test/prop/`), a held-out composition suite (`test-heldout/`) owned by a
+red-team agent, and a mutation gate over each PR diff. See
+`docs/testing/red-team-protocol.md`.
+
 ## Roadmap
 
 This is **subproject 1 of 7**. See `docs/superpowers/specs/2026-10-13-parallax-foundation-design.md` for the full scope and the seven subprojects.
