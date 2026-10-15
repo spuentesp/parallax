@@ -1,7 +1,7 @@
+import { arbJson } from '@parallax/shared/test/prop-arbitraries';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, computeInputDigest, type DigestInput } from '../../src/worker/state.js';
-import { arbJson } from '@parallax/shared/test/prop-arbitraries';
 import { arbDigestInput } from './arbitraries.js';
 import { fcDefaults } from './harness.js';
 

@@ -1,11 +1,11 @@
-import fc from 'fast-check';
 import { AssessmentStatus as SharedAssessmentStatus } from '@parallax/shared/domain';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   AssessmentStatus,
-  TRANSITIONS,
   canTransition,
   isTerminal,
+  TRANSITIONS,
 } from '../../src/worker/state.js';
 import { arbStatus } from './arbitraries.js';
 import { fcDefaults } from './harness.js';
@@ -65,13 +65,20 @@ describe('state machine laws', () => {
   });
 
   it('the documented happy path is a legal transition chain', () => {
-    const chain = ['QUEUED', 'SNAPSHOTTING', 'ANALYZING', 'EXPLAINING', 'READY'] as const;
-    for (let i = 0; i < chain.length - 1; i++) {
-      expect(canTransition(chain[i]!, chain[i + 1]!)).toBe(true);
+    const chain = [
+      ['QUEUED', 'SNAPSHOTTING'],
+      ['SNAPSHOTTING', 'ANALYZING'],
+      ['ANALYZING', 'EXPLAINING'],
+      ['EXPLAINING', 'READY'],
+    ] as const;
+    for (const [from, to] of chain) {
+      expect(canTransition(from, to)).toBe(true);
     }
   });
 
   it('shared and api AssessmentStatus enums define the same values', () => {
-    expect([...SharedAssessmentStatus.options].sort()).toEqual([...AssessmentStatus.options].sort());
+    expect([...SharedAssessmentStatus.options].sort()).toEqual(
+      [...AssessmentStatus.options].sort(),
+    );
   });
 });

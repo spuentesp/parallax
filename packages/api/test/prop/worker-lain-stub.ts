@@ -1,5 +1,5 @@
-import { createLainMock } from '../../src/lain-adapter/mock.js';
 import type { GetSnapshotArgs, GetSnapshotResponse } from '@parallax/shared/lain';
+import { createLainMock } from '../../src/lain-adapter/mock.js';
 import type { LainAdapter } from '../../src/lain-adapter/types.js';
 
 /**

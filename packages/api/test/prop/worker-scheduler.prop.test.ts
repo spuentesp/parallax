@@ -1,9 +1,9 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import fc from 'fast-check';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import fc from 'fast-check';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../src/db/migrate.js';
 import * as schema from '../../src/db/schema.js';
@@ -20,7 +20,10 @@ import { createInstantLain } from './worker-lain-stub.js';
 
 const dirs: string[] = [];
 afterEach(() => {
-  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true });
+  while (dirs.length > 0) {
+    const dir = dirs.pop();
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 function makeDb() {

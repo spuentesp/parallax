@@ -1,7 +1,7 @@
-import fc from 'fast-check';
 import { arbRepoName } from '@parallax/shared/test/prop-arbitraries';
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { presentCoverage, type LainCoverage, type Manifest } from '../../src/coverage.js';
+import { type LainCoverage, type Manifest, presentCoverage } from '../../src/coverage.js';
 import { arbLainCoverage, arbManifest } from './arbitraries.js';
 import { fcDefaults } from './harness.js';
 
@@ -14,7 +14,7 @@ describe('presentCoverage properties (INV 3)', () => {
         // correlación, dos diccionarios aleatorios casi nunca se solapan y la
         // propiedad no muerde al filtro de excluidos.
         const reviewedNames = (lain.scope?.reviewed ?? [])
-          .map((e) => (typeof e === 'string' ? e : e.repo ?? ''))
+          .map((e) => (typeof e === 'string' ? e : (e.repo ?? '')))
           .filter((n) => n.length > 0);
         const manifest: Manifest = { configured: [forced], excluded: [forced, ...reviewedNames] };
         const presented = presentCoverage(lain, manifest);

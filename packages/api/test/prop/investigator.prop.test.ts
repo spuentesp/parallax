@@ -11,22 +11,30 @@ import { fcDefaults } from './harness.js';
 describe('extractCitationRefs properties', () => {
   it('never throws and never duplicates refs', () => {
     fc.assert(
-      fc.property(arbText, fc.array(arbText, { maxLength: 4 }), (answer: string, delivered: string[]) => {
-        const refs = extractCitationRefs(answer, delivered);
-        expect(new Set(refs).size).toBe(refs.length);
-      }),
+      fc.property(
+        arbText,
+        fc.array(arbText, { maxLength: 4 }),
+        (answer: string, delivered: string[]) => {
+          const refs = extractCitationRefs(answer, delivered);
+          expect(new Set(refs).size).toBe(refs.length);
+        },
+      ),
       fcDefaults(),
     );
   });
 
   it('never invents a ref: every ref appears in the answer or in deliveredRefs', () => {
     fc.assert(
-      fc.property(arbText, fc.array(arbSha, { maxLength: 3 }), (answer: string, delivered: string[]) => {
-        const refs = extractCitationRefs(answer, delivered);
-        for (const ref of refs) {
-          expect(answer.includes(ref) || delivered.includes(ref)).toBe(true);
-        }
-      }),
+      fc.property(
+        arbText,
+        fc.array(arbSha, { maxLength: 3 }),
+        (answer: string, delivered: string[]) => {
+          const refs = extractCitationRefs(answer, delivered);
+          for (const ref of refs) {
+            expect(answer.includes(ref) || delivered.includes(ref)).toBe(true);
+          }
+        },
+      ),
       fcDefaults(),
     );
   });
@@ -55,10 +63,7 @@ describe('serializeExplanation properties (INV 2)', () => {
           { maxLength: 4 },
         ),
         arbText,
-        (
-          findings: Array<{ key: string; service: string; class: string }>,
-          answer: string,
-        ) => {
+        (findings: Array<{ key: string; service: string; class: string }>, answer: string) => {
           const engineFindings = findings.map((f) => ({
             endpoint: { key: f.key, service: f.service },
             impact: { class: f.class },

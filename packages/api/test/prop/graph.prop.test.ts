@@ -10,10 +10,7 @@ const KINDS = ['container', 'symbol', 'route', 'schema', 'other'] as const;
 // Oráculo de fuerza bruta, independiente de la implementación: recorre las
 // longitudes de prefijo de mayor a menor (semántica "el prefijo más largo
 // gana") en lugar de rastrear el mejor candidato incrementalmente.
-function resolveOracle(
-  path: string,
-  index: ReadonlyMap<string, readonly string[]>,
-): string | null {
+function resolveOracle(path: string, index: ReadonlyMap<string, readonly string[]>): string | null {
   for (let len = path.length; len > 0; len--) {
     const prefix = path.slice(0, len);
     for (const [service, paths] of index) {

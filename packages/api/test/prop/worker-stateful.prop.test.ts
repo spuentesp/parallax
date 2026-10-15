@@ -1,9 +1,9 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import fc from 'fast-check';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
+import { drizzle } from 'drizzle-orm/better-sqlite3';
+import fc from 'fast-check';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../src/db/migrate.js';
 import * as schema from '../../src/db/schema.js';
@@ -11,11 +11,7 @@ import {
   AssessmentWorker,
   type ResolvedAssessmentRequest,
 } from '../../src/worker/assessment-worker.js';
-import {
-  canonicalJson,
-  isTerminal,
-  type AssessmentStatus,
-} from '../../src/worker/state.js';
+import { type AssessmentStatus, canonicalJson, isTerminal } from '../../src/worker/state.js';
 import { arbRequest } from './arbitraries.js';
 import { fcDefaults } from './harness.js';
 import { createInstantLain } from './worker-lain-stub.js';
@@ -38,7 +34,10 @@ async function makeWorkerHarness() {
 }
 
 afterEach(() => {
-  while (dirs.length > 0) rmSync(dirs.pop()!, { recursive: true, force: true });
+  while (dirs.length > 0) {
+    const dir = dirs.pop();
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe('instant lain stub', () => {
@@ -102,15 +101,16 @@ class RunCmd implements fc.AsyncCommand<Model, Real> {
   }
   async run(model: Model, real: Real): Promise<void> {
     const open = [...model.statusById.entries()].find(([, s]) => !isTerminal(s));
-    const id = open![0];
+    if (open === undefined) return;
+    const id = open[0];
     const before = await real.worker.get(id);
     const record = await real.worker.run(id);
     // Invariante de spec: el run termina en un estado terminal.
     expect(isTerminal(record.status)).toBe(true);
-    if (model.terminalIds.has(id)) {
+    if (model.terminalIds.has(id) && before !== null) {
       // INV 5: un registro terminal no se re-ejecuta (READY queda legible).
-      expect(record.status).toBe(before!.status);
-      expect(record.completedAt).toBe(before!.completedAt);
+      expect(record.status).toBe(before.status);
+      expect(record.completedAt).toBe(before.completedAt);
     }
     // Sólo transiciones legales en el log; seqs estrictamente crecientes y únicas.
     const events = await real.worker.events(id);

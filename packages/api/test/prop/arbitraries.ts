@@ -1,5 +1,5 @@
-import fc from 'fast-check';
 import { arbRepoName, arbSha } from '@parallax/shared/test/prop-arbitraries';
+import fc from 'fast-check';
 import type { LainCoverage, Manifest } from '../../src/coverage.js';
 import type { ResolvedAssessmentRequest } from '../../src/worker/assessment-worker.js';
 import { AssessmentStatus, type DigestInput } from '../../src/worker/state.js';
