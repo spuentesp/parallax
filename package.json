@@ -17,6 +17,7 @@
     "format:check": "biome format .",
     "test": "pnpm -r --parallel run test",
     "test:watch": "vitest",
+    "test:heldout": "pnpm --filter @parallax/api run test:heldout",
     "build": "pnpm -r --filter=!./packages/shared run build",
     "smoke": "pnpm --filter @parallax/api run smoke",
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
