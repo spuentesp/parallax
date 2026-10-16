@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
@@ -87,5 +88,22 @@ describe('composición: ciclo completo create → run → report → comment pre
     expect(coverage.scope.reviewed).not.toContain('legacy');
     expect(coverage.scope.excluded.map((n) => n.repo)).toContain('legacy');
     expect(preview.coverage.notReviewed.map((n) => n.repo)).toContain('legacy');
+  });
+
+  it('executes every pipeline stage — a no-op bypass cannot pass (anti reward-hacking)', async () => {
+    const { worker, db } = await makeHarness();
+    const created = await worker.create(REQUEST);
+    await worker.run(created.assessment.id);
+    await worker.drain();
+
+    // Topología de ejecución: cada etapa crítica se ejecutó y terminó.
+    // Un `return` temprano, un `except: pass` o un skip de etapa deja un
+    // agujero en job_step y esta aserción lo caza.
+    const rows = await db
+      .select()
+      .from(schema.jobStep)
+      .where(eq(schema.jobStep.assessmentId, created.assessment.id));
+    const done = new Set(rows.filter((r) => r.state === 'done').map((r) => r.step));
+    expect([...done].sort()).toEqual(['analyze', 'explain', 'snapshot']);
   });
 });

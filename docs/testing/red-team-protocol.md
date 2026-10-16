@@ -41,6 +41,18 @@ touches both implementation and `test-heldout/`. Held-out changes travel in
    `mutation-allowlist.json` with a `reason`.
 5. Implementer fixes the code; the separation guard keeps the oracle untouched.
 
+## Write-Then-Read (zero intermediate fixtures)
+
+The held-out suite is the oracle and may never fabricate the state it reads.
+Integration and composition tests must reach state **only through the real
+write path** (e.g. `worker.create` / `worker.run`) and read back the IDs that
+path returned. Direct inserts into the state tables
+(`assessment`/`evidence`/`explanation`/`jobStep`/`event`) from `test-heldout/`
+are a violation — `packages/gates/test/repo-policy.test.ts` fails the build if
+they appear. Infrastructure rows (workspace setup) are allowed. If a writer
+stores `doc_id` and a reader filters `source_document_id`, this rule is what
+makes the mismatch explode in CI instead of shipping.
+
 ## What the red team must attack
 
 - Composition: flows that cross worker + services + MCP/HTTP + preview, not
