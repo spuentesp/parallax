@@ -51,14 +51,16 @@ describe('routes render in isolation', () => {
   });
   it('Assessment shows the not-found state when the report is missing', () => {
     render(
-      <MemoryRouter initialEntries={['/assessments/a_1']}>
+      <MemoryRouter initialEntries={['/orgs/acme/assessments/a_1']}>
         <Routes>
-          <Route path="/assessments/:assessmentId" element={<Assessment />} />
+          <Route path="/orgs/:orgId/assessments/:assessmentId" element={<Assessment />} />
         </Routes>
       </MemoryRouter>,
     );
     expect(screen.getByText(/assessment not found/i)).toBeTruthy();
-    expect(screen.getByRole('link', { name: /back to assessments/i })).toBeTruthy();
+    // El link de salida conserva el contexto del org (spec: compatibilidad).
+    const back = screen.getByRole('link', { name: /back to assessments/i });
+    expect(back.getAttribute('href')).toBe('/orgs/acme/assessments');
   });
 
   it('Assessment renders the persisted report with findings and honest coverage', () => {

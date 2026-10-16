@@ -17,7 +17,7 @@ export function Assessment(): React.ReactElement {
     return (
       <div className="p-6">
         <p className="text-sm text-muted">Assessment not found.</p>
-        <Link to="/assessments" className="text-sm text-accent">
+        <Link to={`/orgs/${orgId ?? ''}/assessments`} className="text-sm text-accent">
           ← Back to assessments
         </Link>
       </div>

@@ -38,6 +38,14 @@ describe('route table', () => {
     expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
   });
 
+  it('keeps org context on unknown subpaths', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: ['/orgs/acme/typo'] });
+    render(<RouterProvider router={router} />);
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/orgs/acme');
+    });
+  });
+
   it('keeps /assessments working via redirect to the org picker', () => {
     renderAt('/assessments');
     expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();

@@ -8,6 +8,17 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// reagraph pinta WebGL; el nodo se vuelve un botón que dispara el mismo
+// onNodeClick, para recorrer el hop completo: clic → onSelect → panel.
+vi.mock('reagraph', () => ({
+  darkTheme: {},
+  GraphCanvas: ({ onNodeClick }: { onNodeClick: (n: { id: string | number }) => void }) => (
+    <button type="button" onClick={() => onNodeClick({ id: 'orders' })}>
+      fake-node
+    </button>
+  ),
+}));
+
 vi.mock('../api/hooks.js', () => ({
   useOrgs: () => ({
     data: { orgs: [{ id: 'acme', name: 'Acme Corp' }] },
@@ -31,9 +42,9 @@ describe('demo flow: one connected command center', () => {
     const { router } = renderAt('/orgs/acme');
     const topologyHeading = screen.getByText(/service topology/i);
 
-    // 1. El clic de nodo (seam onSelect, testeado en TopologyView) navega a
-    //    services/:id?node=: panel de servicio SOBRE un grafo que no se desmonta.
-    await router.navigate('/orgs/acme/services/orders?node=orders');
+    // 1. El clic de nodo (hop completo: onNodeClick → onSelect → navigate)
+    //    abre el panel de servicio SOBRE un grafo que no se desmonta.
+    fireEvent.click(screen.getByRole('button', { name: 'fake-node' }));
     expect(await screen.findByRole('heading', { name: /service orders/i })).toBeTruthy();
     expect(screen.getByText(/service topology/i)).toBe(topologyHeading);
 
