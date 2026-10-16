@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { Assessment } from './routes/Assessment.js';
 import { Assessments } from './routes/Assessments.js';
-import { Org } from './routes/Org.js';
+import { OrgLayout } from './routes/OrgLayout.js';
 import { Orgs } from './routes/Orgs.js';
 import { Service } from './routes/Service.js';
 import { WorkspaceDetail } from './routes/WorkspaceDetail.js';
@@ -21,7 +21,7 @@ export const router = createBrowserRouter([
       { path: 'orgs', element: <Orgs /> },
       {
         path: 'orgs/:orgId',
-        element: <Org />,
+        element: <OrgLayout />,
         children: [{ path: 'services/:serviceId', element: <Service /> }],
       },
     ],
