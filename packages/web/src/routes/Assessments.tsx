@@ -1,13 +1,20 @@
 import type * as React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { type AssessmentSummary, useAssessmentList } from '../api/hooks.js';
+import { AssessmentForm } from '../components/AssessmentForm.js';
 
 export function Assessments(): React.ReactElement {
-  const { data, isLoading, error } = useAssessmentList();
+  const { orgId } = useParams();
+  const [searchParams] = useSearchParams();
+  const preselectedRepo = searchParams.get('repo') ?? undefined;
+  const { data, isLoading, error } = useAssessmentList(orgId);
   const items = data?.assessments ?? [];
 
   return (
     <div className="p-6">
+      <Link to={`/orgs/${orgId ?? ''}`} className="text-xs text-accent">
+        ← Volver al hub de {orgId}
+      </Link>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Assessments</h1>
         <p className="text-sm mt-1 text-muted">
@@ -16,12 +23,14 @@ export function Assessments(): React.ReactElement {
         </p>
       </div>
 
+      <AssessmentForm orgId={orgId ?? ''} preselectedRepo={preselectedRepo} />
+
       {isLoading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-error">{String(error)}</p>}
 
       <div className="space-y-3">
         {items.map((a) => (
-          <AssessmentRow key={a.id} a={a} />
+          <AssessmentRow key={a.id} a={a} orgId={orgId ?? ''} />
         ))}
         {items.length === 0 && !isLoading && (
           <div className="text-center py-12 rounded-xl border border-dashed border-border">
@@ -36,10 +45,10 @@ export function Assessments(): React.ReactElement {
   );
 }
 
-function AssessmentRow({ a }: { a: AssessmentSummary }): React.ReactElement {
+function AssessmentRow({ a, orgId }: { a: AssessmentSummary; orgId: string }): React.ReactElement {
   return (
     <Link
-      to={`/assessments/${a.id}`}
+      to={`/orgs/${orgId ?? ''}/assessments/${a.id}`}
       className="block rounded-xl p-4 bg-surface border border-border hover:border-accent transition-colors"
     >
       <div className="flex items-start justify-between gap-4">

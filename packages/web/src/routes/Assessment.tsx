@@ -8,7 +8,7 @@ import { type AssessmentFinding, useAssessment } from '../api/hooks.js';
 import { StatusBadge } from './Assessments.js';
 
 export function Assessment(): React.ReactElement {
-  const { assessmentId } = useParams<{ assessmentId: string }>();
+  const { assessmentId, orgId } = useParams<{ assessmentId: string; orgId?: string }>();
   const { data, isLoading, error } = useAssessment(assessmentId ?? null);
   const report = data?.assessment ?? null;
 
@@ -27,7 +27,13 @@ export function Assessment(): React.ReactElement {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <Link to="/assessments" className="text-xs text-muted hover:text-accent">
+        <Link to={`/orgs/${orgId ?? ''}`} className="text-xs text-accent">
+          ← Volver al hub de {orgId}
+        </Link>{' '}
+        <Link
+          to={`/orgs/${orgId ?? ''}/assessments`}
+          className="text-xs text-muted hover:text-accent"
+        >
           ← Assessments
         </Link>
         <div className="flex items-start justify-between gap-4 mt-2">

@@ -45,7 +45,11 @@ describe('OrgLayout hub', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('link', { name: /configurar workspace/i })).toBeTruthy();
+    expect(screen.getByText(/no topology yet/i)).toBeTruthy();
+    // El CTA vive tanto en el empty state como en la barra de flujo.
+    expect(screen.getAllByRole('link', { name: /configurar workspace/i }).length).toBeGreaterThan(
+      0,
+    );
   });
   it('keeps the graph mounted while the panel slot is active', () => {
     renderHub('/orgs/acme/probe');
@@ -57,5 +61,11 @@ describe('OrgLayout hub', () => {
     renderHub('/orgs/acme/services/does-not-exist');
     expect(screen.getByText(/servicio no encontrado/i)).toBeTruthy();
     expect(screen.getByRole('button', { name: /cerrar/i })).toBeTruthy();
+  });
+
+  it('flow actions carry the selected node context into the evaluation form', () => {
+    renderHub('/orgs/acme?node=orders');
+    const evaluar = screen.getByRole('link', { name: /evaluar pr/i });
+    expect(evaluar.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
   });
 });

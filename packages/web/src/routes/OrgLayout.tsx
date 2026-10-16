@@ -1,8 +1,9 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { Link, Outlet, useNavigate, useOutlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useOutlet, useParams, useSearchParams } from 'react-router-dom';
 import { type ChatMessage, ChatPanel } from '../components/ChatPanel.js';
 import { ContextPanel } from '../components/ContextPanel.js';
+import { FlowActions } from '../components/FlowActions.js';
 import { TopologyView, type TopologyViewData } from '../components/TopologyView.js';
 
 export const SAMPLE_TOPOLOGY: TopologyViewData = {
@@ -27,6 +28,10 @@ export function OrgLayout({
   const { orgId, serviceId } = useParams();
   const navigate = useNavigate();
   const outlet = useOutlet();
+  const [searchParams] = useSearchParams();
+  const nodeId = searchParams.get('node');
+  const selectedNode =
+    nodeId != null ? SAMPLE_TOPOLOGY.nodes.find((n) => n.id === nodeId) : undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const topology: TopologyViewData = emptyTopology ? { nodes: [], edges: [] } : SAMPLE_TOPOLOGY;
@@ -55,6 +60,8 @@ export function OrgLayout({
         </div>
         <h1 className="text-2xl font-bold">{orgId}</h1>
       </div>
+
+      <FlowActions orgId={orgId ?? ''} selectedNode={selectedNode} />
 
       {topology.nodes.length === 0 ? (
         <div className="text-center py-12 rounded-xl border border-dashed border-border">
