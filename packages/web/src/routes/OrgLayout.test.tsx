@@ -68,4 +68,15 @@ describe('OrgLayout hub', () => {
     const evaluar = screen.getByRole('link', { name: /evaluar pr/i });
     expect(evaluar.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
   });
+
+  it('shows a recoverable notice for unknown ?node values', () => {
+    renderHub('/orgs/acme?node=bogus');
+    expect(screen.getByText(/nodo no encontrado/i)).toBeTruthy();
+  });
+
+  it('the open panel wins over a divergent ?node context', () => {
+    renderHub('/orgs/acme/services/orders?node=billing');
+    const evaluar = screen.getByRole('link', { name: /evaluar pr/i });
+    expect(evaluar.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
+  });
 });

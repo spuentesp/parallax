@@ -18,11 +18,15 @@ export function AppShell(): React.ReactElement {
     return base;
   };
   const isActive = (base: string): boolean => {
-    const target = targetFor(base);
-    return (
-      location.pathname.startsWith(target) ||
-      (base === '/orgs' && orgId != null && location.pathname.startsWith(`/orgs/${orgId}`))
-    );
+    if (base === '/orgs') {
+      // El hub (y su panel) es Topología; las páginas de assessment no.
+      return (
+        orgId != null &&
+        (location.pathname === `/orgs/${orgId}` ||
+          location.pathname.startsWith(`/orgs/${orgId}/services`))
+      );
+    }
+    return location.pathname.startsWith(targetFor(base));
   };
 
   return (
@@ -57,7 +61,7 @@ export function AppShell(): React.ReactElement {
         </div>
 
         <nav className="flex-1 px-3">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => item.to !== '/assessments' || orgId != null).map((item) => {
             const active = isActive(item.to);
             return (
               <Link

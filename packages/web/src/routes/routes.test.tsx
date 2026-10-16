@@ -39,7 +39,7 @@ describe('routes render in isolation', () => {
     );
     expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
   });
-  it('Org shows the org id in heading', () => {
+  it('OrgLayout shows the org id in heading', () => {
     render(
       <MemoryRouter initialEntries={['/orgs/acme']}>
         <Routes>

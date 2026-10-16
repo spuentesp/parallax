@@ -23,7 +23,11 @@ export function Assessments(): React.ReactElement {
         </p>
       </div>
 
-      <AssessmentForm orgId={orgId ?? ''} preselectedRepo={preselectedRepo} />
+      <AssessmentForm
+        key={preselectedRepo ?? ''}
+        orgId={orgId ?? ''}
+        preselectedRepo={preselectedRepo}
+      />
 
       {isLoading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-error">{String(error)}</p>}
@@ -36,7 +40,7 @@ export function Assessments(): React.ReactElement {
           <div className="text-center py-12 rounded-xl border border-dashed border-border">
             <div className="text-3xl mb-2">◉</div>
             <div className="text-sm text-muted">
-              No assessments yet. Run one from a workspace to see its impact report.
+              Todavía no hay evaluaciones. Lanza la primera desde el formulario de arriba.
             </div>
           </div>
         )}

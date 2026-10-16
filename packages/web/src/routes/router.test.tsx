@@ -75,4 +75,21 @@ describe('route table', () => {
     renderAt('/assessments/a_gone');
     expect(await screen.findByText(/assessment not found/i)).toBeTruthy();
   });
+
+  it('reseeds the evaluation form when ?repo changes', async () => {
+    const router = createMemoryRouter(routes, {
+      initialEntries: ['/orgs/acme/assessments?repo=orders'],
+    });
+    render(<RouterProvider router={router} />);
+    expect((screen.getByLabelText(/repo/i) as HTMLInputElement).value).toBe('orders');
+    await router.navigate('/orgs/acme/assessments?repo=reports');
+    await waitFor(() => {
+      expect((screen.getByLabelText(/repo/i) as HTMLInputElement).value).toBe('reports');
+    });
+  });
+
+  it('tells the user to launch the first evaluation from the form above', () => {
+    renderAt('/orgs/acme/assessments');
+    expect(screen.getByText(/todavía no hay evaluaciones/i)).toBeTruthy();
+  });
 });

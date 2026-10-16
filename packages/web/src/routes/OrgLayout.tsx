@@ -30,8 +30,12 @@ export function OrgLayout({
   const outlet = useOutlet();
   const [searchParams] = useSearchParams();
   const nodeId = searchParams.get('node');
-  const selectedNode =
-    nodeId != null ? SAMPLE_TOPOLOGY.nodes.find((n) => n.id === nodeId) : undefined;
+  const byParam = nodeId != null ? SAMPLE_TOPOLOGY.nodes.find((n) => n.id === nodeId) : undefined;
+  // El panel abierto manda sobre ?node=: si divergen, el contexto es el del panel.
+  const byPanel =
+    serviceId != null ? SAMPLE_TOPOLOGY.nodes.find((n) => n.id === serviceId) : undefined;
+  const selectedNode = byPanel ?? byParam;
+  const unknownNode = nodeId != null && byParam === undefined;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const topology: TopologyViewData = emptyTopology ? { nodes: [], edges: [] } : SAMPLE_TOPOLOGY;
@@ -61,6 +65,11 @@ export function OrgLayout({
         <h1 className="text-2xl font-bold">{orgId}</h1>
       </div>
 
+      {unknownNode && (
+        <p className="text-xs text-warning mb-2">
+          Nodo no encontrado: «{nodeId}» no está en esta topología.
+        </p>
+      )}
       <FlowActions orgId={orgId ?? ''} selectedNode={selectedNode} />
 
       {topology.nodes.length === 0 ? (

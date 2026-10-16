@@ -45,4 +45,17 @@ describe('AppShell navigation', () => {
     expect(screen.getByText('Acme Corp')).toBeTruthy();
     expect(screen.getByRole('link', { name: /todas las organizaciones/i })).toBeTruthy();
   });
+
+  it('lights only the active section: assessment pages do not highlight Topología', () => {
+    renderAt('/orgs/acme/assessments');
+    const topologia = screen.getByRole('link', { name: /topología/i });
+    const evaluaciones = screen.getByRole('link', { name: /evaluaciones/i });
+    expect(topologia.style.background).toBe('transparent');
+    expect(evaluaciones.style.background).not.toBe('transparent');
+  });
+
+  it('hides Evaluaciones outside an org (no dead-end bounce)', () => {
+    renderAt('/orgs');
+    expect(screen.queryByRole('link', { name: /evaluaciones/i })).toBeNull();
+  });
 });
