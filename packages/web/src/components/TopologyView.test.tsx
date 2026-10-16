@@ -1,10 +1,19 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TopologyView, type TopologyViewData } from './TopologyView.js';
 
-afterEach(() => cleanup());
+// reagraph pinta WebGL: en jsdom no es clickeable. Se sustituye el canvas por
+// un botón que dispara el mismo onNodeClick, para testear el seam onSelect.
+vi.mock('reagraph', () => ({
+  darkTheme: {},
+  GraphCanvas: ({ onNodeClick }: { onNodeClick: (n: { id: string | number }) => void }) => (
+    <button type="button" onClick={() => onNodeClick({ id: 'orders' })}>
+      fake-node
+    </button>
+  ),
+}));
 
-const emptyData: TopologyViewData = { nodes: [], edges: [] };
+afterEach(() => cleanup());
 
 const sampleData: TopologyViewData = {
   nodes: [
@@ -20,12 +29,19 @@ const sampleData: TopologyViewData = {
 
 describe('TopologyView', () => {
   it('renders without crashing on empty data', () => {
-    render(<TopologyView data={emptyData} />);
+    render(<TopologyView data={{ nodes: [], edges: [] }} />);
     expect(screen.getByTestId('topology-view')).toBeTruthy();
   });
 
   it('renders with sample topology data', () => {
     render(<TopologyView data={sampleData} />);
     expect(screen.getByTestId('topology-view')).toBeTruthy();
+  });
+
+  it('reports node selection with its kind', () => {
+    const onSelect = vi.fn();
+    render(<TopologyView data={sampleData} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole('button', { name: 'fake-node' }));
+    expect(onSelect).toHaveBeenCalledWith('orders', 'service');
   });
 });

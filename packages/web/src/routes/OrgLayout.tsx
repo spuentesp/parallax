@@ -98,7 +98,11 @@ export function OrgLayout({
               </div>
               <TopologyView
                 data={topology}
-                onSelect={(id) => navigate(`/orgs/${orgId ?? ''}?node=${encodeURIComponent(id)}`)}
+                onSelect={(id) =>
+                  navigate(
+                    `/orgs/${orgId ?? ''}/services/${encodeURIComponent(id)}?node=${encodeURIComponent(id)}`,
+                  )
+                }
               />
             </div>
           </div>
@@ -111,7 +115,11 @@ export function OrgLayout({
       {outlet !== null && (
         <ContextPanel
           title={serviceId !== undefined ? `Service ${serviceId}` : 'Detalle'}
-          onClose={() => navigate(`/orgs/${orgId ?? ''}`)}
+          onClose={() =>
+            navigate(
+              `/orgs/${orgId ?? ''}${nodeId != null ? `?node=${encodeURIComponent(nodeId)}` : ''}`,
+            )
+          }
         >
           <Outlet />
         </ContextPanel>
