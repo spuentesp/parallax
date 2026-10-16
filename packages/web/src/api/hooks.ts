@@ -1,3 +1,8 @@
+import type {
+  AssessmentReport,
+  AssessmentRequest,
+  AssessmentSummary,
+} from '@parallax/shared/domain';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ApiClient, ApiEndpointNotImplemented } from './client.js';
 
@@ -50,74 +55,8 @@ export function useCreateAssessment() {
 
 // ── Evaluaciones (§13: el informe persistido) ───────────────────────────────
 
-export interface AssessmentSummary {
-  id: string;
-  orgId: string;
-  status: string;
-  inputDigest: string;
-  findingCount: number;
-  coverageComplete: boolean;
-  coverageSummary: string | null;
-  createdAt: number;
-  completedAt: number | null;
-}
-
-export interface AssessmentFinding {
-  kind: string;
-  side?: string;
-  field?: string;
-  route?: string;
-  compat?: string;
-  service?: string;
-  endpoint?: { key?: string; service?: string };
-  impact?: { class?: string; reasons?: string[] | string };
-  affected?: Array<{ service?: string; class?: string; consumer?: string }>;
-}
-
-export interface AssessmentReport {
-  id: string;
-  orgId: string;
-  inputDigest: string;
-  status: string;
-  baseId: string | null;
-  headId: string | null;
-  manifest: unknown;
-  findings: AssessmentFinding[];
-  engine: unknown;
-  coverage: {
-    complete?: boolean;
-    summary?: string;
-    scope?: {
-      reviewed?: string[];
-      unreviewed?: Array<{ repo: string; reason: string } | string>;
-      excluded?: Array<{ repo: string; reason: string } | string>;
-    };
-  } | null;
-  evidence: Array<{
-    id: string;
-    viewId: string;
-    repo: string;
-    sha: string;
-    path: string;
-    range: unknown;
-    hash: string;
-  }>;
-  explanation: { status: string; revision: number | null; model: string | null };
-  createdAt: number;
-  completedAt: number | null;
-}
-
-export type AssessmentRequest =
-  | { prUrl: string; orgId: string; configHash?: string; idempotencyKey?: string }
-  | {
-      repo: string;
-      base: string;
-      head: string;
-      orgId: string;
-      configHash?: string;
-      excludeRepos?: string[];
-      idempotencyKey?: string;
-    };
+// El tipo AssessmentRequest viene del contrato compartido
+// (@parallax/shared/domain) — importado arriba, no se redeclara aquí.
 
 // ── Workspaces (control plane) ──────────────────────────────────────────────
 
