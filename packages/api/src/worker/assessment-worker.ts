@@ -71,6 +71,10 @@ export interface AssessmentWorkerDeps {
     question: string;
     engineFindings: unknown[];
   }) => Promise<ExplainOutcome>;
+  /** Reloj inyectable (DST): por defecto Date.now. */
+  now?: () => number;
+  /** Sleep inyectable (DST): por defecto setTimeout real. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface ExplainOutcome {
@@ -91,6 +95,8 @@ export class AssessmentWorker {
   private readonly db: Db;
   private readonly getLain: ((orgId: string) => Promise<LainAdapter | undefined>) | undefined;
   private readonly explain: AssessmentWorkerDeps['explain'];
+  private readonly now: () => number;
+  private readonly sleep: (ms: number) => Promise<void>;
   private readonly lainByOrg = new Map<string, LainAdapter>();
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
   private readonly inFlight = new Map<string, Promise<AssessmentRecord>>();
@@ -99,6 +105,8 @@ export class AssessmentWorker {
     this.db = db;
     this.getLain = deps?.getLain;
     this.explain = deps?.explain;
+    this.now = deps?.now ?? Date.now;
+    this.sleep = deps?.sleep ?? sleep;
   }
 
   // Un adaptador por organización; dos evaluaciones del mismo workspace
@@ -135,7 +143,7 @@ export class AssessmentWorker {
       return { assessment: this.toRecord(existing[0]), created: false };
     }
 
-    const id = `a_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = `a_${this.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     try {
       await this.db.insert(schema.assessment).values({
         id,
@@ -147,7 +155,7 @@ export class AssessmentWorker {
         manifestJson: JSON.stringify(input.manifest),
         engineJson: null,
         coverageJson: null,
-        createdAt: Date.now(),
+        createdAt: this.now(),
         completedAt: null,
       });
     } catch {
@@ -172,7 +180,7 @@ export class AssessmentWorker {
       seq: await this.nextSeq(record.id),
       type: 'created',
       payload: { status: 'QUEUED', inputDigest: digest },
-      createdAt: Date.now(),
+      createdAt: this.now(),
     });
     return { assessment: record, created: true };
   }
@@ -193,7 +201,7 @@ export class AssessmentWorker {
       seq: await this.nextSeq(id),
       type: 'idempotency',
       payload: { key, digest },
-      createdAt: Date.now(),
+      createdAt: this.now(),
     });
   }
 
@@ -233,7 +241,7 @@ export class AssessmentWorker {
     // nunca ve READY sin el resultado persistido (INV 5).
     const updates: Partial<typeof schema.assessment.$inferInsert> = { status: to };
     if (to === 'READY' || to === 'PARTIAL' || to === 'FAILED' || to === 'CANCELLED') {
-      updates.completedAt = Date.now();
+      updates.completedAt = this.now();
     }
     if (extra?.baseId !== undefined) updates.baseId = extra.baseId;
     if (extra?.headId !== undefined) updates.headId = extra.headId;
@@ -250,7 +258,7 @@ export class AssessmentWorker {
         to,
         ...(extra?.error !== undefined ? { error: extra.error } : {}),
       },
-      createdAt: Date.now(),
+      createdAt: this.now(),
     });
 
     const updated = await this.get(id);
@@ -546,7 +554,7 @@ export class AssessmentWorker {
         model: outcome.model,
         status: outcome.status,
         payload: outcome.payload != null ? JSON.stringify(outcome.payload) : null,
-        createdAt: Date.now(),
+        createdAt: this.now(),
       });
       const coverage = rec.coverageJson
         ? (JSON.parse(rec.coverageJson) as { missing?: string[] })
@@ -627,9 +635,9 @@ export class AssessmentWorker {
     if (prepared.state === 'ready') return prepared.snapshot;
     if (prepared.state === 'failed') throw new Error(`snapshot ${prepared.snapshot} failed`);
 
-    const deadline = Date.now() + SNAPSHOT_WAIT_MS;
-    while (Date.now() < deadline) {
-      await sleep(SNAPSHOT_POLL_MS);
+    const deadline = this.now() + SNAPSHOT_WAIT_MS;
+    while (this.now() < deadline) {
+      await this.sleep(SNAPSHOT_POLL_MS);
       const status = await lain.getSnapshot({ snapshot: prepared.snapshot });
       if (status.state === 'ready') return status.snapshot;
       if (status.state === 'failed') {
@@ -652,7 +660,7 @@ export class AssessmentWorker {
       attempt,
       state: 'running',
       artifactHash: null,
-      updatedAt: Date.now(),
+      updatedAt: this.now(),
     });
     return attempt;
   }
@@ -666,7 +674,7 @@ export class AssessmentWorker {
   ): Promise<void> {
     await this.db
       .update(schema.jobStep)
-      .set({ state, artifactHash, updatedAt: Date.now() })
+      .set({ state, artifactHash, updatedAt: this.now() })
       .where(
         and(
           eq(schema.jobStep.assessmentId, id),
