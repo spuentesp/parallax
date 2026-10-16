@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Assessment } from '../routes/Assessment.js';
-import { Org } from '../routes/Org.js';
+import { OrgLayout } from '../routes/OrgLayout.js';
 import { Orgs } from '../routes/Orgs.js';
 
 afterEach(() => {
@@ -43,7 +43,7 @@ describe('routes render in isolation', () => {
     render(
       <MemoryRouter initialEntries={['/orgs/acme']}>
         <Routes>
-          <Route path="/orgs/:orgId" element={<Org />} />
+          <Route path="/orgs/:orgId" element={<OrgLayout />} />
         </Routes>
       </MemoryRouter>,
     );
