@@ -2,9 +2,14 @@
 // informes. Las rutas HTTP y las tools MCP llaman a estas mismas funciones,
 // de modo que identidad, hallazgos y cobertura coinciden siempre (P09).
 
+import type {
+  AssessmentFinding,
+  AssessmentReport,
+  PresentedCoverage,
+} from '@parallax/shared/domain';
+import { AssessmentRequestBody } from '@parallax/shared/domain';
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { z } from 'zod';
 import * as schema from '../db/schema.js';
 import type { GitHubReader, PrSummary } from '../github/reader.js';
 import { LainCallError } from '../lain-adapter/errors.js';
@@ -20,31 +25,9 @@ type Db = BetterSQLite3Database<typeof schema>;
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
 
-// Todo SHA se resuelve al admitir la solicitud (§5): un nombre de rama no
-// funciona como identidad persistente.
-const ResolvedSha = z.string().regex(/^[0-9a-fA-F]{7,64}$/, 'expected a resolved commit SHA');
-
-const OptionalAssessmentFields = {
-  configHash: z.string().min(1).max(200).optional(),
-  excludeRepos: z.array(z.string().min(1).max(200)).max(100).optional(),
-  idempotencyKey: z.string().min(1).max(256).optional(),
-};
-
-export const AssessmentRequestBody = z.union([
-  z.object({
-    prUrl: z.string().url(),
-    orgId: z.string().min(1),
-    ...OptionalAssessmentFields,
-  }),
-  z.object({
-    repo: z.string().min(1),
-    base: ResolvedSha,
-    head: ResolvedSha,
-    orgId: z.string().min(1),
-    ...OptionalAssessmentFields,
-  }),
-]);
-export type AssessmentRequestBody = z.infer<typeof AssessmentRequestBody>;
+// El contrato del request vive en @parallax/shared: única fuente de verdad
+// para API y web (nadie lo reescribe a mano).
+export { AssessmentRequestBody };
 
 export class NotFoundError extends Error {
   constructor(message: string) {
@@ -61,30 +44,8 @@ export class IdempotencyConflictError extends Error {
   }
 }
 
-export interface AssessmentApiModel {
-  id: string;
-  orgId: string;
-  inputDigest: string;
-  status: string;
-  baseId: string | null;
-  headId: string | null;
-  manifest: unknown;
-  findings: unknown[];
-  engine: unknown;
-  coverage: unknown;
-  evidence: Array<{
-    id: string;
-    viewId: string;
-    repo: string;
-    sha: string;
-    path: string;
-    range: unknown;
-    hash: string;
-  }>;
-  explanation: { status: string; revision: number | null; model: string | null };
-  createdAt: number;
-  completedAt: number | null;
-}
+// Modelo servido por HTTP/MCP: derivado del contrato compartido (z.infer).
+export type AssessmentApiModel = AssessmentReport;
 
 // El nombre LAIN de un repo es el basename de su ruta local o URI: el motor
 // identifica los repos del snapshot por el id del directorio del fixture.
@@ -313,7 +274,7 @@ export async function getAssessmentReport(db: Db, id: string): Promise<Assessmen
     diff?: { changes?: unknown[] };
     error?: string;
   } | null;
-  const coverage = parseJson(rec.coverageJson);
+  const coverage = parseJson(rec.coverageJson) as PresentedCoverage;
   const manifest = parseJson(rec.manifestJson);
 
   const evidenceRows = await db
@@ -326,9 +287,11 @@ export async function getAssessmentReport(db: Db, id: string): Promise<Assessmen
     .where(eq(schema.explanation.assessmentId, id));
   const latestExplanation = explanationRows.sort((a, b) => b.revision - a.revision)[0];
 
-  const findings =
+  // El borde del motor: los cambios llegan como JSON y se tipan contra el
+  // contrato compartido (AssessmentFinding) aquí, y en ningún otro lado.
+  const findings: AssessmentFinding[] =
     engine && typeof engine === 'object' && Array.isArray(engine.diff?.changes)
-      ? engine.diff.changes
+      ? (engine.diff.changes as AssessmentFinding[])
       : [];
 
   return {

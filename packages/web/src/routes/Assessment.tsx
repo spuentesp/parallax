@@ -2,9 +2,10 @@
 // hallazgos del motor, cobertura presentada y evidencia — sin mezclar lo que
 // observó el analizador con lo que diga un modelo (INV 2).
 
+import type { AssessmentFinding } from '@parallax/shared/domain';
 import type * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { type AssessmentFinding, useAssessment } from '../api/hooks.js';
+import { useAssessment } from '../api/hooks.js';
 import { StatusBadge } from './Assessments.js';
 
 export function Assessment(): React.ReactElement {

@@ -1,6 +1,7 @@
+import type { AssessmentSummary } from '@parallax/shared/domain';
 import type * as React from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { type AssessmentSummary, useAssessmentList } from '../api/hooks.js';
+import { useAssessmentList } from '../api/hooks.js';
 import { AssessmentForm } from '../components/AssessmentForm.js';
 
 export function Assessments(): React.ReactElement {
