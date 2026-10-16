@@ -1,7 +1,8 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { Link, Outlet, useParams } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useOutlet, useParams } from 'react-router-dom';
 import { type ChatMessage, ChatPanel } from '../components/ChatPanel.js';
+import { ContextPanel } from '../components/ContextPanel.js';
 import { TopologyView, type TopologyViewData } from '../components/TopologyView.js';
 
 export const SAMPLE_TOPOLOGY: TopologyViewData = {
@@ -23,7 +24,9 @@ export function OrgLayout({
 }: {
   emptyTopology?: boolean;
 }): React.ReactElement {
-  const { orgId } = useParams();
+  const { orgId, serviceId } = useParams();
+  const navigate = useNavigate();
+  const outlet = useOutlet();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const topology: TopologyViewData = emptyTopology ? { nodes: [], edges: [] } : SAMPLE_TOPOLOGY;
@@ -86,7 +89,10 @@ export function OrgLayout({
                   {topology.nodes.length} services · {topology.edges.length} relations
                 </div>
               </div>
-              <TopologyView data={topology} />
+              <TopologyView
+                data={topology}
+                onSelect={(id) => navigate(`/orgs/${orgId ?? ''}?node=${encodeURIComponent(id)}`)}
+              />
             </div>
           </div>
           <div className="h-[600px]">
@@ -95,8 +101,14 @@ export function OrgLayout({
         </div>
       )}
 
-      {/* Panel slot: Task 4 wraps this in ContextPanel. */}
-      <Outlet />
+      {outlet !== null && (
+        <ContextPanel
+          title={serviceId !== undefined ? `Service ${serviceId}` : 'Detalle'}
+          onClose={() => navigate(`/orgs/${orgId ?? ''}`)}
+        >
+          <Outlet />
+        </ContextPanel>
+      )}
     </div>
   );
 }

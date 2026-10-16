@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OrgLayout, SAMPLE_TOPOLOGY } from './OrgLayout.js';
+import { Service } from './Service.js';
 
 afterEach(() => {
   cleanup();
@@ -14,6 +15,7 @@ function renderHub(initialEntry = '/orgs/acme') {
       <Routes>
         <Route path="/orgs/:orgId" element={<OrgLayout />}>
           <Route path="probe" element={<p>panel-slot</p>} />
+          <Route path="services/:serviceId" element={<Service />} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -44,5 +46,16 @@ describe('OrgLayout hub', () => {
       </MemoryRouter>,
     );
     expect(screen.getByRole('link', { name: /configurar workspace/i })).toBeTruthy();
+  });
+  it('keeps the graph mounted while the panel slot is active', () => {
+    renderHub('/orgs/acme/probe');
+    expect(screen.getByText('panel-slot')).toBeTruthy();
+    expect(screen.getByText(/service topology/i)).toBeTruthy();
+  });
+
+  it('rejects unknown service ids with a recoverable message', () => {
+    renderHub('/orgs/acme/services/does-not-exist');
+    expect(screen.getByText(/servicio no encontrado/i)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /cerrar/i })).toBeTruthy();
   });
 });

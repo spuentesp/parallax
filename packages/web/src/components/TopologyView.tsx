@@ -76,9 +76,11 @@ const LAYOUTS = [
 export function TopologyView({
   data,
   height = 560,
+  onSelect,
 }: {
   data: TopologyViewData;
   height?: number;
+  onSelect?: (nodeId: string, kind: 'repo' | 'service' | 'endpoint') => void;
 }): React.ReactElement {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [layout, setLayout] = useState<(typeof LAYOUTS)[number]['id']>('forceDirected2d');
@@ -143,7 +145,13 @@ export function TopologyView({
           labelType="all"
           theme={darkTheme}
           layoutType={layout}
-          onNodeClick={(n) => toggle(String(n.id))}
+          onNodeClick={(n) => {
+            toggle(String(n.id));
+            if (onSelect) {
+              const source = data.nodes.find((d) => d.id === String(n.id));
+              if (source) onSelect(source.id, source.kind);
+            }
+          }}
         />
       ) : (
         <div className="flex items-center justify-center h-full text-sm text-muted">
