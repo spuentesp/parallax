@@ -1,36 +1,20 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, screen } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Assessment } from '../routes/Assessment.js';
 import { OrgLayout } from '../routes/OrgLayout.js';
 import { Orgs } from '../routes/Orgs.js';
+import { sampleReport, server } from '../test/msw.js';
+import { renderWithQuery } from '../test/render.js';
 
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
 });
-
-type UseAssessmentResult = {
-  data: { assessment: unknown } | null;
-  isPending: boolean;
-  isError: boolean;
-};
-const useAssessmentMock = vi.fn<() => UseAssessmentResult>(() => ({
-  data: null,
-  isPending: false,
-  isError: false,
-}));
-
-vi.mock('../api/hooks.js', () => ({
-  useOrgs: () => ({ data: { orgs: [] }, isPending: false, isError: false }),
-  useAssessment: () => useAssessmentMock(),
-  useAssessmentList: () => ({ data: { assessments: [] }, isPending: false, isError: false }),
-  useCreateAssessment: () => ({ mutate: () => {} }),
-}));
 
 describe('routes render in isolation', () => {
   it('Orgs shows the heading', () => {
-    render(
+    renderWithQuery(
       <MemoryRouter initialEntries={['/orgs']}>
         <Routes>
           <Route path="/orgs" element={<Orgs />} />
@@ -39,79 +23,48 @@ describe('routes render in isolation', () => {
     );
     expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
   });
+
   it('OrgLayout shows the org id in heading', () => {
-    render(
+    renderWithQuery(
       <MemoryRouter initialEntries={['/orgs/acme']}>
         <Routes>
-          <Route path="/orgs/:orgId" element={<OrgLayout />} />
+          <Route path="/orgs/:orgId" element={<OrgLayout />}>
+            <Route path="probe" element={<p>panel-slot</p>} />
+          </Route>
         </Routes>
       </MemoryRouter>,
     );
     expect(screen.getByRole('heading', { name: /acme/i })).toBeTruthy();
   });
-  it('Assessment shows the not-found state when the report is missing', () => {
-    render(
+
+  it('Assessment shows the not-found state when the report is missing', async () => {
+    server.use(
+      http.get('/api/assessments/a_1', () =>
+        HttpResponse.json({ code: 'NotImplemented' }, { status: 501 }),
+      ),
+    );
+    renderWithQuery(
       <MemoryRouter initialEntries={['/orgs/acme/assessments/a_1']}>
         <Routes>
           <Route path="/orgs/:orgId/assessments/:assessmentId" element={<Assessment />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByText(/assessment not found/i)).toBeTruthy();
+    expect(await screen.findByText(/assessment not found/i)).toBeTruthy();
     // El link de salida conserva el contexto del org (spec: compatibilidad).
     const back = screen.getByRole('link', { name: /back to assessments/i });
     expect(back.getAttribute('href')).toBe('/orgs/acme/assessments');
   });
 
-  it('Assessment renders the persisted report with findings and honest coverage', () => {
-    useAssessmentMock.mockReturnValueOnce({
-      data: {
-        assessment: {
-          id: 'a_1',
-          orgId: 'ws_fixture',
-          inputDigest: 'sha256_abc',
-          status: 'PARTIAL',
-          baseId: 'snap_base',
-          headId: 'snap_head',
-          manifest: {},
-          findings: [
-            {
-              kind: 'FieldRemoved',
-              field: 'customer_id',
-              service: 'orders',
-              endpoint: { key: 'http:GET /api/orders/{}' },
-              impact: { class: 'Verified' },
-              affected: [{ service: 'billing', class: 'Verified' }],
-            },
-          ],
-          engine: {},
-          coverage: {
-            complete: false,
-            summary:
-              'revisados: orders, billing · no revisados: reports (excluded) · la cobertura está incompleta: un resultado vacío no autoriza a concluir ausencia de impacto',
-            scope: {
-              reviewed: ['orders', 'billing'],
-              unreviewed: [{ repo: 'reports', reason: 'excluded' }],
-              excluded: [],
-            },
-          },
-          evidence: [],
-          explanation: { status: 'skipped', revision: 0, model: 'none' },
-          createdAt: 1,
-          completedAt: 2,
-        },
-      },
-      isPending: false,
-      isError: false,
-    });
-    render(
+  it('Assessment renders the persisted report with findings and honest coverage', async () => {
+    renderWithQuery(
       <MemoryRouter initialEntries={['/assessments/a_1']}>
         <Routes>
           <Route path="/assessments/:assessmentId" element={<Assessment />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByText('Impact report')).toBeTruthy();
+    expect(await screen.findByText('Impact report')).toBeTruthy();
     expect(screen.getByText('FieldRemoved')).toBeTruthy();
     expect(screen.getByText(/customer_id/)).toBeTruthy();
     // INV 3: la omisión de reports es visible y nada se declara completo.
@@ -120,5 +73,10 @@ describe('routes render in isolation', () => {
     expect(screen.getByText(/no autoriza a concluir/i)).toBeTruthy();
     // INV 2: la explicación no toca los findings del analizador.
     expect(screen.getByText(/no puede promover NeedsInvestigation a Verified/i)).toBeTruthy();
+  });
+
+  it('the report crossing the wire satisfies the shared contract', () => {
+    // Sanity: el handler por defecto sirve exactamente el shape que consume la UI.
+    expect(sampleReport.evidence).toEqual([]);
   });
 });

@@ -1,24 +1,24 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
+import { afterEach, describe, expect, it } from 'vitest';
+import { sampleReport, server } from '../test/msw.js';
+import { renderWithQuery } from '../test/render.js';
 import { AssessmentForm } from './AssessmentForm.js';
 
-const mutateMock = vi.fn();
 afterEach(() => {
   cleanup();
-  vi.restoreAllMocks();
 });
-vi.mock('../api/hooks.js', () => ({
-  useCreateAssessment: () => ({ mutate: mutateMock }),
-}));
 
 describe('AssessmentForm', () => {
-  it('preselects the repo from props and submits with the typed SHAs', () => {
-    render(
-      <MemoryRouter>
-        <AssessmentForm orgId="acme" preselectedRepo="orders" />
-      </MemoryRouter>,
+  it('preselects the repo from props and submits the typed SHAs to the API', async () => {
+    let posted: unknown = null;
+    server.use(
+      http.post('/api/assessments', async ({ request }) => {
+        posted = await request.json();
+        return HttpResponse.json({ assessment: sampleReport, created: true });
+      }),
     );
+    renderWithQuery(<AssessmentForm orgId="acme" preselectedRepo="orders" />);
     expect((screen.getByLabelText(/repo/i) as HTMLInputElement).value).toBe('orders');
     fireEvent.change(screen.getByLabelText(/base/i), {
       target: { value: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf' },
@@ -27,11 +27,13 @@ describe('AssessmentForm', () => {
       target: { value: 'afece2321df86647a31d073a2e3cadb50e13d42e' },
     });
     fireEvent.click(screen.getByRole('button', { name: /evaluar/i }));
-    expect(mutateMock).toHaveBeenCalledWith({
-      repo: 'orders',
-      base: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
-      head: 'afece2321df86647a31d073a2e3cadb50e13d42e',
-      orgId: 'acme',
+    await waitFor(() => {
+      expect(posted).toEqual({
+        repo: 'orders',
+        base: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
+        head: 'afece2321df86647a31d073a2e3cadb50e13d42e',
+        orgId: 'acme',
+      });
     });
   });
 });

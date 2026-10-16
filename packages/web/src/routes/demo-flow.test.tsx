@@ -1,7 +1,8 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { routes } from '../router.js';
+import { renderWithQuery } from '../test/render.js';
 
 afterEach(() => {
   cleanup();
@@ -34,7 +35,7 @@ vi.mock('../api/hooks.js', () => ({
 
 function renderAt(initialEntry: string) {
   const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
-  return { router, ...render(<RouterProvider router={router} />) };
+  return { router, ...renderWithQuery(<RouterProvider router={router} />) };
 }
 
 describe('demo flow: one connected command center', () => {
@@ -57,6 +58,6 @@ describe('demo flow: one connected command center', () => {
     // 3. Evaluar PR lleva al formulario con el repo precargado.
     fireEvent.click(screen.getByRole('link', { name: /evaluar pr/i }));
     expect(router.state.location.pathname).toBe('/orgs/acme/assessments');
-    expect((screen.getByLabelText(/repo/i) as HTMLInputElement).value).toBe('orders');
+    expect(((await screen.findByLabelText(/repo/i)) as HTMLInputElement).value).toBe('orders');
   });
 });
