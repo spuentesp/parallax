@@ -25,6 +25,11 @@ const AppConfigSchema = z.object({
   investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
   investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
   webBundlePath: z.string().default('./packages/web/dist'),
+  // Lectura de PRs de GitHub (selector y auto CI). Sólo GET: el token de escritura
+  // (estado y comentarios) es otra credencial, que nunca usa el lector.
+  githubReadToken: z.string().min(1).optional(),
+  // Base de la API de GitHub: configurable para que los tests apunten a un stand-in local.
+  githubApiBase: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -81,6 +86,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
     webBundlePath: env.WEB_BUNDLE_PATH,
+    githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
+    githubApiBase: env.PARALLAX_GITHUB_API_BASE,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

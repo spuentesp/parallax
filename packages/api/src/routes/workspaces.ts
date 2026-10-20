@@ -10,6 +10,7 @@ import {
   resolveSymbolSnippet,
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
+import { GitHubReader, type OpenPrItem, PrUrlError, parseGithubRepoUri } from '../github/reader.js';
 import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import { buildEndpointTopology } from '../topology.js';
@@ -27,6 +28,44 @@ const RepoInput = z.object({
 });
 
 export const workspaceRoutes: FastifyPluginAsync = async (app) => {
+  // PRs abiertos de los repos de GitHub del workspace (selector). Sólo lectura.
+  // Un repo que no es de GitHub o que falla se reporta aparte: nunca desaparece
+  // en silencio, y un listado truncado se declara.
+  app.get('/api/workspaces/:id/prs', { config: { scopes: ['read'] } }, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const [ws] = await app.db.select().from(schema.workspace).where(eq(schema.workspace.id, id));
+    if (!ws) return reply.code(404).send({ error: 'workspace not found' });
+
+    const repos = await app.db.select().from(schema.repo).where(eq(schema.repo.workspaceId, id));
+    const reader = new GitHubReader({
+      ...(app.config.githubApiBase ? { apiBase: app.config.githubApiBase } : {}),
+      ...(app.config.githubReadToken ? { token: app.config.githubReadToken } : {}),
+    });
+    const prs: Array<OpenPrItem & { repo: string }> = [];
+    const skipped: Array<{ repo: string; reason: string }> = [];
+    const errors: Array<{ repo: string; code: string; message: string }> = [];
+    const truncated: string[] = [];
+
+    for (const r of repos) {
+      const gh = parseGithubRepoUri(r.uri);
+      if (!gh) {
+        skipped.push({ repo: r.uri, reason: 'not_github' });
+        continue;
+      }
+      try {
+        const listing = await reader.listOpenPrs(gh.owner, gh.repo);
+        prs.push(...listing.items.map((pr) => ({ ...pr, repo: r.uri })));
+        if (listing.truncated) truncated.push(r.uri);
+      } catch (err) {
+        if (!(err instanceof PrUrlError)) throw err;
+        errors.push({ repo: r.uri, code: err.code, message: err.message });
+      }
+    }
+
+    prs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return { prs, skipped, errors, truncated };
+  });
+
   // List workspaces
   app.get('/api/workspaces', { config: { scopes: ['read'] } }, async () => {
     const workspaces = await app.db.select().from(schema.workspace);

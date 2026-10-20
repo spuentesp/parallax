@@ -66,6 +66,33 @@ export function parsePrUrl(url: string): PrRef {
   };
 }
 
+/**
+ * Owner y repo de una URI de repo de GitHub (`https://github.com/o/r[.git]`,
+ * `github.com/o/r`). Cualquier otra cosa (rutas locales, otros hosts) devuelve
+ * null: no hay PRs que listar. No hace red.
+ */
+export function parseGithubRepoUri(uri: string): { owner: string; repo: string } | null {
+  const m = /^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/\s]+)\/([^/\s?#]+?)(?:\.git)?\/?$/.exec(
+    uri.trim(),
+  );
+  if (!m) return null;
+  return { owner: m[1] ?? '', repo: m[2] ?? '' };
+}
+
+/** Un PR abierto, tal como lo muestra el selector. Los SHAs son la identidad (§5). */
+export interface OpenPrItem {
+  readonly number: number;
+  readonly url: string;
+  readonly title: string;
+  readonly author: string | null;
+  readonly draft: boolean;
+  readonly baseRef: string;
+  readonly headRef: string;
+  readonly baseSha: string;
+  readonly headSha: string;
+  readonly updatedAt: string;
+}
+
 export interface GitHubReadConfig {
   readonly apiBase?: string;
   readonly timeoutMs?: number;
@@ -86,6 +113,8 @@ interface GhPr {
   html_url?: string;
   title?: string;
   state?: string;
+  draft?: boolean;
+  updated_at?: string;
   merged_at?: string | null;
   user?: { login?: string };
   base?: { ref?: string; sha?: string };
@@ -173,5 +202,40 @@ export class GitHubReader {
         deletions: f.deletions ?? 0,
       })),
     };
+  }
+
+  /**
+   * PRs abiertos de un repo, más recientes primero. Una página (100): el selector
+   * no pagina, y un repo con más de 100 PRs abiertos lo declara en vez de
+   * truncarlo en silencio. Sólo lectura.
+   */
+  async listOpenPrs(
+    owner: string,
+    repo: string,
+  ): Promise<{ items: OpenPrItem[]; truncated: boolean }> {
+    const prs = await this.get<GhPr[]>(
+      `/repos/${owner}/${repo}/pulls?state=open&sort=updated&direction=desc&per_page=100`,
+    );
+    const truncated = prs.length === 100;
+    const items: OpenPrItem[] = [];
+    for (const pr of prs) {
+      const baseSha = pr.base?.sha ?? '';
+      const headSha = pr.head?.sha ?? '';
+      // Un PR sin SHAs no tiene identidad: se omite antes que inventarla.
+      if (!pr.number || !baseSha || !headSha) continue;
+      items.push({
+        number: pr.number,
+        url: pr.html_url ?? `https://github.com/${owner}/${repo}/pull/${pr.number}`,
+        title: pr.title ?? '',
+        author: pr.user?.login ?? null,
+        draft: pr.draft ?? false,
+        baseRef: pr.base?.ref ?? '',
+        headRef: pr.head?.ref ?? '',
+        baseSha,
+        headSha,
+        updatedAt: pr.updated_at ?? '',
+      });
+    }
+    return { items, truncated };
   }
 }
