@@ -8,7 +8,8 @@
    a reader then consumes. Enforced by `packages/gates/test/repo-policy.test.ts`.
 2. **Mock only at the process edge**: never `vi.mock` internal modules of this
    repo (hooks, stores, services) in tests; intercept the network boundary or
-   inject a transport. Internal mocks are how feature isolation hides.
+   inject a transport. Internal mocks are how feature isolation hides. Enforced
+   by `packages/gates/test/repo-policy.test.ts`.
 3. **No-op bypasses are failures**: every pipeline stage a feature claims to run
    must be observable in a test (see the jobStep assertions in
    `test-heldout/lifecycle-composition.heldout.test.ts`). An early `return` or a

@@ -5,6 +5,7 @@ import {
   type AllowlistEntry,
   findStaleEntries,
   gateDecision,
+  isMutableSourceFile,
   parseAllowlistFile,
   parseMutationReport,
   partitionRunnable,
@@ -41,8 +42,9 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
-// Archivos mutados: sólo los src/*.ts tocados por el diff, agrupados por paquete.
-const changedSrc = changedFiles().filter((f) => /^packages\/[^/]+\/src\/.*\.ts$/.test(f));
+// Archivos mutados: sólo las fuentes de producción (.ts/.tsx) tocadas por el
+// diff, agrupadas por paquete.
+const changedSrc = changedFiles().filter(isMutableSourceFile);
 const byPackage = new Map<string, string[]>();
 for (const f of changedSrc) {
   const pkg = f.split('/')[1] ?? '';

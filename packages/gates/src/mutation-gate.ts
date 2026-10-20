@@ -18,6 +18,7 @@ interface RawMutant {
   mutatorName?: string;
   status?: string;
   description?: string;
+  replacement?: string;
   location?: { start?: { line?: number } };
 }
 
@@ -36,7 +37,10 @@ export function parseMutationReport(report: unknown): MutantSummary[] {
         mutator: m.mutatorName ?? '',
         line: m.location?.start?.line ?? 0,
         status: m.status ?? 'Unknown',
-        description: m.description ?? '',
+        // Identidad del mutante: stryker 10 no informa `description` en el
+        // JSON; el texto de reemplazo es estable frente a cambios de línea y
+        // es lo que empareja contra el allowlist.
+        description: m.description || m.replacement || '',
       });
     }
   }
@@ -125,4 +129,15 @@ export function partitionRunnable(
     else skipped.push(pkg);
   }
   return { runnable, skipped };
+}
+
+/**
+ * Fuentes mutables del diff: producción .ts/.tsx bajo src/. Los tests, las
+ * utilidades de test (src/test/), las declaraciones .d.ts y todo lo demás
+ * quedan fuera — mutar el oráculo no tiene sentido.
+ */
+export function isMutableSourceFile(repoRelative: string): boolean {
+  if (!/^packages\/[^/]+\/src\/.*\.(ts|tsx)$/.test(repoRelative)) return false;
+  if (/^packages\/[^/]+\/src\/test\//.test(repoRelative)) return false;
+  return !/\.(test|spec)\.(ts|tsx)$|\.d\.ts$/.test(repoRelative);
 }

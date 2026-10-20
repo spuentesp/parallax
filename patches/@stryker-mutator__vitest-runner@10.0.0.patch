@@ -1,0 +1,51 @@
+diff --git a/dist/src/stryker-setup.js b/dist/src/stryker-setup.js
+index aecfacbe47b285c272c47e54b3d66a716adfdc41..81f2bbea90646cc3948bf51921688f2531b5f5d5 100644
+--- a/dist/src/stryker-setup.js
++++ b/dist/src/stryker-setup.js
+@@ -63,7 +63,9 @@ function collectTestName({ name, suite, }) {
+         nameParts.unshift(currentSuite.name);
+         currentSuite = currentSuite.suite;
+     }
+-    return nameParts.join(' ').trim();
++    // Local patch: same ' > ' join as dist/src/test-helpers.js, so the coverage
++    // ids produced here match the test result ids (vitest full test names).
++    return nameParts.join(' > ').trim();
+ }
+ function toRawTestId(test) {
+     return `${test.file?.filepath ?? 'unknown.js'}#${collectTestName(test)}`;
+diff --git a/dist/src/test-helpers.js b/dist/src/test-helpers.js
+index 56cc786f30c524ae18ce87eef1a67fdf26b703c5..6eef596f17926845ba77da14c220f9221c00edb8 100644
+--- a/dist/src/test-helpers.js
++++ b/dist/src/test-helpers.js
+@@ -8,7 +8,10 @@ export function collectTestName({ name, suite, }) {
+         nameParts.unshift(currentSuite.name);
+         currentSuite = currentSuite.suite;
+     }
+-    return nameParts.join(' ').trim();
++    // Local patch: join with ' > ' so names match vitest's full test names
++    // (the target of testNamePattern). Upstream joins with ' ', which makes
++    // every mutant run 0 tests when suites are used (false "Survived").
++    return nameParts.join(' > ').trim();
+ }
+ export function toRawTestId(test) {
+     return `${test.file?.filepath ?? 'unknown.js'}#${collectTestName(test)}`;
+diff --git a/dist/src/vitest-test-runner.js b/dist/src/vitest-test-runner.js
+index 84f1ca026503b8e92b7adc952ec6c6a401943656..591707cf53e468cd2d4e78058b6fe103f7a369b1 100644
+--- a/dist/src/vitest-test-runner.js
++++ b/dist/src/vitest-test-runner.js
+@@ -92,7 +92,14 @@ export class VitestTestRunner {
+             project.config.browser.screenshotFailures = false;
+         });
+         if (this.log.isDebugEnabled()) {
+-            this.log.debug(`vitest final config: ${JSON.stringify(this.ctx.config, null, 2)}`);
++            // Local patch: the resolved vitest config has circular refs; a
++            // stringify crash here must not take down the runner in debug mode.
++            try {
++                this.log.debug(`vitest final config: ${JSON.stringify(this.ctx.config, null, 2)}`);
++            }
++            catch {
++                this.log.debug('vitest final config: <not JSON-serializable>');
++            }
+         }
+     }
+     async dryRun(options) {

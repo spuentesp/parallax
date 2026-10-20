@@ -1,3 +1,11 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "package": "@parallax/mcp",
+      "file": "src/server.ts",
+      "mutator": "BlockStatement",
+      "description": "{}",
+      "reason": "runStdio: wiring del transporte stdio. Ejercitado de punta a punta por el handshake MCP de test/index.test.ts; la cobertura del proceso hijo no es visible para stryker."
+    }
+  ]
 }

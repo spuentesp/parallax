@@ -3,6 +3,7 @@ import {
   type AllowlistEntry,
   findStaleEntries,
   gateDecision,
+  isMutableSourceFile,
   parseAllowlistFile,
   parseMutationReport,
   partitionRunnable,
@@ -190,5 +191,190 @@ describe('partitionRunnable', () => {
     const result = partitionRunnable(byPackage, new Set(['shared']));
     expect(result.skipped).toEqual([]);
     expect(result.runnable.get('shared')).toEqual(['src/lain/evidence.ts']);
+  });
+});
+
+describe('isMutableSourceFile', () => {
+  it('picks up production .ts and .tsx sources and nothing else', () => {
+    expect(isMutableSourceFile('packages/api/src/coverage.ts')).toBe(true);
+    expect(isMutableSourceFile('packages/web/src/routes/OrgLayout.tsx')).toBe(true);
+  });
+
+  it('skips tests, type declarations and non-source paths', () => {
+    expect(isMutableSourceFile('packages/web/src/routes/demo-flow.test.tsx')).toBe(false);
+    expect(isMutableSourceFile('packages/api/src/coverage.test.ts')).toBe(false);
+    expect(isMutableSourceFile('packages/shared/src/lain/shapes.spec.ts')).toBe(false);
+    expect(isMutableSourceFile('packages/shared/src/types.d.ts')).toBe(false);
+    expect(isMutableSourceFile('packages/web/src/test/render.tsx')).toBe(false);
+    expect(isMutableSourceFile('packages/gates/test/mutation-gate.test.ts')).toBe(false);
+    expect(isMutableSourceFile('docs/testing/red-team-protocol.md')).toBe(false);
+  });
+});
+
+describe('parseMutationReport (edges)', () => {
+  it('defaults missing fields and ignores entries with no mutants list', () => {
+    const mutants = parseMutationReport({
+      files: {
+        'src/a.ts': { mutants: [{ location: {} }, { location: { start: {} } }, {}] },
+        'src/b.ts': {},
+      },
+    });
+    expect(mutants).toEqual([
+      { file: 'src/a.ts', mutator: '', line: 0, status: 'Unknown', description: '' },
+      { file: 'src/a.ts', mutator: '', line: 0, status: 'Unknown', description: '' },
+      { file: 'src/a.ts', mutator: '', line: 0, status: 'Unknown', description: '' },
+    ]);
+  });
+
+  it('uses the replacement text as identity when the tool reports no description', () => {
+    const mutants = parseMutationReport({
+      files: {
+        'src/a.ts': {
+          mutants: [
+            {
+              mutatorName: 'BlockStatement',
+              status: 'NoCoverage',
+              location: { start: { line: 7 } },
+              replacement: '{}',
+            },
+          ],
+        },
+      },
+    });
+    expect(mutants).toEqual([
+      {
+        file: 'src/a.ts',
+        mutator: 'BlockStatement',
+        line: 7,
+        status: 'NoCoverage',
+        description: '{}',
+      },
+    ]);
+
+    const decision = gateDecision(
+      mutants,
+      [
+        {
+          package: '@parallax/mcp',
+          file: 'src/a.ts',
+          mutator: 'BlockStatement',
+          description: '{}',
+          reason:
+            'wiring pinned by a subprocess smoke; child-process coverage is invisible to stryker',
+        },
+      ],
+      '@parallax/mcp',
+    );
+    expect(decision.blocked).toEqual([]);
+    expect(decision.allowlisted).toEqual(mutants);
+  });
+});
+
+describe('gateDecision (matching)', () => {
+  const mutant = {
+    file: 'src/coverage.ts',
+    mutator: 'BlockStatement',
+    line: 68,
+    status: 'Survived',
+    description: 'block statement was removed',
+  };
+
+  it('does not allowlist a hit that differs in file or mutator', () => {
+    const wrongFile: AllowlistEntry[] = [
+      {
+        package: '@parallax/api',
+        file: 'src/other.ts',
+        mutator: 'BlockStatement',
+        description: 'block statement was removed',
+        reason: 'equivalent',
+      },
+    ];
+    const wrongMutator: AllowlistEntry[] = [
+      {
+        package: '@parallax/api',
+        file: 'src/coverage.ts',
+        mutator: 'Other',
+        description: 'block statement was removed',
+        reason: 'equivalent',
+      },
+    ];
+    expect(gateDecision([mutant], wrongFile, '@parallax/api').blocked).toEqual([mutant]);
+    expect(gateDecision([mutant], wrongMutator, '@parallax/api').blocked).toEqual([mutant]);
+  });
+
+  it('blocks NoCoverage mutants just like Survived ones', () => {
+    const uncovered = { ...mutant, line: 7, status: 'NoCoverage' };
+    const decision = gateDecision([uncovered], [], '@parallax/api');
+    expect(decision.blocked).toEqual([uncovered]);
+  });
+});
+
+describe('findStaleEntries (scoping)', () => {
+  it('never reports entries of another package as stale', () => {
+    const mutants = parseMutationReport(REPORT);
+    const stale = findStaleEntries(
+      [
+        {
+          package: '@parallax/shared',
+          file: 'src/gone.ts',
+          mutator: 'BlockStatement',
+          description: 'from elsewhere',
+          reason: 'equivalent',
+        },
+      ],
+      mutants,
+      '@parallax/api',
+    );
+    expect(stale).toEqual([]);
+  });
+});
+
+describe('parseAllowlistFile (messages)', () => {
+  it('names the file and the missing key so a human can fix the entry', () => {
+    const badJson = parseAllowlistFile('{not json');
+    expect(badJson.ok).toBe(false);
+    if (!badJson.ok) expect(badJson.error).toContain('mutation-allowlist.json is not valid JSON');
+
+    const missing = parseAllowlistFile('{}');
+    expect(missing.ok).toBe(false);
+    if (!missing.ok)
+      expect(missing.error).toBe('mutation-allowlist.json must contain an "entries" array');
+  });
+});
+
+describe('validateAllowlist (whitespace)', () => {
+  it('treats whitespace-only justification as empty and says which field', () => {
+    const problems = validateAllowlist([
+      {
+        package: '@parallax/api',
+        file: 'src/a.ts',
+        mutator: 'X',
+        description: 'd',
+        reason: '   ',
+      },
+      {
+        package: '@parallax/api',
+        file: 'src/b.ts',
+        mutator: 'X',
+        description: '  ',
+        reason: 'equivalent',
+      },
+    ]);
+    expect(problems).toEqual([
+      'allowlist entry without reason: @parallax/api src/a.ts X',
+      'allowlist entry without description: @parallax/api src/b.ts X',
+    ]);
+  });
+});
+
+describe('isMutableSourceFile (anchors)', () => {
+  it('classifies by repo-relative shape, not by substrings anywhere in the path', () => {
+    expect(isMutableSourceFile('docs/packages/api/src/a.ts')).toBe(false);
+    expect(isMutableSourceFile('packages/api/src/report.ts.bak')).toBe(false);
+    expect(isMutableSourceFile('packages/api/src/vendored/packages/gates/src/test/helper.ts')).toBe(
+      true,
+    );
+    expect(isMutableSourceFile('packages/api/src/a.test.tsx.ts')).toBe(true);
+    expect(isMutableSourceFile('packages/api/src/a.d.ts.ts')).toBe(true);
   });
 });
