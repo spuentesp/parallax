@@ -112,3 +112,13 @@ export const publication = sqliteTable('publication', {
   remoteId: text('remote_id'),
   updatedAt: integer('updated_at').notNull(),
 });
+
+export const workspaceCi = sqliteTable('workspace_ci', {
+  workspaceId: text('workspace_id')
+    .primaryKey()
+    .references(() => workspace.id),
+  mode: text('mode').notNull().default('off'),
+  baseBranch: text('base_branch'),
+  reportComments: integer('report_comments', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: integer('updated_at').notNull(),
+});

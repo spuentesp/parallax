@@ -30,6 +30,13 @@ const AppConfigSchema = z.object({
   githubReadToken: z.string().min(1).optional(),
   // Base de la API de GitHub: configurable para que los tests apunten a un stand-in local.
   githubApiBase: z.string().url().optional(),
+  // Escritura a GitHub (commit status y comentarios): credencial aparte, sólo
+  // `Commit statuses: write` y `Issues: write`. La lee únicamente GitHubWriter.
+  githubWriteToken: z.string().min(1).optional(),
+  // Secreto HMAC de los webhooks de pull_request. Sin él no se acepta ningún webhook.
+  githubWebhookSecret: z.string().min(1).optional(),
+  // URL pública de Parallax, para enlazar el informe desde el estado y el comentario.
+  publicUrl: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -88,6 +95,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
     githubApiBase: env.PARALLAX_GITHUB_API_BASE,
+    githubWriteToken: env.PARALLAX_GITHUB_WRITE_TOKEN,
+    githubWebhookSecret: env.PARALLAX_GITHUB_WEBHOOK_SECRET,
+    publicUrl: env.PARALLAX_PUBLIC_URL,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

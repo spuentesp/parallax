@@ -129,3 +129,17 @@ export const AssessmentRequestBody = z.union([
 export type AssessmentRequestBody = z.infer<typeof AssessmentRequestBody>;
 // Alias corto para el lado web.
 export type AssessmentRequest = AssessmentRequestBody;
+
+// Configuración de CI automática por workspace. `mode: off` es el default: un PR
+// sólo se evalúa cuando alguien lo pide. `baseBranch` acota los PRs que disparan
+// una evaluación (null = cualquier rama base). `reportComments` añade un comentario
+// en el PR además del commit status (opt-in).
+export const CiMode = z.enum(['off', 'on-open-and-update']);
+export type CiMode = z.infer<typeof CiMode>;
+
+export const WorkspaceCiSettings = z.object({
+  mode: CiMode,
+  baseBranch: z.string().min(1).nullable(),
+  reportComments: z.boolean(),
+});
+export type WorkspaceCiSettings = z.infer<typeof WorkspaceCiSettings>;

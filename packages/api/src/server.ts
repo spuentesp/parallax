@@ -12,6 +12,7 @@ import dbPlugin from './plugins/db.js';
 import errorHandler from './plugins/error-handler.js';
 import lainAdapterPlugin from './plugins/lain-adapter.js';
 import { assessmentRoutes } from './routes/assessments.js';
+import { ciRoutes } from './routes/ci.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
 // MCP + Web
@@ -47,6 +48,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(publicationRoutes);
   await app.register(queryRoutes);
   await app.register(workspaceRoutes);
+  await app.register(ciRoutes);
 
   // MCP (http-sse transport).
   await app.register(mcpRoutes);
