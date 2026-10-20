@@ -35,7 +35,7 @@ export function Workspaces(): React.ReactElement {
         {workspaces.map((w) => (
           <WorkspaceCard key={w.id} workspace={w} />
         ))}
-        {workspaces.length === 0 && !isLoading && (
+        {workspaces.length === 0 && !isLoading && !error && (
           <div className="text-center py-12 rounded-xl border border-dashed border-border">
             <div className="text-3xl mb-2">⬡</div>
             <div className="text-sm text-muted">No workspaces yet. Create one to get started.</div>

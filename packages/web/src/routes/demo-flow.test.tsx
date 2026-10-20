@@ -20,18 +20,8 @@ vi.mock('reagraph', () => ({
   ),
 }));
 
-vi.mock('../api/hooks.js', () => ({
-  useOrgs: () => ({
-    data: { orgs: [{ id: 'acme', name: 'Acme Corp' }] },
-    isPending: false,
-    isError: false,
-  }),
-  useAssessment: () => ({ data: null, isPending: true, isError: false }),
-  useAssessmentList: () => ({ data: { assessments: [] }, isPending: false, isError: false }),
-  useCreateAssessment: () => ({ mutate: vi.fn() }),
-  useWorkspace: () => ({ data: null, isPending: true, isError: false }),
-  useWorkspaces: () => ({ data: { workspaces: [] }, isPending: false, isError: false }),
-}));
+// Sin mocks internos (regla AGENTS.md #2): el flujo pasa por los hooks y el
+// cliente HTTP reales, y la red la sirve MSW (ver src/test/msw.ts).
 
 function renderAt(initialEntry: string) {
   const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
