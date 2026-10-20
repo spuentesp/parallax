@@ -491,6 +491,14 @@ describe('trace_impact from-object', () => {
     expect(TraceImpactArgs.safeParse(args({})).success).toBe(false);
   });
 
+  it('explains which start field is required when none is given', () => {
+    const result = TraceImpactArgs.safeParse(args({}));
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.message).toBe(
+      'exactly one of endpoint, field, symbol must be set',
+    );
+  });
+
   it('rejects a from whose endpoint is not an object', () => {
     expect(TraceImpactArgs.safeParse(args({ endpoint: 'orders' })).success).toBe(false);
   });
