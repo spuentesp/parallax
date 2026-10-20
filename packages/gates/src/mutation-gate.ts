@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export interface MutantSummary {
   file: string;
   mutator: string;
@@ -140,4 +142,26 @@ export function isMutableSourceFile(repoRelative: string): boolean {
   if (!/^packages\/[^/]+\/src\/.*\.(ts|tsx)$/.test(repoRelative)) return false;
   if (/^packages\/[^/]+\/src\/test\//.test(repoRelative)) return false;
   return !/\.(test|spec)\.(ts|tsx)$|\.d\.ts$/.test(repoRelative);
+}
+
+/** Parte `items` en lotes de como mucho `size` (orden preservado). */
+export function chunk<T>(items: readonly T[], size: number): T[][] {
+  if (!Number.isInteger(size) || size < 1) throw new RangeError(`chunk size must be >= 1: ${size}`);
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Clave de caché de un lote: sólo depende de las entradas que determinan el
+ * resultado (árbol del paquete, lockfile, archivos del lote). Mismas entradas →
+ * mismo resultado, así que reutilizarlo es seguro; cualquier cambio cambia la clave.
+ */
+export function batchCacheKey(inputs: {
+  packageTree: string;
+  lockfiles: string;
+  files: readonly string[];
+}): string {
+  const canonical = [inputs.packageTree, inputs.lockfiles, ...[...inputs.files].sort()].join('\n');
+  return createHash('sha256').update(canonical).digest('hex');
 }

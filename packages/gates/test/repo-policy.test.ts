@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -8,7 +9,13 @@ import { describe, expect, it } from 'vitest';
 // por la ruta de escritura real (worker.create/run). Insertar infraestructura
 // (workspace) sí está permitido.
 const STATE_TABLES = ['assessment', 'evidence', 'explanation', 'jobStep', 'event'];
-const HELDOUT_DIR = join(__dirname, '../../api/test-heldout');
+// Raíz del repo, no __dirname: Stryker corre estos tests en .stryker-tmp/sandbox-*,
+// donde las rutas relativas al archivo no apuntan al repo.
+const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).trim();
+const PACKAGES_DIR = join(REPO_ROOT, 'packages');
+const HELDOUT_DIR = join(PACKAGES_DIR, 'api', 'test-heldout');
 
 function heldoutFiles(): string[] {
   return readdirSync(HELDOUT_DIR).filter((f) => f.endsWith('.test.ts'));
@@ -39,7 +46,6 @@ describe('repo policy: held-out suite cannot fabricate the state it reads', () =
 // interno es exactamente cómo se esconde el feature isolation. El borde de
 // proceso (red/transporte) se intercepta con MSW o se inyecta; los paquetes
 // externos (p.ej. reagraph) sí se mockean.
-const PACKAGES_DIR = join(__dirname, '../..');
 const INTERNAL_SPEC_PREFIXES = ['.', '@parallax/'];
 
 function tsFiles(dir: string): string[] {

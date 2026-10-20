@@ -3,15 +3,27 @@
   "packageManager": "pnpm",
   "testRunner": "vitest",
   "vitest": {
-    "related": true
+    "related": false
   },
-  "mutate": ["src/**/*.ts", "!src/**/*.test.ts"],
-  "reporters": ["clear-text", "json", "progress"],
-  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "mutate": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts"
+  ],
+  "reporters": [
+    "clear-text",
+    "json",
+    "progress"
+  ],
+  "jsonReporter": {
+    "fileName": "reports/mutation/mutation.json"
+  },
   "coverageAnalysis": "perTest",
-  "thresholds": { "high": 90, "low": 75, "break": 0 },
-  "concurrency": 2,
+  "thresholds": {
+    "high": 90,
+    "low": 75,
+    "break": 0
+  },
+  "concurrency": 1,
   "timeoutMS": 20000,
-  "incremental": true,
-  "incrementalFile": ".stryker-tmp/incremental.json"
+  "incremental": false
 }
