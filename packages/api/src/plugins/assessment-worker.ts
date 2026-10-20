@@ -11,6 +11,13 @@ declare module 'fastify' {
   }
 }
 
+type ExplainFn = (args: {
+  orgId: string;
+  viewId: string;
+  question: string;
+  engineFindings: unknown[];
+}) => Promise<ExplainOutcome>;
+
 // Un solo worker por proceso. Cada organización es un workspace con su propio
 // servidor LAIN, así que el worker resuelve el adaptador por org en vez de
 // usar uno global: analizar contra el adapter global (hoy, mock) producía
@@ -27,13 +34,10 @@ export default fp(
     // failed:no_model_configured y el informe estructural sale igual (P08).
     const nemotronToken = fastify.config.nemotronToken;
     const settings = investigatorSettings(fastify.config);
-    const explain = nemotronToken
-      ? async (args: {
-          orgId: string;
-          viewId: string;
-          question: string;
-          engineFindings: unknown[];
-        }): Promise<ExplainOutcome> => {
+    // El tipo va en la declaración, no en los parámetros: el parser de Stryker
+    // (babel) no acepta `async (args: T): R => …` dentro de un ternario.
+    const explain: ExplainFn | undefined = nemotronToken
+      ? async (args) => {
           const lain = await getLain(args.orgId);
           if (!lain) {
             return {

@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -435,7 +436,12 @@ function fakeEngine(opts: {
   };
 }
 
-const CHECKOUT_ROOT = join(process.cwd(), '..', '..', 'test-repos');
+// Raíz del repo, no cwd: Stryker corre los tests en .stryker-tmp/sandbox-*, y
+// desde ahí `../../test-repos` no existe. Las checkouts son locales (gitignored).
+const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+  encoding: 'utf8',
+}).trim();
+const CHECKOUT_ROOT = join(REPO_ROOT, 'test-repos');
 
 describe('runAdvisor (end-to-end con motor falso)', () => {
   const fixtureRepos = [
