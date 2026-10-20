@@ -476,3 +476,107 @@ describe('confidence bounds on binding', () => {
     expect(GetServiceResponse.safeParse(response(c)).success).toBe(false);
   });
 });
+
+describe('trace_impact from-object', () => {
+  const args = (from: unknown) => ({ snapshot: snap, from });
+
+  it.each([{ endpoint }, { field: { direction: 'request', endpoint } }, { symbol: 'createOrder' }])(
+    'accepts exactly-one-start %j',
+    (from) => {
+      expect(TraceImpactArgs.safeParse(args(from)).success).toBe(true);
+    },
+  );
+
+  it('rejects a from with no endpoint, field or symbol', () => {
+    expect(TraceImpactArgs.safeParse(args({})).success).toBe(false);
+  });
+
+  it('rejects a from whose endpoint is not an object', () => {
+    expect(TraceImpactArgs.safeParse(args({ endpoint: 'orders' })).success).toBe(false);
+  });
+
+  it('rejects a non-string symbol', () => {
+    expect(TraceImpactArgs.safeParse(args({ symbol: 7 })).success).toBe(false);
+  });
+
+  it.each([1, 500])('accepts cap %i', (cap) => {
+    expect(TraceImpactArgs.safeParse({ ...args({ endpoint }), cap }).success).toBe(true);
+  });
+
+  it.each([0, 501])('rejects cap %i', (cap) => {
+    expect(TraceImpactArgs.safeParse({ ...args({ endpoint }), cap }).success).toBe(false);
+  });
+});
+
+describe('response nested fields', () => {
+  it('defaults a use without fields to an empty list', () => {
+    const parsed = GetServiceResponse.parse({
+      service: 'orders',
+      consumers: [
+        {
+          service: 'billing',
+          repo: 'billing',
+          uses: [{ binding: { confidence: 1, kind: 'http' } }],
+        },
+      ],
+      endpoints: [],
+    });
+    expect(parsed.consumers[0]?.uses[0]?.fields).toEqual([]);
+  });
+
+  it('rejects a caller anchor whose line is not an integer', () => {
+    const use = {
+      binding: { confidence: 1, kind: 'http' },
+      caller: { repo: 'billing', path: 'a.ts', line: 'twelve' },
+    };
+    const response = {
+      service: 'orders',
+      consumers: [{ service: 'billing', repo: 'billing', uses: [use] }],
+      endpoints: [],
+    };
+    expect(GetServiceResponse.safeParse(response).success).toBe(false);
+  });
+
+  it('rejects a provenance whose kind is empty', () => {
+    const response = {
+      paths: [
+        {
+          start: 'orders',
+          min_confidence: 0.5,
+          hops: [
+            {
+              edge: 'uses',
+              node: 'billing',
+              node_type: 'service',
+              provenance: { confidence: 0.5, kind: '' },
+            },
+          ],
+        },
+      ],
+    };
+    expect(TraceImpactResponse.safeParse(response).success).toBe(false);
+  });
+
+  it('rejects an empty route on a change', () => {
+    const change = { kind: 'FieldRemoved', route: '' };
+    expect(DiffContractsResponse.safeParse({ changes: [change] }).success).toBe(false);
+  });
+
+  it('rejects a scope whose reviewed list is not an array', () => {
+    const response = {
+      items: [],
+      ambiguous: [],
+      scope: { configured_only: true, reviewed: 'orders' },
+    };
+    expect(ListUnresolvedResponse.safeParse(response).success).toBe(false);
+  });
+
+  it('rejects a non-boolean configured_only in an unresolved scope', () => {
+    const response = {
+      items: [],
+      ambiguous: [],
+      scope: { configured_only: 'yes' },
+    };
+    expect(ListUnresolvedResponse.safeParse(response).success).toBe(false);
+  });
+});
