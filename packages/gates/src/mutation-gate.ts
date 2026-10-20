@@ -165,3 +165,43 @@ export function batchCacheKey(inputs: {
   const canonical = [inputs.packageTree, inputs.lockfiles, ...[...inputs.files].sort()].join('\n');
   return createHash('sha256').update(canonical).digest('hex');
 }
+
+export interface LineRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * Líneas nuevas cambiadas por archivo, a partir de `git diff --unified=0`. Sólo
+ * cuentan las líneas añadidas o modificadas: un hunk que sólo borra (count 0) no
+ * deja líneas que mutar.
+ */
+export function changedLineRanges(diff: string): Map<string, LineRange[]> {
+  const out = new Map<string, LineRange[]>();
+  let current: string | null = null;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('+++ ')) {
+      const path = line.slice(4);
+      current = path === '/dev/null' ? null : path.replace(/^b\//, '');
+      if (current !== null && !out.has(current)) out.set(current, []);
+      continue;
+    }
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line);
+    if (hunk === null || current === null) continue;
+    const start = Number(hunk[1]);
+    const count = hunk[2] === undefined ? 1 : Number(hunk[2]);
+    if (count === 0) continue;
+    out.get(current)?.push({ start, end: start + count - 1 });
+  }
+  return out;
+}
+
+/** Especificación de Stryker para un rango: `archivo:inicio-fin`. */
+export function mutationRangeSpec(file: string, range: LineRange): string {
+  return `${file}:${range.start}-${range.end}`;
+}
+
+/** Archivo de una especificación de rango (quita `:inicio-fin`). */
+export function fileOfSpec(spec: string): string {
+  return spec.slice(0, spec.lastIndexOf(':'));
+}
