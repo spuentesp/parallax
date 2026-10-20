@@ -2,6 +2,20 @@
   "entries": [
     {
       "package": "@parallax/mcp",
+      "file": "src/index.ts",
+      "mutator": "BlockStatement",
+      "description": "{}",
+      "reason": "Wiring del bin (try/catch alrededor de loadEntryConfig + runStdio). El comportamiento queda pinneado por los tests subprocess de test/index.test.ts (exit codes, stderr y handshake stdio); la cobertura de procesos hijos no es visible para stryker."
+    },
+    {
+      "package": "@parallax/mcp",
+      "file": "src/index.ts",
+      "mutator": "CallExpression",
+      "description": ";",
+      "reason": "Wiring del bin (console.error/process.exit del catch). Cubierto por los tests subprocess de test/index.test.ts; la cobertura de procesos hijos no es visible para stryker."
+    },
+    {
+      "package": "@parallax/mcp",
       "file": "src/server.ts",
       "mutator": "BlockStatement",
       "description": "{}",
