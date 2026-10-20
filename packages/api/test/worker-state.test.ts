@@ -77,6 +77,19 @@ describe('canonicalJson', () => {
     expect(canonicalJson({ a: 1, b: 2, c: 3 })).toBe(canonicalJson({ c: 3, b: 2, a: 1 }));
   });
 
+  it('sorts a reversed key set of every size, so each comparator branch decides an order', () => {
+    const keys = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    for (let n = 2; n <= keys.length; n++) {
+      const reversed: Record<string, number> = {};
+      for (const k of keys.slice(0, n).reverse()) reversed[k] = 1;
+      const sorted = keys
+        .slice(0, n)
+        .map((k) => `"${k}":1`)
+        .join(',');
+      expect(canonicalJson(reversed)).toBe(`{${sorted}}`);
+    }
+  });
+
   it('drops keys whose value is undefined', () => {
     expect(canonicalJson({ a: undefined, b: 1 })).toBe('{"b":1}');
   });
