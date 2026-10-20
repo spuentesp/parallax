@@ -22,8 +22,14 @@ import {
 const base = process.env.GATE_BASE ?? 'origin/main';
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
 
+// El diff de un cambio grande (lockfiles incluidos) supera el buffer por defecto
+// de 1 MB de execFileSync: sin maxBuffer el gate revienta con ENOBUFS.
 function git(...args: string[]): string {
-  return execFileSync('git', args, { encoding: 'utf8', cwd: repoRoot }).trim();
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    cwd: repoRoot,
+    maxBuffer: 256 * 1024 * 1024,
+  }).trim();
 }
 
 const allowlistPath = join(repoRoot, 'mutation-allowlist.json');
