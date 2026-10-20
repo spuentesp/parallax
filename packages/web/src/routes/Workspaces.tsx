@@ -99,11 +99,8 @@ function CreateWorkspace({ onCreated }: { onCreated: () => void }): React.ReactE
 
   const addRepo = () => setRepos([...repos, { uri: '', sha: '', local: '' }]);
   const removeRepo = (i: number) => setRepos(repos.filter((_, idx) => idx !== i));
-  const updateRepo = (i: number, field: string, value: string) => {
-    const next = [...repos];
-    (next[i] as Record<string, string>)[field] = value;
-    setRepos(next);
-  };
+  const updateRepo = (i: number, field: string, value: string) =>
+    setRepos(repos.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
 
   const inputCls =
     'w-full px-3 py-2 rounded-lg text-sm bg-bg border border-border focus:outline-none focus:ring-2 focus:ring-accent';
