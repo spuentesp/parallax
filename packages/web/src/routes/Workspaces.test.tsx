@@ -347,6 +347,35 @@ describe('Workspaces create form', () => {
     expect(repoPosts).toEqual([{ uri: './local', sha: 'abc1234', local: '/work/local' }]);
   });
 
+  it('keeps the defaults of a newly added row out of the request', async () => {
+    const repoPosts: unknown[] = [];
+    server.use(
+      http.post('/api/workspaces', () =>
+        HttpResponse.json({ workspace: { ...monorepo, id: 'ws_new' } }),
+      ),
+      http.post('/api/workspaces/:id/repos', async ({ request }) => {
+        repoPosts.push(await request.json());
+        return HttpResponse.json({ repo: {} });
+      }),
+    );
+    renderPage();
+    await screen.findByText(/No workspaces yet/);
+    fireEvent.click(screen.getByRole('button', { name: '+ New Workspace' }));
+    fireEvent.change(screen.getByPlaceholderText('Workspace name (e.g. Saleor)'), {
+      target: { value: 'Saleor' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '+ Add repo' }));
+    fireEvent.click(screen.getByRole('button', { name: '+ Add repo' }));
+    const uris = screen.getAllByPlaceholderText(/github.com\/org\/repo/);
+    fireEvent.change(uris[1] as HTMLElement, {
+      target: { value: 'https://github.com/acme/saleor.git' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Workspace' }));
+
+    await waitFor(() => expect(screen.queryByText('New Workspace', { selector: 'h2' })).toBeNull());
+    expect(repoPosts).toEqual([{ uri: 'https://github.com/acme/saleor.git' }]);
+  });
+
   it('posts a row with only a uri as just that uri, with no empty optional fields', async () => {
     let body: unknown = null;
     const repoPosts: unknown[] = [];
