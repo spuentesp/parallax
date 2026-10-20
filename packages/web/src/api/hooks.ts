@@ -53,6 +53,66 @@ export function useCreateAssessment() {
   });
 }
 
+// ── PRs abiertos y CI automática (lectura del selector, configuración por workspace) ──
+
+export interface OpenPrItem {
+  number: number;
+  url: string;
+  title: string;
+  author: string | null;
+  draft: boolean;
+  baseRef: string;
+  headRef: string;
+  baseSha: string;
+  headSha: string;
+  updatedAt: string;
+  repo: string;
+}
+
+export interface OpenPrsResponse {
+  prs: OpenPrItem[];
+  skipped: Array<{ repo: string; reason: string }>;
+  errors: Array<{ repo: string; code: string; message: string }>;
+  truncated: string[];
+}
+
+export function useOpenPrs(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['open-prs', workspaceId],
+    queryFn: () => client.get<OpenPrsResponse>(`/api/workspaces/${workspaceId}/prs`),
+    enabled: workspaceId != null,
+  });
+}
+
+/** Evalúa un PR abierto: la API resuelve la URL a SHAs (sólo lectura) y crea la evaluación. */
+export function useEvaluatePr() {
+  return useMutation({
+    mutationFn: (args: { prUrl: string; orgId: string }) =>
+      client.post<{ assessment: { id: string }; created: boolean }>('/api/assessments', args),
+  });
+}
+
+export interface WorkspaceCiSettings {
+  mode: 'off' | 'on-open-and-update';
+  baseBranch: string | null;
+  reportComments: boolean;
+}
+
+export function useCiSettings(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['ci-settings', workspaceId],
+    queryFn: () => client.get<WorkspaceCiSettings>(`/api/workspaces/${workspaceId}/ci`),
+    enabled: workspaceId != null,
+  });
+}
+
+export function useSaveCiSettings(workspaceId: string) {
+  return useMutation({
+    mutationFn: (settings: WorkspaceCiSettings) =>
+      client.put<WorkspaceCiSettings>(`/api/workspaces/${workspaceId}/ci`, settings),
+  });
+}
+
 // ── Evaluaciones (§13: el informe persistido) ───────────────────────────────
 
 // El tipo AssessmentRequest viene del contrato compartido

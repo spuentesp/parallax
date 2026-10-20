@@ -50,8 +50,16 @@ export class ApiClient {
   }
 
   async post<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>('POST', path, body);
+  }
+
+  async put<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>('PUT', path, body);
+  }
+
+  private async send<T>(method: 'POST' | 'PUT', path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
+      method,
       headers: this.headers({ 'content-type': 'application/json' }),
       body: JSON.stringify(body),
     });
