@@ -35,7 +35,7 @@ because the patch is not in a release. Re-running the gate on a release that
 includes the patch is the remaining step.
 
 The local [indexing patch](../patches/lain-0.11.0-indexing-performance.patch)
-addresses hot paths observed while profiling that cold run: whole-document
+([engine PR #342](https://github.com/spuentesp/lain/pull/342)) addresses hot paths observed while profiling that cold run: whole-document
 UTF-8 validation during SDL token probes, per-file HTTP query and prefix-regex
 compilation, per-file WebSocket/event idiom compilation, and repeated graph
 copies in field-access analysis. HTTP and event caches live within each scan
