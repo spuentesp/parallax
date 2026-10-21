@@ -6,8 +6,8 @@ import { z } from 'zod';
 // Divergencias motor ↔ docs/query-language.md de lain, verificadas en vivo
 // contra el fixture :9997:
 //   - El argumento se llama `query`, no `spec` (el docs dice `spec`).
-//   - La respuesta trae {count, legacy, meta, nodes, occupancy}: NUNCA trae
-//     `edges` ni `paths`, y omite `nodes` entero cuando count=0.
+//   - 0.9.1 omite edges/paths; 0.11 los devuelve para connect. loose()
+//     conserva ambos campos. El motor omite nodes cuando count=0.
 //   - `meta` no trae `plan` (sólo exec_us y nodes_visited).
 //   - El filtro `id` de find es inerte en este build: hay que dirigir los
 //     nodos por type+name.

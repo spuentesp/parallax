@@ -17,6 +17,10 @@ function rpcResult(result: unknown): Response {
 const CONTRACT_TOOLS = [
   'list_services',
   'get_service',
+  'list_contracts',
+  'get_contract',
+  'list_unresolved',
+  'check_binding',
   'prepare_snapshot',
   'get_snapshot',
   'diff_contracts',
@@ -27,8 +31,17 @@ const CONTRACT_TOOLS = [
 ].map((name) => ({ name }));
 
 function bootMocks(fetchSpy: ReturnType<typeof vi.spyOn>): void {
-  // handshake + load raw/arch/workspace
+  // Discovery, version probe, then optional graph packages.
   fetchSpy.mockResolvedValueOnce(rpcResult({ tools: CONTRACT_TOOLS }));
+  fetchSpy.mockResolvedValueOnce(
+    rpcResult({
+      structuredContent: {
+        analyzer_version: '0.11.0',
+        api_version: 1,
+        data: { items: [], scope: { configured_only: true, reviewed: [], unreviewed: [] } },
+      },
+    }),
+  );
   for (const pkg of ['raw', 'arch', 'workspace']) {
     fetchSpy.mockResolvedValueOnce(
       rpcResult({ content: [{ text: JSON.stringify({ package: pkg, already_loaded: true }) }] }),

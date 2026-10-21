@@ -88,7 +88,11 @@ function _pickRateLimit(headers: Headers): {
 }
 
 export class RealLainAdapter implements LainAdapter {
-  readonly analyzerVersion: string;
+  private version: string;
+
+  get analyzerVersion(): string {
+    return this.version;
+  }
   readonly apiVersion: '1';
 
   private readonly url: string;
@@ -100,7 +104,7 @@ export class RealLainAdapter implements LainAdapter {
   constructor(config: LainClientConfig, analyzerVersion: string) {
     this.url = config.lainUrl;
     this.apiVersion = config.apiVersion;
-    this.analyzerVersion = analyzerVersion;
+    this.version = analyzerVersion;
     this.timeoutMs = config.timeoutMs ?? 30_000;
     this.maxRetries = config.maxRetries ?? 2;
     this.fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
@@ -129,8 +133,8 @@ export class RealLainAdapter implements LainAdapter {
           }),
           signal: ctl.signal,
         });
-        clearTimeout(timer);
         if (res.status === 429) {
+          clearTimeout(timer);
           const retryAfter = res.headers.get('retry-after');
           const delayMs = retryAfter ? Number(retryAfter) * 1000 : 1000 * attempt;
           lastError = LainCallError.parse({
@@ -141,6 +145,7 @@ export class RealLainAdapter implements LainAdapter {
           continue;
         }
         if (res.status === 503 || res.status >= 500) {
+          clearTimeout(timer);
           lastError = LainCallError.parse({
             code: 'LainUnavailable',
             message: `lain returned HTTP ${res.status}`,
@@ -169,6 +174,7 @@ export class RealLainAdapter implements LainAdapter {
             message: 'no result in JSON-RPC response',
           });
         }
+        clearTimeout(timer);
         return envelope;
       } catch (e) {
         clearTimeout(timer);
@@ -223,7 +229,18 @@ export class RealLainAdapter implements LainAdapter {
         message: `lain returned error in envelope: ${JSON.stringify(parsed.error)}`,
       });
     }
-    // Return the `data` field (domain payload) merged with `_meta`.
+    if (parsed.api_version !== undefined && String(parsed.api_version) !== this.apiVersion) {
+      throw LainCallError.parse({
+        code: 'ToolSchemaMismatch',
+        message: `unsupported lain api_version: ${String(parsed.api_version)}`,
+        tool,
+        detail: `expected api_version ${this.apiVersion}`,
+      });
+    }
+    if (typeof parsed.analyzer_version === 'string' && parsed.analyzer_version.length > 0) {
+      this.version = parsed.analyzer_version;
+    }
+    // Return the domain payload; version metadata stays on the adapter.
     const data = parsed.data ?? parsed;
     return data as T;
   }
@@ -388,42 +405,51 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
   const timeoutMs = config.timeoutMs ?? 10_000;
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
-  // Handshake: tools/list to validate apiVersion + analyzerVersion.
+  const adapter = new RealLainAdapter(config, 'unknown');
+
+  // Discover the contract surface, opting in when the server starts with core only.
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const res = await fetchImpl(config.lainUrl, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'tools/list',
-        params: {},
-      }),
-      signal: ctl.signal,
-    });
-    if (!res.ok) {
-      throw LainCallError.parse({
-        code: 'LainUnavailable',
-        message: `lain handshake returned HTTP ${res.status}`,
+    const listTools = async (): Promise<string[]> => {
+      const res = await fetchImpl(config.lainUrl, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'tools/list',
+          params: {},
+        }),
+        signal: ctl.signal,
       });
-    }
-    const body = (await res.json()) as JsonRpcResponse;
-    if (body.error) {
-      throw LainCallError.parse({
-        code: 'LainUnavailable',
-        message: `lain handshake JSON-RPC error: ${body.error.message}`,
-      });
-    }
-    const result = body.result as { tools?: Array<{ name: string }> };
-    const toolNames = (result.tools ?? []).map((t) => t.name);
+      if (!res.ok) {
+        throw LainCallError.parse({
+          code: 'LainUnavailable',
+          message: `lain handshake returned HTTP ${res.status}`,
+        });
+      }
+      const body = (await res.json()) as JsonRpcResponse;
+      if (body.error) {
+        throw LainCallError.parse({
+          code: 'LainUnavailable',
+          message: `lain handshake JSON-RPC error: ${body.error.message}`,
+        });
+      }
+      const result = body.result as { tools?: Array<{ name: string }> };
+      return (result.tools ?? []).map((t) => t.name);
+    };
+    let toolNames = await listTools();
     const expected = [
       'list_services',
       'get_service',
+      'list_contracts',
+      'get_contract',
+      'list_unresolved',
+      'check_binding',
       'prepare_snapshot',
       'get_snapshot',
       'diff_contracts',
@@ -432,13 +458,18 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
       'resolve_evidence',
       'read_source',
     ];
+    if (expected.some((t) => !toolNames.includes(t)) && toolNames.includes('load_package')) {
+      await adapter.loadPackage({ package: 'contracts' });
+      toolNames = await listTools();
+    }
     const missing = expected.filter((t) => !toolNames.includes(t));
-    if (missing.length > 0) {
+    const [firstMissing] = missing;
+    if (firstMissing !== undefined) {
       throw LainCallError.parse({
         code: 'ToolSchemaMismatch',
         message: `lain tools/list is missing: ${missing.join(', ')}`,
-        tool: missing[0] ?? '',
-        detail: `expected 9 contract tools, got ${toolNames.length}`,
+        tool: firstMissing,
+        detail: `expected 13 contract tools, got ${toolNames.length}`,
       });
     }
   } catch (e) {
@@ -459,9 +490,17 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
     clearTimeout(timer);
   }
 
-  // analyzerVersion is populated by the first tools/call response; until then
-  // we expose the version from config or the handshake.
-  const adapter = new RealLainAdapter(config, '0.9.0');
+  // Read the contract envelope before exposing the adapter: assessment digests
+  // must include the actual analyzer version even on the first request.
+  await adapter.listServices({ snapshot: 'live' });
+  if (adapter.analyzerVersion === 'unknown') {
+    throw LainCallError.parse({
+      code: 'ToolSchemaMismatch',
+      message: 'lain list_services is missing analyzer_version',
+      tool: 'list_services',
+      detail: 'assessment identity requires the analyzer version',
+    });
+  }
 
   // query_graph vive en el paquete `raw`, que no viene cargado por defecto.
   // Se opta por él (y por arch/workspace, que aportan las vistas de capas) de

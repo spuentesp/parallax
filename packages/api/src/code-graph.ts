@@ -3,9 +3,9 @@ import type { LainAdapter } from './lain-adapter/types.js';
 
 // Topología de código expandible sobre query_graph (paquete raw de lain).
 //
-// El motor devuelve SÓLO nodos: nunca incluye `edges` en la respuesta (verificado
-// en vivo, lain 0.9.1). Por eso cada nivel se construye con dos familias de
-// consultas, y las relaciones de comunicación se agrupan por TIPO de arista
+// LAIN 0.11 devuelve edges/paths en consultas connect; 0.9.1 sólo devolvía
+// nodos. Cada nivel conserva consultas compatibles con ambos motores, y
+// las relaciones de comunicación se agrupan por TIPO de arista
 // (una consulta por arista) en vez de inventar aristas por par de nodos:
 //
 //   raíz:      find {type: [File, Namespace, Module, Package, HttpRoute, Topic]}
