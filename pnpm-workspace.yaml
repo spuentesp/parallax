@@ -1,5 +1,9 @@
 packages:
   - 'packages/*'
+allowBuilds:
+  canvas: true
+  esbuild: true
+  msw: true
 minimumReleaseAgeExclude:
   - fastify@5.12.7
 # Stryker hace `import('typescript')` sin declararlo (fantasma) y topa con el
