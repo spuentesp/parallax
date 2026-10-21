@@ -1,5 +1,28 @@
 # Notas de integración con LAIN
 
+## Actualización 2026-10-21: release 0.11.0
+
+La release [v0.11.0](https://github.com/spuentesp/lain/releases/tag/v0.11.0)
+implementa `provides_graphql: false`, bindings GraphQL y `edges`/`paths` en
+consultas `query_graph` con `connect`. El fixture de contratos pasa G1
+(26 comprobaciones), G2 (37) y el gate de grafo (21) con ese binario.
+
+Parallax carga `contracts` al conectar a un servidor con perfil core y lee
+`analyzer_version` del envelope antes de calcular el primer digest. Ya no usa
+la versión fija `0.9.0`. Un API incompatible o sin versión del analizador falla
+al conectar, para no certificar una identidad inventada.
+
+Los gates del advisor y de Saleor esperan a que todos los repos estén revisados:
+un listener HTTP activo con un catálogo vacío durante el indexado no prueba
+que no haya consumidores. `pnpm gate:saleor` comprueba la flecha del storefront,
+la supresión de providers del dashboard y el YAML de `check_binding`; requiere
+aplicar la propuesta del advisor a la configuración antes de ejecutarlo.
+
+Las entradas que siguen documentan el comportamiento histórico de 0.9.1.
+Sus restricciones sobre GraphQL y edges/paths ya no describen 0.11.0.
+
+## Registro de 0.9.1
+
 Divergencias verificadas contra el motor real (`lain 0.9.1`, 2026-10-14). Sirven
 para no volver a caer en las mismas y para saber qué depende de un PR de LAIN.
 
