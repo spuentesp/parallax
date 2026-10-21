@@ -24,7 +24,10 @@
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
     "dev:api": "pnpm --filter @parallax/api dev",
     "dev:web": "pnpm --filter @parallax/web dev",
-    "dev:mcp": "pnpm --filter @parallax/mcp dev"
+    "dev:mcp": "pnpm --filter @parallax/mcp dev",
+    "gate:release": "pnpm --filter @parallax/api run gate:release",
+    "gate:saleor": "pnpm --filter @parallax/api run gate:saleor",
+    "gate:graphql": "pnpm --filter @parallax/api run gate:graphql"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",

@@ -13,7 +13,9 @@
 // Si NEBIUS_TOKEN está presente (entorno o .env) se hace además una llamada
 // REAL al modelo; sin ella el gate lo declara y cubre los criterios no-modelo.
 
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { buildApp } from '../src/server.js';
 import { join } from 'node:path';
 import { createLainClient } from '../src/lain-adapter/client.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
@@ -52,7 +54,7 @@ function loadDotEnv(): void {
       const text = readFileSync(candidate, 'utf8');
       for (const line of text.split('\n')) {
         const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-        if (m && m[1] && process.env[m[1]] === undefined) {
+        if (m && m[1] && m[2] !== undefined && process.env[m[1]] === undefined) {
           process.env[m[1]] = m[2].trim();
         }
       }
@@ -315,17 +317,48 @@ async function g3Budget(lain: LainAdapter): Promise<void> {
 async function g3NoModel(lain: LainAdapter): Promise<void> {
   console.log('\n=== G3.5 P08: sin modelo configurado ===');
   const catalog = await lain.listServices({ snapshot: 'live' });
-  check('el catálogo estructural del fixture responde sin modelo', catalog.items.length > 0, catalog.items.map((i) => i.service).join(', '));
-
-  // El investigador no se invoca sin modelo; el estado que el producto
-  // persiste es failed:no_model_configured (ruta /api/query y paso EXPLAINING).
-  // Aquí se comprueba el contrato de estado que ambos escriben.
-  const statusWhenNoModel = 'failed:no_model_configured';
   check(
-    'explanation_status de la ausencia de modelo es un fallo visible',
-    statusWhenNoModel.startsWith('failed:'),
-    statusWhenNoModel,
+    'el catálogo estructural del fixture responde sin modelo',
+    catalog.items.length > 0,
+    catalog.items.map((i) => i.service).join(', '),
   );
+
+  const dir = mkdtempSync(join(tmpdir(), 'parallax-g3-'));
+  const app = await buildApp({
+    port: 0,
+    databasePath: join(dir, 'gate.db'),
+    lainAdapter: 'real',
+    lainUrl: LAIN_URL,
+    mcpTransport: 'http-sse',
+    authTokens: [{ token: 'g3', orgId: 'g3', scopes: ['read'] }],
+    webBundlePath: join(dir, 'web'),
+  });
+  try {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/query',
+      headers: { authorization: 'Bearer g3' },
+      payload: { question: 'What services exist?', orgId: 'g3' },
+    });
+    const result = response.json() as {
+      explanation_status?: string;
+      topology?: { nodes?: unknown[] };
+      model?: string | null;
+    };
+    check('la consulta sin modelo responde por el API real', response.statusCode === 200);
+    check(
+      'explanation_status de la ausencia de modelo es un fallo visible',
+      result.explanation_status === 'failed:no_model_configured' && result.model === null,
+      result.explanation_status,
+    );
+    check(
+      'la consulta conserva la topología estructural real',
+      (result.topology?.nodes?.length ?? 0) > 0,
+    );
+  } finally {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // ── G3.6 modelo real: tool calling end-to-end (si hay token) ─────────────
@@ -350,17 +383,27 @@ async function g3RealModel(lain: LainAdapter, token: string | undefined): Promis
   //    herramienta: §14 exige que la respuesta produzca una llamada válida,
   //    y eso no puede quedar al arbitrio del modelo (flotaba entre corridas).
   const simple = await investigate({
-    question: 'How many services are in this workspace? Use the catalog tool to check.',
+    question: 'How many services are in this workspace? First call list_services with exactly {} as arguments, then interpret the returned catalog.',
     lain,
-    model: nemotron,
+    model: {
+      complete: (messages, options) =>
+        nemotron.complete(messages, {
+          ...options,
+          // Force the catalog on the first round, then ask the real model to
+          // interpret it. Forcing the tool on every round prevents an answer.
+          toolChoice: messages.some((m) => m.role === 'tool' && m.content?.includes('"ok":true'))
+            ? 'none'
+            : { type: 'function', function: { name: 'list_services' } },
+        }),
+    },
+    maxTokens: 1024,
     budget: { maxToolCalls: 4, maxModelMs: 90_000 },
-    toolChoice: { type: 'function', function: { name: 'list_services' } },
   });
   const okToolCalls = simple.toolCallLog.filter((t) => t.ok);
   check(
     'el modelo real produce tool_calls válidos',
     okToolCalls.length >= 1,
-    okToolCalls.map((t) => `${t.tool}(${t.ok ? 'ok' : t.code})`).join(', ') || 'ninguna',
+    simple.toolCallLog.map((t) => `${t.tool}(${t.ok ? 'ok' : t.code}; args=${t.args})`).join(', ') || 'ninguna',
   );
   check(
     'el modelo interpreta el resultado role=tool (segunda vuelta o respuesta final)',

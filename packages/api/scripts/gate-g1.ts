@@ -9,7 +9,8 @@
 //   LAIN_URL=http://localhost:9997/mcp pnpm --filter @parallax/api exec tsx scripts/gate-g1.ts
 
 import { presentCoverage, type LainCoverage } from '../src/coverage.js';
-import { createLainClient, type LainAdapter } from '../src/lain-adapter/client.js';
+import { createLainClient } from '../src/lain-adapter/client.js';
+import type { LainAdapter } from '../src/lain-adapter/types.js';
 
 const LAIN_URL = process.env.LAIN_URL ?? 'http://localhost:9997/mcp';
 

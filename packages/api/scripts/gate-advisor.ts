@@ -13,6 +13,7 @@
 //   LAIN_URL=http://localhost:9999/mcp pnpm --filter @parallax/api exec tsx scripts/gate-advisor.ts
 
 import { join } from 'node:path';
+import { waitForIndexedRepos } from './lain-readiness.js';
 import { createLainClient } from '../src/lain-adapter/client.js';
 import { runAdvisor, type AdvisorReport } from '../src/advisor/index.js';
 
@@ -53,6 +54,7 @@ async function main(): Promise<void> {
   const engine = await createLainClient({ lainUrl: LAIN_URL, apiVersion: '1', timeoutMs: 120_000 });
   console.log(`handshake OK (analyzerVersion=${engine.analyzerVersion})`);
 
+  await waitForIndexedRepos(engine, REPOS.map((r) => r.id));
   const report = await runAdvisor(engine, [...REPOS], 'live');
 
   console.log('\n=== A.1 señales del §4 en los checkouts (sin respetar .gitignore) ===');

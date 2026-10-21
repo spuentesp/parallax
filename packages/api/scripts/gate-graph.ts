@@ -14,7 +14,8 @@ import {
   COMM_EDGE_TYPES,
   ROOT_NODE_TYPES,
 } from '../src/code-graph.js';
-import { createLainClient, type LainAdapter } from '../src/lain-adapter/client.js';
+import { createLainClient } from '../src/lain-adapter/client.js';
+import type { LainAdapter } from '../src/lain-adapter/types.js';
 
 const LAIN_URL = process.env.LAIN_URL ?? 'http://localhost:9997/mcp';
 
@@ -46,6 +47,25 @@ async function gRaw(lain: LainAdapter): Promise<void> {
   });
   check('query_graph responde', res.count >= 0, `count=${res.count}`);
   check('query_graph normaliza nodes ausente a []', Array.isArray(res.nodes));
+  const connected = await lain.queryGraph({
+    query: {
+      ops: [
+        { op: 'find', type: 'File', name: 'main.rs' },
+        { op: 'connect', edge: 'Contains', direction: 'outgoing', depth: 1 },
+      ],
+    },
+    repo_id: 'orders',
+  });
+  check(
+    'query_graph connect devuelve las aristas reales de 0.11',
+    Array.isArray(connected.edges) && connected.edges.length > 0,
+  );
+  check(
+    'query_graph connect devuelve los caminos reales de 0.11',
+    Array.isArray(connected.paths) &&
+      connected.paths.length === connected.nodes.length &&
+      connected.nodes.length > 0,
+  );
 }
 
 async function gRoot(lain: LainAdapter): Promise<void> {

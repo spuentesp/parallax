@@ -188,8 +188,8 @@ async function main(): Promise<void> {
     JSON.stringify(report.coverage?.scope?.reviewed ?? null),
   );
   check(
-    'la explicación queda skipped (el modelo es G3)',
-    report.explanation.status === 'skipped',
+    'sin modelo, la explicación registra el fallo visible (P08)',
+    report.explanation.status === 'failed:no_model_configured',
     report.explanation.status,
   );
   // Reproducibilidad: mismo manifiesto → misma identidad, sin re-ejecución.
@@ -222,7 +222,7 @@ async function main(): Promise<void> {
   sqlite2.pragma('journal_mode = WAL');
   sqlite2.pragma('foreign_keys = ON');
   const db2 = drizzle(sqlite2, { schema });
-  const worker2 = new AssessmentWorker(db2, { lain: await createLainClient({ lainUrl: LAIN_URL, apiVersion: '1', timeoutMs: 60_000 }) });
+  const worker2 = new AssessmentWorker(db2, { getLain: async () => createLainClient({ lainUrl: LAIN_URL, apiVersion: '1', timeoutMs: 60_000 }) });
   const survived = await worker2.get(id);
   check('el informe sigue legible tras el reinicio', survived != null);
   check(
