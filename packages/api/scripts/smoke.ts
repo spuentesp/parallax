@@ -24,14 +24,14 @@ async function main() {
   }
 
   // 1. /health
-  const h = await fetch(`${base}/health`);
-  if (!h.ok) throw new Error(`/health returned ${h.status}`);
+  const h = await fetch(`${base}/api/health`);
+  if (!h.ok) throw new Error(`/api/health returned ${h.status}`);
   const hb = (await h.json()) as Record<string, unknown>;
-  if (hb.status !== 'ok') throw new Error(`/health status is ${hb.status}`);
-  console.log('✓ /health');
+  if (hb.status !== 'ok') throw new Error(`/api/health status is ${hb.status}`);
+  console.log('✓ /api/health');
 
   // 2. /orgs with bearer
-  const o = await fetch(`${base}/orgs`, {
+  const o = await fetch(`${base}/api/orgs`, {
     headers: { authorization: `Bearer ${token}` },
   });
   if (!o.ok) throw new Error(`/orgs returned ${o.status}`);

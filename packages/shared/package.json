@@ -9,7 +9,8 @@
     ".": "./src/index.ts",
     "./lain": "./src/lain/index.ts",
     "./domain": "./src/domain/index.ts",
-    "./test/lain-fixtures": "./test/lain-fixtures.ts"
+    "./test/lain-fixtures": "./test/lain-fixtures.ts",
+    "./test/prop-arbitraries": "./test/prop/arbitraries.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -20,6 +21,10 @@
     "zod": "4.6.7"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/vitest-runner": "10.0.0",
+    "@types/node": "24.19.2",
+    "fast-check": "4.10.2",
     "typescript": "7.0.2",
     "vitest": "5.0.4"
   }

@@ -1,16 +1,34 @@
 import type * as React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
+import { OrgSwitcher } from './OrgSwitcher.js';
 import { ThemeToggle } from './Theme.js';
 
-const NAV_ITEMS = [
-  { to: '/workspaces', label: 'Workspaces', icon: '⬡' },
-  { to: '/orgs', label: 'Organizations', icon: '⬡' },
-  { to: '/assessments', label: 'Assessments', icon: '◉' },
-  { to: '/proposals', label: 'Proposals', icon: '◈' },
-];
+export const NAV_ITEMS = [
+  { to: '/orgs', label: 'Topología', icon: '⬡' },
+  { to: '/assessments', label: 'Evaluaciones', icon: '◉' },
+  { to: '/workspaces', label: 'Workspaces', icon: '◈' },
+] as const;
 
 export function AppShell(): React.ReactElement {
   const location = useLocation();
+  const { orgId } = useParams();
+  const targetFor = (base: string): string => {
+    if (base === '/orgs' && orgId) return `/orgs/${orgId}`;
+    if (base === '/assessments' && orgId) return `/orgs/${orgId}/assessments`;
+    return base;
+  };
+  const isActive = (base: string): boolean => {
+    if (base === '/orgs') {
+      // El hub (y su panel) es Topología; las páginas de assessment no.
+      return (
+        orgId != null &&
+        (location.pathname === `/orgs/${orgId}` ||
+          location.pathname.startsWith(`/orgs/${orgId}/services`))
+      );
+    }
+    return location.pathname.startsWith(targetFor(base));
+  };
+
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -38,13 +56,17 @@ export function AppShell(): React.ReactElement {
           </div>
         </div>
 
+        <div className="px-3">
+          <OrgSwitcher />
+        </div>
+
         <nav className="flex-1 px-3">
-          {NAV_ITEMS.map((item) => {
-            const active = location.pathname.startsWith(item.to);
+          {NAV_ITEMS.filter((item) => item.to !== '/assessments' || orgId != null).map((item) => {
+            const active = isActive(item.to);
             return (
               <Link
                 key={item.to}
-                to={item.to}
+                to={targetFor(item.to)}
                 className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors"
                 style={{
                   background: active ? 'var(--color-accent, #3b82f6)' : 'transparent',

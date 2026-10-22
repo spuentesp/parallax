@@ -15,14 +15,18 @@ import {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  TraceImpactArgs,
   TraceImpactResponse,
 } from '../src/lain/tools.js';
 
 describe('lain tool schemas', () => {
-  it('ListServices: accepts a view and an optional repo filter', () => {
-    expect(() => ListServicesArgs.parse({ view: 'live' })).not.toThrow();
-    expect(() => ListServicesArgs.parse({ view: 'live', repo: 'orders' })).not.toThrow();
+  it('ListServices: requires snapshot, accepts repo/cursor/limit, rejects view', () => {
+    expect(() => ListServicesArgs.parse({ snapshot: 'live' })).not.toThrow();
+    expect(() => ListServicesArgs.parse({ snapshot: 'snap_0123456789abcdef' })).not.toThrow();
+    expect(() => ListServicesArgs.parse({ snapshot: 'live', repo: 'orders' })).not.toThrow();
     expect(() => ListServicesArgs.parse({})).toThrow();
+    expect(() => ListServicesArgs.parse({ view: 'live' })).toThrow();
+    expect(() => ListServicesArgs.parse({ snapshot: 'live', nope: true })).toThrow();
   });
 
   it('ListServicesResponse: parses items with service and repo', () => {
@@ -58,32 +62,50 @@ describe('lain tool schemas', () => {
     expect(r.scope.reviewed).toHaveLength(2);
   });
 
-  it('GetService: requires service and view; consumers[] is a list of uses', () => {
-    const r = GetServiceArgs.parse({ view: 'live', service: 'orders' });
+  it('GetService: requires snapshot + service; consumers[] lists uses per consumer', () => {
+    const r = GetServiceArgs.parse({ snapshot: 'live', service: 'orders' });
     expect(r.service).toBe('orders');
+    expect(() => GetServiceArgs.parse({ snapshot: 'live' })).toThrow();
 
     const resp = GetServiceResponse.parse({
-      view: 'live',
-      service: { id: 'orders', name: 'orders' },
+      service: 'orders',
       consumers: [
         {
-          consumer: 'billing',
-          uses: [{ field: 'customer_id', binding: 'confirmed', source: 'http' }],
+          service: 'billing',
+          repo: 'billing',
+          uses: [
+            {
+              binding: { confidence: 1, kind: 'static', source: 'Regex' },
+              endpoint: { key: 'graphql:query:orders', service: 'orders' },
+              fields: ['customer_id'],
+              match: 'exact',
+            },
+          ],
         },
       ],
-      usedByTruncated: false,
+      endpoints: ['graphql:query:orders'],
     });
-    expect(resp.consumers[0]?.uses[0]?.field).toBe('customer_id');
+    expect(resp.consumers[0]?.service).toBe('billing');
+    expect(resp.consumers[0]?.uses[0]?.endpoint?.key).toBe('graphql:query:orders');
   });
 
-  it('PrepareSnapshot: requires repos map and returns a snapshot id', () => {
+  it('PrepareSnapshot: repos/exclude/from/max_base_age_s/configHash, none required', () => {
+    expect(() => PrepareSnapshotArgs.parse({})).not.toThrow();
+    expect(() =>
+      PrepareSnapshotArgs.parse({
+        repos: { orders: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf' },
+        exclude: ['reports'],
+        max_base_age_s: 3600,
+        configHash: 'ch_1',
+      }),
+    ).not.toThrow();
+    expect(() => PrepareSnapshotArgs.parse({ from: 'live' })).toThrow();
     const r = PrepareSnapshotResponse.parse({
       snapshot: 'snap_abc',
       state: 'pending',
-      manifestDigest: 'd_1',
+      created_unix: 1791952849,
     });
     expect(r.snapshot).toBe('snap_abc');
-    void PrepareSnapshotArgs;
   });
 
   it('GetSnapshot: status pending|ready|failed', () => {
@@ -93,62 +115,114 @@ describe('lain tool schemas', () => {
     expect(() => GetSnapshotResponse.parse({ snapshot: 's1', status: 'oops' })).toThrow();
   });
 
-  it('DiffContracts: requires base and head snapshot ids and returns changes[]', () => {
+  it('DiffContracts: base/head must be snap_ ids; returns changes[]', () => {
+    const args = DiffContractsArgs.parse({ base: 'snap_deadbeef', head: 'snap_cafebabe' });
+    expect(args.base).toBe('snap_deadbeef');
+    expect(() => DiffContractsArgs.parse({ base: 'live', head: 'snap_cafebabe' })).toThrow();
+    expect(() => DiffContractsArgs.parse({ base: 'snap_deadbeef' })).toThrow();
+
     const r = DiffContractsResponse.parse({
-      base: 'snap_b',
-      head: 'snap_h',
       changes: [{ kind: 'FieldRemoved', service: 'orders', field: 'customer_id' }],
-      truncated: false,
-      cap: 1000,
+      compatible_changes: 0,
     });
     expect(r.changes).toHaveLength(1);
-    void DiffContractsArgs;
+    expect(r.compatible_changes).toBe(0);
   });
 
-  it('TraceImpact: returns findings with classification and consumers', () => {
+  it('TraceImpact: from needs one of endpoint/field/symbol; returns impact paths', () => {
+    expect(() =>
+      TraceImpactArgs.parse({
+        snapshot: 'live',
+        from: { endpoint: { key: 'http:GET /api/orders/me', service: 'orders' } },
+      }),
+    ).not.toThrow();
+    expect(() => TraceImpactArgs.parse({ snapshot: 'live', from: {} })).toThrow();
+    expect(() => TraceImpactArgs.parse({ snapshot: 'live' })).toThrow();
+
     const r = TraceImpactResponse.parse({
-      snapshot: 'snap_head_s1',
-      findings: [
+      paths: [
         {
-          id: 'f1',
-          change: { kind: 'FieldRemoved', service: 'orders', field: 'customer_id' },
-          classification: 'Verified',
-          consumers: [{ consumer: 'billing', field: 'customer_id' }],
+          start: 'orders:Field:openapi.yaml:customer_id:27',
+          min_confidence: 1,
+          hops: [
+            {
+              edge: 'Calls',
+              node: 'billing:Function:src/main.py:fetch_me:35',
+              node_type: 'Function',
+            },
+          ],
         },
       ],
-    });
-    expect(r.findings[0]?.classification).toBe('Verified');
-  });
-
-  it('GetCoverage: returns reviewed, omitted, truncated', () => {
-    const r = GetCoverageResponse.parse({
-      reviewed: ['orders', 'billing'],
-      omitted: [{ repo: 'reports', cause: 'excluded-by-scope' }],
-      truncated: [],
-    });
-    expect(r.reviewed).toContain('orders');
-    expect(r.omitted).toHaveLength(1);
-    void GetCoverageArgs;
-  });
-
-  it('ResolveEvidence: returns a resolvable evidence record', () => {
-    const r = ResolveEvidenceResponse.parse({
-      repo: 'orders',
-      sha: 'b5bf29a',
-      path: 'src/main.rs',
-      range: { start: 1, end: 10 },
-    });
-    expect(r.sha).toBe('b5bf29a');
-    void ResolveEvidenceArgs;
-  });
-
-  it('ReadSource: returns text + cap + truncated', () => {
-    const r = ReadSourceResponse.parse({
-      text: 'fn main() {}',
-      cap: 2000,
       truncated: false,
     });
+    expect(r.paths[0]?.start).toContain('customer_id');
+    expect(r.paths[0]?.hops[0]?.node_type).toBe('Function');
+  });
+
+  it('GetCoverage: complete flag plus the scope the view saw', () => {
+    expect(() => GetCoverageArgs.parse({ snapshot: 'live' })).not.toThrow();
+    expect(() =>
+      GetCoverageArgs.parse({ snapshot: 'live', endpoint: { key: 'http:GET /x', service: 's' } }),
+    ).not.toThrow();
+    expect(() => GetCoverageArgs.parse({})).toThrow();
+
+    const r = GetCoverageResponse.parse({
+      complete: false,
+      scope: {
+        configured_only: true,
+        reviewed: [{ repo: 'orders', commit: 'b5bf29a', dirty: false }],
+        unreviewed: ['reports'],
+      },
+    });
+    expect(r.complete).toBe(false);
+    expect(r.scope?.unreviewed).toContain('reports');
+  });
+
+  it('ResolveEvidence: refs[] required, items report exists/snippet/reason', () => {
+    const args = ResolveEvidenceArgs.parse({
+      snapshot: 'live',
+      refs: ['orders@b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf:src/main.rs:12'],
+    });
+    expect(args.refs).toHaveLength(1);
+    expect(() => ResolveEvidenceArgs.parse({ snapshot: 'live' })).toThrow();
+    expect(() => ResolveEvidenceArgs.parse({ snapshot: 'live', refs: [] })).toThrow();
+
+    const r = ResolveEvidenceResponse.parse({
+      items: [
+        {
+          exists: true,
+          ref: 'orders@b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf:src/main.rs:12',
+          snippet: 'fn main() {}',
+        },
+        { exists: false, ref: 'bogus', reason: 'malformed' },
+      ],
+    });
+    expect(r.items[0]?.exists).toBe(true);
+    expect(r.items[1]?.reason).toBe('malformed');
+  });
+
+  it('ReadSource: snapshot/repo/path/start/end in, text + range metadata out', () => {
+    const args = ReadSourceArgs.parse({
+      snapshot: 'live',
+      repo: 'orders',
+      path: 'src/main.rs',
+      start: 1,
+      end: 10,
+    });
+    expect(args.start).toBe(1);
+    expect(() =>
+      ReadSourceArgs.parse({ snapshot: 'live', repo: 'orders', path: 'src/main.rs' }),
+    ).toThrow();
+
+    const r = ReadSourceResponse.parse({
+      text: 'fn main() {}',
+      path: 'src/main.rs',
+      start: 1,
+      end: 10,
+      commit: 'b5bf29ad1d5d6b84ef9655ee7a035a4a5c8523cf',
+      total_lines: 42,
+    });
     expect(r.text).toContain('fn main');
-    void ReadSourceArgs;
+    expect(r.total_lines).toBe(42);
   });
 });

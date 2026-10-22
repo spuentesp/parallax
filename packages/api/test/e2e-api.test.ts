@@ -118,14 +118,16 @@ describe('E2E API', () => {
 
   // ── Assessments ────────────────────────────────────────────────
   describe('assessments', () => {
-    it('create returns 501', async () => {
+    it('publication is refused: dry run never touches GitHub', async () => {
       const r = await app.inject({
         method: 'POST',
-        url: '/api/assessments',
+        url: '/api/publications',
         headers: auth,
-        payload: { prUrl: 'https://github.com/org/repo/pull/1', orgId: 'org_demo' },
+        payload: { assessmentId: 'a_1', target: 'github:saleor/saleor#1' },
       });
       expect(r.statusCode).toBe(501);
+      expect(r.json().code).toBe('NotImplemented');
+      expect(r.body).toMatch(/dry run/i);
     });
     it('invalid body returns 400', async () => {
       const r = await app.inject({
@@ -136,23 +138,23 @@ describe('E2E API', () => {
       });
       expect(r.statusCode).toBe(400);
     });
-    it('get returns 501', async () => {
+    it('get returns 404 for unknown id', async () => {
       const r = await app.inject({ method: 'GET', url: '/api/assessments/a_1', headers: auth });
-      expect(r.statusCode).toBe(501);
+      expect(r.statusCode).toBe(404);
     });
-    it('events returns 501', async () => {
+    it('events returns 404 for unknown id', async () => {
       const r = await app.inject({
         method: 'GET',
         url: '/api/assessments/a_1/events',
         headers: auth,
       });
-      expect(r.statusCode).toBe(501);
+      expect(r.statusCode).toBe(404);
     });
   });
 
   // ── Query Agent ────────────────────────────────────────────────
   describe('query agent', () => {
-    it('returns fallback without Nemotron', async () => {
+    it('P08: structural topology stays available and the explanation failure is visible', async () => {
       const r = await app.inject({
         method: 'POST',
         url: '/api/query',
@@ -161,8 +163,12 @@ describe('E2E API', () => {
       });
       expect(r.statusCode).toBe(200);
       const body = r.json();
-      expect(body.answer).toBeTruthy();
-      expect(body.topology).toBeDefined();
+      // El análisis estructural (mock LAIN) sigue accesible sin modelo.
+      expect(body.topology.nodes.length).toBeGreaterThan(0);
+      // La falta de modelo es un fallo VISIBLE, no un silencio (P08).
+      expect(body.explanation_status).toBe('failed:no_model_configured');
+      expect(body.model).toBeNull();
+      expect(body.answer).toContain('Nemotron');
     });
     it('validates body', async () => {
       const r = await app.inject({ method: 'POST', url: '/api/query', headers: auth, payload: {} });

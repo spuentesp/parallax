@@ -1,0 +1,514 @@
+{
+  "list_services": {
+    "description": "Every service in the federation with its repo, paths, endpoint count and consumer counts. Works on `live` and named snapshots (\u00a712).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `list_services`. On `live` only \u2014 PR 16 scope; PR 11/13 will route the value through the snapshot manager.",
+      "properties": {
+        "cursor": {
+          "description": "Opaque paging cursor (base64url of `{v:1, after, q}`). Reused with different args \u2192 `cursor_mismatch`.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Max items returned (default 100, max 1000).",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repo": {
+          "description": "Optional: pin the listing to one repo (every listed service must live there)",
+          "type": "string"
+        },
+        "snapshot": {
+          "description": "Snapshot id (`live` for the in-process view; PR 11 surfaces named snapshots)",
+          "enum": [
+            "live"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "title": "list_services input",
+      "type": "object"
+    }
+  },
+  "get_service": {
+    "description": "Consumers of one service: endpoints, calling code, fields used, and the `used_by` walk that explains why each caller runs (\u00a710.9).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `get_service`. Live only \u2014 PR 11/13 surfaces named snapshots.",
+      "properties": {
+        "cursor": {
+          "description": "Opaque paging cursor.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "Max depth for the `used_by` walk (\u00a710.9). Default 4, max 8.",
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "limit": {
+          "description": "Max consumer-service rows (default 100, max 1000).",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "service": {
+          "description": "Service name (`^[a-z0-9][a-z0-9_-]*$`).",
+          "type": "string"
+        },
+        "snapshot": {
+          "enum": [
+            "live"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "service"
+      ],
+      "title": "get_service input",
+      "type": "object"
+    }
+  },
+  "prepare_snapshot": {
+    "description": "Pin every repo to a commit, index once, reuse the result. Same inputs after ref resolution produce the same id (\u00a78.4); `from` derives a snapshot from an existing base (\u00a711).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `prepare_snapshot`. Same inputs after ref resolution produce the same snapshot id (\u00a78.4) \u2014 `prepare_snapshot` is idempotent.",
+      "properties": {
+        "exclude": {
+          "description": "Repos to exclude from the snapshot (\u00a78.4).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from": {
+          "description": "Snapshot id to derive from (\u00a711). Derived snapshots inherit `join_config` and the un-overridden commits; they do NOT inherit failure. Mutually exclusive with `max_base_age_s`.",
+          "type": "string"
+        },
+        "max_base_age_s": {
+          "description": "Reuse the newest `ready` record younger than this age for any repo not in `repos`. Only valid without `from` (\u00a711).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repos": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "`repo -> ref | sha` map. Refs resolved against the federation's mirror; shas passed through unchanged.",
+          "type": "object"
+        },
+        "wait_ms": {
+          "description": "Maximum time to wait for `ready`/`failed`. Defaults to 5,000 ms; capped at 60,000 ms (\u00a710.5).",
+          "maximum": 60000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "title": "prepare_snapshot input",
+      "type": "object"
+    }
+  },
+  "get_snapshot": {
+    "description": "Read a snapshot's current state. The `snapshot` argument is required; same shape as `prepare_snapshot` returns. On `live` returns a readiness-shaped answer (\u00a78.7).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `get_snapshot`. Reads the on-disk record and refreshes `last_access_unix` per \u00a78.4.",
+      "properties": {
+        "snapshot": {
+          "description": "Snapshot id (`snap_` + 16 hex). Same shape as `prepare_snapshot` returns.",
+          "type": "string"
+        },
+        "wait_ms": {
+          "description": "Maximum time to wait for a non-terminal state. Defaults to 5,000 ms; capped at 60,000 ms (\u00a710.5).",
+          "maximum": 60000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "title": "get_snapshot input",
+      "type": "object"
+    }
+  },
+  "list_contracts": {
+    "description": "Endpoints the federation exposes, filterable by service, repo, and kind (http/topic).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `list_contracts`. Filters endpoints by service, repo, and kind; supports paging via `cursor`/`limit`.",
+      "properties": {
+        "cursor": {
+          "description": "Opaque paging cursor.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Filter by contract kind. Unknown values are rejected with `invalid_argument` rather than returning an empty page.",
+          "enum": [
+            "http",
+            "topic",
+            "rpc",
+            "graphql",
+            "websocket",
+            "table"
+          ],
+          "type": "string"
+        },
+        "limit": {
+          "description": "Max items per page (default 100, max 1000).",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repo": {
+          "description": "Filter by repo id.",
+          "type": "string"
+        },
+        "service": {
+          "description": "Filter by service name.",
+          "type": "string"
+        },
+        "snapshot": {
+          "description": "Snapshot id (`snap_<hex>`) or `live`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "title": "list_contracts input",
+      "type": "object"
+    }
+  },
+  "get_contract": {
+    "description": "Providers, schema fields, and bound consumers for one endpoint (\u00a712).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `get_contract`. Returns providers, schema fields and bound consumers for one endpoint.",
+      "properties": {
+        "key": {
+          "description": "Contract key (`http:<METHOD> <template>` or `topic:<broker>/<name>`).",
+          "type": "string"
+        },
+        "service": {
+          "description": "Optional service filter; without it every service providing `key` is returned.",
+          "type": "string"
+        },
+        "snapshot": {
+          "description": "Snapshot id (`snap_<hex>`) or `live`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "key"
+      ],
+      "title": "get_contract input",
+      "type": "object"
+    }
+  },
+  "list_unresolved": {
+    "description": "Every ambiguous and unresolved consumer with the candidate endpoints that could match (\u00a79.7).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `list_unresolved`. Lists every ambiguous and unresolved consumer with the candidate endpoints that could match it.",
+      "properties": {
+        "cursor": {
+          "type": "string"
+        },
+        "limit": {
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        },
+        "snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "title": "list_unresolved input",
+      "type": "object"
+    }
+  },
+  "check_binding": {
+    "description": "Validate a proposed consumer\u2192endpoint link and emit the YAML for `repos.yaml#bindings` (\u00a712). Pure; creates nothing.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `check_binding`. Validates a proposed consumer\u2192endpoint link and emits its `bindings_entry` YAML for `repos.yaml`.",
+      "properties": {
+        "consumer": {
+          "description": "Consumer GlobalId.",
+          "type": "string"
+        },
+        "endpoint": {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "service": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "service",
+            "key"
+          ],
+          "type": "object"
+        },
+        "snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "consumer",
+        "endpoint"
+      ],
+      "title": "check_binding input",
+      "type": "object"
+    }
+  },
+  "diff_contracts": {
+    "description": "Provider and consumer changes between two snapshots, classified, with impact paths and coverage (\u00a712). `live` is not allowed as base/head.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `diff_contracts`. Both `base` and `head` must be `ready` snapshots; `live` is not allowed.",
+      "properties": {
+        "base": {
+          "description": "Snapshot id (`snap_<hex>`); must be `ready`.",
+          "type": "string"
+        },
+        "cap": {
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "head": {
+          "description": "Snapshot id (`snap_<hex>`); must be `ready`. `live` is invalid (`invalid_argument`, `live_not_supported`).",
+          "type": "string"
+        },
+        "min_impact": {
+          "enum": [
+            "NoKnownImpact",
+            "NeedsInvestigation",
+            "Verified"
+          ],
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "base",
+        "head"
+      ],
+      "title": "diff_contracts input",
+      "type": "object"
+    }
+  },
+  "trace_impact": {
+    "description": "Impact paths from an endpoint, field, or symbol (\u00a75.2 + \u00a712). Exactly one of endpoint/field/symbol is required.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `trace_impact`. Exactly one of endpoint/field/symbol is required.",
+      "properties": {
+        "cap": {
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "depth": {
+          "maximum": 12,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "from": {
+          "description": "Exactly one of `endpoint`, `field`, `symbol` must be set.",
+          "properties": {
+            "endpoint": {
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "service": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "field": {
+              "properties": {
+                "direction": {
+                  "enum": [
+                    "request",
+                    "response",
+                    "payload"
+                  ],
+                  "type": "string"
+                },
+                "endpoint": {
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "service": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "json_path": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "min_confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "from"
+      ],
+      "title": "trace_impact input",
+      "type": "object"
+    }
+  },
+  "get_coverage": {
+    "description": "What the view saw and what it could not resolve (\u00a79.7). With an `endpoint`, `complete` reflects the could-match gate.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `get_coverage`.",
+      "properties": {
+        "endpoint": {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "service": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot"
+      ],
+      "title": "get_coverage input",
+      "type": "object"
+    }
+  },
+  "resolve_evidence": {
+    "description": "Check refs exist at their commit; return context. Bad refs are `exists: false` with a reason, never an error (\u00a712).",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `resolve_evidence`.`refs` accepts GlobalIds or EvidenceRef texts (`<repo>@<sha>:<path>:<line>`).",
+      "properties": {
+        "context_lines": {
+          "maximum": 20,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 200,
+          "type": "array"
+        },
+        "snapshot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "snapshot",
+        "refs"
+      ],
+      "title": "resolve_evidence input",
+      "type": "object"
+    }
+  },
+  "read_source": {
+    "description": "A bounded line range of a file at a view's commit (\u00a710.7). Refuses secrets and binaries; reads snapshot content from the mirror's git2 blob.",
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "description": "Input for `read_source`. Reads a bounded line range from a file the view's index walked. The \u00a710.7 safety rules apply.",
+      "properties": {
+        "end": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "snapshot": {
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "snapshot",
+        "repo",
+        "path",
+        "start",
+        "end"
+      ],
+      "title": "read_source input",
+      "type": "object"
+    }
+  }
+}

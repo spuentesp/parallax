@@ -14,11 +14,51 @@ const AppConfigSchema = z.object({
   mcpTransport: z.enum(['stdio', 'http-sse']).default('stdio'),
   authTokens: z.array(AuthToken).min(1),
   nemotronToken: z.string().optional(),
+  // Endpoint y modelos del investigador (§14): configurables porque el modelo
+  // efectivo es una condición experimental, no una constante del código. Los
+  // defaults viven en investigatorSettings() para no romper AppConfig en tests.
+  nemotronBaseUrl: z.string().url().optional(),
+  nemotronPlannerModel: z.string().min(1).optional(),
+  nemotronWorkerModel: z.string().min(1).optional(),
+  // Presupuesto de investigación (§6): ocho llamadas y 120 s de modelo por
+  // consulta, medidos y reportados en la demo.
+  investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
+  investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
   webBundlePath: z.string().default('./packages/web/dist'),
+  // Lectura de PRs de GitHub (selector y auto CI). Sólo GET: el token de escritura
+  // (estado y comentarios) es otra credencial, que nunca usa el lector.
+  githubReadToken: z.string().min(1).optional(),
+  // Base de la API de GitHub: configurable para que los tests apunten a un stand-in local.
+  githubApiBase: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type AuthToken = z.infer<typeof AuthToken>;
+
+// §6: valores iniciales del presupuesto y §14: endpoint/modelos configurables.
+export const INVESTIGATOR_DEFAULTS = {
+  nemotronBaseUrl: 'https://api.tokenfactory.nebius.com/v1',
+  nemotronPlannerModel: 'nvidia/nemotron-3-super-120b-a12b',
+  nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
+  investigatorMaxToolCalls: 8,
+  investigatorMaxModelMs: 120_000,
+} as const;
+
+export function investigatorSettings(cfg: AppConfig): {
+  baseUrl: string;
+  plannerModel: string;
+  workerModel: string;
+  maxToolCalls: number;
+  maxModelMs: number;
+} {
+  return {
+    baseUrl: cfg.nemotronBaseUrl ?? INVESTIGATOR_DEFAULTS.nemotronBaseUrl,
+    plannerModel: cfg.nemotronPlannerModel ?? INVESTIGATOR_DEFAULTS.nemotronPlannerModel,
+    workerModel: cfg.nemotronWorkerModel ?? INVESTIGATOR_DEFAULTS.nemotronWorkerModel,
+    maxToolCalls: cfg.investigatorMaxToolCalls ?? INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
+    maxModelMs: cfg.investigatorMaxModelMs ?? INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
+  };
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const tokensRaw = env.PARALLAX_TOKENS;
@@ -40,7 +80,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpTransport: env.PARALLAX_MCP_TRANSPORT,
     authTokens,
     nemotronToken: env.NEMOTRON_TOKEN ?? env.NEBIUS_TOKEN,
+    nemotronBaseUrl: env.NEMOTRON_BASE_URL,
+    nemotronPlannerModel: env.NEMOTRON_PLANNER_MODEL,
+    nemotronWorkerModel: env.NEMOTRON_WORKER_MODEL,
+    investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
+    investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
     webBundlePath: env.WEB_BUNDLE_PATH,
+    githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
+    githubApiBase: env.PARALLAX_GITHUB_API_BASE,
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

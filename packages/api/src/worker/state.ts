@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { AssessmentId, OrgId } from '@parallax/shared/domain';
 import { z } from 'zod';
 
@@ -29,6 +30,10 @@ export function canTransition(from: AssessmentStatus, to: AssessmentStatus): boo
   return TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+export function isTerminal(status: AssessmentStatus): boolean {
+  return TRANSITIONS[status].length === 0;
+}
+
 export interface AssessmentRecord {
   id: AssessmentId;
   orgId: OrgId;
@@ -50,28 +55,46 @@ export interface AssessmentEvent {
   createdAt: number;
 }
 
-// Idempotency: input_digest is computed from the assessment request.
-// Same digest → same assessment (P INV 4).
-export function computeInputDigest(input: {
-  orgId: string;
-  prUrl?: string;
-  repo?: string;
-  base?: string;
-  head?: string;
-  configHash?: string;
-}): string {
-  const canonical = JSON.stringify({
-    orgId: input.orgId,
-    prUrl: input.prUrl ?? null,
-    repo: input.repo ?? null,
-    base: input.base ?? null,
-    head: input.head ?? null,
+// Versión de la política de Parallax que gobierna este análisis (§4: la clave
+// incluye la versión de la política; cambiarla invalida la identidad del trabajo).
+export const PARALLAX_POLICY_VERSION = '1';
+
+export interface DigestInput {
+  /** Manifiesto resuelto: repo → commit en ambas vistas (§5). */
+  readonly manifest: {
+    readonly base: Readonly<Record<string, string>>;
+    readonly head: Readonly<Record<string, string>>;
+  };
+  readonly configHash?: string | null;
+  readonly analyzerVersion: string;
+  readonly policyVersion?: string;
+}
+
+// JSON canónico: claves ordenadas recursivamente, sin dependencia del orden de
+// inserción. Mismas entradas → mismo texto → mismo digest.
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  // Las claves de un objeto son únicas, así que nunca hay empate: basta `<`.
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : 1));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
+}
+
+// Idempotencia (§4, INV 4): la clave del trabajo se calcula sólo sobre hechos
+// resueltos — manifiesto de commits, config_hash, analyzer_version y política.
+// Nada derivado del modelo entra aquí, así que un PR se re-evalúa con la misma
+// identidad aunque el modelo cambie (o no exista).
+export function computeInputDigest(input: DigestInput): string {
+  const canonical = canonicalJson({
+    manifest: {
+      base: input.manifest.base,
+      head: input.manifest.head,
+    },
     configHash: input.configHash ?? null,
+    analyzerVersion: input.analyzerVersion,
+    policyVersion: input.policyVersion ?? PARALLAX_POLICY_VERSION,
   });
-  // Simple hash — not cryptographic, just deterministic.
-  let h = 0;
-  for (let i = 0; i < canonical.length; i++) {
-    h = ((h << 5) - h + canonical.charCodeAt(i)) | 0;
-  }
-  return `digest_${(h >>> 0).toString(16).padStart(8, '0')}`;
+  return `sha256_${createHash('sha256').update(canonical).digest('hex')}`;
 }

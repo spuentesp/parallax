@@ -4,6 +4,7 @@ export const workspace = sqliteTable('workspace', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   description: text('description'),
+  lainUrl: text('lain_url'),
   createdAt: integer('created_at').notNull(),
 });
 

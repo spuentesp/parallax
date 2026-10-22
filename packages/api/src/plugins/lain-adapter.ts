@@ -4,10 +4,16 @@ import { createLainMock } from '../lain-adapter/mock.js';
 
 export default fp(
   async (fastify) => {
-    const adapter =
-      fastify.config.lainAdapter === 'real'
-        ? await createLainClient({ lainUrl: fastify.config.lainUrl!, apiVersion: '1' })
-        : createLainMock();
+    let adapter: ReturnType<typeof createLainMock>;
+    if (fastify.config.lainAdapter === 'real') {
+      const lainUrl = fastify.config.lainUrl;
+      if (lainUrl === undefined) {
+        throw new Error('LAIN_URL is required when LAIN_ADAPTER=real');
+      }
+      adapter = await createLainClient({ lainUrl, apiVersion: '1' });
+    } else {
+      adapter = createLainMock();
+    }
     fastify.decorate('lain', adapter);
   },
   { name: 'lain-adapter' },

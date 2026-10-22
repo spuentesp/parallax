@@ -1,3 +1,4 @@
+export * from './api-model.js';
 export * from './architecture-proposal.js';
 export * from './assessment.js';
 export * from './coverage.js';

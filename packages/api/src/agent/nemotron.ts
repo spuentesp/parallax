@@ -78,7 +78,6 @@ export class NemotronProvider {
         body: JSON.stringify(body),
         signal: ctl.signal,
       });
-      clearTimeout(timer);
       if (!res.ok) {
         const text = await res.text();
         throw new Error(`Nemotron HTTP ${res.status}: ${text.slice(0, 200)}`);

@@ -33,3 +33,20 @@ export const apiNotImplemented = (what: string) => ({
   message: what,
   doc: SPEC_DOC,
 });
+
+// Helpers de respuesta MCP: todo payload viaja como JSON en content[0].text.
+export function jsonResult(payload: unknown) {
+  return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
+}
+
+export function errorResult(code: string, message: string) {
+  return {
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify({ code, message, doc: SPEC_DOC }),
+      },
+    ],
+    isError: true,
+  };
+}
