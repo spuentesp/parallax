@@ -1,8 +1,7 @@
-import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   correlate,
   decodeGlobalId,
@@ -436,19 +435,59 @@ function fakeEngine(opts: {
   };
 }
 
-// Raíz del repo, no cwd: Stryker corre los tests en .stryker-tmp/sandbox-*, y
-// desde ahí `../../test-repos` no existe. Las checkouts son locales (gitignored).
-const REPO_ROOT = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-  encoding: 'utf8',
-}).trim();
-const CHECKOUT_ROOT = join(REPO_ROOT, 'test-repos');
-
 describe('runAdvisor (end-to-end con motor falso)', () => {
-  const fixtureRepos = [
-    { id: 'saleor', root: join(CHECKOUT_ROOT, 'saleor') },
-    { id: 'saleor-dashboard', root: join(CHECKOUT_ROOT, 'saleor-dashboard') },
-    { id: 'storefront', root: join(CHECKOUT_ROOT, 'storefront') },
-  ];
+  // Checkouts de fixture escritas en un directorio propio por la suite. No se
+  // leen de test-repos/: esa carpeta es local y gitignored, y CI no la tiene.
+  // Se crean en beforeAll, no con tmpFixture, porque afterEach vacía tmpDirs
+  // tras cada test y borraría las raíces antes de los tests que las usan.
+  let fixtureDir = '';
+  let fixtureRepos: Array<{ id: string; root: string }> = [];
+
+  beforeAll(() => {
+    fixtureDir = mkdtempSync(join(tmpdir(), 'parallax-advisor-repos-'));
+    const write = (repo: string, files: Record<string, string>): string => {
+      const root = join(fixtureDir, repo);
+      for (const [rel, content] of Object.entries(files)) {
+        mkdirSync(join(root, rel, '..'), { recursive: true });
+        writeFileSync(join(root, rel), content);
+      }
+      return root;
+    };
+    fixtureRepos = [
+      {
+        id: 'saleor',
+        root: write('saleor', {
+          'schema.graphql': 'type Query {\n  product(slug: String!): Product\n}\n',
+        }),
+      },
+      {
+        // Copia de SDL + operaciones: el advisor propone provides_graphql: false.
+        id: 'saleor-dashboard',
+        root: write('saleor-dashboard', {
+          'schema.graphql': 'type Query {\n  product(slug: String!): Product\n}\n',
+          'src/graphql/ProductDetails.graphql':
+            'query ProductDetails($slug: String!) {\n  product(slug: $slug) { id }\n}\n',
+        }),
+      },
+      {
+        id: 'storefront',
+        root: write('storefront', {
+          'src/graphql/ProductDetails.graphql':
+            'query ProductDetails($slug: String!) {\n  product(slug: $slug) { id }\n}\n',
+          'src/lib/saleor/client.ts': [
+            'export function saleorFetch() {',
+            '  const url = process.env.NEXT_PUBLIC_SALEOR_API_URL;',
+            '  return fetch(url!, {});',
+            '}',
+          ].join('\n'),
+        }),
+      },
+    ];
+  });
+
+  afterAll(() => {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  });
 
   it('degrades gracefully when the engine rejects GraphQL bindings', async () => {
     const engine = fakeEngine({
