@@ -16,7 +16,9 @@ If the only feedback an agent gets is "the visible suite is green", the cheapest
 path is hardcoding and feature isolation: happy paths, branches tuned to known
 cases, components that pass alone and break when composed. The held-out suite
 (`test-heldout/`, run only by `pnpm test:heldout` in CI) and the mutation gate
-(`pnpm gate:mutation`, only over the PR diff) close both escape routes.
+(`pnpm gate:mutation`, only over the PR diff) close both escape routes. The
+mutation gate is not a CI job: it takes longer than CI allows, so run it locally
+before opening or merging a PR.
 
 ## Ownership enforcement
 
