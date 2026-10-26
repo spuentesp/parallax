@@ -182,7 +182,8 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
       try {
         done(null, JSON.parse((body as Buffer).toString('utf8')));
       } catch (err) {
-        done(err as Error, undefined);
+        // Un cuerpo JSON mal formado es un error del cliente, no del servidor.
+        done(Object.assign(err as Error, { statusCode: 400 }), undefined);
       }
     });
 

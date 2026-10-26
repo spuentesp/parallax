@@ -37,6 +37,18 @@ export default fp(
         const status = lainCodeToStatus[lainResult.data.code] ?? 500;
         return reply.code(status).send({ ...lainResult.data, status, traceId: tid });
       }
+      // Errores 4xx de Fastify (cuerpo JSON mal formado, tipo de contenido no admitido)
+      // son del cliente: se responden con su propio código, no como 500.
+      const clientStatus = (err as { statusCode?: unknown }).statusCode;
+      if (typeof clientStatus === 'number' && clientStatus >= 400 && clientStatus < 500) {
+        return reply.code(clientStatus).send({
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: clientStatus,
+          detail: (err as Error).message,
+          traceId: tid,
+        });
+      }
       return reply.code(500).send({
         type: 'about:blank',
         title: 'Internal Server Error',

@@ -1,0 +1,420 @@
+// Reporte a GitHub y bordes de las rutas de CI. Los logs y el cliente de escritura se
+// inyectan por su contrato (handlePullRequest recibe `log` y `writer`); GitHub se
+// sustituye por un servidor local en el borde HTTP.
+import { createHmac } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { FastifyBaseLogger } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as schema from '../src/db/schema.js';
+import { GitHubWriter } from '../src/github/status.js';
+import { handlePullRequest } from '../src/routes/ci.js';
+import { buildApp } from '../src/server.js';
+
+const SECRET = 'whsec-test';
+const BASE = 'a'.repeat(40);
+const HEAD = 'b'.repeat(40);
+const AUTH = { authorization: 'Bearer t' };
+
+interface Recorded {
+  method: string;
+  url: string;
+  body: unknown;
+}
+
+function prFor(overrides: { owner?: string; repo?: string; action?: string } = {}) {
+  const owner = overrides.owner ?? 'acme';
+  const repo = overrides.repo ?? 'shop';
+  return {
+    action: overrides.action ?? 'opened',
+    owner,
+    repo,
+    number: 4,
+    htmlUrl: `https://github.com/${owner}/${repo}/pull/4`,
+    baseRef: 'main',
+    headRef: 'feat',
+    baseSha: BASE,
+    headSha: HEAD,
+    isFork: false,
+  };
+}
+
+function prPayload(action = 'opened') {
+  return {
+    action,
+    repository: { full_name: 'acme/shop' },
+    pull_request: {
+      number: 4,
+      html_url: 'https://github.com/acme/shop/pull/4',
+      base: { ref: 'main', sha: BASE, repo: { full_name: 'acme/shop' } },
+      head: { ref: 'feat', sha: HEAD, repo: { full_name: 'acme/shop' } },
+    },
+  };
+}
+
+function signed(payload: unknown, event = 'pull_request', secret = SECRET) {
+  const raw = Buffer.from(JSON.stringify(payload));
+  const sig = `sha256=${createHmac('sha256', secret).update(raw).digest('hex')}`;
+  return {
+    raw,
+    headers: {
+      'content-type': 'application/json',
+      'x-github-event': event,
+      'x-hub-signature-256': sig,
+    },
+  };
+}
+
+interface Logged {
+  level: 'warn' | 'error';
+  obj: unknown;
+  msg: string;
+}
+
+function recordingLog(): { log: FastifyBaseLogger; lines: Logged[] } {
+  const lines: Logged[] = [];
+  const log = {
+    warn: (obj: unknown, msg: string) => lines.push({ level: 'warn', obj, msg }),
+    error: (obj: unknown, msg: string) => lines.push({ level: 'error', obj, msg }),
+    info: () => undefined,
+    debug: () => undefined,
+  } as unknown as FastifyBaseLogger;
+  return { log, lines };
+}
+
+async function until(check: () => boolean, ms = 10_000): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start > ms) throw new Error('timed out waiting for condition');
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
+describe('CI routes edges', { timeout: 30_000 }, () => {
+  let dir: string;
+  let gh: Server;
+  let recorded: Recorded[];
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let wsId: string;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-ci-edges-'));
+    recorded = [];
+    gh = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        recorded.push({
+          method: req.method ?? '',
+          url: req.url ?? '',
+          body: text ? JSON.parse(text) : null,
+        });
+        res.statusCode = 201;
+        res.end('{}');
+      });
+    });
+    await new Promise<void>((resolve) => gh.listen(0, '127.0.0.1', resolve));
+    const apiBase = `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`;
+    app = await buildApp({
+      port: 0,
+      databasePath: join(dir, 'p.db'),
+      lainAdapter: 'mock',
+      mcpTransport: 'stdio',
+      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      webBundlePath: join(dir, 'web'),
+      githubApiBase: apiBase,
+      githubWriteToken: 'write-token',
+      githubWebhookSecret: SECRET,
+      publicUrl: 'https://parallax.example',
+    });
+    const ws = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: AUTH,
+      payload: { name: 'shop' },
+    });
+    wsId = ws.json().workspace.id as string;
+    await app.db.insert(schema.repo).values({
+      id: 'shop',
+      workspaceId: wsId,
+      uri: 'https://github.com/acme/shop.git',
+      createdAt: Date.now(),
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => gh.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('answers 404 when setting CI on an unknown workspace', async () => {
+    const r = await app.inject({
+      method: 'PUT',
+      url: '/api/workspaces/ws_nope/ci',
+      headers: AUTH,
+      payload: { mode: 'off', baseBranch: null, reportComments: false },
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json()).toEqual({ error: 'workspace not found' });
+  });
+
+  it('returns mode off exactly when the stored mode is off', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: AUTH,
+      payload: { mode: 'off', baseBranch: 'main', reportComments: true },
+    });
+    const r = await app.inject({ method: 'GET', url: `/api/workspaces/${wsId}/ci`, headers: AUTH });
+    expect(r.json()).toEqual({ mode: 'off', baseBranch: 'main', reportComments: true });
+  });
+
+  it('answers 200 with ok for a ping', async () => {
+    const s = signed({ zen: 'ok' }, 'ping');
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: s.headers,
+      payload: s.raw,
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ ok: true });
+  });
+
+  it('acknowledges other events without evaluating them', async () => {
+    const s = signed(prPayload(), 'push');
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: s.headers,
+      payload: s.raw,
+    });
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ handled: 0, ignored: 'push' });
+  });
+
+  it('rejects a pull_request payload that lacks the fields it needs', async () => {
+    const s = signed({ action: 'opened', repository: { full_name: 'acme/shop' } });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: s.headers,
+      payload: s.raw,
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json()).toEqual({ error: 'pull_request payload is missing fields' });
+  });
+
+  it('answers 401 with the exact error for a bad signature', async () => {
+    const s = signed(prPayload(), 'pull_request', 'wrong');
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: s.headers,
+      payload: s.raw,
+    });
+    expect(r.statusCode).toBe(401);
+    expect(r.json()).toEqual({ error: 'invalid signature' });
+  });
+
+  it('refuses a malformed JSON body instead of hanging', async () => {
+    const raw = Buffer.from('{"action": ');
+    const sig = `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: {
+        'content-type': 'application/json',
+        'x-github-event': 'pull_request',
+        'x-hub-signature-256': sig,
+      },
+      payload: raw,
+    });
+    expect(r.statusCode).toBe(400);
+  });
+});
+
+describe('CI webhook disabled without a secret', () => {
+  let dir: string;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-ci-nosecret-'));
+    app = await buildApp({
+      port: 0,
+      databasePath: join(dir, 'p.db'),
+      lainAdapter: 'mock',
+      mcpTransport: 'stdio',
+      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      webBundlePath: join(dir, 'web'),
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('answers 503 and accepts nothing when no webhook secret is configured', async () => {
+    const s = signed(prPayload(), 'pull_request', SECRET);
+    const r = await app.inject({
+      method: 'POST',
+      url: '/webhooks/github',
+      headers: s.headers,
+      payload: s.raw,
+    });
+    expect(r.statusCode).toBe(503);
+    expect(r.json()).toEqual({ error: 'webhooks are not configured' });
+  });
+});
+
+describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
+  let dir: string;
+  let gh: Server;
+  let recorded: Recorded[];
+  let ghStatus: number;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let wsId: string;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-ci-handle-'));
+    recorded = [];
+    ghStatus = 201;
+    gh = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const text = Buffer.concat(chunks).toString('utf8');
+        recorded.push({
+          method: req.method ?? '',
+          url: req.url ?? '',
+          body: text ? JSON.parse(text) : null,
+        });
+        res.statusCode = ghStatus;
+        res.end('{}');
+      });
+    });
+    await new Promise<void>((resolve) => gh.listen(0, '127.0.0.1', resolve));
+    const apiBase = `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`;
+    app = await buildApp({
+      port: 0,
+      databasePath: join(dir, 'p.db'),
+      lainAdapter: 'mock',
+      mcpTransport: 'stdio',
+      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      webBundlePath: join(dir, 'web'),
+      githubApiBase: apiBase,
+      githubWriteToken: 'write-token',
+      githubWebhookSecret: SECRET,
+      publicUrl: 'https://parallax.example',
+    });
+    const ws = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: AUTH,
+      payload: { name: 'shop' },
+    });
+    wsId = ws.json().workspace.id as string;
+    await app.db.insert(schema.repo).values({
+      id: 'shop',
+      workspaceId: wsId,
+      uri: 'https://github.com/acme/shop.git',
+      createdAt: Date.now(),
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: AUTH,
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+    });
+  });
+
+  afterEach(async () => {
+    await app.close();
+    await new Promise<void>((resolve) => gh.close(() => resolve()));
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const deps = (log: FastifyBaseLogger, writer: GitHubWriter | null) => ({
+    db: app.db,
+    worker: app.assessmentWorker,
+    analyzerVersion: app.lain.analyzerVersion,
+    writer,
+    publicUrl: 'https://parallax.example',
+    log,
+  });
+
+  const statusPosts = () => recorded.filter((r) => r.url.includes('/statuses/'));
+
+  it('evaluates an acme/shop PR whose owner differs only in case', async () => {
+    const { log } = recordingLog();
+    const writer = new GitHubWriter({
+      token: 'write-token',
+      apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
+    });
+    const n = await handlePullRequest(deps(log, writer), prFor({ owner: 'ACME', repo: 'SHOP' }));
+    expect(n).toBe(1);
+  });
+
+  it('skips repos of another owner, another name, or a non-GitHub host', async () => {
+    const { log } = recordingLog();
+    const writer = new GitHubWriter({ token: 'write-token' });
+    expect(await handlePullRequest(deps(log, writer), prFor({ owner: 'other' }))).toBe(0);
+    expect(await handlePullRequest(deps(log, writer), prFor({ repo: 'other' }))).toBe(0);
+    await app.db.update(schema.repo).set({ uri: 'https://gitlab.com/acme/shop.git' });
+    expect(await handlePullRequest(deps(log, writer), prFor())).toBe(0);
+  });
+
+  it('warns and posts nothing when there is no write token, and never errors', async () => {
+    const { log, lines } = recordingLog();
+    const n = await handlePullRequest(deps(log, null), prFor());
+    expect(n).toBe(1);
+    await until(() => lines.some((l) => l.level === 'warn'));
+    expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+    expect(lines.find((l) => l.level === 'warn')?.msg).toBe(
+      'no write token: result not reported to GitHub',
+    );
+    expect(statusPosts()).toHaveLength(0);
+  });
+
+  it('logs an error, not a warning, when GitHub rejects the write', async () => {
+    ghStatus = 403;
+    const { log, lines } = recordingLog();
+    const writer = new GitHubWriter({
+      token: 'write-token',
+      apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
+    });
+    await handlePullRequest(deps(log, writer), prFor());
+    await until(() => lines.some((l) => l.level === 'error'));
+    const err = lines.find((l) => l.level === 'error');
+    expect(err?.msg).toBe('failed to report assessment to GitHub');
+    expect(lines.filter((l) => l.level === 'warn')).toHaveLength(0);
+  });
+
+  it('posts the cancelled assessment as pending, with the report link', async () => {
+    const { log, lines } = recordingLog();
+    const writer = new GitHubWriter({
+      token: 'write-token',
+      apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
+    });
+    await handlePullRequest(deps(log, writer), prFor());
+    const [row] = await app.db.select().from(schema.assessment);
+    expect(row).toBeDefined();
+    await app.assessmentWorker.transition(row?.id ?? '', 'CANCELLED');
+    await until(() => statusPosts().length === 1);
+    const sent = statusPosts()[0]?.body as {
+      state: string;
+      description: string;
+      target_url: string;
+    };
+    expect(sent.target_url).toBe(
+      `https://parallax.example/app/orgs/${wsId}/assessments/${row?.id}`,
+    );
+    expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+  });
+});
