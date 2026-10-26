@@ -116,7 +116,7 @@ parallax/
 
 Testing follows an anti-reward-hacking protocol: property-based and model-based
 tests (`test/prop/`), a held-out composition suite (`test-heldout/`) owned by a
-red-team agent, and a mutation gate over each PR diff. See
+red-team agent, and a mutation gate over each PR diff (run locally, not in CI). See
 `docs/testing/red-team-protocol.md`.
 
 ## Release checks
