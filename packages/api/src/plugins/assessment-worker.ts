@@ -2,7 +2,7 @@ import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { investigatorModel } from '../agent/model.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
-import { AssessmentWorker, type ExplainOutcome } from '../worker/assessment-worker.js';
+import { AssessmentWorker, type AssessmentWorkerDeps } from '../worker/assessment-worker.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -10,12 +10,8 @@ declare module 'fastify' {
   }
 }
 
-type ExplainFn = (args: {
-  orgId: string;
-  viewId: string;
-  question: string;
-  engineFindings: unknown[];
-}) => Promise<ExplainOutcome>;
+// El contrato de explain vive en el worker: una sola declaración.
+type ExplainFn = NonNullable<AssessmentWorkerDeps['explain']>;
 
 // Un solo worker por proceso. Cada organización es un workspace con su propio
 // servidor LAIN, así que el worker resuelve el adaptador por org en vez de
@@ -51,6 +47,8 @@ export default fp(
             view: args.viewId,
             budget: model.budget,
             engineFindings: args.engineFindings,
+            // Los hallazgos del motor entran en el contexto y se explican por id.
+            pr: { changes: args.engineFindings, coverage: args.coverage ?? {} },
             endpointLabel: model.settings.baseUrl,
           });
           const payload = serializeExplanation(result, {

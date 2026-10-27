@@ -234,6 +234,11 @@ export class LainDispatcher {
       .join('\n');
   }
 
+  /** Ids que el motor ya entregó fuera de una lectura del modelo (p. ej. los hallazgos de un PR). */
+  deliverEvidence(ids: readonly string[]): void {
+    for (const id of ids) this.delivered.add(id);
+  }
+
   receipts(): Receipt[] {
     return [...this.receiptLog];
   }

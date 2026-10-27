@@ -33,6 +33,17 @@ import {
   type Receipt,
 } from './dispatcher.js';
 import type { ChatMessage, NemotronResponse, ToolSpec } from './nemotron.js';
+import {
+  buildFindings,
+  PR_SUBMIT_SPEC,
+  PR_SYSTEM_PROMPT,
+  PR_TOOL_BUDGET,
+  type PrCoverage,
+  PrSubmitArgs,
+  type PrVerification,
+  renderFindingsBlock,
+  verifyPrSubmission,
+} from './pr-explain.js';
 
 export const PROMPT_VERSION = 'parallax-investigator-v4';
 
@@ -115,6 +126,8 @@ export interface InvestigationResult {
   receipts: Receipt[];
   /** Recibos citados en la prosa que existen en esta investigación. */
   citedReceipts: string[];
+  /** Modo PR: explicación por hallazgo verificada contra el motor (null fuera de ese modo). */
+  pr: Pick<PrVerification, 'findings' | 'unaddressed' | 'unknownIds'> | null;
   errors: string[];
 }
 
@@ -122,6 +135,11 @@ export interface InvestigationResult {
 const RETRY_DELAY_MS = 1500;
 
 export interface InvestigateOptions {
+  /**
+   * Modo PR: los hallazgos del motor entran en el contexto, el modelo explica
+   * cada uno por id y la entrega se verifica contra ellos.
+   */
+  pr?: { changes: unknown[]; coverage: PrCoverage };
   /** Pausa antes del reintento (los tests la ponen a 0). */
   retryDelayMs?: number;
   question: string;
@@ -257,7 +275,10 @@ export function detectClassificationConflicts(
  */
 export async function investigate(opts: InvestigateOptions): Promise<InvestigationResult> {
   const budget: InvestigatorBudget = {
-    maxToolCalls: opts.budget?.maxToolCalls ?? DEFAULT_INVESTIGATOR_BUDGET.maxToolCalls,
+    maxToolCalls: Math.min(
+      opts.budget?.maxToolCalls ?? DEFAULT_INVESTIGATOR_BUDGET.maxToolCalls,
+      opts.pr ? PR_TOOL_BUDGET : Number.POSITIVE_INFINITY,
+    ),
     maxModelMs: opts.budget?.maxModelMs ?? DEFAULT_INVESTIGATOR_BUDGET.maxModelMs,
   };
   const view: LainView = opts.view ?? 'live';
@@ -267,20 +288,30 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     maxToolCalls: budget.maxToolCalls,
     ...(opts.maxResultChars !== undefined ? { maxResultChars: opts.maxResultChars } : {}),
   });
-  const tools = [...dispatcher.toolSpecs(), SUBMIT_TOOL_SPEC];
+  const prFindings = opts.pr ? buildFindings(opts.pr.changes) : null;
+  if (prFindings) dispatcher.deliverEvidence(prFindings.flatMap((f) => f.evidenceIds));
+  const tools = [...dispatcher.toolSpecs(), opts.pr ? PR_SUBMIT_SPEC : SUBMIT_TOOL_SPEC];
   const modelRole = opts.modelRole ?? 'worker';
   const maxTokens = opts.maxTokens ?? 2048;
 
   // Orientación sin gastar presupuesto: el mapa sale del mismo catálogo que fija
   // el alcance, así el modelo no gasta sus primeras llamadas descubriéndolo.
   const workspaceMap = await dispatcher.workspaceMap();
+  const mapBlock = workspaceMap
+    ? `Workspace map (from the engine, fixed view):\n${workspaceMap}`
+    : '';
   const messages: ChatMessage[] = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: prFindings ? PR_SYSTEM_PROMPT : SYSTEM_PROMPT },
     {
       role: 'user',
-      content: workspaceMap
-        ? `Workspace map (from the engine, fixed view):\n${workspaceMap}\n\nQuestion: ${opts.question}`
-        : opts.question,
+      content:
+        prFindings && opts.pr
+          ? [renderFindingsBlock(prFindings, opts.pr.coverage), mapBlock]
+              .filter(Boolean)
+              .join('\n\n')
+          : workspaceMap
+            ? `${mapBlock}\n\nQuestion: ${opts.question}`
+            : opts.question,
     },
   ];
   const toolCallLog: ToolCallRecord[] = [];
@@ -294,6 +325,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let retried = false;
   let pushedBack = false;
   let submittedClaims: Claim[] = [];
+  let prSubmission: PrSubmitArgs | null = null;
 
   // El tope de rondas evita bucles infinitos con un modelo que sólo pide
   // herramientas inválidas; el tiempo límite es el presupuesto real.
@@ -376,7 +408,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       // Un modelo que contesta sin leer nada sólo puede repetir el mapa del
       // workspace. Se le devuelve UNA vez a reunir evidencia; si insiste, su
       // respuesta sigue su curso y la validación de citas la declara fallida.
-      if (!pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
+      if (!opts.pr && !pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
         pushedBack = true;
         messages.push({ role: 'assistant', content: resp.content });
         messages.push({
@@ -435,7 +467,9 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       } catch {
         parsedArgs = null;
       }
-      const checked = SubmitAnswerArgs.safeParse(parsedArgs);
+      const checked = opts.pr
+        ? PrSubmitArgs.safeParse(parsedArgs)
+        : SubmitAnswerArgs.safeParse(parsedArgs);
       if (!checked.success) {
         reject(
           'invalid_schema',
@@ -445,7 +479,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
         );
         continue;
       }
-      if (!pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
+      if (!opts.pr && !pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
         pushedBack = true;
         reject(
           'no_evidence',
@@ -462,8 +496,14 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
         resultChars: 0,
         truncated: false,
       });
-      answer = checked.data.answer;
-      submittedClaims = checked.data.claims ?? [];
+      if (opts.pr) {
+        prSubmission = checked.data as PrSubmitArgs;
+        answer = prSubmission.summary;
+      } else {
+        const qa = checked.data as SubmitAnswerArgs;
+        answer = qa.answer;
+        submittedClaims = qa.claims ?? [];
+      }
       break;
     }
 
@@ -502,13 +542,55 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
 
   if (preflightFailure) status = preflightFailure.status;
 
+  // Modo PR: el backend contrasta la entrega con los hallazgos del motor y compone
+  // la narrativa (hechos deterministas + explicación del modelo por id).
+  const cleanedValidate = async (refs: readonly string[]) => {
+    const r = await validateRefs(
+      opts.lain,
+      view,
+      [...new Set(refs.map(cleanRef).filter(Boolean))],
+      dispatcher,
+    );
+    return { accepted: r.accepted, receipts: r.receipts, rejected: r.rejected };
+  };
+  const prResult: PrVerification | null =
+    prFindings && opts.pr && prSubmission && answer != null
+      ? await verifyPrSubmission(prFindings, prSubmission, opts.pr.coverage, async (refs) => {
+          const r = await cleanedValidate(refs);
+          return { accepted: r.accepted, rejected: r.rejected };
+        })
+      : null;
+  if (prResult) answer = prResult.narrative;
+  // Lo que escribió el modelo (no la narrativa compuesta) es lo que se contrasta
+  // con las clases del motor y de donde se extraen las citas.
+  const modelText = prResult ? prResult.modelText : answer;
+
   const checkedCitations =
-    answer != null
-      ? await validateCitations(opts.lain, view, answer, dispatcher)
+    modelText != null
+      ? await validateCitations(opts.lain, view, modelText, dispatcher)
       : { accepted: [], receipts: [], rejected: [] };
-  const citations = { accepted: checkedCitations.accepted, rejected: checkedCitations.rejected };
+  const citations = prResult
+    ? {
+        accepted: [
+          ...new Set([
+            ...checkedCitations.accepted,
+            ...prResult.findings.flatMap((f) => f.evidence.accepted),
+          ]),
+        ],
+        rejected: [
+          ...new Map(
+            [
+              ...checkedCitations.rejected,
+              ...prResult.findings.flatMap((f) => f.evidence.rejected),
+            ].map((r) => [r.ref, r as CitationRejection]),
+          ).values(),
+        ],
+      }
+    : { accepted: checkedCitations.accepted, rejected: checkedCitations.rejected };
   const conflictingClaims =
-    answer != null ? detectClassificationConflicts(answer, opts.engineFindings ?? []) : [];
+    modelText != null
+      ? detectClassificationConflicts(modelText, opts.engineFindings ?? opts.pr?.changes ?? [])
+      : [];
 
   // El motor adjudica las afirmaciones de relación; una contradicha se señala en
   // el veredicto y en el resumen, sin tocar la prosa ni el estado.
@@ -518,20 +600,16 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
           lain: opts.lain,
           view,
           resolveService: (name) => dispatcher.resolveService(name),
-          validateRefs: async (refs) => {
-            const r = await validateRefs(
-              opts.lain,
-              view,
-              [...new Set(refs.map(cleanRef).filter(Boolean))],
-              dispatcher,
-            );
-            return { accepted: r.accepted, receipts: r.receipts, rejected: r.rejected };
-          },
+          validateRefs: cleanedValidate,
         })
       : [];
   const claimsSummary = summarizeClaims(claims);
 
-  if (answer != null) {
+  if (prResult) {
+    // Los hallazgos son hechos del motor: no hace falta una cita nueva para que
+    // la explicación valga, pero cada hallazgo debe estar explicado.
+    status = prResult.unaddressed.length > 0 ? 'failed:findings_unaddressed' : 'available';
+  } else if (answer != null) {
     // El validador ya sabe si hubo citas: accepted + rejected son las que
     // reconoció. Volver a extraerlas aquí sería otra interpretación del texto.
     const cited = citations.accepted.length + citations.rejected.length;
@@ -571,6 +649,13 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     claimsSummary,
     receipts: dispatcher.receipts(),
     citedReceipts: checkedCitations.receipts,
+    pr: prResult
+      ? {
+          findings: prResult.findings,
+          unaddressed: prResult.unaddressed,
+          unknownIds: prResult.unknownIds,
+        }
+      : null,
     errors,
   };
 }
@@ -654,6 +739,8 @@ export interface ExplanationPayload {
   claims: ClaimResult[];
   claims_summary: ClaimsSummary;
   receipts: Receipt[];
+  /** Modo PR: explicación por hallazgo (clase del motor verbatim + explicación del modelo). */
+  pr: InvestigationResult['pr'];
   tool_calls: ToolCallRecord[];
   model_calls: ModelCallRecord[];
   errors: string[];
@@ -695,6 +782,7 @@ export function serializeExplanation(
     claims: result.claims,
     claims_summary: result.claimsSummary,
     receipts: result.receipts,
+    pr: result.pr,
     tool_calls: result.toolCallLog,
     model_calls: result.modelLog,
     errors: result.errors,

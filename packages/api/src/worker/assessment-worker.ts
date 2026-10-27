@@ -70,6 +70,12 @@ export interface AssessmentWorkerDeps {
     viewId: string;
     question: string;
     engineFindings: unknown[];
+    /** Cobertura presentada del análisis (INV 3): la explicación no puede callarla. */
+    coverage?: {
+      complete?: boolean | undefined;
+      missing?: string[] | undefined;
+      summary?: string | undefined;
+    };
   }) => Promise<ExplainOutcome>;
   /** Reloj inyectable (DST): por defecto Date.now. */
   now?: () => number;
@@ -81,6 +87,24 @@ export interface ExplainOutcome {
   status: string; // 'available' | 'failed:<reason>'
   model: string;
   payload: unknown | null;
+}
+
+// Los errores del motor llegan como objetos planos ({code, message}), no como
+// Error: String(e) daba "[object Object]" en la cobertura del informe.
+export function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object') {
+    const o = e as { message?: unknown; code?: unknown };
+    if (typeof o.message === 'string') {
+      return typeof o.code === 'string' ? `${o.code}: ${o.message}` : o.message;
+    }
+    try {
+      return JSON.stringify(e);
+    } catch {
+      return Object.prototype.toString.call(e);
+    }
+  }
+  return String(e);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -354,7 +378,7 @@ export class AssessmentWorker {
       }
       return rec;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = describeError(e);
       const current = (await this.get(id)) ?? rec;
       return this.fail(current, message);
     }
@@ -395,7 +419,7 @@ export class AssessmentWorker {
       await this.endStep(id, 'snapshot', attempt, 'done', sha256Hex(`${base}:${head}`));
       return next;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = describeError(e);
       await this.endStep(id, 'snapshot', attempt, 'failed', null);
       return this.fail(rec, `snapshot failed: ${message}`);
     }
@@ -426,15 +450,17 @@ export class AssessmentWorker {
         // superficie loosely tipada que presentCoverage consume.
         coverageRaw = (await lain.getCoverage({ snapshot: head })) as unknown as LainCoverage;
       } catch (e) {
-        gaps.push(`get_coverage failed: ${e instanceof Error ? e.message : String(e)}`);
+        gaps.push(`get_coverage failed: ${describeError(e)}`);
         coverageRaw = (diff.coverage as LainCoverage | undefined) ?? { complete: false };
       }
 
       const changes = diff.changes as Array<Record<string, unknown>>;
+      // Un cambio del lado consumidor ya trae sus caminos en el diff, y su
+      // endpoint no es de ese servicio: no se traza aparte.
       const traceTargets = changes
         .filter((c) => {
           const endpoint = c.endpoint as { key?: string; service?: string } | undefined;
-          return endpoint?.key != null && endpoint.service != null;
+          return endpoint?.key != null && endpoint.service != null && c.side !== 'consumer';
         })
         .slice(0, MAX_TRACE_TARGETS);
 
@@ -442,8 +468,12 @@ export class AssessmentWorker {
       for (const change of traceTargets) {
         const endpoint = change.endpoint as { key: string; service: string };
         try {
+          // Un endpoint ELIMINADO no existe en head: su impacto (quién lo
+          // consumía) se traza en base. Trazarlo en head daba contract_not_found
+          // y dejaba justo los hallazgos más graves como hueco de cobertura.
+          const traceView = change.kind === 'EndpointRemoved' && rec.baseId ? rec.baseId : head;
           const result = await lain.traceImpact({
-            snapshot: head,
+            snapshot: traceView,
             from: { endpoint: { service: endpoint.service, key: endpoint.key } },
           });
           traces.push({ from: { endpoint }, result });
@@ -452,7 +482,7 @@ export class AssessmentWorker {
           }
         } catch (e) {
           gaps.push(
-            `trace_impact failed for ${endpoint.service} ${endpoint.key}: ${e instanceof Error ? e.message : String(e)}`,
+            `trace_impact failed for ${endpoint.service} ${endpoint.key}: ${describeError(e)}`,
           );
         }
       }
@@ -492,7 +522,7 @@ export class AssessmentWorker {
       await this.endStep(id, 'analyze', attempt, 'done', sha256Hex(engineJson));
       return next;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = describeError(e);
       await this.endStep(id, 'analyze', attempt, 'failed', null);
       return this.fail(rec, `analysis failed: ${message}`);
     }
@@ -535,6 +565,13 @@ export class AssessmentWorker {
               'Keep engine classifications as they are, cite evidence ids you receive, ' +
               'and separate what is known from what remains unknown.',
             engineFindings,
+            coverage: rec.coverageJson
+              ? (JSON.parse(rec.coverageJson) as {
+                  complete?: boolean;
+                  missing?: string[];
+                  summary?: string;
+                })
+              : {},
           });
         } catch (e) {
           // Un fallo del modelo nunca destruye el informe estructural: queda
@@ -542,7 +579,7 @@ export class AssessmentWorker {
           outcome = {
             status: 'failed:explain_error',
             model: 'none',
-            payload: { error: e instanceof Error ? e.message : String(e) },
+            payload: { error: describeError(e) },
           };
         }
       }
@@ -565,7 +602,7 @@ export class AssessmentWorker {
       await this.endStep(id, 'explain', attempt, 'done', sha256Hex(outcome.status));
       return next;
     } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
+      const message = describeError(e);
       await this.endStep(id, 'explain', attempt, 'failed', null);
       return this.fail(rec, `explain step failed: ${message}`);
     }
@@ -618,9 +655,7 @@ export class AssessmentWorker {
           }
         }
       } catch (e) {
-        gaps.push(
-          `evidence harvest failed for ${service}: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        gaps.push(`evidence harvest failed for ${service}: ${describeError(e)}`);
       }
     }
     return inserted;
