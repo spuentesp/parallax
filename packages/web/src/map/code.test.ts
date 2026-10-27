@@ -153,3 +153,112 @@ describe('mergeCode', () => {
       expect(isOpenableType(t)).toBe(false);
   });
 });
+
+describe('parseCodeId — boundaries', () => {
+  it('rejects ids with an empty repo or without both separators', () => {
+    expect(parseCodeId('sym:|Function|x')).toBeNull();
+    expect(parseCodeId('sym:orders|Function')).toBeNull();
+    expect(parseCodeId('sym:orders')).toBeNull();
+    expect(parseCodeId('other:orders')).toBeNull();
+    expect(parseCodeId('')).toBeNull();
+  });
+  it('splits repo, type and name at the first two separators only', () => {
+    expect(parseCodeId('sym:r|T|a|b|c')).toEqual({
+      kind: 'node',
+      repo: 'r',
+      type: 'T',
+      name: 'a|b|c',
+    });
+    expect(parseCodeId('code:r|x')).toEqual({ kind: 'root', repo: 'r|x' });
+  });
+  it('isCodeId is true for code ids only', () => {
+    expect(isCodeId('code:r')).toBe(true);
+    expect(isCodeId('sym:r|T|n')).toBe(true);
+    expect(isCodeId('sym:broken')).toBe(false);
+    expect(isCodeId('svc:x')).toBe(false);
+  });
+});
+
+describe('mergeCode — node meta and structure', () => {
+  const file = codeNodeId('orders', 'File', 'main.rs');
+  const open = new Set(['code:orders', file]);
+  const base = (state: CodeState) => mergeCode(view([repoNode()]), open, state);
+  const rootReady = ready([{ type: 'File', name: 'main.rs' }]);
+
+  it('a child node carries repo/type/name and starts closed with no flags', () => {
+    const m = mergeCode(view([repoNode()]), new Set(['code:orders']), { 'code:orders': rootReady });
+    const f = m.nodes.find((n) => n.id === file);
+    expect(f?.meta).toEqual({ repo: 'orders', type: 'File', name: 'main.rs' });
+    expect(f?.expanded).toBe(false);
+    expect(f?.childCount).toBe(0);
+    expect(f?.parent).toBe('code:orders');
+  });
+
+  it('flags a child that is loading, failed or truncated — and only that state', () => {
+    const loading = base({ 'code:orders': rootReady, [file]: { state: 'loading' } });
+    expect(loading.nodes.find((n) => n.id === file)?.meta).toMatchObject({ loading: true });
+    const failed = base({ 'code:orders': rootReady, [file]: { state: 'error', message: 'nope' } });
+    expect(failed.nodes.find((n) => n.id === file)?.meta).toMatchObject({ error: 'nope' });
+    expect(failed.nodes.find((n) => n.id === file)?.meta).not.toHaveProperty('loading');
+    const trunc = base({ 'code:orders': rootReady, [file]: ready([], true) });
+    expect(trunc.nodes.find((n) => n.id === file)?.meta).toMatchObject({ truncated: true });
+    const fine = base({ 'code:orders': rootReady, [file]: ready([], false) });
+    const meta = fine.nodes.find((n) => n.id === file)?.meta ?? {};
+    expect(meta).not.toHaveProperty('truncated');
+    expect(meta).not.toHaveProperty('loading');
+    expect(meta).not.toHaveProperty('error');
+  });
+
+  it('the Code door carries the same flags and a repo in meta', () => {
+    const code = (s: CodeState) =>
+      mergeCode(view([repoNode()]), new Set(), s).nodes.find((n) => n.id === 'code:orders');
+    expect(code({})?.meta).toEqual({ repo: 'orders' });
+    expect(code({ 'code:orders': { state: 'loading' } })?.meta).toMatchObject({ loading: true });
+    expect(code({ 'code:orders': { state: 'error', message: 'x' } })?.meta).toMatchObject({
+      error: 'x',
+    });
+    expect(code({ 'code:orders': ready([], true) })?.meta).toMatchObject({ truncated: true });
+    expect(code({ 'code:orders': ready([], false) })?.meta).toEqual({ repo: 'orders' });
+  });
+
+  it('counts the Code door once per open linked repo, and leaves the rest alone', () => {
+    const m = mergeCode(
+      view([
+        repoNode(),
+        repoNode({ id: 'repo:web', label: 'web', meta: { lainRepoId: 'web' }, childCount: 0 }),
+        repoNode({ id: 'repo:x', label: 'x', expanded: false }),
+      ]),
+      new Set(),
+      {},
+    );
+    const count = (id: string) => m.nodes.find((n) => n.id === id)?.childCount;
+    expect(count('repo:orders')).toBe(3);
+    expect(count('repo:web')).toBe(1);
+    expect(count('repo:x')).toBe(2);
+  });
+
+  it('never duplicates an id the server projection already has', () => {
+    const dup = view([
+      repoNode(),
+      {
+        ...repoNode(),
+        id: 'code:orders',
+        kind: 'code',
+        parent: 'repo:orders',
+        label: 'Code',
+        meta: {},
+      },
+    ]);
+    const m = mergeCode(dup, new Set(), {});
+    expect(m.nodes.filter((n) => n.id === 'code:orders')).toHaveLength(1);
+  });
+
+  it('does not grow children under a node that is closed or whose entry is not ready', () => {
+    const closedParent = mergeCode(view([repoNode()]), new Set(), { 'code:orders': rootReady });
+    expect(closedParent.nodes.some((n) => n.id === file)).toBe(false);
+    const errored = mergeCode(view([repoNode()]), new Set(['code:orders']), {
+      'code:orders': { state: 'error', message: 'x' },
+    });
+    expect(errored.nodes.filter((n) => n.parent === 'code:orders')).toEqual([]);
+  });
+});

@@ -23,3 +23,18 @@ describe('nodeContext', () => {
     expect(nodeContext('ep:no-owner')).toBeNull();
   });
 });
+
+describe('nodeContext — boundaries', () => {
+  it('needs at least one character in each part of a code id', () => {
+    expect(nodeContext('sym:|Function|x')).toBeNull();
+    expect(nodeContext('sym:a|Function|x')).toEqual({ kind: 'repo', name: 'a' });
+    expect(nodeContext('code:')).toEqual({ kind: 'repo', name: '' });
+  });
+  it('an endpoint id needs a key before the owner', () => {
+    expect(nodeContext('ep:@orders')).toBeNull();
+    expect(nodeContext('ep:k@orders')).toEqual({ kind: 'endpoint', name: 'orders' });
+  });
+  it('a repo name containing "sym:" or "svc:" is still read by its own prefix', () => {
+    expect(nodeContext('repo:svc:x')).toEqual({ kind: 'repo', name: 'svc:x' });
+  });
+});
