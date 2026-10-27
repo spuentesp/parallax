@@ -1,7 +1,7 @@
 # Org map (command center) — UI review and design
 
 **Date:** 2026-10-27
-**Status:** phases 1–3 implemented on `feat/command-center-graph`; open items at the end.
+**Status:** implemented on `feat/command-center-graph` (map, code layer, agent navigation, shell); open items at the end.
 **Scope:** `packages/web`, `packages/api` (map routes), `packages/shared/org-map`.
 
 ## 1. Review of the UI as it was
@@ -52,6 +52,13 @@ Visual language (same in canvas, outline, inspector, legend):
 - `MapOutline` (tree, keyboard), `MapInspector` ("consumed by / depends on" with provenance), toolbar (search, provenance, min confidence, contract, freshness, refresh).
 - State that should be shareable lives in the URL: `?tab=map&focus=<id>&hops=<n>&sel=<id>&prov=&contract=&minc=`.
 
+**Code layer** (functions inside packages)
+
+- A repo that is open offers **Code** → files/modules → symbols (functions, classes, routes), each level requested from LAIN (`query_graph`) only when opened. Ids: `code:<repo_id>`, `sym:<repo_id>|<type>|<name>`.
+- A repo gets **Code** only if its name in the contract analysis equals, exactly, the LAIN `repo_id` derived from a workspace repo (`annotateRepos`, `meta.lainRepoId`). Otherwise the inspector says why; nothing is guessed.
+- Code relationships (Calls/Uses/Imports/Produces/Consumes/CallsHttp) are **listed in the inspector per edge type, not drawn**: `query_graph` neighbours carry no path (so no place in the tree) and no direction. Drawing them would invent pairs (INV 3).
+- Source on request: symbols via `explain_symbol`, files and an endpoint's "Defined at" via `get_code_snippet` (`/graph/snippet?path=`).
+
 **Agent navigation**
 
 - `/api/query` returns `map_focus` built by `agent/map-focus.ts` from **engine-verified** relation claims only, restricted to nodes that exist in the map. Contradicted, unverifiable or unresolved claims never produce a focus.
@@ -65,10 +72,10 @@ Visual language (same in canvas, outline, inspector, legend):
 
 ## 5. Not done / open
 
-1. **Code-graph join.** Endpoints should link to their handler (`providers[].path/line`) and expand into files/symbols lazily through `buildGraphChildren`. The model is ready (`meta.providers`); the join is not built. The Code graph tab remains separate.
-2. **Direction of code-graph edges.** `connect … direction: both` does not say direction; when the join is built, query outgoing and incoming separately or draw undirected. Do not infer direction.
-3. **MCP.** Expose `map_focus` / a `get_map_view` tool so an MCP client gets the same deep link.
-4. **Real-data run.** The browser check used synthetic data through the real projection code. It has not been run against Saleor via a live LAIN.
-5. **Cache persistence.** The cache is in-memory per process; a restart rebuilds on first request.
-6. **Copy.** English applied to the surfaces rewritten here; the remaining pages still mix Spanish.
-7. **`check-ui*.mjs` scripts** were not updated and Playwright's bundled browser is not installed in this environment (system Chrome was used).
+1. **Endpoint → handler link on the canvas.** "Defined at" shows the path/line and opens its source, but the endpoint node is not yet connected to its File node inside the Code tree (query_graph does not expose paths, so locating the File by name is a guess I did not make).
+2. **MCP.** Expose `map_focus` / a `get_map_view` tool so an MCP client gets the same deep link.
+3. **Real-data run.** The browser checks used synthetic data through the real projection code and stubbed LAIN responses. Not run against Saleor through a live LAIN (so: real `repo_id` vs repo-name parity, real code-graph volume, the 50-child cap on a ~500-endpoint service are unverified).
+4. **Code search.** Search covers repos/services/endpoints, not code symbols.
+5. **Cache persistence.** In-memory per process; a restart rebuilds on first request. Code-graph results are per-session client state.
+6. **Copy.** English applied to the surfaces rewritten here; other pages still mix Spanish. The old Code graph tab (`CodeGraphTree`) is still there, unrestyled, as a duplicate of the Code layer.
+7. **`check-ui*.mjs` scripts** were not updated, and Playwright's bundled browser is not installed here (system Chrome was used).
