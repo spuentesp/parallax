@@ -1,5 +1,5 @@
 // CodeGraphTree — árbol de código expandible sobre query_graph (paquete raw
-// de lain). A diferencia de HierarchyTree (contratos, datos completos), aquí
+// de lain). A diferencia del mapa de contratos (map/MapOutline, datos proyectados), aquí
 // cada expansión se pide al vuelo: repo → archivo/módulo → símbolo, y al
 // abrir un nodo se muestran sus HIJOS (Contains) y sus VECINOS de
 // comunicación rotulados por arista (Calls/Uses/Consumes/…).

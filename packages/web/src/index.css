@@ -16,6 +16,12 @@
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
+  /* Mapa: un color por tipo de nodo y uno por procedencia de la relación. */
+  --color-repo: #7c3aed;
+  --color-service: #2563eb;
+  --color-endpoint: #d97706;
+  --color-deterministic: #0f766e;
+  --color-inferred: #e11d48;
 }
 
 .dark {
@@ -26,6 +32,11 @@
   --color-border: #262626;
   --color-accent: #3b82f6;
   --color-accent-fg: #ffffff;
+  --color-repo: #a78bfa;
+  --color-service: #60a5fa;
+  --color-endpoint: #fbbf24;
+  --color-deterministic: #2dd4bf;
+  --color-inferred: #fb7185;
 }
 
 body {

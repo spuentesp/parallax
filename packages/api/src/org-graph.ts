@@ -15,49 +15,32 @@ import type { TopologyEdge, TopologyNode, TopologyViewData } from './topology.js
 // deterministic, pero conserva el conteo de usos heurísticos: nada se
 // redondea hacia arriba.
 
-export type Provenance = 'deterministic' | 'inferred';
-export type OrgNodeKind = 'repo' | 'service' | 'endpoint';
-export type OrgEdgeKind = 'consumes' | 'servedBy';
+import type {
+  NodeDetail,
+  NodeRelation,
+  OrgEdge,
+  OrgGraphFilters,
+  OrgNode,
+  Projection,
+  Provenance,
+} from '@parallax/shared/org-map';
 
-export interface OrgNode {
-  id: string;
-  label: string;
-  kind: OrgNodeKind;
-  parent: string | null;
-  /** Tipo de contrato (http, topic, graphql…) — sólo endpoints. */
-  contract?: string;
-  meta: Record<string, unknown>;
-}
-
-export interface OrgEdge {
-  id: string;
-  source: string;
-  target: string;
-  kind: OrgEdgeKind;
-  provenance: Provenance;
-  confidence: number;
-  /** Cuántas relaciones concretas representa (1 si no está agregada). */
-  count: number;
-  /** Desglose por procedencia de esas relaciones. */
-  deterministicCount: number;
-  inferredCount: number;
-  label?: string;
-}
+export type {
+  NodeDetail,
+  NodeRelation,
+  OrgEdge,
+  OrgEdgeKind,
+  OrgGraphFilters,
+  OrgNode,
+  OrgNodeKind,
+  ProjectedNode,
+  Projection,
+  Provenance,
+} from '@parallax/shared/org-map';
 
 export interface OrgGraph {
   nodes: OrgNode[];
   edges: OrgEdge[];
-}
-
-export interface OrgGraphFilters {
-  /** Sólo endpoints de este tipo de contrato. */
-  contract?: string | undefined;
-  /** Sólo relaciones de esta procedencia. */
-  provenance?: Provenance | undefined;
-  /** Descarta relaciones inferidas con confianza menor. */
-  minConfidence?: number | undefined;
-  /** Sólo este servicio y todo lo que lo consume o que él consume. */
-  service?: string | undefined;
 }
 
 /** Procedencia de una arista de topología según sus conteos de uso. */
@@ -236,40 +219,71 @@ export function filterOrgGraph(graph: OrgGraph, f: OrgGraphFilters): OrgGraph {
 
 // ── Proyección por nivel ────────────────────────────────────────────────────
 
-export interface ProjectedNode extends OrgNode {
-  /** Hijos directos en el grafo (filtrado), visibles o no. */
-  childCount: number;
-  /** true si sus hijos ya vienen en la proyección. */
-  expanded: boolean;
-}
+export const DEFAULT_CHILD_LIMIT = 50;
 
-export interface Projection {
-  nodes: ProjectedNode[];
-  edges: OrgEdge[];
+export interface ProjectionOptions {
+  /** Tope de hijos mostrados por nodo expandido (los más conectados primero). */
+  childLimit?: number;
+  /** Tope propio por padre ("mostrar más" sube el de ese padre). */
+  limits?: Readonly<Record<string, number>>;
+  /** Nodos que se muestran aunque excedan el tope (foco, selección). */
+  pinned?: ReadonlySet<string>;
 }
 
 /**
  * Lo visible dado un conjunto de nodos expandidos: las raíces más los hijos de
- * cada nodo expandido cuyo ancestro también está expandido. Las aristas se
- * ELEVAN al ancestro visible más cercano de cada extremo y se agregan, con
- * conteos por procedencia — colapsar nunca borra relaciones, las resume.
+ * cada nodo expandido cuyo ancestro también está expandido, hasta un tope por
+ * padre (los más conectados primero; lo que queda fuera se cuenta en
+ * `hiddenChildren`, nunca se oculta sin decirlo). Las aristas se ELEVAN al
+ * ancestro visible más cercano de cada extremo y se agregan, con conteos por
+ * procedencia — colapsar o recortar nunca borra relaciones, las resume.
  * Una arista entre un nodo y su propio ancestro (p. ej. endpoint → su
  * servicio) es contención, no relación, y se descarta.
  */
-export function projectOrgGraph(graph: OrgGraph, expanded: ReadonlySet<string>): Projection {
+export function projectOrgGraph(
+  graph: OrgGraph,
+  expanded: ReadonlySet<string>,
+  opts: ProjectionOptions = {},
+): Projection {
   const byId = indexById(graph);
   const childCount = new Map<string, number>();
+  const kids = new Map<string, OrgNode[]>();
   for (const n of graph.nodes) {
     if (n.parent !== null && byId.has(n.parent)) {
       childCount.set(n.parent, (childCount.get(n.parent) ?? 0) + 1);
+      const list = kids.get(n.parent) ?? [];
+      list.push(n);
+      kids.set(n.parent, list);
     }
   }
 
+  // Grado por nodo (relaciones propias): ordena qué hijos sobreviven al tope.
+  const degree = new Map<string, number>();
+  for (const e of graph.edges) {
+    degree.set(e.source, (degree.get(e.source) ?? 0) + e.count);
+    degree.set(e.target, (degree.get(e.target) ?? 0) + e.count);
+  }
+  const hiddenByCap = new Set<string>();
+  const hiddenChildren: Record<string, number> = {};
+  for (const [parent, list] of kids) {
+    if (!expanded.has(parent)) continue;
+    const limit = opts.limits?.[parent] ?? opts.childLimit ?? DEFAULT_CHILD_LIMIT;
+    if (list.length <= limit) continue;
+    const ranked = [...list].sort(
+      (a, b) =>
+        Number(opts.pinned?.has(b.id) ?? false) - Number(opts.pinned?.has(a.id) ?? false) ||
+        (degree.get(b.id) ?? 0) - (degree.get(a.id) ?? 0) ||
+        a.label.localeCompare(b.label),
+    );
+    for (const n of ranked.slice(limit)) hiddenByCap.add(n.id);
+  }
+
   const visible = (n: OrgNode): boolean => {
+    if (hiddenByCap.has(n.id)) return false;
     let cur = n.parent;
     const seen = new Set<string>([n.id]);
     while (cur !== null && byId.has(cur)) {
-      if (!expanded.has(cur) || seen.has(cur)) return false;
+      if (!expanded.has(cur) || seen.has(cur) || hiddenByCap.has(cur)) return false;
       seen.add(cur);
       cur = byId.get(cur)?.parent ?? null;
     }
@@ -305,6 +319,12 @@ export function projectOrgGraph(graph: OrgGraph, expanded: ReadonlySet<string>):
     if (e.label && prev.label !== e.label) delete prev.label;
   }
 
+  for (const id of hiddenByCap) {
+    const parent = byId.get(id)?.parent;
+    if (parent && visibleIds.has(parent))
+      hiddenChildren[parent] = (hiddenChildren[parent] ?? 0) + 1;
+  }
+
   return {
     nodes: visibleNodes.map((n) => ({
       ...n,
@@ -312,6 +332,7 @@ export function projectOrgGraph(graph: OrgGraph, expanded: ReadonlySet<string>):
       expanded: expanded.has(n.id),
     })),
     edges: [...agg.values()],
+    hiddenChildren,
   };
 }
 
@@ -356,21 +377,6 @@ export function expansionToReveal(graph: OrgGraph, ids: Iterable<string>): Set<s
   const out = new Set<string>();
   for (const id of ids) for (const a of ancestorsOf(id, byId)) out.add(a);
   return out;
-}
-
-export interface NodeRelation {
-  edge: OrgEdge;
-  peer: OrgNode;
-}
-
-export interface NodeDetail {
-  node: OrgNode;
-  /** Del padre a la raíz: repo ⊃ servicio ⊃ … */
-  path: OrgNode[];
-  children: OrgNode[];
-  /** Quién lo consume (consumidores) / a quién consume (proveedores). */
-  consumers: NodeRelation[];
-  providers: NodeRelation[];
 }
 
 /**

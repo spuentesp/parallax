@@ -19,6 +19,10 @@ export interface MapViewRequest {
   /** Nodo a enfocar: se revelan él y su vecindad de `hops` saltos. */
   focus?: string;
   hops?: number;
+  /** Tope de hijos por padre; "mostrar más" sube el de un padre concreto. */
+  limits?: Readonly<Record<string, number>>;
+  /** Nodos que deben verse aunque excedan el tope (p. ej. la selección). */
+  pin?: readonly string[];
 }
 
 export interface MapViewResponse extends Projection {
@@ -51,7 +55,14 @@ export function viewOrgGraph(full: OrgGraph, req: MapViewRequest): MapViewRespon
     focus = { seed: req.focus, ids: [...ids] };
   }
 
-  const projection = projectOrgGraph(graph, expanded);
+  const pinned = new Set(req.pin?.filter((id) => known.has(id)));
+  for (const id of focus?.ids ?? []) pinned.add(id);
+  // Fijar un nodo obliga a abrir sus ancestros para que sea alcanzable.
+  for (const a of expansionToReveal(graph, pinned)) expanded.add(a);
+  const projection = projectOrgGraph(graph, expanded, {
+    ...(req.limits ? { limits: req.limits } : {}),
+    pinned,
+  });
   return {
     ...projection,
     focus,

@@ -65,6 +65,22 @@ export const handlers = [
   http.get('/api/workspaces/:id/graph', () => HttpResponse.json({ roots: [] })),
   http.get('/api/workspaces/:id/graph/children', () => HttpResponse.json({ children: [] })),
   http.get('/api/workspaces/:id/graph/snippet', () => HttpResponse.json({ text: null })),
+  http.post('/api/workspaces/:id/map/view', () =>
+    HttpResponse.json({
+      nodes: [],
+      edges: [],
+      hiddenChildren: {},
+      focus: null,
+      unknownExpand: [],
+      meta: { source: 'unconfigured' },
+    }),
+  ),
+  http.get('/api/workspaces/:id/map/node', () =>
+    HttpResponse.json({ detail: null, meta: { source: 'unconfigured' } }),
+  ),
+  http.get('/api/workspaces/:id/map/search', () =>
+    HttpResponse.json({ results: [], meta: { source: 'unconfigured' } }),
+  ),
   http.post('/api/workspaces/:id/evidence', () => HttpResponse.json({ items: [], source: 'mock' })),
 ];
 

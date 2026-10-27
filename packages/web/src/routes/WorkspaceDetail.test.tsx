@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { renderWithQuery } from '../test/render.js';
@@ -9,15 +9,34 @@ afterEach(() => {
 });
 
 describe('WorkspaceDetail', () => {
-  it('shows the repo trees but not a second topology canvas', async () => {
+  const renderAt = (url: string) =>
     renderWithQuery(
-      <MemoryRouter initialEntries={['/workspaces/ws1']}>
+      <MemoryRouter initialEntries={[url]}>
         <Routes>
           <Route path="/workspaces/:id" element={<WorkspaceDetail />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(await screen.findByText(/contract topology/i)).toBeTruthy();
+
+  it('opens on the Map tab, the one place the org graph is drawn', async () => {
+    renderAt('/workspaces/ws1');
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
+    expect(screen.getByTestId('tab-map').className).toMatch(/bg-accent/);
     expect(screen.queryByText(/collapse \/ expand/i)).toBeNull();
+  });
+
+  it('keeps contracts and the code graph one click away, without a second topology canvas', async () => {
+    renderAt('/workspaces/ws1?tab=contracts');
+    expect(await screen.findByRole('heading', { name: /^contracts$/i })).toBeTruthy();
+    expect(screen.queryByTestId('map-explorer')).toBeNull();
+    expect(screen.queryByTestId('topology-view')).toBeNull();
+    expect(screen.queryByText(/collapse \/ expand/i)).toBeNull();
+  });
+
+  it('switches tabs through the URL so a link can open the map already focused', async () => {
+    renderAt('/workspaces/ws1?tab=contracts');
+    await screen.findByRole('heading', { name: /^contracts$/i });
+    fireEvent.click(screen.getByTestId('tab-map'));
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
   });
 });

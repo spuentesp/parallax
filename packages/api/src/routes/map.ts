@@ -28,6 +28,8 @@ const ViewBody = z.object({
   filters: Filters.optional(),
   focus: z.string().min(1).optional(),
   hops: z.number().int().min(0).max(4).optional(),
+  limits: z.record(z.string(), z.number().int().min(1).max(5000)).optional(),
+  pin: z.array(z.string()).max(200).optional(),
 });
 
 export const mapRoutes: FastifyPluginAsync = async (app) => {
@@ -76,7 +78,13 @@ export const mapRoutes: FastifyPluginAsync = async (app) => {
     }
   }
 
-  const EMPTY = { nodes: [], edges: [], focus: null, unknownExpand: [] as string[] };
+  const EMPTY = {
+    nodes: [],
+    edges: [],
+    hiddenChildren: {},
+    focus: null,
+    unknownExpand: [] as string[],
+  };
 
   app.post(
     '/api/workspaces/:id/map/view',
@@ -95,6 +103,8 @@ export const mapRoutes: FastifyPluginAsync = async (app) => {
         ...(body.filters ? { filters: body.filters } : {}),
         ...(body.focus ? { focus: body.focus } : {}),
         ...(body.hops !== undefined ? { hops: body.hops } : {}),
+        ...(body.limits ? { limits: body.limits } : {}),
+        ...(body.pin ? { pin: body.pin } : {}),
       });
       return { ...view, meta: loaded.meta };
     },

@@ -3,7 +3,14 @@ import type {
   AssessmentRequest,
   AssessmentSummary,
 } from '@parallax/shared/domain';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import type {
+  MapMeta,
+  MapViewResponse,
+  NodeDetail,
+  OrgGraphFilters,
+  OrgNode,
+} from '@parallax/shared/org-map';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClient, ApiEndpointNotImplemented } from './client.js';
 
 // Token source: localStorage (set by user), URL hash (?token=...), or empty.
@@ -359,6 +366,95 @@ export function useEvidence() {
           ...(vars.contextLines !== undefined ? { contextLines: vars.contextLines } : {}),
         },
       ),
+  });
+}
+
+// ── Mapa de la organización (grafo unificado, carga perezosa, con caché) ────
+//
+// El servidor devuelve sólo lo visible para el conjunto de nodos expandidos; el
+// cliente pide otra vista al abrir/cerrar un nodo. keepPreviousData evita el
+// parpadeo mientras llega la nueva proyección.
+
+export interface MapViewParams {
+  expand: readonly string[];
+  filters: OrgGraphFilters;
+  focus?: string | undefined;
+  hops?: number | undefined;
+  limits?: Readonly<Record<string, number>>;
+  pin?: readonly string[];
+}
+
+export function useOrgMap(workspaceId: string | undefined, params: MapViewParams) {
+  const expand = [...params.expand].sort();
+  return useQuery({
+    queryKey: [
+      'org-map',
+      workspaceId,
+      expand,
+      params.filters,
+      params.focus,
+      params.hops,
+      params.limits,
+      params.pin,
+    ],
+    queryFn: () =>
+      client.post<MapViewResponse>(`/api/workspaces/${workspaceId}/map/view`, {
+        expand,
+        filters: params.filters,
+        ...(params.focus ? { focus: params.focus, hops: params.hops ?? 1 } : {}),
+        ...(params.limits ? { limits: params.limits } : {}),
+        ...(params.pin && params.pin.length > 0 ? { pin: params.pin } : {}),
+      }),
+    enabled: workspaceId != null,
+    placeholderData: keepPreviousData,
+    // La caché del servidor decide la frescura; el cliente no re-pide solo.
+    staleTime: 60_000,
+  });
+}
+
+export function useMapNode(workspaceId: string | undefined, nodeId: string | null) {
+  return useQuery({
+    queryKey: ['org-map-node', workspaceId, nodeId],
+    queryFn: () => {
+      const qs = new URLSearchParams({ id: nodeId ?? '' });
+      return client.get<{ detail: NodeDetail | null; meta: MapMeta }>(
+        `/api/workspaces/${workspaceId}/map/node?${qs}`,
+      );
+    },
+    enabled: workspaceId != null && nodeId != null,
+    staleTime: 60_000,
+  });
+}
+
+export function useMapSearch(workspaceId: string | undefined, q: string) {
+  const term = q.trim();
+  return useQuery({
+    queryKey: ['org-map-search', workspaceId, term],
+    queryFn: () => {
+      const qs = new URLSearchParams({ q: term });
+      return client.get<{ results: OrgNode[]; meta: MapMeta }>(
+        `/api/workspaces/${workspaceId}/map/search?${qs}`,
+      );
+    },
+    enabled: workspaceId != null && term.length >= 2,
+    staleTime: 60_000,
+  });
+}
+
+/** Reconstruye el grafo en el servidor (espera al motor) e invalida las vistas. */
+export function useRefreshMap(workspaceId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.post<{ meta: MapMeta; totals?: { nodes: number; edges: number } }>(
+        `/api/workspaces/${workspaceId}/map/refresh`,
+        {},
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['org-map', workspaceId] });
+      void qc.invalidateQueries({ queryKey: ['org-map-node', workspaceId] });
+      void qc.invalidateQueries({ queryKey: ['org-map-search', workspaceId] });
+    },
   });
 }
 

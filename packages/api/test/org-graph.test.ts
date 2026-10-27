@@ -182,6 +182,32 @@ describe('projectOrgGraph — niveles y agregación', () => {
   });
 });
 
+describe('projectOrgGraph — tope de hijos', () => {
+  const open = new Set(['repo:orders', orders, 'repo:billing', 'repo:analytics']);
+  const listOrders = endpointNodeId(LIST_ORDERS, 'orders');
+
+  it('keeps the most connected children and says how many it left out', () => {
+    const p = projectOrgGraph(graph, open, { childLimit: 1 });
+    const shown = p.nodes.filter((n) => n.kind === 'endpoint').map((n) => n.id);
+    expect(shown).toEqual([listOrders]);
+    expect(p.hiddenChildren[orders]).toBe(2);
+  });
+
+  it('never drops the relations of hidden children: they roll up to the parent', () => {
+    const p = projectOrgGraph(graph, open, { childLimit: 1 });
+    const reportsToOrders = p.edges.find((e) => e.source === reports && e.target === orders);
+    expect(reportsToOrders).toMatchObject({ provenance: 'inferred', count: 1 });
+  });
+
+  it('pins and per-parent limits override the cap', () => {
+    const pinned = projectOrgGraph(graph, open, { childLimit: 1, pinned: new Set([getOrder]) });
+    expect(pinned.nodes.some((n) => n.id === getOrder)).toBe(true);
+    const more = projectOrgGraph(graph, open, { childLimit: 1, limits: { [orders]: 3 } });
+    expect(more.hiddenChildren).toEqual({});
+    expect(more.nodes.filter((n) => n.kind === 'endpoint')).toHaveLength(3);
+  });
+});
+
 describe('filterOrgGraph', () => {
   it('provenance=inferred keeps only inferred relations and what they touch', () => {
     const f = filterOrgGraph(graph, { provenance: 'inferred' });

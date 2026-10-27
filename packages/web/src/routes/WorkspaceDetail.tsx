@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
   fetchGraphChildren,
   fetchGraphSnippet,
@@ -13,13 +13,27 @@ import {
 import { CodeGraphTree } from '../components/CodeGraphTree.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
-import { HierarchyTree } from '../components/HierarchyTree.js';
+import { MapExplorer } from '../map/MapExplorer.js';
 
 const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
 
 export function WorkspaceDetail(): React.ReactElement {
   const { id } = useParams<{ id: string }>();
-  const [tab, setTab] = useState<'contracts' | 'graph'>('contracts');
+  // La pestaña vive en la URL: un enlace (o un agente) puede abrir el mapa ya
+  // enfocado en un nodo (?tab=map&focus=…).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get('tab');
+  const tab: 'map' | 'contracts' | 'graph' =
+    rawTab === 'contracts' || rawTab === 'graph' ? rawTab : 'map';
+  const setTab = (next: 'map' | 'contracts' | 'graph') =>
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev);
+        p.set('tab', next);
+        return p;
+      },
+      { replace: true },
+    );
   const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id, filters);
@@ -66,10 +80,11 @@ export function WorkspaceDetail(): React.ReactElement {
         </div>
       </div>
 
-      {/* Pestañas: contratos (topología de endpoints) vs grafo de código */}
+      {/* Pestañas: mapa (jerarquía + relaciones), contratos y grafo de código */}
       <div className="flex items-center gap-2" data-testid="workspace-tabs">
         {(
           [
+            ['map', 'Map'],
             ['contracts', 'Contracts'],
             ['graph', 'Code graph'],
           ] as const
@@ -88,6 +103,8 @@ export function WorkspaceDetail(): React.ReactElement {
         ))}
       </div>
 
+      {tab === 'map' && id && <MapExplorer workspaceId={id} />}
+
       {tab === 'contracts' && (
         <>
           {/* Stats strip */}
@@ -99,24 +116,16 @@ export function WorkspaceDetail(): React.ReactElement {
             <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
           </div>
 
-          {/* Topology graph + filtros */}
+          {/* Filtros de la lista de dependencias */}
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <h2 className="font-semibold">Contract topology</h2>
+              <h2 className="font-semibold">Contracts</h2>
               <span className="text-xs text-muted">
                 {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
                 {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
               </span>
             </div>
-
             <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
-
-            <div className="mt-2">
-              <HierarchyTree
-                nodes={topo?.topology?.nodes ?? []}
-                edges={topo?.topology?.edges ?? []}
-              />
-            </div>
             {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
           </div>
 
