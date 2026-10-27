@@ -45,4 +45,43 @@ describe('AppShell navigation', () => {
     renderAt('/orgs');
     expect(screen.queryByRole('link', { name: /^assessments$/i })).toBeNull();
   });
+
+  it('marks exactly one section as current and points each link at its context-aware target', () => {
+    const cases: Array<[string, string]> = [
+      ['/orgs/acme', 'Map'],
+      ['/orgs/acme/services/orders', 'Map'],
+      ['/orgs/acme/assessments', 'Assessments'],
+      ['/orgs/acme/assessments/a_1', 'Assessments'],
+      ['/workspaces', 'Workspaces'],
+      ['/workspaces/ws1', 'Workspaces'],
+    ];
+    for (const [url, current] of cases) {
+      renderAt(url);
+      const nav = screen.getByRole('navigation', { name: 'Main' });
+      const links = Array.from(nav.querySelectorAll('a'));
+      const active = links
+        .filter((a) => a.getAttribute('aria-current') === 'page')
+        .map((a) => a.textContent);
+      expect(active, url).toEqual([current]);
+      cleanup();
+    }
+    renderAt('/orgs/acme');
+    const href = (name: string) => screen.getByRole('link', { name }).getAttribute('href');
+    expect(href('Map')).toBe('/orgs/acme');
+    expect(href('Assessments')).toBe('/orgs/acme/assessments');
+    expect(href('Workspaces')).toBe('/workspaces');
+  });
+
+  it('outside an org the Map link goes to the picker and nothing in the map section is current', () => {
+    renderAt('/workspaces');
+    expect(screen.getByRole('link', { name: 'Map' }).getAttribute('href')).toBe('/orgs');
+    expect(screen.getByRole('link', { name: 'Map' }).getAttribute('aria-current')).toBeNull();
+  });
+
+  it('identifies the product and offers the theme toggle', () => {
+    renderAt('/orgs');
+    expect(screen.getByText('Parallax')).toBeTruthy();
+    expect(screen.getByText('Architecture command center')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeTruthy();
+  });
 });
