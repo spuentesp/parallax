@@ -136,7 +136,7 @@ describe('investigate loop', () => {
     expect(result.explanationStatus).toBe('available');
     expect(result.citations.accepted).toEqual([EVID]);
     expect(result.effectiveModel).toBe('fake/nemotron');
-    expect(result.promptVersion).toBe('parallax-investigator-v1');
+    expect(result.promptVersion).toBe('parallax-investigator-v3');
     // LAIN fue llamado con la vista fijada (live por defecto).
     expect(getLainMockCalls().some((c) => c.tool === 'get_service' && c.snapshot === 'live')).toBe(
       true,
@@ -191,7 +191,10 @@ describe('investigate loop', () => {
   });
 
   it('fails the explanation when every citation is invented', async () => {
-    const model = new ScriptedModel([resp({ content: 'Todo Verified [ev:fake:made-up:1].' })]);
+    const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: 'Todo Verified [ev:fake:made-up:1].' }),
+    ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
     expect(result.citations.accepted).toHaveLength(0);
@@ -199,7 +202,10 @@ describe('investigate loop', () => {
   });
 
   it('fails the explanation when the answer carries no citations', async () => {
-    const model = new ScriptedModel([resp({ content: 'Sin citas.' })]);
+    const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: 'Sin citas.' }),
+    ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_missing');
   });
@@ -264,10 +270,34 @@ describe('investigate loop', () => {
       }),
       resp({ content: `Ok [ev:${EVID}].` }),
     ]);
-    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      retryDelayMs: 0,
+    });
     expect(result.explanationStatus).toBe('available');
     expect(result.modelLog.some((m) => m.retry && m.finishReason === 'rate_limited')).toBe(true);
     expect(result.errors.some((e) => e.includes('429'))).toBe(true);
+  });
+
+  it('also retries a provider overload (HTTP 529) once instead of failing the run', async () => {
+    const model = new ScriptedModel([
+      new Error('Nemotron HTTP 529: {"detail":"System is overloaded"}'),
+      resp({
+        toolCalls: [toolCall('call_1', 'get_service', { service: 'orders' })],
+        finishReason: 'tool_calls',
+      }),
+      resp({ content: `Ok [ev:${EVID}].` }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      retryDelayMs: 0,
+    });
+    expect(result.explanationStatus).toBe('available');
+    expect(result.modelLog.some((m) => m.retry)).toBe(true);
   });
 
   it('gives up after repeated model errors with a visible failed status', async () => {
@@ -328,6 +358,7 @@ describe('INV 2 — engine fields stay engine fields', () => {
 
   it('serializeExplanation keeps engine classes verbatim and model fields separate', async () => {
     const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
       resp({
         content: `El endpoint http:GET /api/orders/{} queda Verified [ev:${EVID}].`,
       }),
@@ -351,8 +382,8 @@ describe('INV 2 — engine fields stay engine fields', () => {
     expect(payload.engine_finding_classes.every((f) => f.class === 'NeedsInvestigation')).toBe(
       true,
     );
-    expect(payload.prompt_version).toBe('parallax-investigator-v1');
-    expect(payload.tool_calls).toHaveLength(0);
+    expect(payload.prompt_version).toBe('parallax-investigator-v3');
+    expect(payload.tool_calls).toHaveLength(1);
   });
 });
 
@@ -371,6 +402,16 @@ describe('citations helpers', () => {
       'billing:HttpRoute:src/main.py:GET /invoices/{invoice_id}:51',
     ]);
     expect(refs).toContain('billing:HttpRoute:src/main.py:GET /invoices/{invoice_id}:51');
+  });
+
+  it('unwraps angle brackets and full-width brackets around a cited id', () => {
+    const id = 'saleor-dashboard:Function:src/a.ts:graphql-call%3Aquery%3Ashop:3';
+    expect(extractCitationRefs(`x [ev:<${id}>】 y`)).toEqual([id]);
+    expect(extractCitationRefs(`x (ev: <${id}>)`)).toEqual([id]);
+  });
+
+  it('keeps a literal placeholder as a visible rejection, not a citation', () => {
+    expect(extractCitationRefs('x [ev:<id>]')).toEqual(['id']);
   });
 
   it('acepta un id entregado citado sin marcador alguno', () => {
@@ -399,6 +440,78 @@ describe('citations helpers', () => {
     );
     // La frase que nombra la clave usa NeedsInvestigation (la del motor): sin conflicto.
     expect(conflicts).toHaveLength(0);
+  });
+});
+
+describe('answering without evidence', () => {
+  it('sends a model that answers before reading anything back to the tools, once', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      resp({ content: 'From the map I can tell: it is fine.' }),
+      resp({ toolCalls: [toolCall('c1', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: `Verified [ev:${EVID}]` }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(3);
+    // El modelo vio el aviso antes de su tercera respuesta.
+    const seen = model.calls[2]?.messages ?? [];
+    expect(
+      seen.some(
+        (m) => typeof m.content === 'string' && m.content.includes('without using any tool'),
+      ),
+    ).toBe(true);
+    expect(result.budget.toolCallsUsed).toBe(1);
+  });
+
+  it('does not loop: a second tool-less answer is kept and judged by the citation check', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      resp({ content: 'no tools 1' }),
+      resp({ content: 'no tools 2' }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(2);
+    expect(result.answer).toBe('no tools 2');
+    expect(result.explanationStatus).toBe('failed:citations_missing');
+  });
+});
+
+describe('empty or unreadable service catalog', () => {
+  it('says why instead of a silent no_answer, and spends no model time', async () => {
+    const base = createLainMock();
+    const model = new ScriptedModel([resp({ content: 'should never be asked' })]);
+    const result = await investigate({
+      question: 'q',
+      lain: {
+        ...base,
+        async listServices(req) {
+          return { ...(await base.listServices(req)), items: [] };
+        },
+      },
+      model,
+    });
+    expect(result.explanationStatus).toBe('failed:empty_service_catalog');
+    expect(result.answer).toBeNull();
+    expect(result.errors.some((e) => e.includes('services'))).toBe(true);
+    expect(model.calls).toHaveLength(0);
+  });
+
+  it('reports an unreadable catalog as unavailable, with the cause', async () => {
+    const base = createLainMock();
+    const model = new ScriptedModel([resp({ content: 'x' })]);
+    const result = await investigate({
+      question: 'q',
+      lain: {
+        ...base,
+        async listServices() {
+          throw new Error('connection refused');
+        },
+      },
+      model,
+    });
+    expect(result.explanationStatus).toBe('failed:catalog_unavailable');
+    expect(result.errors.join(' ')).toContain('connection refused');
+    expect(model.calls).toHaveLength(0);
   });
 });
 

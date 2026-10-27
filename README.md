@@ -48,7 +48,7 @@ The Nemotron investigator runs as a **Nebius Serverless Job** (bounded: 8 tool c
 nvm use                  # or ensure Node 24.21.0+
 corepack enable          # if pnpm is not installed
 pnpm install
-cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEMOTRON_TOKEN
+cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ```
 
 ## Run (dev mode)
@@ -98,7 +98,7 @@ Parallax is built for the **Coding and Agentic Engineering** track. The Nemotron
 - **Nemotron 3_5 Lightning** (`nvidia/Nemotron-3_5-Lightning`) for the worker role — many short calls, "execution layer" for always-on, long-running agents.
 - **Nemotron 3 Ultra 550B-A55B** (`nvidia/Nemotron-3-Ultra-550b-a55b`) for heavy reasoning when budget allows.
 
-All three are consumed through **Nebius Token Factory** (`NEMOTRON_TOKEN` env). The investigator loop respects a hard budget (8 tool calls, 120s per query) and persists every explanation with `revision` and `prompt_version` so the work is auditable.
+All three are consumed through **Nebius Token Factory** (`NEBIUS_TOKEN` env). The investigator loop respects a hard budget (16 tool calls by default, 120s per query) and persists every explanation with `revision` and `prompt_version` so the work is auditable.
 
 ## Project structure
 

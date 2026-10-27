@@ -3,7 +3,7 @@
 // corte declarado.
 
 import { describe, expect, it } from 'vitest';
-import { createDispatcher, DISPATCHER_TOOLS } from '../src/agent/dispatcher.js';
+import { createDispatcher, DISPATCHER_TOOLS, summarizeConsumers } from '../src/agent/dispatcher.js';
 import type { ToolCall } from '../src/agent/nemotron.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
@@ -105,8 +105,39 @@ describe('LainDispatcher', () => {
     expect(r3.ok).toBe(false);
     if (!r3.ok) expect(r3.code).toBe('budget_exhausted');
     // El catálogo de arranque no gasta presupuesto; sólo las llamadas del modelo.
-    expect(d.budgetUse()).toEqual({ toolCallsUsed: 2, maxToolCalls: 2, exhausted: true });
+    expect(d.budgetUse()).toEqual({
+      toolCallsUsed: 2,
+      maxToolCalls: 2,
+      exhausted: true,
+      cutShort: true,
+    });
     expect(lainCalls).toBe(3); // 1 catálogo + 2 del modelo
+  });
+
+  it('only flags the research as cut short once a read was actually refused', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live', maxToolCalls: 1 });
+    expect((await d.execute(call('t1', 'list_services', {}))).ok).toBe(true);
+    // Gastó todo el tope pero nada quedó sin leer: agotado, no recortado.
+    expect(d.budgetUse()).toMatchObject({ exhausted: true, cutShort: false });
+    expect((await d.execute(call('t2', 'list_services', {}))).ok).toBe(false);
+    expect(d.budgetUse()).toMatchObject({ exhausted: true, cutShort: true });
+  });
+
+  it('does not charge the budget for a read the engine failed', async () => {
+    const base = createLainMock();
+    const failing: LainAdapter = {
+      ...base,
+      async getContract() {
+        throw new Error('contract not found');
+      },
+    };
+    const d = createDispatcher({ lain: failing, view: 'live', maxToolCalls: 2 });
+    const bad = await d.execute(call('t1', 'get_contract', { service: 'billing', key: 'nope' }));
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.code).toBe('engine_error');
+    expect(d.budgetUse()).toMatchObject({ toolCallsUsed: 0, cutShort: false });
+    expect((await d.execute(call('t2', 'list_services', {}))).ok).toBe(true);
+    expect(d.budgetUse().toolCallsUsed).toBe(1);
   });
 
   it('declares the cut when a result is too large (INV 3)', async () => {
@@ -184,5 +215,168 @@ describe('LainDispatcher', () => {
     );
     const delivered = d.deliveredEvidence();
     expect(delivered).toContain('billing:Function:src/main.py:fetch:35');
+  });
+
+  it('consumers_of summarizes consumers with a citable id and counts only delivered ids as evidence', async () => {
+    const base = createLainMock();
+    const lain: LainAdapter = {
+      ...base,
+      async getService(req) {
+        const r = await base.getService(req);
+        return {
+          ...r,
+          consumers: [
+            {
+              service: 'web',
+              repo: 'web-repo',
+              uses: [
+                {
+                  binding: { confidence: 1, kind: 'static' },
+                  fields: [],
+                  endpoint: { service: r.service, key: 'graphql:query:product' },
+                  site: { id: 'web-repo:Function:src/a.ts:call:3' },
+                },
+                {
+                  binding: { confidence: 1, kind: 'static' },
+                  fields: [],
+                  endpoint: { service: r.service, key: 'graphql:query:product' },
+                  site: { id: 'web-repo:Function:src/b.ts:call:9' },
+                },
+              ],
+            },
+          ],
+        };
+      },
+    };
+    const d = createDispatcher({ lain, view: 'live' });
+    const services = await lain.listServices({ snapshot: 'live' });
+    const name = services.items[0]?.service as string;
+    const r = await d.execute(call('t1', 'consumers_of', { service: name }));
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      const data = r.data as {
+        consumers: Array<{ uses: number; endpoints: Array<{ evidence_id: string }> }>;
+      };
+      expect(data.consumers[0]?.uses).toBe(2);
+      expect(data.consumers[0]?.endpoints[0]?.evidence_id).toBe(
+        'web-repo:Function:src/a.ts:call:3',
+      );
+    }
+    // El id entregado por el resumen es citable; uno que no se entregó no.
+    expect(d.deliveredEvidence()).toContain('web-repo:Function:src/a.ts:call:3');
+    expect(d.deliveredEvidence()).not.toContain('web-repo:Function:src/b.ts:call:9');
+  });
+
+  it('consumers_of respects the workspace scope', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live' });
+    const r = await d.execute(call('t1', 'consumers_of', { service: 'not-in-the-view' }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe('scope_violation');
+  });
+
+  it('workspaceMap lists the catalog services with the engine counts', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live' });
+    const map = await d.workspaceMap();
+    expect(map.length).toBeGreaterThan(0);
+    expect(map).toMatch(/endpoints, consumed by \d+ service\(s\)/);
+  });
+});
+
+describe('summarizeConsumers', () => {
+  const use = (key: string, id: string) => ({
+    endpoint: { key },
+    site: { id },
+  });
+
+  it('ranks endpoints by use, caps them, and declares what was omitted', () => {
+    const s = summarizeConsumers(
+      {
+        service: 'api',
+        consumers: [
+          {
+            service: 'web',
+            repo: 'w',
+            uses: [use('b', 'w:1'), use('a', 'w:2'), use('a', 'w:3'), use('c', 'w:4')],
+          },
+        ],
+      },
+      2,
+    );
+    const web = s.consumers[0];
+    expect(web?.uses).toBe(4);
+    expect(web?.distinct_endpoints).toBe(3);
+    expect(web?.endpoints.map((e) => [e.key, e.uses])).toEqual([
+      ['a', 2],
+      ['b', 1],
+    ]);
+    expect(web?.omitted_endpoints).toBe(1);
+    expect(web?.endpoints[0]?.evidence_id).toBe('w:2');
+  });
+
+  it('accepts the consumer by service or repo name and always lists who the consumers are', () => {
+    const svc = {
+      service: 'api',
+      consumers: [
+        { service: 'saleor-storefront', repo: 'storefront', uses: [use('k', 's:1')] },
+        { service: 'dash', repo: 'dash-repo', uses: [use('k', 'd:1')] },
+      ],
+    };
+    const byRepo = summarizeConsumers(svc, { consumer: 'storefront' });
+    expect(byRepo.consumers.map((c) => c.service)).toEqual(['saleor-storefront']);
+    // Un filtro que no coincide con nadie no deja al modelo a ciegas.
+    const none = summarizeConsumers(svc, { consumer: 'nope' });
+    expect(none.consumers).toEqual([]);
+    expect(none.available_consumers).toEqual([
+      { service: 'saleor-storefront', repo: 'storefront' },
+      { service: 'dash', repo: 'dash-repo' },
+    ]);
+  });
+
+  it('flags a service consuming itself and tolerates uses without an endpoint', () => {
+    const s = summarizeConsumers(
+      {
+        service: 'api',
+        consumers: [
+          { service: 'api', repo: 'r', uses: [{ site: { id: 'r:1' } }, use('t', 'r:2')] },
+        ],
+      },
+      5,
+    );
+    expect(s.consumers[0]?.is_self).toBe(true);
+    // Sólo cuenta el uso que tiene endpoint: el otro no se puede atribuir.
+    expect(s.consumers[0]?.uses).toBe(1);
+    expect(s.consumers[0]?.distinct_endpoints).toBe(1);
+  });
+
+  it('filters by consumer and endpoint text so a rare operation is not lost to the cap', () => {
+    const svc = {
+      service: 'api',
+      consumers: [
+        {
+          service: 'web',
+          repo: 'w',
+          uses: [
+            ...Array.from({ length: 5 }, (_, i) => use('graphql:query:products', `w:p${i}`)),
+            use('graphql:mutation:attributeCreate', 'w:a1'),
+          ],
+        },
+        { service: 'admin', repo: 'a', uses: [use('graphql:query:attributes', 'a:1')] },
+      ],
+    };
+    // Con tope 1, sin filtro, el endpoint raro queda fuera y se declara.
+    const capped = summarizeConsumers(svc, { max_endpoints: 1 });
+    expect(capped.consumers[0]?.endpoints.map((e) => e.key)).toEqual(['graphql:query:products']);
+    expect(capped.consumers[0]?.omitted_endpoints).toBe(1);
+    // Con filtro aparece, y el otro consumidor se puede excluir.
+    const filtered = summarizeConsumers(svc, {
+      endpoint_contains: 'ATTRIBUTE',
+      consumer: 'web',
+      max_endpoints: 1,
+    });
+    expect(filtered.consumers).toHaveLength(1);
+    expect(filtered.consumers[0]?.endpoints.map((e) => e.key)).toEqual([
+      'graphql:mutation:attributeCreate',
+    ]);
+    expect(filtered.consumers[0]?.omitted_endpoints).toBe(0);
   });
 });

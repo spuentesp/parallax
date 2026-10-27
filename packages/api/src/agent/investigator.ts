@@ -13,11 +13,12 @@
 // del motor (INV 2).
 
 import type { LainView } from '@parallax/shared/lain';
+import { INVESTIGATOR_DEFAULTS } from '../config.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { createDispatcher, type DispatcherBudgetUse, type LainDispatcher } from './dispatcher.js';
 import type { ChatMessage, NemotronResponse, ToolSpec } from './nemotron.js';
 
-export const PROMPT_VERSION = 'parallax-investigator-v1';
+export const PROMPT_VERSION = 'parallax-investigator-v3';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
 // las pruebas inyectan un modelo guionizado y P08 se prueba sin modelo.
@@ -38,10 +39,11 @@ export interface InvestigatorBudget {
   maxModelMs: number;
 }
 
-// §6: "ocho llamadas de investigación y 120 segundos de modelo por consulta".
+// §6 fijó ocho llamadas; las preguntas entre repos (Saleor) necesitan ~12 con
+// el modelo que sí responde. El valor vive en INVESTIGATOR_DEFAULTS (config.ts).
 export const DEFAULT_INVESTIGATOR_BUDGET: InvestigatorBudget = {
-  maxToolCalls: 8,
-  maxModelMs: 120_000,
+  maxToolCalls: INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
+  maxModelMs: INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
 };
 
 export interface ToolCallRecord {
@@ -93,7 +95,12 @@ export interface InvestigationResult {
   errors: string[];
 }
 
+/** Espera antes del único reintento: una sobrecarga del proveedor no se resuelve al instante. */
+const RETRY_DELAY_MS = 1500;
+
 export interface InvestigateOptions {
+  /** Pausa antes del reintento (los tests la ponen a 0). */
+  retryDelayMs?: number;
   question: string;
   lain: LainAdapter;
   model: ChatCompleter;
@@ -118,8 +125,8 @@ export interface InvestigateOptions {
 const SYSTEM_PROMPT = `You are Parallax's architecture investigator. You answer questions about a fixed code workspace using ONLY the read-only research tools provided. The workspace view was fixed by the analysis: you cannot choose snapshots, repos outside the workspace, or any write/publish tool.
 
 Method:
-1. Gather facts with the tools before answering. list_services gives the catalog; get_service shows consumers with evidence ids; trace_impact shows who depends on an endpoint; resolve_evidence/read_source verify code locations; list_unresolved and get_coverage tell you what remains unknown.
-2. Every factual conclusion MUST cite at least one evidence id you actually received in tool results, using the marker [ev:<id>]. Never invent ids, paths or refs. If you did not receive an id, do not cite it.
+1. Gather facts with the tools before answering. The workspace map in the question already lists the services, so do not call list_services just to learn them. consumers_of summarizes who consumes a service and through which endpoints, each with a citable evidence id; get_service gives the raw detail; trace_impact shows who depends on an endpoint; resolve_evidence/read_source verify code locations; list_unresolved and get_coverage tell you what remains unknown.
+2. Every factual conclusion MUST cite at least one evidence id you actually received in tool results. Write the id exactly as it appears in the tool result inside the marker, with no angle brackets, quotes or placeholders, for example [ev:billing:Function:src/main.py:fetch_me:35]. Evidence ids are the long anchor strings found in tool results (fields like site.id or caller.id); service names and tool names are not evidence ids. Never invent ids, paths or refs. If you did not receive an id, do not cite it.
 3. You cannot change engine classifications. If a finding is NeedsInvestigation or NoKnownImpact, keep it; explain what is unknown and what evidence would resolve it.
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
@@ -132,7 +139,10 @@ function nowMs(): number {
 function isRetryableError(e: unknown): boolean {
   const message = e instanceof Error ? e.message : String(e);
   const name = e instanceof Error ? e.name : '';
-  return name === 'AbortError' || /429|rate.?limit|timeout|aborted/i.test(message);
+  return (
+    name === 'AbortError' ||
+    /\b(429|502|503|529)\b|rate.?limit|overload|timeout|aborted/i.test(message)
+  );
 }
 
 function isTimeoutError(e: unknown): boolean {
@@ -158,8 +168,8 @@ export function extractCitationRefs(
   const push = (raw: string | undefined): void => {
     const ref = (raw ?? '')
       .trim()
-      .replace(/^[`"'“”]+/, '')
-      .replace(/[`"'“”)\].,;:]+$/, '')
+      .replace(/^[`"'“”<(「【]+/, '')
+      .replace(/[`"'“”>)\]】」.,;:]+$/, '')
       .trim();
     if (ref && !refs.includes(ref)) refs.push(ref);
   };
@@ -230,9 +240,17 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   const modelRole = opts.modelRole ?? 'worker';
   const maxTokens = opts.maxTokens ?? 2048;
 
+  // Orientación sin gastar presupuesto: el mapa sale del mismo catálogo que fija
+  // el alcance, así el modelo no gasta sus primeras llamadas descubriéndolo.
+  const workspaceMap = await dispatcher.workspaceMap();
   const messages: ChatMessage[] = [
     { role: 'system', content: SYSTEM_PROMPT },
-    { role: 'user', content: opts.question },
+    {
+      role: 'user',
+      content: workspaceMap
+        ? `Workspace map (from the engine, fixed view):\n${workspaceMap}\n\nQuestion: ${opts.question}`
+        : opts.question,
+    },
   ];
   const toolCallLog: ToolCallRecord[] = [];
   const modelLog: ModelCallRecord[] = [];
@@ -243,13 +261,33 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let rounds = 0;
   let modelMsUsed = 0;
   let retried = false;
+  let pushedBack = false;
 
   // El tope de rondas evita bucles infinitos con un modelo que sólo pide
   // herramientas inválidas; el tiempo límite es el presupuesto real.
-  const maxRounds = budget.maxToolCalls + 2;
+  // Los errores del motor no consumen presupuesto, así que las rondas dejan
+  // margen proporcional para que un modelo que se corrige no se quede sin ellas.
+  const maxRounds = budget.maxToolCalls * 2 + 2;
   const deadline = nowMs() + budget.maxModelMs;
 
-  while (rounds < maxRounds) {
+  // Sin servicios en el catálogo toda lectura quedaría fuera de alcance: se
+  // dice por qué y no se gasta el modelo (P08: nunca un no_answer mudo).
+  const catalog = await dispatcher.catalogStatus();
+  const preflightFailure = catalog.error
+    ? {
+        status: 'failed:catalog_unavailable',
+        message: `service catalog unavailable: ${catalog.error}`,
+      }
+    : catalog.empty
+      ? {
+          status: 'failed:empty_service_catalog',
+          message:
+            'LAIN reports no configured services for this view (list_services is empty). Declare services in the LAIN config (services: name/repo) and reindex.',
+        }
+      : null;
+  if (preflightFailure) errors.push(preflightFailure.message);
+
+  while (!preflightFailure && rounds < maxRounds) {
     // La primera llamada siempre se intenta; el límite se aplica a partir de
     // la segunda para que un presupuesto ya consumido por arranque no impida
     // ni siquiera la primera consulta.
@@ -272,6 +310,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       if (isRetryableError(e) && !retried && nowMs() < deadline) {
         // Timeout o 429: se reintenta UNA vez dentro del presupuesto (§14).
         retried = true;
+        await new Promise((r) => setTimeout(r, opts.retryDelayMs ?? RETRY_DELAY_MS));
         modelLog.push({
           model: 'unknown',
           latencyMs: 0,
@@ -302,6 +341,20 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     });
 
     if (resp.toolCalls.length === 0) {
+      // Un modelo que contesta sin leer nada sólo puede repetir el mapa del
+      // workspace. Se le devuelve UNA vez a reunir evidencia; si insiste, su
+      // respuesta sigue su curso y la validación de citas la declara fallida.
+      if (!pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
+        pushedBack = true;
+        messages.push({ role: 'assistant', content: resp.content });
+        messages.push({
+          role: 'user',
+          content:
+            'You answered without using any tool. The workspace map is orientation, not evidence. Gather facts with the tools, then answer citing the evidence ids they return.',
+        });
+        rounds++;
+        continue;
+      }
       answer = resp.content ?? '';
       break;
     }
@@ -344,6 +397,8 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     rounds++;
   }
 
+  if (preflightFailure) status = preflightFailure.status;
+
   const citations =
     answer != null
       ? await validateCitations(opts.lain, view, answer, dispatcher)
@@ -375,6 +430,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       maxModelMs: budget.maxModelMs,
       toolCallsUsed: use.toolCallsUsed,
       exhausted: use.exhausted || status.startsWith('failed:model_time'),
+      cutShort: use.cutShort,
       modelMsUsed,
       rounds,
     },

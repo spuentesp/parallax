@@ -26,12 +26,14 @@ import {
   TraceImpactArgs,
 } from '@parallax/shared/lain';
 import { z } from 'zod';
+import { INVESTIGATOR_DEFAULTS } from '../config.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import type { ToolCall, ToolSpec } from './nemotron.js';
 
 export const DISPATCHER_TOOLS = [
   'list_services',
   'get_service',
+  'consumers_of',
   'list_contracts',
   'get_contract',
   'trace_impact',
@@ -54,6 +56,16 @@ export type DispatchErrorCode =
 const ModelArgsSchemas = {
   list_services: ListServicesArgs.omit({ snapshot: true }),
   get_service: GetServiceArgs.omit({ snapshot: true }),
+  consumers_of: z
+    .object({
+      service: z.string().min(1),
+      /** Sólo este consumidor: nombre de servicio o de su repo. */
+      consumer: z.string().min(1).optional(),
+      /** Sólo endpoints cuya clave contiene este texto (sin distinguir mayúsculas). */
+      endpoint_contains: z.string().min(1).optional(),
+      max_endpoints: z.number().int().min(1).max(200).optional(),
+    })
+    .strict(),
   list_contracts: ListContractsArgs.omit({ snapshot: true }),
   get_contract: GetContractArgs.omit({ snapshot: true }),
   trace_impact: TraceImpactArgs.omit({ snapshot: true }),
@@ -68,6 +80,8 @@ const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
     'List the services of the fixed analysis view (catalog). Optional repo filter must belong to the workspace.',
   get_service:
     'Detail of one service: consumers, bindings and evidence anchors (site/caller with evidence ids).',
+  consumers_of:
+    'Who consumes a service, summarized by the engine data: per consumer service, how many uses, and its most used endpoints, each with one evidence id you can cite. Endpoints are ranked by use and capped, with omitted_endpoints declaring the rest: narrow with consumer and endpoint_contains (e.g. "attribute") instead of assuming something is absent. Prefer this over get_service for who-depends-on-whom questions; use get_service only for raw detail.',
   list_contracts:
     'List contracts (endpoints) published in the view, optionally filtered by service or repo.',
   get_contract: 'Full detail of one contract by key (e.g. "http:GET /api/orders/{}").',
@@ -118,13 +132,16 @@ export interface DispatcherConfig {
   maxResultChars?: number;
 }
 
-const DEFAULT_MAX_TOOL_CALLS = 8;
+const DEFAULT_MAX_TOOL_CALLS = INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls;
 const DEFAULT_MAX_RESULT_CHARS = 24_000;
+const DEFAULT_CONSUMER_ENDPOINTS = 15;
 
 export interface DispatcherBudgetUse {
   toolCallsUsed: number;
   maxToolCalls: number;
   exhausted: boolean;
+  /** El tope rechazó al menos una lectura: la respuesta pudo quedar incompleta. */
+  cutShort: boolean;
 }
 
 export class LainDispatcher {
@@ -133,11 +150,19 @@ export class LainDispatcher {
   private readonly maxToolCalls: number;
   private readonly maxResultChars: number;
   private toolCallsUsed = 0;
+  private budgetRefusals = 0;
   // Evidencia entregada por el backend: el único conjunto que el modelo puede
   // citar (INV 1). Se alimenta de ids/refs que aparecen en resultados reales.
   private readonly delivered = new Set<string>();
   private catalog: { services: Set<string>; repos: Set<string> } | null = null;
   private catalogError: string | null = null;
+  private serviceSummaries: Array<{
+    service: string;
+    repo: string;
+    endpoints: number;
+    consumer_services: number;
+    unresolved_inbound: number;
+  }> = [];
   private readonly topologyEdges = new Map<string, { source: string; target: string }>();
 
   constructor(cfg: DispatcherConfig) {
@@ -165,7 +190,31 @@ export class LainDispatcher {
       toolCallsUsed: this.toolCallsUsed,
       maxToolCalls: this.maxToolCalls,
       exhausted: this.toolCallsUsed >= this.maxToolCalls,
+      cutShort: this.budgetRefusals > 0,
     };
+  }
+
+  // Estado del catálogo de servicios de la vista. Un catálogo vacío o ilegible
+  // deja fuera de alcance toda llamada con servicio/repo: se declara antes de
+  // gastar tiempo de modelo en una investigación que no puede reunir evidencia.
+  async catalogStatus(): Promise<{ empty: boolean; error: string | null }> {
+    if (!this.catalog) await this.loadCatalog();
+    return { empty: (this.catalog?.services.size ?? 0) === 0, error: this.catalogError };
+  }
+
+  /**
+   * Mapa del workspace para orientar al modelo antes de la primera llamada:
+   * servicios del catálogo con sus conteos del motor. Es la misma vista que el
+   * catálogo de alcance, no un dato nuevo.
+   */
+  async workspaceMap(): Promise<string> {
+    if (!this.catalog) await this.loadCatalog();
+    return this.serviceSummaries
+      .map(
+        (s) =>
+          `- ${s.service} (repo ${s.repo}): ${s.endpoints} endpoints, consumed by ${s.consumer_services} service(s), ${s.unresolved_inbound} unresolved inbound call(s)`,
+      )
+      .join('\n');
   }
 
   deliveredEvidence(): string[] {
@@ -182,6 +231,7 @@ export class LainDispatcher {
     const tool = call.function?.name ?? '';
 
     if (this.toolCallsUsed >= this.maxToolCalls) {
+      this.budgetRefusals++;
       return {
         ok: false,
         tool,
@@ -248,10 +298,12 @@ export class LainDispatcher {
     }
 
     // La vista la inyecta SIEMPRE el backend: el modelo no la elige.
-    this.toolCallsUsed++;
-
     try {
       const data = await this.dispatchToLain(tool, args);
+      // Sólo una lectura que el motor respondió consume presupuesto: un error
+      // del motor (p. ej. una clave inventada) no deja evidencia y el modelo
+      // no debe pagarlo con su alcance. Las rondas y el tiempo siguen acotando.
+      this.toolCallsUsed++;
       this.harvest(tool, data);
       const { value, truncated } = this.truncate(data, tool);
       return {
@@ -287,6 +339,11 @@ export class LainDispatcher {
         return this.lain.listServices({ ...(args as object), snapshot } as never);
       case 'get_service':
         return this.lain.getService({ ...(args as object), snapshot } as never);
+      case 'consumers_of': {
+        const { service, ...opts } = args as unknown as { service: string } & ConsumersOptions;
+        const svc = await this.lain.getService({ service, snapshot });
+        return summarizeConsumers(svc, opts);
+      }
       case 'list_contracts':
         return this.lain.listContracts({ ...(args as object), snapshot } as never);
       case 'get_contract':
@@ -355,6 +412,7 @@ export class LainDispatcher {
         if (typeof reviewed?.repo === 'string') repos.add(reviewed.repo);
       }
       this.catalog = { services, repos };
+      this.serviceSummaries = list.items;
       // El arranque del catálogo no consume presupuesto del modelo: es la vista
       // fijada por el análisis, no una llamada de investigación.
       this.catalogError = null;
@@ -380,10 +438,17 @@ export class LainDispatcher {
       }
     }
     walkEvidenceIds(data, (id) => this.delivered.add(id));
-    if (tool === 'get_service' && data && typeof data === 'object') {
+    if (tool === 'consumers_of' && data && typeof data === 'object') {
+      for (const consumer of (data as ConsumersSummary).consumers) {
+        for (const ep of consumer.endpoints) {
+          if (ep.evidence_id) this.delivered.add(ep.evidence_id);
+        }
+      }
+    }
+    if ((tool === 'get_service' || tool === 'consumers_of') && data && typeof data === 'object') {
       const svc = data as { service?: string; consumers?: Array<{ service?: string }> };
       for (const consumer of svc.consumers ?? []) {
-        if (consumer.service && svc.service) {
+        if (consumer.service && svc.service && consumer.service !== svc.service) {
           this.topologyEdges.set(`${consumer.service}->${svc.service}`, {
             source: consumer.service,
             target: svc.service,
@@ -426,6 +491,85 @@ export class LainDispatcher {
     }
     return { value: { truncated_preview: preview, cut }, truncated: cut };
   }
+}
+
+export interface ConsumersOptions {
+  consumer?: string | undefined;
+  endpoint_contains?: string | undefined;
+  max_endpoints?: number | undefined;
+}
+
+export interface ConsumersSummary {
+  service: string;
+  repo: string | null;
+  /** Todos los consumidores del servicio, aunque un filtro haya dejado fuera a alguno. */
+  available_consumers: Array<{ service: string; repo: string }>;
+  consumers: Array<{
+    service: string;
+    repo: string;
+    /** El consumidor es el propio servicio (p. ej. lecturas de tablas). */
+    is_self: boolean;
+    uses: number;
+    distinct_endpoints: number;
+    endpoints: Array<{ key: string; uses: number; evidence_id: string | null }>;
+    omitted_endpoints: number;
+  }>;
+}
+
+// Resumen DETERMINISTA de get_service: quién consume, cuánto, y por qué
+// endpoints, con un id de evidencia citable por endpoint. El modelo no tiene que
+// recorrer cientos de usos crudos (que el recorte de contexto además corta).
+export function summarizeConsumers(
+  svc: {
+    service: string;
+    repo?: string | undefined;
+    consumers: Array<{
+      service: string;
+      repo: string;
+      uses: Array<{
+        endpoint?: { key?: string | undefined } | undefined;
+        site?: { id?: string | undefined } | undefined;
+        caller?: { id?: string | undefined } | undefined;
+      }>;
+    }>;
+  },
+  opts: ConsumersOptions | number = {},
+): ConsumersSummary {
+  const o: ConsumersOptions = typeof opts === 'number' ? { max_endpoints: opts } : opts;
+  const maxEndpoints = o.max_endpoints ?? DEFAULT_CONSUMER_ENDPOINTS;
+  const needle = o.endpoint_contains?.toLowerCase();
+  return {
+    service: svc.service,
+    repo: svc.repo ?? null,
+    available_consumers: svc.consumers.map((c) => ({ service: c.service, repo: c.repo })),
+    consumers: svc.consumers
+      .filter((c) => o.consumer === undefined || c.service === o.consumer || c.repo === o.consumer)
+      .map((c) => {
+        const byKey = new Map<string, { uses: number; evidence_id: string | null }>();
+        for (const use of c.uses) {
+          const key = use.endpoint?.key;
+          if (!key) continue;
+          if (needle !== undefined && !key.toLowerCase().includes(needle)) continue;
+          const entry = byKey.get(key) ?? { uses: 0, evidence_id: null };
+          entry.uses++;
+          entry.evidence_id ??= use.site?.id ?? use.caller?.id ?? null;
+          byKey.set(key, entry);
+        }
+        const ranked = [...byKey.entries()]
+          .map(([key, v]) => ({ key, ...v }))
+          .sort((a, b) => b.uses - a.uses || a.key.localeCompare(b.key));
+        return {
+          service: c.service,
+          repo: c.repo,
+          is_self: c.service === svc.service,
+          // Usos que cumplen el filtro (todos, si no hay filtro).
+          uses: ranked.reduce((n, e) => n + e.uses, 0),
+          distinct_endpoints: ranked.length,
+          endpoints: ranked.slice(0, maxEndpoints),
+          omitted_endpoints: Math.max(0, ranked.length - maxEndpoints),
+        };
+      }),
+  };
 }
 
 function isDispatcherTool(name: string): name is DispatcherTool {
