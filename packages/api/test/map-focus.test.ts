@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { type Claim, type ClaimEvidence, verifyClaims } from '../src/agent/claims.js';
 import { mapFocusFromClaims } from '../src/agent/map-focus.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
+import type { LainAdapter } from '../src/lain-adapter/types.js';
 import { toOrgGraph } from '../src/org-graph.js';
 import { viewOrgGraph } from '../src/org-graph-view.js';
 import { buildEndpointTopology } from '../src/topology.js';
@@ -99,5 +100,112 @@ describe('mapFocusFromClaims', () => {
     expect(view.focus?.seed).toBe(focus?.seed);
     // El resultado del mapa incluye al consumidor que el agente citó.
     expect(view.nodes.some((n) => n.id === 'svc:billing')).toBe(true);
+  });
+});
+
+// Un motor con usos controlados: billing toca UN endpoint de orders, reports
+// toca DOS. Lo demás (catálogo, alcance) lo pone el mock.
+const GET = 'http:GET /api/orders/{}';
+const LIST = 'http:GET /api/orders';
+const use = (key: string) => ({
+  endpoint: { key, service: 'orders' },
+  binding: { kind: 'static', confidence: 1, source: 'TreeSitter' },
+  fields: [],
+  match: 'exact',
+  caller: { repo: 'x', path: 'x.py', line: 1, id: 'c' },
+});
+function engineWith(): LainAdapter {
+  const base = createLainMock();
+  return {
+    ...base,
+    async getService(req) {
+      const r = await base.getService(req);
+      if (req.service !== 'orders') return r;
+      return {
+        ...r,
+        consumers: [
+          { service: 'billing', repo: 'billing', uses: [use(GET)] },
+          { service: 'reports', repo: 'reports-repo', uses: [use(GET), use(LIST)] },
+        ],
+      } as typeof r;
+    },
+  };
+}
+
+async function focusWith(claims: Claim[], known: string[]) {
+  const engine = engineWith();
+  const services = await engine.listServices({ snapshot: 'live' });
+  const results = await verifyClaims(claims, {
+    lain: engine,
+    view: 'live',
+    resolveService: async (name) =>
+      services.items.find((x) => x.service === name || x.repo === name) ?? null,
+    validateRefs: async () => none,
+  });
+  return mapFocusFromClaims(results, new Set(known));
+}
+
+const ALL = ['svc:billing', 'svc:orders', 'svc:reports', `ep:${GET}@orders`, `ep:${LIST}@orders`];
+
+describe('mapFocusFromClaims — where the agent lands', () => {
+  it('lands on the endpoint when exactly one endpoint is at stake, and lists consumer, provider and endpoint', async () => {
+    const f = await focusWith([rel('billing', 'orders', 'present')], ALL);
+    expect(f?.seed).toBe(`ep:${GET}@orders`);
+    expect(new Set(f?.ids)).toEqual(new Set(['svc:billing', 'svc:orders', `ep:${GET}@orders`]));
+    expect(f?.relations[0]).toMatchObject({
+      endpoints: [`ep:${GET}@orders`],
+      uses: 1,
+      complete: true,
+    });
+    expect(new URLSearchParams(f?.query).get('focus')).toBe(`ep:${GET}@orders`);
+  });
+
+  it('lands on the provider when several endpoints are involved', async () => {
+    const f = await focusWith([rel('reports', 'orders', 'present')], ALL);
+    expect(f?.seed).toBe('svc:orders');
+    expect(f?.relations[0]?.endpoints).toHaveLength(2);
+    expect(f?.ids).toEqual(expect.arrayContaining([`ep:${GET}@orders`, `ep:${LIST}@orders`]));
+  });
+
+  it('keeps only endpoints the map has; with none left it lands on the provider', async () => {
+    const f = await focusWith([rel('billing', 'orders', 'present')], ['svc:billing', 'svc:orders']);
+    expect(f?.relations[0]?.endpoints).toEqual([]);
+    expect(f?.seed).toBe('svc:orders');
+    expect(f?.ids.some((id) => id.startsWith('ep:'))).toBe(false);
+  });
+
+  it('skips a relation when EITHER end is missing from the map', async () => {
+    expect(await focusWith([rel('billing', 'orders', 'present')], ['svc:orders'])).toBeNull();
+    expect(await focusWith([rel('billing', 'orders', 'present')], ['svc:billing'])).toBeNull();
+  });
+
+  it('merges several verified claims: union of ids, the first provider seeds', async () => {
+    const f = await focusWith(
+      [rel('billing', 'orders', 'present'), rel('reports', 'orders', 'present')],
+      ALL,
+    );
+    expect(f?.relations).toHaveLength(2);
+    expect(new Set(f?.ids)).toEqual(new Set(ALL));
+    // Dos endpoints distintos en juego en total: aterriza en el proveedor.
+    expect(f?.seed).toBe('svc:orders');
+  });
+
+  it('a repeated endpoint across claims still counts as one: the seed stays on it', async () => {
+    const f = await focusWith(
+      [rel('billing', 'orders', 'present'), rel('billing', 'orders', 'present')],
+      ALL,
+    );
+    expect(f?.seed).toBe(`ep:${GET}@orders`);
+  });
+
+  it('ignores note claims and any verdict other than verified', async () => {
+    const f = await focusWith(
+      [
+        { kind: 'note', text: 'orders is central', evidence: ['ev:1'] },
+        rel('billing', 'reports', 'present'),
+      ],
+      ALL,
+    );
+    expect(f).toBeNull();
   });
 });

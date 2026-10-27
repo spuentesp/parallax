@@ -29,7 +29,6 @@ interface Entry {
   graph: OrgGraph;
   generatedAt: number;
   lastError?: string;
-  inflight?: Promise<void>;
 }
 
 export interface OrgGraphCacheOptions {
@@ -52,9 +51,11 @@ export class OrgGraphCache {
   async get(key: string, build: () => Promise<OrgGraph>): Promise<CachedGraph> {
     let entry = this.entries.get(key);
     if (!entry) {
+      // La primera construcción sí se espera, y si falla el error llega tal
+      // cual: no hay grafo anterior que servir en su lugar.
       await this.rebuild(key, build);
       entry = this.entries.get(key);
-      if (!entry) throw new Error(this.pendingError(key));
+      if (!entry) throw new Error('org graph build failed');
     }
     const stale = this.now() - entry.generatedAt > this.ttlMs;
     if (stale && !this.pending.has(key)) {
@@ -66,20 +67,18 @@ export class OrgGraphCache {
 
   /** Reconstrucción explícita: espera y devuelve el grafo nuevo. */
   async refresh(key: string, build: () => Promise<OrgGraph>): Promise<CachedGraph> {
-    await this.rebuild(key, build).catch(() => undefined);
+    let failure: unknown;
+    await this.rebuild(key, build).catch((e: unknown) => {
+      failure = e;
+    });
     const entry = this.entries.get(key);
-    if (!entry) throw new Error(this.pendingError(key));
+    // Sin grafo previo y con la construcción caída: el error, no un grafo vacío.
+    if (!entry) throw failure instanceof Error ? failure : new Error('org graph build failed');
     return this.snapshot(key, entry, false);
   }
 
   invalidate(key: string): void {
     this.entries.delete(key);
-  }
-
-  private failures = new Map<string, string>();
-
-  private pendingError(key: string): string {
-    return this.failures.get(key) ?? 'org graph build failed';
   }
 
   private snapshot(key: string, entry: Entry, stale: boolean): CachedGraph {
@@ -99,10 +98,8 @@ export class OrgGraphCache {
       try {
         const graph = await build();
         this.entries.set(key, { graph, generatedAt: this.now() });
-        this.failures.delete(key);
       } catch (e) {
         const message = e instanceof Error ? e.message : 'org graph build failed';
-        this.failures.set(key, message);
         const prev = this.entries.get(key);
         if (prev) prev.lastError = message;
         else throw e;

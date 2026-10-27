@@ -324,6 +324,7 @@ describe('OrgGraphCache', () => {
     nodes: [{ id: 'a', label: 'a', kind: 'repo', parent: null, meta: {} }],
     edges: [],
   };
+  const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
   it('builds once, then serves from memory and shares concurrent builds', async () => {
     let calls = 0;
@@ -339,33 +340,74 @@ describe('OrgGraphCache', () => {
     expect(a.stale).toBe(false);
   });
 
-  it('serves the stale graph immediately and revalidates in the background', async () => {
+  it('is fresh up to and including the TTL, stale after it', async () => {
     let t = 0;
-    let n = 0;
     const cache = new OrgGraphCache({ ttlMs: 100, now: () => t });
-    const build = async () => {
-      n++;
-      return n === 1 ? g1 : g2;
-    };
-    await cache.get('k', build);
-    t = 500;
-    const stale = await cache.get('k', build);
-    expect(stale.stale).toBe(true);
-    expect(stale.graph).toBe(g1);
-    await cache.refresh('k', async () => g2);
-    const fresh = await cache.get('k', build);
-    expect(fresh.graph).toBe(g2);
-    expect(fresh.generatedAt).toBe(500);
+    await cache.get('k', async () => g1);
+    t = 100;
+    expect((await cache.get('k', async () => g2)).stale).toBe(false);
+    t = 101;
+    expect((await cache.get('k', async () => g2)).stale).toBe(true);
   });
 
-  it('keeps the previous graph and exposes the error when a rebuild fails', async () => {
+  it('serves the stale graph immediately and revalidates in the background, once', async () => {
+    let t = 0;
+    let builds = 0;
+    let release: (g: OrgGraph) => void = () => {};
+    const cache = new OrgGraphCache({ ttlMs: 100, now: () => t });
+    await cache.get('k', async () => {
+      builds++;
+      return g1;
+    });
+    t = 500;
+    const slow = () => {
+      builds++;
+      return new Promise<OrgGraph>((r) => {
+        release = r;
+      });
+    };
+    const first = await cache.get('k', slow);
+    expect(first.stale).toBe(true);
+    expect(first.graph).toBe(g1);
+    // La reconstrucción ya está en vuelo: lo dice, y una segunda petición no abre otra.
+    const second = await cache.get('k', slow);
+    expect(second.refreshing).toBe(true);
+    expect(builds).toBe(2);
+
+    release(g2);
+    await tick();
+    const done = await cache.get('k', slow);
+    expect(done.graph).toBe(g2);
+    expect(done.stale).toBe(false);
+    expect(done.refreshing).toBe(false);
+    expect(done.generatedAt).toBe(500);
+  });
+
+  it('refresh waits for the engine and always returns a fresh graph', async () => {
+    let t = 0;
+    const cache = new OrgGraphCache({ ttlMs: 100, now: () => t });
+    await cache.get('k', async () => g1);
+    t = 500;
+    const r = await cache.refresh('k', async () => g2);
+    expect(r).toMatchObject({ stale: false, refreshing: false, generatedAt: 500 });
+    expect(r.graph).toBe(g2);
+  });
+
+  it('keeps the previous graph and exposes the error when a rebuild fails, then clears it on success', async () => {
     const cache = new OrgGraphCache({ ttlMs: 1000, now: () => 0 });
     await cache.get('k', async () => g1);
-    const after = await cache.refresh('k', async () => {
+    const failed = await cache.refresh('k', async () => {
       throw new Error('lain down');
     });
-    expect(after.graph).toBe(g1);
-    expect(after.lastError).toBe('lain down');
+    expect(failed.graph).toBe(g1);
+    expect(failed.lastError).toBe('lain down');
+    const labelled = await cache.refresh('k', async () => {
+      throw 'boom';
+    });
+    expect(labelled.lastError).toBe('org graph build failed');
+    const healed = await cache.refresh('k', async () => g2);
+    expect(healed.graph).toBe(g2);
+    expect(healed).not.toHaveProperty('lastError');
   });
 
   it('propagates the failure of the very first build instead of returning an empty graph', async () => {
@@ -375,5 +417,31 @@ describe('OrgGraphCache', () => {
         throw new Error('lain down');
       }),
     ).rejects.toThrow('lain down');
+    await expect(
+      cache.refresh('k', async () => {
+        throw new Error('still down');
+      }),
+    ).rejects.toThrow('still down');
+    await expect(
+      cache.refresh('k', async () => {
+        throw 'boom';
+      }),
+    ).rejects.toThrow('org graph build failed');
+  });
+
+  it('keys entries independently and can forget one', async () => {
+    let calls = 0;
+    const cache = new OrgGraphCache({ ttlMs: 1000, now: () => 0 });
+    const build = async () => {
+      calls++;
+      return g1;
+    };
+    await cache.get('a', build);
+    await cache.get('b', build);
+    expect(calls).toBe(2);
+    cache.invalidate('a');
+    await cache.get('a', build);
+    await cache.get('b', build);
+    expect(calls).toBe(3);
   });
 });

@@ -2,8 +2,9 @@ import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { deriveLainRepoId } from './code-graph.js';
 import * as schema from './db/schema.js';
-import { getLainClient } from './lain-adapter/client.js';
+import { getLainClient, type LainClientConfig } from './lain-adapter/client.js';
 import { isLainCallError } from './lain-adapter/errors.js';
+import type { LainAdapter } from './lain-adapter/types.js';
 import { annotateRepos, type OrgGraph, toOrgGraph } from './org-graph.js';
 import { OrgGraphCache } from './org-graph-cache.js';
 import { buildEndpointTopology } from './topology.js';
@@ -25,8 +26,15 @@ export interface OrgGraphService {
 export function createOrgGraphService(deps: {
   db: BetterSQLite3Database<typeof schema>;
   ttlMs?: number;
+  now?: () => number;
+  /** Transporte hacia LAIN; por defecto el pool real. Se inyecta en los tests. */
+  getClient?: (config: LainClientConfig) => Promise<LainAdapter>;
 }): OrgGraphService {
-  const cache = new OrgGraphCache({ ttlMs: deps.ttlMs ?? CACHE_TTL_MS });
+  const cache = new OrgGraphCache({
+    ttlMs: deps.ttlMs ?? CACHE_TTL_MS,
+    ...(deps.now ? { now: deps.now } : {}),
+  });
+  const getClient = deps.getClient ?? getLainClient;
 
   return {
     async load(workspaceId, refresh) {
@@ -47,7 +55,7 @@ export function createOrgGraphService(deps: {
       const lainRepoIds = new Set(repos.map((r) => deriveLainRepoId(r)));
 
       const build = async (): Promise<OrgGraph> => {
-        const client = await getLainClient({ lainUrl, apiVersion: '1', timeoutMs: 20_000 });
+        const client = await getClient({ lainUrl, apiVersion: '1', timeoutMs: 20_000 });
         return annotateRepos(toOrgGraph(await buildEndpointTopology(client)), lainRepoIds);
       };
       const key = `${ws.id}|${lainUrl}|live`;
