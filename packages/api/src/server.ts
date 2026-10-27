@@ -11,6 +11,7 @@ import authPlugin from './plugins/auth.js';
 import dbPlugin from './plugins/db.js';
 import errorHandler from './plugins/error-handler.js';
 import lainAdapterPlugin from './plugins/lain-adapter.js';
+import orgGraphPlugin from './plugins/org-graph.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { ciRoutes } from './routes/ci.js';
 // API routes (all under /api/)
@@ -39,6 +40,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(authPlugin);
   await app.register(dbPlugin);
   await app.register(lainAdapterPlugin);
+  await app.register(orgGraphPlugin);
   await app.register(assessmentWorkerPlugin);
 
   // API routes.

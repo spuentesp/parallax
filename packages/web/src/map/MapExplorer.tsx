@@ -31,6 +31,22 @@ export function filtersFromParams(p: URLSearchParams): OrgGraphFilters {
   };
 }
 
+/** ¿`id` cuelga (a cualquier profundidad) de `ancestor` en lo que se ve? */
+export function isDescendant(
+  byId: ReadonlyMap<string, { parent: string | null }>,
+  id: string,
+  ancestor: string,
+): boolean {
+  const seen = new Set<string>();
+  let cur = byId.get(id)?.parent ?? null;
+  while (cur !== null && !seen.has(cur)) {
+    if (cur === ancestor) return true;
+    seen.add(cur);
+    cur = byId.get(cur)?.parent ?? null;
+  }
+  return false;
+}
+
 export function MapExplorer({ workspaceId }: { workspaceId: string }): React.ReactElement {
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(params), [params]);
@@ -71,12 +87,14 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
 
   // Lo que el servidor reveló por su cuenta (foco, selección fijada) pasa a ser
   // estado del cliente: así abrir/cerrar actúa sobre lo que realmente se ve.
+  // No con la vista anterior que se muestra mientras llega la nueva
+  // (placeholder): reabriría lo que el usuario acaba de cerrar.
   useEffect(() => {
-    if (!view) return;
+    if (!view || q.isPlaceholderData) return;
     const revealed = view.nodes.filter((n) => n.expanded).map((n) => n.id);
     if (revealed.every((id) => expanded.has(id))) return;
     setExpanded((prev) => new Set([...prev, ...revealed]));
-  }, [view, expanded]);
+  }, [view, expanded, q.isPlaceholderData]);
 
   const byId = useMemo(() => new Map((view?.nodes ?? []).map((n) => [n.id, n])), [view]);
 
@@ -90,10 +108,15 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
         else next.add(id);
         return next;
       });
-      // Cerrar un nodo con foco activo no tiene efecto visible: se suelta el foco.
-      if (n.expanded && focus) setParam({ focus: null, hops: null });
+      if (n.expanded) {
+        // La selección fijada reabriría a sus ancestros: si lo que se cierra la
+        // contiene, la selección pasa al nodo cerrado (si no, "no cierra").
+        if (selectedId && isDescendant(byId, selectedId, id)) setParam({ sel: id });
+        // Cerrar un nodo con foco activo no tiene efecto visible: se suelta el foco.
+        if (focus) setParam({ focus: null, hops: null });
+      }
     },
-    [byId, focus, setParam],
+    [byId, focus, selectedId, setParam],
   );
 
   const focusIds = useMemo(() => (view?.focus ? new Set(view.focus.ids) : null), [view?.focus]);
@@ -158,11 +181,26 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
                 {view ? 'No nodes match these filters.' : 'Loading…'}
               </div>
             )}
-            {focus && (
+            {focus && view && !view.focus && (
+              <div
+                className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border border-warning bg-surface px-3 py-1 text-xs shadow-sm"
+                data-testid="map-focus-missing"
+              >
+                <span className="text-warning">Focus target is not in this map</span>
+                <button
+                  type="button"
+                  className="text-accent hover:underline"
+                  onClick={() => setParam({ focus: null, hops: null })}
+                >
+                  clear
+                </button>
+              </div>
+            )}
+            {view?.focus && (
               <div className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs shadow-sm">
                 <span className="text-muted">Focus</span>
                 <span className="font-medium truncate max-w-[16rem]">
-                  {byId.get(focus)?.label ?? focus}
+                  {byId.get(view.focus.seed)?.label ?? view.focus.seed}
                 </span>
                 <HopsControl hops={hops} onChange={(h) => setParam({ hops: String(h) })} />
                 <button

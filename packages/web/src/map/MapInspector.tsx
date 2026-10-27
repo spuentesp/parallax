@@ -5,6 +5,7 @@
 
 import type { NodeDetail, NodeRelation } from '@parallax/shared/org-map';
 import type * as React from 'react';
+import { ApiError } from '../api/client.js';
 import { useMapNode } from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 
@@ -43,7 +44,22 @@ export function MapInspector({
     );
   }
   if (q.isPending) return <div className="p-5 text-sm text-muted">Loading…</div>;
-  if (q.isError) return <div className="p-5 text-sm text-error">Could not load this node.</div>;
+  if (q.isError) {
+    // 404 = el enlace apunta a algo que este mapa no tiene (p. ej. tras un
+    // refresh o con otros filtros): es recuperable, no un fallo.
+    const missing = q.error instanceof ApiError && q.error.status === 404;
+    return missing ? (
+      <div className="p-5 text-sm text-muted" data-testid="map-inspector-missing">
+        <p className="font-medium text-fg mb-1">Not in this map</p>
+        <p>
+          <span className="font-mono">{nodeId}</span> is not in the current graph. It may have been
+          removed, or the link was made for another workspace.
+        </p>
+      </div>
+    ) : (
+      <div className="p-5 text-sm text-error">Could not load this node.</div>
+    );
+  }
   const detail = q.data?.detail;
   if (!detail) {
     return (

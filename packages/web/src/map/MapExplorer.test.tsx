@@ -1,7 +1,7 @@
 import type { MapViewResponse, NodeDetail, OrgEdge, ProjectedNode } from '@parallax/shared/org-map';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
-import { MemoryRouter } from 'react-router-dom';
+import { createMemoryRouter, MemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
@@ -51,6 +51,8 @@ function serveMap(requests: Posted[]) {
       const body = (await request.json()) as Posted;
       requests.push(body);
       const open = new Set(body.expand);
+      // Como el servidor real: fijar un nodo abre a sus ancestros.
+      if (body.pin?.includes('svc:orders')) open.add('repo:orders');
       const nodes: ProjectedNode[] = [
         pn('repo:orders', {
           kind: 'repo',
@@ -81,7 +83,10 @@ function serveMap(requests: Posted[]) {
           }),
         ],
         hiddenChildren: {},
-        focus: body.focus ? { seed: body.focus, ids: [body.focus, 'repo:web'] } : null,
+        focus:
+          body.focus && body.focus !== 'ghost'
+            ? { seed: body.focus, ids: [body.focus, 'repo:web'] }
+            : null,
         unknownExpand: [],
         totals: { nodes: 6, edges: 3, shownNodes: nodes.length, shownEdges: 1 },
         meta: META,
@@ -121,6 +126,14 @@ function renderExplorer(url = '/') {
       <MapExplorer workspaceId="ws1" />
     </MemoryRouter>,
   );
+}
+
+function renderRouted(url: string) {
+  const router = createMemoryRouter([{ path: '*', element: <MapExplorer workspaceId="ws1" /> }], {
+    initialEntries: [url],
+  });
+  renderWithQuery(<RouterProvider router={router} />);
+  return router;
 }
 
 describe('MapExplorer', () => {
@@ -253,4 +266,65 @@ describe('MapExplorer', () => {
     expect(f.textContent).toMatch(/stale/i);
     expect(f.textContent).toMatch(/refreshing/);
   });
+
+  it('can collapse an ancestor of the selection: the selection moves up instead of re-opening it', async () => {
+    const requests: Posted[] = [];
+    serveMap(requests);
+    const router = renderRouted('/?sel=svc:orders');
+    const outline = await screen.findByTestId('map-outline');
+    expect(await within(outline).findByText('orders-api')).toBeTruthy();
+
+    fireEvent.click(within(outline).getByRole('button', { name: 'Collapse orders' }));
+
+    await waitFor(() => {
+      expect(new URLSearchParams(router.state.location.search).get('sel')).toBe('repo:orders');
+    });
+    await waitFor(() => expect(within(outline).queryByText('orders-api')).toBeNull());
+    expect(requests.at(-1)?.pin).toEqual(['repo:orders']);
+  });
+
+  it('says a deep-linked node is not in this map instead of reporting a load failure', async () => {
+    serveMap([]);
+    server.use(
+      http.get('/api/workspaces/:id/map/node', () =>
+        HttpResponse.json({ code: 'NodeNotFound' }, { status: 404 }),
+      ),
+    );
+    renderExplorer('/?sel=svc:gone');
+    const missing = await screen.findByTestId('map-inspector-missing');
+    expect(missing.textContent).toMatch(/not in this map/i);
+    expect(screen.queryByText(/could not load this node/i)).toBeNull();
+  });
+
+  it('flags a focus target the map does not have instead of showing a focus that is not there', async () => {
+    serveMap([]);
+    renderExplorer('/?focus=ghost&hops=1');
+    expect(await screen.findByTestId('map-focus-missing')).toBeTruthy();
+    expect(screen.queryByText('Focus')).toBeNull();
+  });
+
+  it('clears "refreshing" by itself once the server finishes revalidating', async () => {
+    let calls = 0;
+    server.use(
+      http.post('/api/workspaces/:id/map/view', () => {
+        calls++;
+        return HttpResponse.json({
+          nodes: [pn('repo:a', { kind: 'repo' })],
+          edges: [],
+          hiddenChildren: {},
+          focus: null,
+          unknownExpand: [],
+          meta: { ...META, stale: calls === 1, refreshing: calls === 1 },
+        });
+      }),
+    );
+    renderExplorer();
+    expect((await screen.findByTestId('map-freshness')).textContent).toMatch(/refreshing/);
+    await waitFor(
+      () =>
+        expect(screen.getByTestId('map-freshness').textContent).not.toMatch(/refreshing|stale/i),
+      { timeout: 6000 },
+    );
+    expect(calls).toBeGreaterThan(1);
+  }, 10_000);
 });

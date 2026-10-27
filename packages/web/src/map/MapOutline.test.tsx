@@ -64,6 +64,19 @@ describe('MapOutline', () => {
     expect(within(row).getByText('http')).toBeTruthy();
   });
 
+  it('is reachable by keyboard with no selection: the first row is the tab stop', () => {
+    setup();
+    const stops = screen.getAllByRole('treeitem').filter((r) => r.getAttribute('tabindex') === '0');
+    expect(stops).toHaveLength(1);
+    expect(stops[0]?.getAttribute('data-node-id')).toBe('repo:b');
+  });
+
+  it('moves the tab stop to the selected row once there is one', () => {
+    setup({ selectedId: 'svc:o' });
+    const stops = screen.getAllByRole('treeitem').filter((r) => r.getAttribute('tabindex') === '0');
+    expect(stops.map((r) => r.getAttribute('data-node-id'))).toEqual(['svc:o']);
+  });
+
   it('reports aria-expanded only for nodes that can open', () => {
     setup();
     const rows = screen.getAllByRole('treeitem');

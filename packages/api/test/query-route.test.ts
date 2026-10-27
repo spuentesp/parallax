@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../src/server.js';
 
-type ModelTurn = { content: string | null; tool?: string };
+type ModelTurn = { content: string | null; tool?: string; args?: unknown };
 
 function stubModel(turns: ModelTurn[]): void {
   let i = 0;
@@ -18,7 +18,13 @@ function stubModel(turns: ModelTurn[]): void {
     const message = turn.tool
       ? {
           content: null,
-          tool_calls: [{ id, type: 'function', function: { name: turn.tool, arguments: '{}' } }],
+          tool_calls: [
+            {
+              id,
+              type: 'function',
+              function: { name: turn.tool, arguments: JSON.stringify(turn.args ?? {}) },
+            },
+          ],
         }
       : { content: turn.content };
     return new Response(
@@ -89,5 +95,27 @@ describe('POST /api/query budget', () => {
     const r = await ask();
     expect(r.statusCode).toBe(200);
     expect(r.json().budget).toMatchObject({ toolCallsUsed: 2, exhausted: true, cutShort: true });
+  });
+
+  it('verifies a relation claim but gives no map focus when the workspace has no map of its own', async () => {
+    // org_demo no es un workspace con LAIN: el investigador usó el adapter por
+    // defecto (mock) y el mapa dice "unconfigured". Apuntarle un foco a nodos
+    // que ese mapa no muestra sería enviar al usuario a ninguna parte.
+    stubModel([
+      {
+        content: null,
+        tool: 'submit_answer',
+        args: {
+          answer: 'billing consumes orders.',
+          claims: [
+            { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+          ],
+        },
+      },
+    ]);
+    await start(8);
+    const r = await ask();
+    expect(r.json().claims_summary).toMatchObject({ verified: 1 });
+    expect(r.json().map_focus).toBeNull();
   });
 });

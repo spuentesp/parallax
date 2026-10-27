@@ -144,10 +144,14 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         endpointLabel: model.settings.baseUrl,
       });
 
-      const focus: MapFocus | null = mapFocusFromClaims(
-        result.claims,
-        new Set(topology.nodes.map((n) => n.id)),
-      );
+      // El foco sólo puede nombrar nodos que el MAPA tiene: se valida contra el
+      // mismo grafo cacheado que sirve /map/view. Un workspace sin LAIN propio
+      // (el investigador usó el adapter por defecto) o con el LAIN caído no
+      // tiene mapa al que apuntar.
+      const mapGraph = await app.orgGraphs.load(orgId, false);
+      const focus: MapFocus | null = mapGraph.ok
+        ? mapFocusFromClaims(result.claims, new Set(mapGraph.graph.nodes.map((n) => n.id)))
+        : null;
 
       // Serialización INV 2: la prosa del modelo no toca datos del motor; el
       // payload queda listo para auditoría (modelo, endpoint, prompt_version).

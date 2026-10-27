@@ -59,6 +59,8 @@ export function MapOutline({
   onMore,
 }: MapOutlineProps): React.ReactElement {
   const rows = useMemo(() => flattenOutline(view.nodes), [view.nodes]);
+  // Sin selección visible, la primera fila es la entrada de tabulador del árbol.
+  const hasSelection = rows.some((r) => r.node.id === selectedId);
 
   const onKey = (e: React.KeyboardEvent, row: Row, index: number) => {
     const move = (to: number) => {
@@ -100,7 +102,7 @@ export function MapOutline({
           <div key={n.id}>
             <div
               role="treeitem"
-              tabIndex={selected ? 0 : -1}
+              tabIndex={selected || (!hasSelection && i === 0) ? 0 : -1}
               aria-selected={selected}
               aria-expanded={openable ? n.expanded : undefined}
               data-node-id={n.id}

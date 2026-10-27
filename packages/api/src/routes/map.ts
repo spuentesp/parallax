@@ -1,20 +1,12 @@
-import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import * as schema from '../db/schema.js';
-import { getLainClient } from '../lain-adapter/client.js';
-import { isLainCallError } from '../lain-adapter/errors.js';
-import { describeNode, type OrgGraph, searchOrgGraph, toOrgGraph } from '../org-graph.js';
-import { OrgGraphCache } from '../org-graph-cache.js';
+import { describeNode, searchOrgGraph } from '../org-graph.js';
 import { viewOrgGraph } from '../org-graph-view.js';
-import { buildEndpointTopology } from '../topology.js';
 
 // Mapa de la organización (command center). El grafo completo se construye una
 // vez por workspace y se cachea (stale-while-revalidate); cada petición sólo
 // filtra, expande y proyecta en memoria. El cliente pide lo que ve: raíces al
 // abrir, y los hijos de cada nodo que el usuario expande.
-
-const CACHE_TTL_MS = 5 * 60_000;
 
 const Filters = z.object({
   contract: z.string().min(1).optional(),
@@ -33,50 +25,7 @@ const ViewBody = z.object({
 });
 
 export const mapRoutes: FastifyPluginAsync = async (app) => {
-  const cache = new OrgGraphCache({ ttlMs: CACHE_TTL_MS });
-
-  type Loaded =
-    | { ok: true; graph: OrgGraph; meta: Record<string, unknown> }
-    | { ok: false; source: 'none' | 'unconfigured' | 'error'; error?: string };
-
-  async function load(workspaceId: string, refresh: boolean): Promise<Loaded> {
-    const rows = await app.db
-      .select()
-      .from(schema.workspace)
-      .where(eq(schema.workspace.id, workspaceId))
-      .limit(1);
-    const ws = rows[0];
-    if (!ws) return { ok: false, source: 'none' };
-    if (!ws.lainUrl) return { ok: false, source: 'unconfigured' };
-    const lainUrl = ws.lainUrl;
-
-    const build = async (): Promise<OrgGraph> => {
-      const client = await getLainClient({ lainUrl, apiVersion: '1', timeoutMs: 20_000 });
-      return toOrgGraph(await buildEndpointTopology(client));
-    };
-    const key = `${ws.id}|${lainUrl}|live`;
-    try {
-      const cached = refresh ? await cache.refresh(key, build) : await cache.get(key, build);
-      return {
-        ok: true,
-        graph: cached.graph,
-        meta: {
-          source: 'lain',
-          lainUrl,
-          generatedAt: cached.generatedAt,
-          stale: cached.stale,
-          refreshing: cached.refreshing,
-          ...(cached.lastError !== undefined ? { lastError: cached.lastError } : {}),
-        },
-      };
-    } catch (e) {
-      return {
-        ok: false,
-        source: 'error',
-        error: isLainCallError(e) ? e.message : e instanceof Error ? e.message : 'lain unreachable',
-      };
-    }
-  }
+  const load = (id: string, refresh: boolean) => app.orgGraphs.load(id, refresh);
 
   const EMPTY = {
     nodes: [],

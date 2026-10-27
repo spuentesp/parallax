@@ -407,8 +407,11 @@ export function useOrgMap(workspaceId: string | undefined, params: MapViewParams
       }),
     enabled: workspaceId != null,
     placeholderData: keepPreviousData,
-    // La caché del servidor decide la frescura; el cliente no re-pide solo.
+    // La caché del servidor decide la frescura; el cliente sólo vuelve a pedir
+    // mientras el servidor dice que está reconstruyendo, para que "refreshing"
+    // se resuelva solo en vez de quedarse pegado.
     staleTime: 60_000,
+    refetchInterval: (q) => (q.state.data?.meta?.refreshing ? 3_000 : false),
   });
 }
 
