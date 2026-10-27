@@ -282,6 +282,64 @@ describe('LainDispatcher', () => {
   });
 });
 
+describe('query receipts', () => {
+  it('mints one receipt per answered read and none for rejected ones', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live', maxToolCalls: 5 });
+    const a = await d.execute(call('t1', 'list_services', {}));
+    await d.execute(call('t2', 'get_service', { service: 'not-in-the-view' }));
+    const b = await d.execute(call('t3', 'get_service', { service: 'orders' }));
+    expect(a.ok && a.receipt).toBe('q:1');
+    expect(b.ok && b.receipt).toBe('q:2');
+    expect(d.receipts().map((r) => [r.id, r.tool])).toEqual([
+      ['q:1', 'list_services'],
+      ['q:2', 'get_service'],
+    ]);
+    expect(d.hasReceipt('q:2')).toBe(true);
+    expect(d.hasReceipt('q:3')).toBe(false);
+  });
+
+  it('marks a receipt incomplete when the engine scope has unreviewed repos', async () => {
+    const base = createLainMock();
+    const lain: LainAdapter = {
+      ...base,
+      async getService(req) {
+        const r = await base.getService(req);
+        return { ...r, scope: { configured_only: true, reviewed: [], unreviewed: ['orders'] } };
+      },
+    };
+    const d = createDispatcher({ lain, view: 'live' });
+    await d.execute(call('t1', 'get_service', { service: 'orders' }));
+    await d.execute(call('t2', 'list_services', {}));
+    expect(d.receipts().map((r) => r.complete)).toEqual([false, true]);
+  });
+
+  it('marks a receipt incomplete when the result had to be truncated', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live', maxResultChars: 40 });
+    await d.execute(call('t1', 'list_services', {}));
+    expect(d.receipts()[0]?.complete).toBe(false);
+  });
+
+  it('carries the provider completeness into consumers_of receipts', async () => {
+    const base = createLainMock();
+    const lain: LainAdapter = {
+      ...base,
+      async getService(req) {
+        return { ...(await base.getService(req)), provider_reviewed: false };
+      },
+    };
+    const d = createDispatcher({ lain, view: 'live' });
+    const r = await d.execute(call('t1', 'consumers_of', { service: 'orders' }));
+    expect(r.ok && (r.data as { provider_complete: boolean }).provider_complete).toBe(false);
+    expect(d.receipts()[0]?.complete).toBe(false);
+  });
+
+  it('resolves a service by name or by an unambiguous repo name', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live' });
+    expect(await d.resolveService('orders')).toEqual({ service: 'orders', repo: 'orders' });
+    expect(await d.resolveService('nope')).toBeNull();
+  });
+});
+
 describe('summarizeConsumers', () => {
   const use = (key: string, id: string) => ({
     endpoint: { key },

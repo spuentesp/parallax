@@ -15,10 +15,26 @@
 import type { LainView } from '@parallax/shared/lain';
 import { INVESTIGATOR_DEFAULTS } from '../config.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
-import { createDispatcher, type DispatcherBudgetUse, type LainDispatcher } from './dispatcher.js';
+import {
+  type Claim,
+  type ClaimEvidence,
+  type ClaimResult,
+  type ClaimsSummary,
+  SUBMIT_TOOL,
+  SUBMIT_TOOL_SPEC,
+  SubmitAnswerArgs,
+  summarizeClaims,
+  verifyClaims,
+} from './claims.js';
+import {
+  createDispatcher,
+  type DispatcherBudgetUse,
+  type LainDispatcher,
+  type Receipt,
+} from './dispatcher.js';
 import type { ChatMessage, NemotronResponse, ToolSpec } from './nemotron.js';
 
-export const PROMPT_VERSION = 'parallax-investigator-v3';
+export const PROMPT_VERSION = 'parallax-investigator-v4';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
 // las pruebas inyectan un modelo guionizado y P08 se prueba sin modelo.
@@ -92,6 +108,13 @@ export interface InvestigationResult {
   promptVersion: string;
   /** Aristas consumidor→servicio observadas en get_service (estructural). */
   consumedEdges: Array<{ source: string; target: string }>;
+  /** Afirmaciones tipadas de submit_answer, con el veredicto del motor. */
+  claims: ClaimResult[];
+  claimsSummary: ClaimsSummary;
+  /** Recibos de consulta (q:N) emitidos en esta investigación. */
+  receipts: Receipt[];
+  /** Recibos citados en la prosa que existen en esta investigación. */
+  citedReceipts: string[];
   errors: string[];
 }
 
@@ -130,7 +153,8 @@ Method:
 3. You cannot change engine classifications. If a finding is NeedsInvestigation or NoKnownImpact, keep it; explain what is unknown and what evidence would resolve it.
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
-6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.`;
+6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.
+7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.`;
 
 function nowMs(): number {
   return Date.now();
@@ -160,17 +184,24 @@ function isTimeoutError(e: unknown): boolean {
 //
 // Esto no afloja INV 1: sigue sin aceptarse ningún id que el backend no haya
 // entregado. Lo que cambia es la tolerancia al formato, no a la verdad.
+// Un id tal como lo escribe el modelo -> el id: sin comillas, paréntesis ni
+// corchetes (también los de ancho completo) y sin el prefijo ev: si lo trae.
+export function cleanRef(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^[`"'“”<([「【]+/, '')
+    .replace(/^ev:\s*/i, '')
+    .replace(/[`"'“”>)\]】」.,;:]+$/, '')
+    .trim();
+}
+
 export function extractCitationRefs(
   answer: string,
   deliveredRefs: readonly string[] = [],
 ): string[] {
   const refs: string[] = [];
   const push = (raw: string | undefined): void => {
-    const ref = (raw ?? '')
-      .trim()
-      .replace(/^[`"'“”<(「【]+/, '')
-      .replace(/[`"'“”>)\]】」.,;:]+$/, '')
-      .trim();
+    const ref = cleanRef(raw ?? '');
     if (ref && !refs.includes(ref)) refs.push(ref);
   };
 
@@ -236,7 +267,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     maxToolCalls: budget.maxToolCalls,
     ...(opts.maxResultChars !== undefined ? { maxResultChars: opts.maxResultChars } : {}),
   });
-  const tools = dispatcher.toolSpecs();
+  const tools = [...dispatcher.toolSpecs(), SUBMIT_TOOL_SPEC];
   const modelRole = opts.modelRole ?? 'worker';
   const maxTokens = opts.maxTokens ?? 2048;
 
@@ -262,6 +293,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let modelMsUsed = 0;
   let retried = false;
   let pushedBack = false;
+  let submittedClaims: Claim[] = [];
 
   // El tope de rondas evita bucles infinitos con un modelo que sólo pide
   // herramientas inválidas; el tiempo límite es el presupuesto real.
@@ -365,12 +397,83 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       tool_calls: resp.toolCalls,
     });
 
+    // submit_answer cierra la investigación: no es una lectura del motor.
+    const submit = resp.toolCalls.find((c) => c.function?.name === SUBMIT_TOOL);
+    if (submit) {
+      const reject = (code: string, message: string): void => {
+        for (const call of resp.toolCalls) {
+          const own = call.id === submit.id;
+          toolCallLog.push({
+            toolCallId: call.id,
+            tool: call.function?.name ?? '',
+            args: call.function?.arguments ?? '',
+            ok: false,
+            code: own ? code : 'ignored',
+            latencyMs: 0,
+            resultChars: message.length,
+            truncated: false,
+          });
+          messages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              error: {
+                code: own ? code : 'ignored',
+                message: own
+                  ? message
+                  : 'submit_answer ends the investigation; other calls in the same turn are not executed',
+              },
+            }),
+          });
+        }
+        rounds++;
+      };
+      let parsedArgs: unknown;
+      try {
+        parsedArgs = JSON.parse(submit.function?.arguments || '{}');
+      } catch {
+        parsedArgs = null;
+      }
+      const checked = SubmitAnswerArgs.safeParse(parsedArgs);
+      if (!checked.success) {
+        reject(
+          'invalid_schema',
+          `invalid arguments for ${SUBMIT_TOOL}: ${checked.error.issues
+            .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+            .join('; ')}`,
+        );
+        continue;
+      }
+      if (!pushedBack && dispatcher.budgetUse().toolCallsUsed === 0) {
+        pushedBack = true;
+        reject(
+          'no_evidence',
+          'You submitted without using any tool. The workspace map is orientation, not evidence. Gather facts with the tools, then call submit_answer again.',
+        );
+        continue;
+      }
+      toolCallLog.push({
+        toolCallId: submit.id,
+        tool: SUBMIT_TOOL,
+        args: submit.function?.arguments ?? '',
+        ok: true,
+        latencyMs: 0,
+        resultChars: 0,
+        truncated: false,
+      });
+      answer = checked.data.answer;
+      submittedClaims = checked.data.claims ?? [];
+      break;
+    }
+
     for (const call of resp.toolCalls) {
       const result = await dispatcher.execute(call);
       const content = result.ok
         ? JSON.stringify({
             ok: true,
             tool: result.tool,
+            receipt: result.receipt,
             data: result.data,
             ...(result.truncated ? { cut_declared: result.truncated } : {}),
           })
@@ -399,20 +502,45 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
 
   if (preflightFailure) status = preflightFailure.status;
 
-  const citations =
+  const checkedCitations =
     answer != null
       ? await validateCitations(opts.lain, view, answer, dispatcher)
-      : { accepted: [], rejected: [] };
+      : { accepted: [], receipts: [], rejected: [] };
+  const citations = { accepted: checkedCitations.accepted, rejected: checkedCitations.rejected };
   const conflictingClaims =
     answer != null ? detectClassificationConflicts(answer, opts.engineFindings ?? []) : [];
+
+  // El motor adjudica las afirmaciones de relación; una contradicha se señala en
+  // el veredicto y en el resumen, sin tocar la prosa ni el estado.
+  const claims =
+    answer != null && submittedClaims.length > 0
+      ? await verifyClaims(submittedClaims, {
+          lain: opts.lain,
+          view,
+          resolveService: (name) => dispatcher.resolveService(name),
+          validateRefs: async (refs) => {
+            const r = await validateRefs(
+              opts.lain,
+              view,
+              [...new Set(refs.map(cleanRef).filter(Boolean))],
+              dispatcher,
+            );
+            return { accepted: r.accepted, receipts: r.receipts, rejected: r.rejected };
+          },
+        })
+      : [];
+  const claimsSummary = summarizeClaims(claims);
 
   if (answer != null) {
     // El validador ya sabe si hubo citas: accepted + rejected son las que
     // reconoció. Volver a extraerlas aquí sería otra interpretación del texto.
     const cited = citations.accepted.length + citations.rejected.length;
-    if (citations.accepted.length > 0) {
+    // Una relación verificada por el motor sostiene la respuesta sin ancla de
+    // código (una ausencia correcta no tiene ninguna que citar), y una nota cuya
+    // evidencia se resolvió también.
+    if (citations.accepted.length > 0 || claimsSummary.verified + claimsSummary.supported > 0) {
       status = 'available';
-    } else if (cited === 0) {
+    } else if (cited === 0 && checkedCitations.receipts.length === 0 && claims.length === 0) {
       status = 'failed:citations_missing';
     } else {
       status = 'failed:citations_unresolved';
@@ -439,32 +567,41 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
     effectiveModel,
     promptVersion: PROMPT_VERSION,
     consumedEdges: dispatcher.consumedEdges(),
+    claims,
+    claimsSummary,
+    receipts: dispatcher.receipts(),
+    citedReceipts: checkedCitations.receipts,
     errors,
   };
 }
 
 // INV 1: sólo una ref entregada por el backend y resoluble en la vista pasa.
-async function validateCitations(
+const RECEIPT_REF = /^q:\d+$/;
+
+// Valida refs contra lo que el backend entregó y el motor resuelve (INV 1). Un
+// recibo de consulta (q:N) es válido si existe en ESTA investigación.
+async function validateRefs(
   lain: LainAdapter,
   view: LainView,
-  answer: string,
+  refs: readonly string[],
   dispatcher: LainDispatcher,
-): Promise<{ accepted: string[]; rejected: CitationRejection[] }> {
+): Promise<ClaimEvidence & { rejected: CitationRejection[] }> {
   const delivered = new Set(dispatcher.deliveredEvidence());
-  // El marcador puede venir reescrito por el modelo; por eso se le pasan los ids
-  // entregados para reconocerlos aunque cambie la puntuación.
-  const refs = extractCitationRefs(answer, [...delivered]);
   const rejected: CitationRejection[] = [];
+  const receipts: string[] = [];
   const candidates: string[] = [];
   for (const ref of refs) {
-    if (!delivered.has(ref)) {
+    if (RECEIPT_REF.test(ref)) {
+      if (dispatcher.hasReceipt(ref)) receipts.push(ref);
+      else rejected.push({ ref, reason: 'not_delivered_by_backend' });
+    } else if (!delivered.has(ref)) {
       // Referencia inventada o fuera de la vista: se rechaza, no se oculta.
       rejected.push({ ref, reason: 'not_delivered_by_backend' });
     } else {
       candidates.push(ref);
     }
   }
-  if (candidates.length === 0) return { accepted: [], rejected };
+  if (candidates.length === 0) return { accepted: [], receipts, rejected };
 
   try {
     const resolved = await lain.resolveEvidence({ snapshot: view, refs: candidates });
@@ -478,14 +615,26 @@ async function validateCitations(
         rejected.push({ ref, reason: 'unresolvable_in_view' });
       }
     }
-    return { accepted, rejected };
+    return { accepted, receipts, rejected };
   } catch {
     // Sin resolución no hay cita publicable: queda el rechazo visible.
     for (const ref of candidates) {
       rejected.push({ ref, reason: 'unresolvable_in_view' });
     }
-    return { accepted: [], rejected };
+    return { accepted: [], receipts, rejected };
   }
+}
+
+// Citas de la prosa: el marcador puede venir reescrito por el modelo; por eso se
+// le pasan los ids entregados para reconocerlos aunque cambie la puntuación.
+async function validateCitations(
+  lain: LainAdapter,
+  view: LainView,
+  answer: string,
+  dispatcher: LainDispatcher,
+): Promise<ClaimEvidence & { rejected: CitationRejection[] }> {
+  const refs = extractCitationRefs(answer, dispatcher.deliveredEvidence());
+  return validateRefs(lain, view, refs, dispatcher);
 }
 
 export interface ExplanationPayload {
@@ -501,6 +650,10 @@ export interface ExplanationPayload {
   /** Clases del motor, copiadas VERBATIM: la autoridad es engine_json. */
   engine_finding_classes: Array<{ endpoint: string; service: string | null; class: string }>;
   budget: InvestigationResult['budget'];
+  /** Afirmaciones tipadas con el veredicto del motor; una contradicha se señala aquí. */
+  claims: ClaimResult[];
+  claims_summary: ClaimsSummary;
+  receipts: Receipt[];
   tool_calls: ToolCallRecord[];
   model_calls: ModelCallRecord[];
   errors: string[];
@@ -539,6 +692,9 @@ export function serializeExplanation(
     conflicting_claims: result.conflictingClaims,
     engine_finding_classes: engineClasses,
     budget: result.budget,
+    claims: result.claims,
+    claims_summary: result.claimsSummary,
+    receipts: result.receipts,
     tool_calls: result.toolCallLog,
     model_calls: result.modelLog,
     errors: result.errors,

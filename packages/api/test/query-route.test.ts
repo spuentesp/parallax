@@ -77,6 +77,9 @@ describe('POST /api/query budget', () => {
       exhausted: false,
       cutShort: false,
     });
+    // Sin submit_answer no hay afirmaciones: la forma de la respuesta es estable.
+    expect(r.json().claims).toEqual([]);
+    expect(r.json().claims_summary).toMatchObject({ total: 0, contradicted: 0 });
   });
 
   it('reports cutShort when the budget refused a read the model asked for', async () => {

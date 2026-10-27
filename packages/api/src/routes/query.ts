@@ -47,7 +47,27 @@ const QueryResponse = z.object({
     .nullable(),
   tool_calls: z.array(z.unknown()),
   model: z.string().nullable(),
+  // Afirmaciones tipadas con el veredicto del motor. Una contradicha no cambia
+  // explanation_status: se señala aquí y en el resumen.
+  claims: z.array(z.unknown()),
+  claims_summary: z.object({
+    total: z.number(),
+    verified: z.number(),
+    contradicted: z.number(),
+    unverifiable: z.number(),
+    supported: z.number(),
+    unsupported: z.number(),
+  }),
 });
+
+const NO_CLAIMS = {
+  total: 0,
+  verified: 0,
+  contradicted: 0,
+  unverifiable: 0,
+  supported: 0,
+  unsupported: 0,
+};
 
 const EMPTY_TOPOLOGY: TopologyViewData = { nodes: [], edges: [] };
 
@@ -90,6 +110,8 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           budget: null,
           tool_calls: [],
           model: null,
+          claims: [],
+          claims_summary: NO_CLAIMS,
         };
       }
 
@@ -136,6 +158,8 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         },
         tool_calls: result.toolCallLog,
         model: result.effectiveModel,
+        claims: result.claims,
+        claims_summary: result.claimsSummary,
       };
     },
   );

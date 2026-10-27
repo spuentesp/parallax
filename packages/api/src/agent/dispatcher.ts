@@ -105,10 +105,26 @@ export interface DispatchTruncation {
   hint: string;
 }
 
+/**
+ * Recibo de consulta: el backend deja constancia de una lectura que el motor
+ * respondió, y de si el resultado fue COMPLETO. Es la forma de evidencia de una
+ * ausencia (una consulta completa que no devolvió filas), que no tiene ancla de
+ * código que citar.
+ */
+export interface Receipt {
+  id: string;
+  tool: DispatcherTool;
+  args: unknown;
+  rows: number | null;
+  complete: boolean;
+}
+
 export interface DispatchOk {
   ok: true;
   tool: DispatcherTool;
   callId: string;
+  /** Id citable del recibo de esta lectura (q:N). */
+  receipt: string;
   data: unknown;
   truncated: DispatchTruncation | null;
   latencyMs: number;
@@ -151,6 +167,7 @@ export class LainDispatcher {
   private readonly maxResultChars: number;
   private toolCallsUsed = 0;
   private budgetRefusals = 0;
+  private readonly receiptLog: Receipt[] = [];
   // Evidencia entregada por el backend: el único conjunto que el modelo puede
   // citar (INV 1). Se alimenta de ids/refs que aparecen en resultados reales.
   private readonly delivered = new Set<string>();
@@ -215,6 +232,49 @@ export class LainDispatcher {
           `- ${s.service} (repo ${s.repo}): ${s.endpoints} endpoints, consumed by ${s.consumer_services} service(s), ${s.unresolved_inbound} unresolved inbound call(s)`,
       )
       .join('\n');
+  }
+
+  receipts(): Receipt[] {
+    return [...this.receiptLog];
+  }
+
+  hasReceipt(id: string): boolean {
+    return this.receiptLog.some((r) => r.id === id);
+  }
+
+  /** Servicio del catálogo por nombre, o por el de su repo si es inequívoco. */
+  async resolveService(name: string): Promise<{ service: string; repo: string } | null> {
+    if (!this.catalog) await this.loadCatalog();
+    const exact = this.serviceSummaries.find((s) => s.service === name);
+    if (exact) return { service: exact.service, repo: exact.repo };
+    const byRepo = this.serviceSummaries.filter((s) => s.repo === name);
+    const only = byRepo.length === 1 ? byRepo[0] : undefined;
+    return only ? { service: only.service, repo: only.repo } : null;
+  }
+
+  private mintReceipt(
+    tool: DispatcherTool,
+    args: Record<string, unknown>,
+    data: unknown,
+    truncated: boolean,
+  ): Receipt {
+    const obj = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+    const rowsOf = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
+    const rows = rowsOf(obj.items) ?? rowsOf(obj.consumers) ?? rowsOf(obj.edges) ?? null;
+    const moreRows = typeof obj.cursor === 'string' && obj.cursor.length > 0;
+    const scope = obj.scope as { unreviewed?: unknown[] } | undefined;
+    const scopeOpen = Array.isArray(scope?.unreviewed) && scope.unreviewed.length > 0;
+    // consumers_of ya calculó la completitud del proveedor (provider_complete).
+    const providerOpen = obj.provider_complete === false || obj.provider_reviewed === false;
+    const receipt: Receipt = {
+      id: `q:${this.receiptLog.length + 1}`,
+      tool,
+      args,
+      rows,
+      complete: !truncated && !moreRows && !scopeOpen && !providerOpen,
+    };
+    this.receiptLog.push(receipt);
+    return receipt;
   }
 
   deliveredEvidence(): string[] {
@@ -306,10 +366,12 @@ export class LainDispatcher {
       this.toolCallsUsed++;
       this.harvest(tool, data);
       const { value, truncated } = this.truncate(data, tool);
+      const receipt = this.mintReceipt(tool, args, data, truncated !== null);
       return {
         ok: true,
         tool,
         callId,
+        receipt: receipt.id,
         data: value,
         truncated,
         latencyMs: Date.now() - t0,
@@ -502,6 +564,8 @@ export interface ConsumersOptions {
 export interface ConsumersSummary {
   service: string;
   repo: string | null;
+  /** El proveedor y sus repos fueron revisados por completo: una ausencia es creíble. */
+  provider_complete: boolean;
   /** Todos los consumidores del servicio, aunque un filtro haya dejado fuera a alguno. */
   available_consumers: Array<{ service: string; repo: string }>;
   consumers: Array<{
@@ -523,6 +587,8 @@ export function summarizeConsumers(
   svc: {
     service: string;
     repo?: string | undefined;
+    provider_reviewed?: unknown;
+    scope?: { unreviewed?: unknown[] | undefined } | undefined;
     consumers: Array<{
       service: string;
       repo: string;
@@ -541,6 +607,8 @@ export function summarizeConsumers(
   return {
     service: svc.service,
     repo: svc.repo ?? null,
+    provider_complete:
+      svc.provider_reviewed !== false && (svc.scope?.unreviewed?.length ?? 0) === 0,
     available_consumers: svc.consumers.map((c) => ({ service: c.service, repo: c.repo })),
     consumers: svc.consumers
       .filter((c) => o.consumer === undefined || c.service === o.consumer || c.repo === o.consumer)
