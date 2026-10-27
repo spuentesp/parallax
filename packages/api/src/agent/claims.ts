@@ -72,6 +72,8 @@ export interface ClaimResult {
   reason: string;
   /** Lo que el motor dice de la relación (sólo para `relation`). */
   engine?: { uses: number; endpoints: string[]; complete: boolean };
+  /** Servicios del catálogo a los que se resolvieron consumer y provider (sólo `relation`). */
+  resolved?: { consumer: string; provider: string };
   evidence: ClaimEvidence;
 }
 
@@ -135,6 +137,7 @@ async function verifyRelation(
     };
   }
 
+  const resolved = { consumer: consumer.service, provider: provider.service };
   let svc: Awaited<ReturnType<LainAdapter['getService']>>;
   try {
     svc = await deps.lain.getService({ snapshot: deps.view as never, service: provider.service });
@@ -143,6 +146,7 @@ async function verifyRelation(
       claim,
       verdict: 'unverifiable',
       reason: `engine lookup failed: ${e instanceof Error ? e.message : String(e)}`,
+      resolved,
       evidence,
     };
   }
@@ -170,6 +174,7 @@ async function verifyRelation(
         verdict: 'verified',
         reason: `engine records ${uses.length} use(s) of ${provider.service} by ${consumer.service}`,
         engine,
+        resolved,
         evidence,
       };
     }
@@ -179,6 +184,7 @@ async function verifyRelation(
           verdict: 'contradicted',
           reason: `engine records no use of ${provider.service} by ${consumer.service} over a complete scope (${subject})`,
           engine,
+          resolved,
           evidence,
         }
       : {
@@ -186,6 +192,7 @@ async function verifyRelation(
           verdict: 'unverifiable',
           reason: `engine records no ${subject} edge, but the scope is incomplete (unreviewed: ${unreviewed.join(', ') || 'provider not reviewed'})`,
           engine,
+          resolved,
           evidence,
         };
   }
@@ -205,6 +212,7 @@ async function verifyRelation(
         verdict: 'verified',
         reason: `engine records no ${subject} edge over a complete scope`,
         engine,
+        resolved,
         evidence,
       }
     : {
@@ -212,6 +220,7 @@ async function verifyRelation(
         verdict: 'unverifiable',
         reason: `no ${subject} edge found, but absence cannot be confirmed: scope incomplete (unreviewed: ${unreviewed.join(', ') || 'provider not reviewed'})`,
         engine,
+        resolved,
         evidence,
       };
 }

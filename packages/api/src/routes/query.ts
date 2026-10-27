@@ -7,6 +7,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
+import { type MapFocus, mapFocusFromClaims } from '../agent/map-focus.js';
 import { investigatorModel } from '../agent/model.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
@@ -50,6 +51,24 @@ const QueryResponse = z.object({
   // Afirmaciones tipadas con el veredicto del motor. Una contradicha no cambia
   // explanation_status: se señala aquí y en el resumen.
   claims: z.array(z.unknown()),
+  // A dónde llevar al usuario en el mapa: sólo lo que un recibo del motor respalda.
+  map_focus: z
+    .object({
+      seed: z.string(),
+      ids: z.array(z.string()),
+      relations: z.array(
+        z.object({
+          consumer: z.string(),
+          provider: z.string(),
+          polarity: z.enum(['present', 'absent']),
+          uses: z.number(),
+          endpoints: z.array(z.string()),
+          complete: z.boolean(),
+        }),
+      ),
+      query: z.string(),
+    })
+    .nullable(),
   claims_summary: z.object({
     total: z.number(),
     verified: z.number(),
@@ -112,6 +131,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           model: null,
           claims: [],
           claims_summary: NO_CLAIMS,
+          map_focus: null,
         };
       }
 
@@ -123,6 +143,11 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         budget: model.budget,
         endpointLabel: model.settings.baseUrl,
       });
+
+      const focus: MapFocus | null = mapFocusFromClaims(
+        result.claims,
+        new Set(topology.nodes.map((n) => n.id)),
+      );
 
       // Serialización INV 2: la prosa del modelo no toca datos del motor; el
       // payload queda listo para auditoría (modelo, endpoint, prompt_version).
@@ -160,6 +185,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         model: result.effectiveModel,
         claims: result.claims,
         claims_summary: result.claimsSummary,
+        map_focus: focus,
       };
     },
   );
