@@ -32,11 +32,12 @@ const CHAR_W = { proportional: 6.6, mono: 6.1 } as const;
 
 /** Tamaño de una hoja según su rótulo (el lienzo trunca con puntos suspensivos). */
 export function measure(label: string, kind: ProjectedNode['kind']): Size {
-  const mono = kind === 'endpoint';
+  // Contratos y código se leen en monoespaciada; repos y servicios son nombres.
+  const mono = kind !== 'repo' && kind !== 'service' && kind !== 'code';
   const w = Math.round(
     Math.min(Math.max(label.length * (mono ? CHAR_W.mono : CHAR_W.proportional) + 22, 84), 230),
   );
-  return { w, h: kind === 'repo' ? 34 : kind === 'service' ? 28 : 24 };
+  return { w, h: kind === 'repo' ? 34 : kind === 'service' ? 28 : kind === 'code' ? 26 : 24 };
 }
 
 export interface LayoutNode {

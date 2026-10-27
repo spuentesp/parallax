@@ -36,6 +36,9 @@ export function buildStyle(): StylesheetJson {
   const repo = TOKEN('--color-repo', '#7c3aed');
   const service = TOKEN('--color-service', '#2563eb');
   const endpoint = TOKEN('--color-endpoint', '#d97706');
+  const codeC = TOKEN('--color-code', '#64748b');
+  const fileC = TOKEN('--color-file', '#65a30d');
+  const symbolC = TOKEN('--color-symbol', '#c026d3');
   const det = TOKEN('--color-deterministic', '#0f766e');
   const inf = TOKEN('--color-inferred', '#e11d48');
 
@@ -88,6 +91,47 @@ export function buildStyle(): StylesheetJson {
         'background-color': surface,
         'border-color': endpoint,
         'border-width': 1.5,
+        width: 'data(w)',
+        height: 'data(h)',
+        padding: '0px',
+        'font-size': 10,
+        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      },
+    },
+    // Grafo de código: la puerta ("Code"), archivos/módulos y símbolos.
+    {
+      selector: 'node.code',
+      style: {
+        shape: 'round-rectangle',
+        'background-color': codeC,
+        'background-opacity': 0.1,
+        'border-color': codeC,
+        'font-weight': 600,
+        width: 'data(w)',
+        height: 'data(h)',
+        padding: '0px',
+      },
+    },
+    {
+      selector: 'node.file',
+      style: {
+        shape: 'round-rectangle',
+        'background-color': fileC,
+        'background-opacity': 0.12,
+        'border-color': fileC,
+        width: 'data(w)',
+        height: 'data(h)',
+        padding: '0px',
+        'font-size': 10,
+        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+      },
+    },
+    {
+      selector: 'node.symbol',
+      style: {
+        shape: 'round-rectangle',
+        'background-color': surface,
+        'border-color': symbolC,
         width: 'data(w)',
         height: 'data(h)',
         padding: '0px',
@@ -324,10 +368,15 @@ export function MapCanvas({
         const n = cy.getElementById(selectedId);
         if (n.nonempty()) {
           n.select();
-          const around = n.closedNeighborhood();
-          cy.elements().not(around).not(n.ancestors()).addClass('dim');
-          n.connectedEdges().addClass('hl');
-          around.removeClass('dim');
+          // Atenuar el resto sólo tiene sentido si el nodo tiene con qué
+          // contrastar (relaciones): uno sin aristas — p. ej. un símbolo de
+          // código — dejaría a sus hermanos ilegibles sin decir nada.
+          if (n.connectedEdges().nonempty()) {
+            const around = n.closedNeighborhood();
+            cy.elements().not(around).not(n.ancestors()).addClass('dim');
+            n.connectedEdges().addClass('hl');
+            around.removeClass('dim');
+          }
         }
       }
     });

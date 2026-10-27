@@ -4,6 +4,7 @@ import {
   buildGraphRoot,
   classifyNode,
   deriveLainRepoId,
+  resolvePathSnippet,
   resolveSymbolSnippet,
 } from '../src/code-graph.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
@@ -188,5 +189,26 @@ describe('resolveSymbolSnippet', () => {
     expect(res.path).toBeNull();
     expect(res.text).toBeNull();
     expect(res.error).toContain('Node not found');
+  });
+});
+
+describe('resolvePathSnippet (mock engine)', () => {
+  it('opens a file by path without going through explain_symbol', async () => {
+    const r = await resolvePathSnippet(createLainMock(), 'orders', 'src/api.py');
+    expect(r).toMatchObject({ repo: 'orders', path: 'src/api.py', symbol: 'src/api.py' });
+    expect(r.text).toMatch(/mock line 1/);
+    expect(r.error).toBeUndefined();
+  });
+
+  it('reports the engine failure instead of an empty snippet', async () => {
+    const failing = {
+      ...createLainMock(),
+      getCodeSnippet: async () => {
+        throw new Error('index cannot open it');
+      },
+    } as unknown as LainAdapter;
+    const r = await resolvePathSnippet(failing, 'orders', 'src/api.py');
+    expect(r.text).toBeNull();
+    expect(r.error).toBe('index cannot open it');
   });
 });

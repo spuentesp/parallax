@@ -13,10 +13,13 @@ import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap } from '../api/hooks.js';
+import { CodeInspector } from './CodeInspector.js';
+import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { MapCanvas } from './MapCanvas.js';
 import { MapInspector } from './MapInspector.js';
 import { MapOutline } from './MapOutline.js';
+import { useCodeLayer } from './useCodeLayer.js';
 
 const CONTRACTS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
 const PAGE = 100;
@@ -29,6 +32,24 @@ export function filtersFromParams(p: URLSearchParams): OrgGraphFilters {
     provenance: prov === 'deterministic' || prov === 'inferred' ? prov : undefined,
     minConfidence: p.get('minc') !== null && Number.isFinite(minc) ? minc : undefined,
   };
+}
+
+/** Ancestros de un nodo tal como se ven en el mapa, del padre a la raíz. */
+export function trailOf<T extends { id: string; parent: string | null }>(
+  byId: ReadonlyMap<string, T>,
+  id: string,
+): T[] {
+  const out: T[] = [];
+  const seen = new Set<string>([id]);
+  let cur = byId.get(id)?.parent ?? null;
+  while (cur !== null && !seen.has(cur)) {
+    const n = byId.get(cur);
+    if (!n) break;
+    out.push(n);
+    seen.add(cur);
+    cur = n.parent;
+  }
+  return out;
 }
 
 /** ¿`id` cuelga (a cualquier profundidad) de `ancestor` en lo que se ve? */
@@ -66,7 +87,13 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
     limits,
     pin: selectedId ? [selectedId] : [],
   });
-  const view = q.data;
+  const serverView = q.data;
+  const code = useCodeLayer(workspaceId);
+  // La capa de código (archivos/símbolos de LAIN) se suma a la proyección del servidor.
+  const view = useMemo(
+    () => (serverView ? mergeCode(serverView, code.open, code.state) : undefined),
+    [serverView, code.open, code.state],
+  );
   const refresh = useRefreshMap(workspaceId);
 
   const setParam = useCallback(
@@ -90,18 +117,23 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
   // No con la vista anterior que se muestra mientras llega la nueva
   // (placeholder): reabriría lo que el usuario acaba de cerrar.
   useEffect(() => {
-    if (!view || q.isPlaceholderData) return;
-    const revealed = view.nodes.filter((n) => n.expanded).map((n) => n.id);
+    if (!serverView || q.isPlaceholderData) return;
+    const revealed = serverView.nodes.filter((n) => n.expanded).map((n) => n.id);
     if (revealed.every((id) => expanded.has(id))) return;
     setExpanded((prev) => new Set([...prev, ...revealed]));
-  }, [view, expanded, q.isPlaceholderData]);
+  }, [serverView, expanded, q.isPlaceholderData]);
 
   const byId = useMemo(() => new Map((view?.nodes ?? []).map((n) => [n.id, n])), [view]);
 
   const toggle = useCallback(
     (id: string) => {
       const n = byId.get(id);
-      if (!n || n.childCount === 0) return;
+      // Nodos de código: se abren bajo demanda (se piden a LAIN al abrir).
+      if (n && isCodeId(id)) {
+        if (n.lazy) code.toggle(id, n.expanded);
+        return;
+      }
+      if (!n || !canOpen(n)) return;
       setExpanded((prev) => {
         const next = new Set(prev);
         if (n.expanded) next.delete(id);
@@ -116,8 +148,16 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
         if (focus) setParam({ focus: null, hops: null });
       }
     },
-    [byId, focus, selectedId, setParam],
+    [byId, focus, selectedId, setParam, code.toggle],
   );
+
+  // Seleccionar un símbolo trae sus relaciones (el inspector las lista).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sólo al cambiar la selección
+  useEffect(() => {
+    if (selectedId && isCodeId(selectedId) && !selectedId.startsWith('code:')) {
+      code.ensure(selectedId);
+    }
+  }, [selectedId]);
 
   const focusIds = useMemo(() => (view?.focus ? new Set(view.focus.ids) : null), [view?.focus]);
   const meta = view?.meta;
@@ -140,7 +180,7 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
         meta={meta}
         totals={view?.totals}
         refreshing={refresh.isPending}
-        onRefresh={() => refresh.mutate()}
+        onRefresh={() => refresh.mutate(undefined, { onSuccess: code.reset })}
         onFit={() => setFitNonce((n) => n + 1)}
         loading={q.isFetching}
       />
@@ -216,15 +256,27 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
           </div>
 
           <aside className="overflow-y-auto border-l border-border" aria-label="Inspector">
-            <MapInspector
-              workspaceId={workspaceId}
-              nodeId={selectedId}
-              onSelect={(id) => setParam({ sel: id })}
-              onFocus={(id) => setParam({ focus: id, hops: String(hops), sel: id })}
-              onToggle={toggle}
-              focusing={focus !== null}
-              onClearFocus={() => setParam({ focus: null, hops: null })}
-            />
+            {selectedId && isCodeId(selectedId) ? (
+              <CodeInspector
+                workspaceId={workspaceId}
+                nodeId={selectedId}
+                node={byId.get(selectedId)}
+                entry={code.state[selectedId]}
+                trail={trailOf(byId, selectedId)}
+                onSelect={(id) => setParam({ sel: id })}
+                onToggle={toggle}
+              />
+            ) : (
+              <MapInspector
+                workspaceId={workspaceId}
+                nodeId={selectedId}
+                onSelect={(id) => setParam({ sel: id })}
+                onFocus={(id) => setParam({ focus: id, hops: String(hops), sel: id })}
+                onToggle={toggle}
+                focusing={focus !== null}
+                onClearFocus={() => setParam({ focus: null, hops: null })}
+              />
+            )}
           </aside>
         </div>
       )}

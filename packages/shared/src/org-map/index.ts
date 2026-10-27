@@ -4,7 +4,12 @@
 
 /** deterministic = binding estático / relación estructural; inferred = heurístico. */
 export type Provenance = 'deterministic' | 'inferred';
-export type OrgNodeKind = 'repo' | 'service' | 'endpoint';
+/**
+ * repo / service / endpoint vienen del análisis de contratos. `code` es la
+ * puerta al grafo de código de un repo; `file` (contenedores: archivo, módulo,
+ * paquete) y `symbol` (funciones, clases, rutas…) se piden al vuelo a LAIN.
+ */
+export type OrgNodeKind = 'repo' | 'service' | 'endpoint' | 'code' | 'file' | 'symbol';
 export type OrgEdgeKind = 'consumes' | 'servedBy';
 
 export interface OrgNode {
@@ -44,6 +49,8 @@ export interface ProjectedNode extends OrgNode {
   childCount: number;
   /** true si sus hijos ya vienen en la proyección. */
   expanded: boolean;
+  /** Puede tener hijos que aún no se han pedido (grafo de código): se abre bajo demanda. */
+  lazy?: boolean;
 }
 
 export interface Projection {

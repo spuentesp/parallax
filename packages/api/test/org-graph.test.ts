@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
 import {
+  annotateRepos,
   describeNode,
   filterOrgGraph,
   neighborhood,
@@ -205,6 +206,26 @@ describe('projectOrgGraph — tope de hijos', () => {
     const more = projectOrgGraph(graph, open, { childLimit: 1, limits: { [orders]: 3 } });
     expect(more.hiddenChildren).toEqual({});
     expect(more.nodes.filter((n) => n.kind === 'endpoint')).toHaveLength(3);
+  });
+});
+
+describe('annotateRepos — repo_id de LAIN para navegar el código', () => {
+  it('links a repo node to its LAIN repo_id only on an exact match', () => {
+    const annotated = annotateRepos(graph, new Set(['orders', 'billing']));
+    const lain = (label: string) =>
+      annotated.nodes.find((n) => n.kind === 'repo' && n.label === label)?.meta.lainRepoId;
+    expect(lain('orders')).toBe('orders');
+    expect(lain('billing')).toBe('billing');
+    // "analytics" es el repo del servicio reports y no está entre los repos del
+    // workspace: no se adivina un id parecido, queda null y la UI lo dice.
+    expect(lain('analytics')).toBeNull();
+  });
+
+  it('leaves services, endpoints and edges untouched', () => {
+    const annotated = annotateRepos(graph, new Set(['orders']));
+    expect(annotated.edges).toBe(graph.edges);
+    const svc = annotated.nodes.find((n) => n.id === orders);
+    expect(svc?.meta).toEqual(graph.nodes.find((n) => n.id === orders)?.meta);
   });
 });
 

@@ -6,6 +6,7 @@
 import type { MapViewResponse, ProjectedNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
 import { useMemo } from 'react';
+import { canOpen } from './code.js';
 import { KindIcon } from './icons.js';
 
 export interface MapOutlineProps {
@@ -97,7 +98,10 @@ export function MapOutline({
         const selected = n.id === selectedId;
         const inFocus = focusIds?.has(n.id) ?? false;
         const hidden = view.hiddenChildren[n.id] ?? 0;
-        const openable = n.childCount > 0;
+        // Los nodos de código (lazy) se abren sin saber cuántos hijos tienen.
+        const openable = canOpen(n);
+        const loading = n.meta.loading === true;
+        const failed = typeof n.meta.error === 'string' ? n.meta.error : null;
         return (
           <div key={n.id}>
             <div
@@ -143,7 +147,7 @@ export function MapOutline({
               </button>
               <KindIcon kind={n.kind} />
               <span
-                className={`truncate ${n.kind === 'endpoint' ? 'font-mono text-[12px]' : n.kind === 'repo' ? 'font-semibold' : ''}`}
+                className={`truncate ${n.kind === 'endpoint' || n.kind === 'file' || n.kind === 'symbol' ? 'font-mono text-[12px]' : n.kind === 'repo' ? 'font-semibold' : ''}`}
                 title={n.label}
               >
                 {displayLabel(n)}
@@ -153,12 +157,26 @@ export function MapOutline({
                   {n.contract}
                 </span>
               )}
-              {openable && !n.expanded && (
+              {loading && <span className="ml-auto shrink-0 text-[11px] text-muted">loading…</span>}
+              {failed && (
+                <span className="ml-auto shrink-0 text-[11px] text-error" title={failed}>
+                  failed
+                </span>
+              )}
+              {openable && !n.expanded && n.childCount > 0 && !loading && !failed && (
                 <span className="ml-auto shrink-0 tabular-nums text-[11px] text-muted">
                   {n.childCount}
                 </span>
               )}
             </div>
+            {n.expanded && n.meta.truncated === true && (
+              <p
+                className="text-[11px] text-muted py-0.5"
+                style={{ paddingLeft: 8 + (row.depth + 1) * 16 + 22 }}
+              >
+                The engine capped this listing — more exist than shown.
+              </p>
+            )}
             {n.expanded && hidden > 0 && (
               <button
                 type="button"

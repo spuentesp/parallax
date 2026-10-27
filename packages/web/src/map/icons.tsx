@@ -9,6 +9,9 @@ const COLOR: Record<OrgNodeKind, string> = {
   repo: 'var(--color-repo)',
   service: 'var(--color-service)',
   endpoint: 'var(--color-endpoint)',
+  code: 'var(--color-code)',
+  file: 'var(--color-file)',
+  symbol: 'var(--color-symbol)',
 };
 
 export function KindIcon({
@@ -57,6 +60,37 @@ export function KindIcon({
           strokeLinejoin="round"
         />
       )}
+      {kind === 'code' && (
+        <path
+          d="M6 4L2.5 8 6 12M10 4l3.5 4L10 12"
+          fill="none"
+          stroke={c}
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
+      {kind === 'file' && (
+        <>
+          <path
+            d="M4 1.8h5l3 3v9.4H4z"
+            fill="none"
+            stroke={c}
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
+          <path d="M9 1.8v3h3" fill="none" stroke={c} strokeWidth="1.3" strokeLinejoin="round" />
+        </>
+      )}
+      {kind === 'symbol' && (
+        <path
+          d="M10.5 3.2c-1.6-.5-2.6.3-2.9 1.9L7 8.5c-.3 1.6-1.2 2.4-2.8 1.9M5 6.6h5"
+          fill="none"
+          stroke={c}
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      )}
     </svg>
   );
 }
@@ -65,6 +99,9 @@ export const KIND_LABEL: Record<OrgNodeKind, string> = {
   repo: 'Repository',
   service: 'Service',
   endpoint: 'Endpoint',
+  code: 'Code',
+  file: 'File / module',
+  symbol: 'Symbol',
 };
 
 /** Muestra de trazo: continuo = determinista, discontinuo = inferido. */

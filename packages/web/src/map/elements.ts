@@ -1,4 +1,5 @@
 import type { MapViewResponse, OrgEdge, ProjectedNode } from '@parallax/shared/org-map';
+import { canOpen } from './code.js';
 import type { LayoutEdge, LayoutNode } from './layout.js';
 
 // Proyección del servidor → elementos de Cytoscape. Funciones puras: aquí vive
@@ -39,6 +40,9 @@ export type CyElement =
 /** Etiqueta del nodo: "nombre" o "nombre  ▸ 12" si se puede abrir. */
 export function nodeLabel(n: ProjectedNode, hidden: number): string {
   const base = n.kind === 'endpoint' ? trimContract(n.label) : n.label;
+  if (n.meta.loading === true) return `${base}  …`;
+  // Código: los hijos no se cuentan de antemano, sólo se sabe que pueden existir.
+  if (n.lazy) return n.expanded ? base : `${base}  ▸`;
   if (n.childCount === 0) return base;
   if (n.expanded) return hidden > 0 ? `${base}  (+${hidden})` : base;
   return `${base}  ▸ ${n.childCount}`;
@@ -109,7 +113,7 @@ export function toCyElements(
       kind: n.kind,
       childCount: n.childCount,
       expanded: n.expanded,
-      collapsible: n.childCount > 0 && !n.expanded,
+      collapsible: canOpen(n) && !n.expanded,
       ...(n.parent && ids.has(n.parent) ? { parent: n.parent } : {}),
       ...(n.contract ? { contract: n.contract } : {}),
     };

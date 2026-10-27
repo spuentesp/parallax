@@ -8,6 +8,7 @@ import type * as React from 'react';
 import { ApiError } from '../api/client.js';
 import { useMapNode } from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
+import { SourcePeek } from './SourcePeek.js';
 
 export interface MapInspectorProps {
   workspaceId: string;
@@ -70,6 +71,7 @@ export function MapInspector({
   }
   return (
     <Detail
+      workspaceId={workspaceId}
       detail={detail}
       onSelect={onSelect}
       onFocus={onFocus}
@@ -81,15 +83,19 @@ export function MapInspector({
 }
 
 function Detail({
+  workspaceId,
   detail,
   onSelect,
   onFocus,
   onToggle,
   focusing,
   onClearFocus,
-}: Omit<MapInspectorProps, 'workspaceId' | 'nodeId'> & { detail: NodeDetail }): React.ReactElement {
+}: Omit<MapInspectorProps, 'nodeId'> & { detail: NodeDetail }): React.ReactElement {
   const { node } = detail;
   const consumerRepos = new Set(detail.consumers.map((c) => c.peer.parent));
+  // El repo que contiene al nodo (o el nodo mismo) decide si hay código navegable.
+  const repoNode = node.kind === 'repo' ? node : detail.path.find((p) => p.kind === 'repo');
+  const lainRepo = typeof repoNode?.meta.lainRepoId === 'string' ? repoNode.meta.lainRepoId : null;
   const providers =
     (node.meta.providers as Array<{ repo?: string; path?: string; line?: number }> | undefined) ??
     [];
@@ -178,16 +184,34 @@ function Detail({
         </>
       ) : null}
 
+      {node.kind === 'repo' && node.meta.lainRepoId === null && (
+        <p className="p-5 text-xs text-muted" data-testid="repo-no-code">
+          Code browsing is unavailable for this repository: its name in the contract analysis does
+          not match any repository configured in this workspace, so it cannot be linked to the
+          engine's code graph. Nothing is guessed.
+        </p>
+      )}
+
       {providers.length > 0 && (
-        <div className="p-5 space-y-1">
+        <div className="p-5 space-y-2">
           <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">Defined at</h4>
           {providers.map((p) => (
-            <p key={`${p.repo}:${p.path}:${p.line}`} className="font-mono text-xs break-all">
-              {p.repo ? `${p.repo}:` : ''}
-              {p.path}
-              {p.line ? `:${p.line}` : ''}
-            </p>
+            <div key={`${p.repo}:${p.path}:${p.line}`} className="space-y-1">
+              <p className="font-mono text-xs break-all">
+                {p.repo ? `${p.repo}:` : ''}
+                {p.path}
+                {p.line ? `:${p.line}` : ''}
+              </p>
+              {p.path && lainRepo && (
+                <SourcePeek workspaceId={workspaceId} repo={lainRepo} target={{ path: p.path }} />
+              )}
+            </div>
           ))}
+          {!lainRepo && (
+            <p className="text-[11px] text-muted">
+              Source unavailable: this repository is not linked to the engine's code graph.
+            </p>
+          )}
         </div>
       )}
     </div>

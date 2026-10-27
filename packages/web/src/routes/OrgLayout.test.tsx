@@ -21,12 +21,15 @@ const svc = (name: string): ProjectedNode => ({
 
 function serveMap(nodes: ProjectedNode[]) {
   server.use(
-    http.post('/api/workspaces/:id/map/view', () => {
+    http.post('/api/workspaces/:id/map/view', async ({ request }) => {
+      const body = (await request.json()) as { focus?: string };
+      // Como el servidor: un foco que existe en el mapa vuelve como foco.
+      const known = nodes.some((n) => n.id === body.focus);
       const view: MapViewResponse = {
         nodes,
         edges: [],
         hiddenChildren: {},
-        focus: null,
+        focus: known && body.focus ? { seed: body.focus, ids: [body.focus] } : null,
         unknownExpand: [],
         totals: { nodes: nodes.length, edges: 0, shownNodes: nodes.length, shownEdges: 0 },
         meta: { source: 'lain', generatedAt: Date.now() },

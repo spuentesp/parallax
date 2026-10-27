@@ -300,6 +300,31 @@ export async function resolveSymbolSnippet(
   }
 }
 
+/** Fuente de un archivo por su path (p. ej. dónde se define un endpoint). */
+export async function resolvePathSnippet(
+  adapter: LainAdapter,
+  repo: string,
+  path: string,
+  contextLines = 12,
+): Promise<SymbolSnippetResult> {
+  try {
+    const snippet = await adapter.getCodeSnippet({
+      path,
+      repo_id: repo,
+      context_lines: contextLines,
+    });
+    return { symbol: path, repo, path, text: snippet.text };
+  } catch (e) {
+    return {
+      symbol: path,
+      repo,
+      path,
+      text: null,
+      error: e instanceof Error ? e.message : 'get_code_snippet failed',
+    };
+  }
+}
+
 /**
  * repo_id de LAIN para un repo del workspace: el basename del checkout local
  * (./test-repos/contracts-fixture/orders → orders), o del URI sin .git.

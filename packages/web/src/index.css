@@ -22,6 +22,10 @@
   --color-endpoint: #d97706;
   --color-deterministic: #0f766e;
   --color-inferred: #e11d48;
+  /* Grafo de código: la puerta, los contenedores (archivo/módulo) y los símbolos. */
+  --color-code: #64748b;
+  --color-file: #65a30d;
+  --color-symbol: #c026d3;
 }
 
 .dark {
@@ -37,6 +41,9 @@
   --color-endpoint: #fbbf24;
   --color-deterministic: #2dd4bf;
   --color-inferred: #fb7185;
+  --color-code: #94a3b8;
+  --color-file: #a3e635;
+  --color-symbol: #e879f9;
 }
 
 body {

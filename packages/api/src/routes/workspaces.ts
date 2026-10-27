@@ -7,6 +7,7 @@ import {
   buildGraphChildren,
   buildGraphRoot,
   deriveLainRepoId,
+  resolvePathSnippet,
   resolveSymbolSnippet,
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
@@ -395,9 +396,13 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     '/api/workspaces/:id/graph',
     {
       config: { scopes: ['read'] },
-      schema: { params: z.object({ id: z.string().min(1) }) },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        // `repo` limita la raíz a un repo (el mapa abre el código repo a repo).
+        querystring: z.object({ repo: z.string().min(1).optional() }).loose(),
+      },
     },
-    async (req) => {
+    async (req, reply) => {
       const ws = await app.db
         .select()
         .from(schema.workspace)
@@ -422,8 +427,14 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         });
         // repo_id de LAIN se deriva del checkout local (orders, saleor, …),
         // no del id interno del workspace.
-        const repoIds = repos.map((r) => deriveLainRepoId(r));
-        const graph = await buildGraphRoot(client, repoIds);
+        const all = repos.map((r) => deriveLainRepoId(r));
+        const only = (req.query as { repo?: string }).repo;
+        if (only !== undefined && !all.includes(only)) {
+          return reply
+            .code(400)
+            .send({ code: 'BadRequest', detail: `repo '${only}' is not part of this workspace` });
+        }
+        const graph = await buildGraphRoot(client, only === undefined ? all : [only]);
         return { graph, source: 'lain' as const, lainUrl: ws[0].lainUrl, workspace };
       } catch (e) {
         return {
@@ -506,13 +517,20 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         querystring: z
           .object({
             repo: z.string().min(1),
-            symbol: z.string().min(1),
+            // Un símbolo (explain_symbol) o un path (get_code_snippet).
+            symbol: z.string().min(1).optional(),
+            path: z.string().min(1).optional(),
           })
           .loose(),
       },
     },
     async (req, reply) => {
-      const { repo, symbol } = req.query as { repo: string; symbol: string };
+      const { repo, symbol, path } = req.query as { repo: string; symbol?: string; path?: string };
+      if ((symbol === undefined) === (path === undefined)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: 'give exactly one of `symbol` or `path`' });
+      }
       const ws = await app.db
         .select()
         .from(schema.workspace)
@@ -539,7 +557,10 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           apiVersion: '1',
           timeoutMs: 20_000,
         });
-        const snippet = await resolveSymbolSnippet(client, repo, symbol);
+        const snippet =
+          path !== undefined
+            ? await resolvePathSnippet(client, repo, path)
+            : await resolveSymbolSnippet(client, repo, symbol as string);
         return { snippet, source: 'lain' as const };
       } catch (e) {
         return {

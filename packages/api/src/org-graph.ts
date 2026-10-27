@@ -114,6 +114,24 @@ export function toOrgGraph(topology: TopologyViewData): OrgGraph {
   return { nodes, edges };
 }
 
+/**
+ * Cada nodo `repo` lleva el `repo_id` de LAIN con el que se navega su código
+ * (`meta.lainRepoId`), o null si no se puede establecer. Nunca se adivina: el
+ * nombre del repo en el análisis de contratos tiene que coincidir EXACTAMENTE
+ * con el id derivado de un repo del workspace; si no, el código de ese repo no
+ * es navegable y la UI lo dice.
+ */
+export function annotateRepos(graph: OrgGraph, lainRepoIds: ReadonlySet<string>): OrgGraph {
+  return {
+    edges: graph.edges,
+    nodes: graph.nodes.map((n) =>
+      n.kind === 'repo'
+        ? { ...n, meta: { ...n.meta, lainRepoId: lainRepoIds.has(n.label) ? n.label : null } }
+        : n,
+    ),
+  };
+}
+
 function indexById(graph: OrgGraph): Map<string, OrgNode> {
   return new Map(graph.nodes.map((n) => [n.id, n]));
 }

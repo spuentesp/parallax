@@ -288,12 +288,21 @@ export function fetchGraphChildren(
   );
 }
 
+/** Raíz de código de UN repo (el mapa abre el código repo a repo). */
+export function fetchGraphRoot(workspaceId: string, repo: string): Promise<GraphRootResponse> {
+  const qs = new URLSearchParams({ repo });
+  return client.get<GraphRootResponse>(`/api/workspaces/${workspaceId}/graph?${qs}`);
+}
+
+/** Fuente de un símbolo (explain_symbol) o de un archivo por su path (get_code_snippet). */
 export function fetchGraphSnippet(
   workspaceId: string,
   repo: string,
-  symbol: string,
+  target: string | { path: string },
 ): Promise<GraphSnippetResponse> {
-  const qs = new URLSearchParams({ repo, symbol });
+  const qs = new URLSearchParams(
+    typeof target === 'string' ? { repo, symbol: target } : { repo, path: target.path },
+  );
   return client.get<GraphSnippetResponse>(`/api/workspaces/${workspaceId}/graph/snippet?${qs}`);
 }
 

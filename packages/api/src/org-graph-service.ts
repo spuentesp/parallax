@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { deriveLainRepoId } from './code-graph.js';
 import * as schema from './db/schema.js';
 import { getLainClient } from './lain-adapter/client.js';
 import { isLainCallError } from './lain-adapter/errors.js';
-import { type OrgGraph, toOrgGraph } from './org-graph.js';
+import { annotateRepos, type OrgGraph, toOrgGraph } from './org-graph.js';
 import { OrgGraphCache } from './org-graph-cache.js';
 import { buildEndpointTopology } from './topology.js';
 
@@ -39,9 +40,15 @@ export function createOrgGraphService(deps: {
       if (!ws.lainUrl) return { ok: false, source: 'unconfigured' };
       const lainUrl = ws.lainUrl;
 
+      const repos = await deps.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, workspaceId));
+      const lainRepoIds = new Set(repos.map((r) => deriveLainRepoId(r)));
+
       const build = async (): Promise<OrgGraph> => {
         const client = await getLainClient({ lainUrl, apiVersion: '1', timeoutMs: 20_000 });
-        return toOrgGraph(await buildEndpointTopology(client));
+        return annotateRepos(toOrgGraph(await buildEndpointTopology(client)), lainRepoIds);
       };
       const key = `${ws.id}|${lainUrl}|live`;
       try {

@@ -11,6 +11,11 @@ describe('nodeContext', () => {
       name: 'orders',
     });
   });
+  it('reads code nodes as their repo, so flow actions keep the repo context', () => {
+    expect(nodeContext('code:orders')).toEqual({ kind: 'repo', name: 'orders' });
+    expect(nodeContext('sym:orders|Function|a|b')).toEqual({ kind: 'repo', name: 'orders' });
+    expect(nodeContext('sym:broken')).toBeNull();
+  });
   it('returns null for anything else', () => {
     expect(nodeContext(null)).toBeNull();
     expect(nodeContext('')).toBeNull();
