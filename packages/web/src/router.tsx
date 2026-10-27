@@ -27,11 +27,8 @@ export const routes: RouteObject[] = [
       { path: 'workspaces', element: <Workspaces /> },
       { path: 'workspaces/:id', element: <WorkspaceDetail /> },
       { path: 'orgs', element: <Orgs /> },
-      {
-        path: 'orgs/:orgId',
-        element: <OrgLayout />,
-        children: [{ path: 'services/:serviceId', element: <Service /> }],
-      },
+      { path: 'orgs/:orgId', element: <OrgLayout /> },
+      { path: 'orgs/:orgId/services/:serviceId', element: <Service /> },
       { path: 'orgs/:orgId/assessments', element: <Assessments /> },
       { path: 'orgs/:orgId/assessments/:assessmentId', element: <Assessment /> },
       { path: 'orgs/:orgId/*', element: <OrgCatchAll /> },

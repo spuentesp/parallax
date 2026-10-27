@@ -1,26 +1,12 @@
 import type * as React from 'react';
-import { useParams } from 'react-router-dom';
-import { EvidencePanel } from '../components/EvidencePanel.js';
-import { SAMPLE_TOPOLOGY } from './OrgLayout.js';
+import { Navigate, useParams } from 'react-router-dom';
 
+// Compatibilidad: /orgs/:orgId/services/:serviceId era un panel con datos de
+// muestra. El servicio ahora se inspecciona en el mapa, así que el enlace
+// viejo aterriza en el hub con ese servicio seleccionado y enfocado.
 export function Service(): React.ReactElement {
-  const { serviceId } = useParams();
-  const known = SAMPLE_TOPOLOGY.nodes.some((n) => n.id === serviceId);
-
-  if (!known) {
-    return (
-      <section>
-        <h2>Servicio no encontrado</h2>
-        <p className="text-sm text-muted">No existe «{serviceId}» en esta topología.</p>
-        <p className="text-xs text-muted">Cierra el panel para volver al hub.</p>
-      </section>
-    );
-  }
-
-  return (
-    <section>
-      <h2>Service {serviceId}</h2>
-      <EvidencePanel />
-    </section>
-  );
+  const { orgId, serviceId } = useParams();
+  const id = `svc:${serviceId ?? ''}`;
+  const q = new URLSearchParams({ focus: id, hops: '1', sel: id });
+  return <Navigate to={`/orgs/${orgId ?? ''}?${q.toString()}`} replace />;
 }

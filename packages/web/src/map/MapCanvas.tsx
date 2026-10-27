@@ -333,6 +333,16 @@ export function MapCanvas({
     });
   }, [selectedId, focusIds, view]);
 
+  // Un foco nuevo (agente, "Focus neighborhood") encuadra su vecindad.
+  const focusKey = focusIds ? [...focusIds].sort().join('|') : '';
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sólo reencuadra cuando cambia el conjunto enfocado
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || !focusIds || focusIds.size === 0) return;
+    const eles = cy.nodes().filter((n) => focusIds.has(n.id()));
+    if (eles.nonempty()) cy.animate({ fit: { eles, padding: 90 }, duration: 240 });
+  }, [focusKey]);
+
   useEffect(() => {
     if (fitNonce > 0)
       cyRef.current?.animate({

@@ -44,17 +44,28 @@ export function ThemeToggle(): React.ReactElement {
       type="button"
       onClick={toggle}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      style={{
-        background: 'transparent',
-        border: `1px solid ${dark ? '#262626' : '#e5e5e5'}`,
-        borderRadius: 6,
-        padding: '6px 10px',
-        color: dark ? '#a3a3a3' : '#737373',
-        cursor: 'pointer',
-        fontSize: 13,
-      }}
+      className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-bg hover:text-fg transition-colors"
     >
-      {dark ? '☀️' : '🌙'}
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        {dark ? (
+          <>
+            <circle cx="8" cy="8" r="3" />
+            <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1" />
+          </>
+        ) : (
+          <path d="M13 9.5A5.5 5.5 0 116.5 3a4.5 4.5 0 006.5 6.5z" />
+        )}
+      </svg>
+      {dark ? 'Light' : 'Dark'}
     </button>
   );
 }

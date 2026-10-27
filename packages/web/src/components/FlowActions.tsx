@@ -1,33 +1,36 @@
 import type * as React from 'react';
 import { Link } from 'react-router-dom';
+import type { NodeContext } from '../map/nodeId.js';
 
 export function FlowActions({
   orgId,
   selectedNode,
 }: {
   orgId: string;
-  selectedNode?: { id: string; kind: string } | undefined;
+  selectedNode?: NodeContext | null | undefined;
 }): React.ReactElement {
-  const repo = selectedNode?.kind === 'service' ? selectedNode.id : '';
+  // Un PR se evalúa contra un repo o servicio concreto: lo seleccionado en el
+  // mapa precarga el formulario.
+  const repo = selectedNode?.name ?? '';
   return (
-    <div className="flex flex-wrap gap-2 mb-6">
+    <div className="flex flex-wrap gap-2">
       <Link
         to="/workspaces"
         className="text-xs px-3 py-1.5 rounded-lg bg-surface border border-border"
       >
-        Configurar workspace
+        Configure workspace
       </Link>
       <Link
         to={`/orgs/${orgId}/assessments?repo=${encodeURIComponent(repo)}`}
         className="text-xs px-3 py-1.5 rounded-lg bg-accent text-accent-fg"
       >
-        Evaluar PR
+        Evaluate PR{repo ? ` · ${repo}` : ''}
       </Link>
       <Link
         to={`/orgs/${orgId}/assessments`}
         className="text-xs px-3 py-1.5 rounded-lg bg-surface border border-border"
       >
-        Ver evaluaciones
+        View assessments
       </Link>
     </div>
   );

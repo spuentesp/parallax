@@ -458,4 +458,41 @@ export function useRefreshMap(workspaceId: string | undefined) {
   });
 }
 
+// ── Preguntas de arquitectura al investigador ───────────────────────────────
+
+export interface MapFocusDto {
+  seed: string;
+  ids: string[];
+  relations: Array<{
+    consumer: string;
+    provider: string;
+    polarity: 'present' | 'absent';
+    uses: number;
+    endpoints: string[];
+    complete: boolean;
+  }>;
+  query: string;
+}
+
+export interface AskResponse {
+  answer: string;
+  explanation_status: string;
+  claims_summary: {
+    total: number;
+    verified: number;
+    contradicted: number;
+    unverifiable: number;
+    supported: number;
+    unsupported: number;
+  };
+  map_focus: MapFocusDto | null;
+}
+
+export function useAsk(orgId: string | undefined) {
+  return useMutation({
+    mutationFn: (question: string) =>
+      client.post<AskResponse>('/api/query', { question, orgId: orgId ?? '' }),
+  });
+}
+
 export { client };
