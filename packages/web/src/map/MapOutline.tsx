@@ -34,14 +34,25 @@ export function flattenOutline(nodes: readonly ProjectedNode[]): Row[] {
     kids.set(key, list);
   }
   const out: Row[] = [];
+  const seen = new Set<string>();
   const walk = (parent: string | null, depth: number) => {
     const list = [...(kids.get(parent) ?? [])].sort((a, b) => a.label.localeCompare(b.label));
     for (const n of list) {
+      if (seen.has(n.id)) continue;
+      seen.add(n.id);
       out.push({ node: n, depth });
       walk(n.id, depth + 1);
     }
   };
   walk(null, 0);
+  // Un ciclo de padres (o un nodo que es su propio padre) no cuelga de ninguna
+  // raíz: se muestra como raíz en vez de desaparecer del árbol.
+  for (const n of nodes) {
+    if (seen.has(n.id)) continue;
+    seen.add(n.id);
+    out.push({ node: n, depth: 0 });
+    walk(n.id, 1);
+  }
   return out;
 }
 
