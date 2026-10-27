@@ -11,6 +11,7 @@
 // criterios del caso. No usa un modelo como juez: todo son comprobaciones sobre
 // el motor y sobre el texto.
 
+import type { ClaimResult } from '../src/agent/claims.js';
 import { investigate } from '../src/agent/investigator.js';
 import { investigatorModel } from '../src/agent/model.js';
 import { fetchAllContracts } from '../src/advisor/correlate.js';
@@ -25,9 +26,9 @@ interface EvalCase {
   id: string;
   question: string;
   /** Todas deben cumplirse. */
-  require: Array<{ label: string; test: (answer: string) => boolean }>;
+  require: Array<{ label: string; test: (answer: string, claims: ClaimResult[]) => boolean }>;
   /** Ninguna debe cumplirse. */
-  forbid: Array<{ label: string; test: (answer: string) => boolean }>;
+  forbid: Array<{ label: string; test: (answer: string, claims: ClaimResult[]) => boolean }>;
 }
 
 // Polaridad de una respuesta sí/no: se mira sólo la primera oración (sin
@@ -41,6 +42,24 @@ function verdict(answer: string): 'yes' | 'no' | 'unclear' {
   if (/\b(no|not|neither|nor|none|doesn't|does not|do not|never|unknown)\b/.test(first)) return 'no';
   if (/\b(yes|does|consumes?|calls?|uses?|depends?)\b/.test(first)) return 'yes';
   return 'unclear';
+}
+
+// Veredicto estructurado: la relación consumer→provider que el modelo afirmó y
+// que el MOTOR verificó. Si no hay afirmación, se cae al texto (modelo en prosa).
+function relationVerdict(
+  claims: ClaimResult[],
+  consumer: string,
+  provider: string,
+): 'yes' | 'no' | 'wrong' | undefined {
+  const c = claims.find(
+    (x) =>
+      x.claim.kind === 'relation' &&
+      x.claim.consumer.replace(/^saleor-/, '') === consumer.replace(/^saleor-/, '') &&
+      x.claim.provider.replace(/^saleor-/, '') === provider.replace(/^saleor-/, ''),
+  );
+  if (!c || c.claim.kind !== 'relation') return undefined;
+  if (c.verdict !== 'verified') return 'wrong';
+  return c.claim.polarity === 'present' ? 'yes' : 'no';
 }
 
 const has = (needle: string) => (a: string) => a.toLowerCase().includes(needle.toLowerCase());
@@ -76,7 +95,11 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
       question: `Does the storefront consume the product query from ${PROVIDER}? Answer yes or no and cite the evidence.`,
       require: [
         { label: 'engine: storefront uses graphql:query:product', test: () => storefrontOps.has('graphql:query:product') },
-        { label: 'verdict is yes', test: (a) => verdict(a) === 'yes' },
+        {
+          label: 'verdict is yes (engine-verified claim, else text)',
+          test: (a, claims) =>
+            (relationVerdict(claims, 'saleor-storefront', PROVIDER) ?? verdict(a)) === 'yes',
+        },
       ],
       forbid: [],
     },
@@ -94,7 +117,11 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
     {
       id: 'no-reverse-dependency',
       question: `Does ${PROVIDER} consume saleor-dashboard or saleor-storefront?`,
-      require: [{ label: 'verdict is no', test: (a) => verdict(a) === 'no' }],
+      require: ['saleor-dashboard', 'saleor-storefront'].map((consumer) => ({
+        label: `verdict for ${consumer} is no (engine-verified claim, else text)`,
+        test: (a: string, claims: ClaimResult[]) =>
+          (relationVerdict(claims, PROVIDER, consumer) ?? verdict(a)) === 'no',
+      })),
       forbid: [],
     },
   ];
@@ -109,6 +136,7 @@ interface RunResult {
   calls: number;
   ms: number;
   invented: string[];
+  claims: { verified: number; contradicted: number; unverifiable: number; total: number };
   failedRequire: string[];
   hitForbid: string[];
   pass: boolean;
@@ -151,8 +179,8 @@ async function main(): Promise<void> {
         // para medir el contenido, no la tipografía.
         const answer = (res.answer ?? '').replace(/[\u2010-\u2015\u2212]/g, '-');
         const invented = [...new Set(answer.match(OP_KEY) ?? [])].filter((k) => !providerOps.has(k));
-        const failedRequire = c.require.filter((q) => !q.test(answer)).map((q) => q.label);
-        const hitForbid = c.forbid.filter((f) => f.test(answer)).map((f) => f.label);
+        const failedRequire = c.require.filter((q) => !q.test(answer, res.claims)).map((q) => q.label);
+        const hitForbid = c.forbid.filter((f) => f.test(answer, res.claims)).map((f) => f.label);
         const pass =
           res.explanationStatus === 'available' &&
           invented.length === 0 &&
@@ -166,6 +194,12 @@ async function main(): Promise<void> {
           calls: res.budget.toolCallsUsed,
           ms: Date.now() - t0,
           invented,
+          claims: {
+            verified: res.claimsSummary.verified,
+            contradicted: res.claimsSummary.contradicted,
+            unverifiable: res.claimsSummary.unverifiable,
+            total: res.claimsSummary.total,
+          },
           failedRequire,
           hitForbid,
           pass,
@@ -173,6 +207,7 @@ async function main(): Promise<void> {
         const last = results[results.length - 1] as RunResult;
         console.log(
           `${last.pass ? 'PASS' : 'FAIL'} ${workerModel.split('/').pop()} ${c.id} [${last.status}] calls=${last.calls}${last.cutShort ? ' CUT' : ''} ${(last.ms / 1000).toFixed(0)}s` +
+            (last.claims.total ? ` claims=${last.claims.verified}ok/${last.claims.contradicted}contradicted/${last.claims.unverifiable}unverifiable` : ' claims=none(prose)') +
             (last.invented.length ? ` invented=${last.invented.slice(0, 3).join(',')}` : '') +
             (last.failedRequire.length ? ` missing=[${last.failedRequire.join('; ')}]` : '') +
             (last.hitForbid.length ? ` forbidden=[${last.hitForbid.join('; ')}]` : ''),
@@ -188,7 +223,9 @@ async function main(): Promise<void> {
     const cut = rs.filter((r) => r.cutShort).length;
     const invented = rs.filter((r) => r.invented.length > 0).length;
     const avgCalls = rs.reduce((n, r) => n + r.calls, 0) / rs.length;
-    console.log(`${m}: ${passed}/${rs.length} pass, ${cut} cut short, ${invented} with invented operations, avg ${avgCalls.toFixed(1)} calls`);
+    const structured = rs.filter((r) => r.claims.total > 0).length;
+    const contradicted = rs.reduce((n, r) => n + r.claims.contradicted, 0);
+    console.log(`${m}: ${passed}/${rs.length} pass, ${cut} cut short, ${invented} with invented operations, avg ${avgCalls.toFixed(1)} calls, ${structured} structured answers, ${contradicted} contradicted claims`);
   }
   if (results.some((r) => !r.pass)) process.exitCode = 1;
 }
