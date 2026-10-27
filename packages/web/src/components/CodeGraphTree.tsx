@@ -20,11 +20,11 @@ import type {
 import { codeNodeKey } from '../api/hooks.js';
 
 const KIND_DOT: Record<CodeNodeKind, string> = {
-  container: '#3b82f6',
-  symbol: '#a78bfa',
-  route: '#f59e0b',
-  schema: '#6b7280',
-  other: '#9ca3af',
+  container: 'var(--color-file)',
+  symbol: 'var(--color-symbol)',
+  route: 'var(--color-endpoint)',
+  schema: 'var(--color-muted)',
+  other: 'var(--color-muted)',
 };
 
 type ChildEntry =
@@ -162,7 +162,7 @@ export function CodeGraphTree({
                   <span className="w-3 text-muted text-xs">{open ? '▾' : '▸'}</span>
                   <span
                     className="inline-block rounded-full shrink-0"
-                    style={{ background: '#a78bfa', width: 10, height: 10 }}
+                    style={{ background: 'var(--color-repo)', width: 10, height: 10 }}
                   />
                   <span className="font-medium">{repo.repo}</span>
                   <span className="ml-auto text-xs text-muted whitespace-nowrap">
