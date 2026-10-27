@@ -153,6 +153,10 @@ export function buildCommentPreview(
     `\`${report.explanation.status}\` · model \`${report.explanation.model ?? '—'}\` · revision \`${report.explanation.revision ?? '—'}\``,
   );
   lines.push('');
+  if (report.explanation.narrative) {
+    lines.push(report.explanation.narrative);
+    lines.push('');
+  }
   lines.push(
     'Model output does not change analyzer classification. It cannot promote `NeedsInvestigation` to `Verified`.',
   );

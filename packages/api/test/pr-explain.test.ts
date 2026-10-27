@@ -129,6 +129,77 @@ describe('findings block', () => {
   });
 });
 
+describe('evidence for code the PR removed', () => {
+  // El motor real: la ruta de un endpoint eliminado existe en base y no en head.
+  const REMOVED_ROUTE = 'orders:HttpRoute:main.py:GET /orders/{order_id}:11';
+  const removed = [
+    {
+      kind: 'EndpointRemoved',
+      endpoint: { key: 'http:GET /orders/{}', service: 'orders' },
+      impact: { class: 'Verified', reasons: ['static_binding'] },
+      affected: [{ service: 'billing', class: 'Verified', reasons: 'static_binding' }],
+      paths: [{ start: REMOVED_ROUTE, hops: [] }],
+    },
+  ];
+  const baseOnly = () => ({
+    ...createLainMock(),
+    async resolveEvidence(req: { snapshot: string; refs: string[] }) {
+      return {
+        items: req.refs.map((ref) => ({ ref, exists: req.snapshot === 'snap_base' })),
+      };
+    },
+  });
+  const answer = () =>
+    new Scripted([
+      submit({
+        summary: 's',
+        findings: [{ id: 'F1', explanation: 'route removed', evidence: [REMOVED_ROUTE] }],
+      }),
+    ]);
+
+  it('accepts the engine-delivered route of a removed endpoint when it resolves in the base view', async () => {
+    const r = await investigate({
+      question: 'q',
+      lain: baseOnly() as never,
+      model: answer(),
+      view: 'snap_head' as never,
+      pr: { changes: removed, coverage: {}, baseView: 'snap_base' as never },
+    });
+    expect(r.pr?.findings[0]?.evidence).toEqual({ accepted: [REMOVED_ROUTE], rejected: [] });
+    expect(r.citations.rejected).toEqual([]);
+  });
+
+  it('still rejects evidence that exists in neither view', async () => {
+    const neither = {
+      ...createLainMock(),
+      async resolveEvidence(req: { refs: string[] }) {
+        return { items: req.refs.map((ref) => ({ ref, exists: false })) };
+      },
+    };
+    const r = await investigate({
+      question: 'q',
+      lain: neither as never,
+      model: answer(),
+      view: 'snap_head' as never,
+      pr: { changes: removed, coverage: {}, baseView: 'snap_base' as never },
+    });
+    expect(r.pr?.findings[0]?.evidence.rejected).toEqual([
+      { ref: REMOVED_ROUTE, reason: 'unresolvable_in_view' },
+    ]);
+  });
+
+  it('without a base view the same evidence is rejected (the failure this guards against)', async () => {
+    const r = await investigate({
+      question: 'q',
+      lain: baseOnly() as never,
+      model: answer(),
+      view: 'snap_head' as never,
+      pr: { changes: removed, coverage: {} },
+    });
+    expect(r.pr?.findings[0]?.evidence.rejected).toHaveLength(1);
+  });
+});
+
 describe('PR explanation', () => {
   it('puts the findings in the model context and uses the PR prompt', async () => {
     const model = new Scripted([

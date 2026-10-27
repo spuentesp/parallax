@@ -68,6 +68,8 @@ export interface AssessmentWorkerDeps {
   explain?: (args: {
     orgId: string;
     viewId: string;
+    /** Snapshot base del análisis: la evidencia de lo eliminado sólo existe ahí. */
+    baseView?: string | undefined;
     question: string;
     engineFindings: unknown[];
     /** Cobertura presentada del análisis (INV 3): la explicación no puede callarla. */
@@ -560,6 +562,7 @@ export class AssessmentWorker {
           outcome = await this.explain({
             orgId: rec.orgId,
             viewId,
+            baseView: rec.baseId ?? undefined,
             question:
               'Explain, for an architect, the impact of these contract changes. ' +
               'Keep engine classifications as they are, cite evidence ids you receive, ' +

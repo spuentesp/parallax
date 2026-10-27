@@ -114,7 +114,7 @@ async function runOnce(fixture: PrFixture, workerModel: string): Promise<Score &
     // la cobertura): las rutas inventadas se buscan sólo en lo que escribió el
     // modelo, y "explicado" sale del registro por hallazgo.
     const composed = payload.narrative ?? '';
-    if (process.env.PR_EVAL_PRINT) console.log(`coverageJson=${row.coverageJson}\n--- narrative ---\n${composed}\n--- end ---`);
+    if (process.env.PR_EVAL_PRINT) console.log(`citations: accepted=${(payload as { citations?: { accepted: unknown[] } }).citations?.accepted.length ?? 0} rejected=${JSON.stringify((payload as { citations?: { rejected: unknown[] } }).citations?.rejected ?? [])}\ncoverageJson=${row.coverageJson}\n--- narrative ---\n${composed}\n--- end ---`);
     const modelWritten = payload.pr
       ? [
           composed.split('\n\nFindings (engine')[0] ?? '',

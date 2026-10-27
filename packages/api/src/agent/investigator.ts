@@ -139,7 +139,16 @@ export interface InvestigateOptions {
    * Modo PR: los hallazgos del motor entran en el contexto, el modelo explica
    * cada uno por id y la entrega se verifica contra ellos.
    */
-  pr?: { changes: unknown[]; coverage: PrCoverage };
+  pr?: {
+    changes: unknown[];
+    coverage: PrCoverage;
+    /**
+     * Snapshot base del PR. La evidencia de un endpoint ELIMINADO (su ruta) sólo
+     * existe ahí: resolverla únicamente en head la rechazaría como si el modelo
+     * la hubiera inventado.
+     */
+    baseView?: LainView | undefined;
+  };
   /** Pausa antes del reintento (los tests la ponen a 0). */
   retryDelayMs?: number;
   question: string;
@@ -550,6 +559,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       view,
       [...new Set(refs.map(cleanRef).filter(Boolean))],
       dispatcher,
+      opts.pr?.baseView,
     );
     return { accepted: r.accepted, receipts: r.receipts, rejected: r.rejected };
   };
@@ -567,7 +577,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
 
   const checkedCitations =
     modelText != null
-      ? await validateCitations(opts.lain, view, modelText, dispatcher)
+      ? await validateCitations(opts.lain, view, modelText, dispatcher, opts.pr?.baseView)
       : { accepted: [], receipts: [], rejected: [] };
   const citations = prResult
     ? {
@@ -670,6 +680,7 @@ async function validateRefs(
   view: LainView,
   refs: readonly string[],
   dispatcher: LainDispatcher,
+  fallbackView?: LainView,
 ): Promise<ClaimEvidence & { rejected: CitationRejection[] }> {
   const delivered = new Set(dispatcher.deliveredEvidence());
   const rejected: CitationRejection[] = [];
@@ -692,14 +703,27 @@ async function validateRefs(
     const resolved = await lain.resolveEvidence({ snapshot: view, refs: candidates });
     const accepted: string[] = [];
     const byRef = new Map(resolved.items.map((item) => [item.ref, item]));
+    const unresolved = candidates.filter((ref) => byRef.get(ref)?.exists !== true);
     for (const ref of candidates) {
-      const item = byRef.get(ref);
-      if (item?.exists === true) {
-        accepted.push(ref);
-      } else {
-        rejected.push({ ref, reason: 'unresolvable_in_view' });
+      if (byRef.get(ref)?.exists === true) accepted.push(ref);
+    }
+    // Lo que no existe en la vista de la explicación puede existir en la base del
+    // mismo análisis (código eliminado por el PR); sólo entonces se rechaza.
+    let stillUnresolved = unresolved;
+    if (unresolved.length > 0 && fallbackView && fallbackView !== view) {
+      try {
+        const alt = await lain.resolveEvidence({ snapshot: fallbackView, refs: unresolved });
+        const altByRef = new Map(alt.items.map((item) => [item.ref, item]));
+        stillUnresolved = [];
+        for (const ref of unresolved) {
+          if (altByRef.get(ref)?.exists === true) accepted.push(ref);
+          else stillUnresolved.push(ref);
+        }
+      } catch {
+        // Sin base consultable, el rechazo original se mantiene.
       }
     }
+    for (const ref of stillUnresolved) rejected.push({ ref, reason: 'unresolvable_in_view' });
     return { accepted, receipts, rejected };
   } catch {
     // Sin resolución no hay cita publicable: queda el rechazo visible.
@@ -717,9 +741,10 @@ async function validateCitations(
   view: LainView,
   answer: string,
   dispatcher: LainDispatcher,
+  fallbackView?: LainView,
 ): Promise<ClaimEvidence & { rejected: CitationRejection[] }> {
   const refs = extractCitationRefs(answer, dispatcher.deliveredEvidence());
-  return validateRefs(lain, view, refs, dispatcher);
+  return validateRefs(lain, view, refs, dispatcher, fallbackView);
 }
 
 export interface ExplanationPayload {

@@ -1,3 +1,4 @@
+import type { LainView } from '@parallax/shared/lain';
 import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { investigatorModel } from '../agent/model.js';
@@ -48,7 +49,11 @@ export default fp(
             budget: model.budget,
             engineFindings: args.engineFindings,
             // Los hallazgos del motor entran en el contexto y se explican por id.
-            pr: { changes: args.engineFindings, coverage: args.coverage ?? {} },
+            pr: {
+              changes: args.engineFindings,
+              coverage: args.coverage ?? {},
+              baseView: args.baseView as LainView | undefined,
+            },
             endpointLabel: model.settings.baseUrl,
           });
           const payload = serializeExplanation(result, {

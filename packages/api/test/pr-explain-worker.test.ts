@@ -160,6 +160,42 @@ describe('assessment explain step in PR mode', () => {
     expect(payload.narrative).toContain('Findings (engine classifications are authoritative):');
   });
 
+  it('serves the explanation text and the unexplained findings in the report, not just a status', async () => {
+    stubModel([], (id) => id !== 'F1');
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/assessments',
+      headers: { authorization: 'Bearer t' },
+      payload: { repo: 'orders', base: SHAS.ordersBase, head: SHAS.ordersS1, orgId: 'org_demo' },
+    });
+    const id = (created.json() as { assessment: { id: string } }).assessment.id;
+    await app.assessmentWorker.run(id);
+    const report = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/assessments/${id}`,
+        headers: { authorization: 'Bearer t' },
+      })
+    ).json() as {
+      assessment: {
+        explanation: { status: string; narrative?: string | null; unaddressed?: string[] };
+      };
+    };
+    expect(report.assessment.explanation.status).toBe('failed:findings_unaddressed');
+    expect(report.assessment.explanation.narrative).toContain('NOT EXPLAINED by the model.');
+    expect(report.assessment.explanation.unaddressed).toEqual(['F1']);
+
+    // La vista previa del comentario del PR lleva el mismo texto.
+    const preview = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/assessments/${id}/comment-preview`,
+        headers: { authorization: 'Bearer t' },
+      })
+    ).json() as { markdown?: string; body?: string };
+    expect(JSON.stringify(preview)).toContain('NOT EXPLAINED by the model.');
+  });
+
   it('records a visible failed status when the model leaves a finding unexplained', async () => {
     stubModel([], (id) => id !== 'F1');
     const { ex, payload } = await assess();

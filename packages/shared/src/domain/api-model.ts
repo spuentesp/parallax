@@ -82,6 +82,11 @@ export const AssessmentReportSchema = z.object({
     status: z.string(),
     revision: z.number().nullable(),
     model: z.string().nullable(),
+    // Texto de la explicación (modelo + hechos compuestos por el backend) y los
+    // hallazgos del motor que el modelo dejó sin explicar. Aditivos: un informe
+    // sin modelo no los trae.
+    narrative: z.string().nullable().optional(),
+    unaddressed: z.array(z.string()).optional(),
   }),
   createdAt: z.number(),
   completedAt: z.number().nullable(),
