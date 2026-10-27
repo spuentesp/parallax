@@ -186,7 +186,10 @@ export function filterOrgGraph(graph: OrgGraph, f: OrgGraphFilters): OrgGraph {
       const ep = byId.get(e.kind === 'consumes' ? e.target : e.source);
       return ep?.kind === 'endpoint' && endpoints.has(ep.id);
     });
+    // Los endpoints del contrato y quienes los consumen: sin sus consumidores
+    // el mapa mostraría contratos huérfanos, no "quién usa los http".
     keep = new Set(endpoints);
+    for (const e of edges) if (e.kind === 'consumes') keep.add(e.source);
   }
 
   if (f.service !== undefined) {
