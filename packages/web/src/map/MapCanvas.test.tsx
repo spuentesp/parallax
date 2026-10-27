@@ -106,7 +106,10 @@ describe('MapCanvas data', () => {
       expect(n.data('tw')).toBe(n.data('w') - 12);
     }
     const spots = new Set(
-      leaves.toArray().map((n) => `${Math.round(n.position('x'))},${Math.round(n.position('y'))}`),
+      leaves.toArray().map((n) => {
+        const p = (n as NodeSingular).position();
+        return `${Math.round(p.x)},${Math.round(p.y)}`;
+      }),
     );
     expect(spots.size).toBe(leaves.length);
   });
