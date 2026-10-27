@@ -15,6 +15,7 @@ import { assessmentRoutes } from './routes/assessments.js';
 import { ciRoutes } from './routes/ci.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
+import { mapRoutes } from './routes/map.js';
 // MCP + Web
 import { mcpRoutes } from './routes/mcp.js';
 import { orgsRoutes } from './routes/orgs.js';
@@ -48,6 +49,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(publicationRoutes);
   await app.register(queryRoutes);
   await app.register(workspaceRoutes);
+  await app.register(mapRoutes);
   await app.register(ciRoutes);
 
   // MCP (http-sse transport).

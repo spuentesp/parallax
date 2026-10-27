@@ -138,6 +138,8 @@ export async function buildEndpointTopology(
   const edgeKeys = new Set<string>();
   const byKind: Record<string, number> = {};
   const serviceRepo = new Map<string, string>();
+  // key de contrato → servicio dueño, en orden de alta (el primero gana).
+  const endpointOwner = new Map<string, string>();
 
   const ensureRepo = (repo: string | null | undefined): string | null => {
     if (!repo) return null;
@@ -187,6 +189,7 @@ export async function buildEndpointTopology(
     }
 
     const epId = endpointNodeId(key, owner);
+    if (!endpointOwner.has(key)) endpointOwner.set(key, owner);
     const definePath = item.providers?.[0]?.path ?? null;
     nodes.set(epId, {
       id: epId,
@@ -249,7 +252,14 @@ export async function buildEndpointTopology(
       // Agrupa por endpoint consumido: un consumidor puede tocar varios.
       const byEndpoint = new Map<
         string,
-        { fields: string[]; binding: string; confidence: number; useCount: number }
+        {
+          fields: string[];
+          binding: string;
+          confidence: number;
+          useCount: number;
+          staticUses: number;
+          heuristicUses: number;
+        }
       >();
       for (const u of c.uses) {
         const ekey = u.endpoint?.key;
@@ -265,8 +275,14 @@ export async function buildEndpointTopology(
           binding: bindingKind,
           confidence,
           useCount: 0,
+          staticUses: 0,
+          heuristicUses: 0,
         };
         acc.useCount++;
+        // Procedencia por uso: un vínculo mixto no se etiqueta con el primer
+        // uso que apareció; el mapa necesita saber cuánto es duro y cuánto no.
+        if (bindingKind === 'heuristic') acc.heuristicUses++;
+        else acc.staticUses++;
         acc.confidence = Math.max(acc.confidence, confidence);
         for (const f of u.fields ?? []) if (f && !acc.fields.includes(f)) acc.fields.push(f);
         byEndpoint.set(ekey, acc);
@@ -283,15 +299,12 @@ export async function buildEndpointTopology(
             meta: { service: ownerOfKey, contractKind: contractKind(ekey) },
           });
           byKind[contractKind(ekey)] = (byKind[contractKind(ekey)] ?? 0) + 1;
+          if (!endpointOwner.has(ekey)) endpointOwner.set(ekey, ownerOfKey);
         }
       }
 
       for (const [ekey, acc] of byEndpoint) {
-        const ownerOfKey = [...nodes.values()].find(
-          (n) =>
-            n.id === endpointNodeId(ekey, n.meta?.service as string) ||
-            (n.kind === 'endpoint' && n.label === ekey),
-        )?.meta?.service as string | undefined;
+        const ownerOfKey = endpointOwner.get(ekey);
         const epId = endpointNodeId(ekey, ownerOfKey ?? s.service);
 
         // 1) consumidor → endpoint
@@ -308,6 +321,8 @@ export async function buildEndpointTopology(
               confidence: acc.confidence,
               fields: acc.fields,
               useCount: acc.useCount,
+              staticUses: acc.staticUses,
+              heuristicUses: acc.heuristicUses,
             },
           });
         }
