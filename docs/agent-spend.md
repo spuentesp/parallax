@@ -82,8 +82,7 @@ Four model chapters in one conversation on Saleor (3 → 6, "add a delivery note
 
 | Stage | Chapter times (s) | Total | Claims (verified / contradicted / other) |
 |---|---|---|---|
-| Start of the day | 52 · 103 · 156 · 122 | **433 s** | mostly unverifiable |
-| After the first guards + location claims | 52 · 103 · 156 · 122 (same loop) | 433 s | 4/4, 4/6, 6/7, 2/4 |
+| First tour run (guards + location claims already in) | 52 · 103 · 156 · 122 | **433 s** | 4/4 · 4/6 · 6/7 · 2/4 verified (3 contradicted by wrong paths/lines) |
 | After the fixes below | **60 · 36 · 34 · 63** | **193 s** | 2/4 · 5/5 · 5/5 · 5/8 (2 contradicted: real model mistakes) |
 
 What the real runs found, in order:
