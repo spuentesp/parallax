@@ -9,6 +9,13 @@ import { z } from 'zod';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { type MapFocus, mapFocusFromClaims } from '../agent/map-focus.js';
 import { investigatorModel } from '../agent/model.js';
+import { buildHistory } from '../conversation/history.js';
+import {
+  ConversationFullError,
+  createConversationStore,
+  MAX_TURNS_PER_CONVERSATION,
+  ownerOf,
+} from '../conversation/store.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { createWindowLimiter } from '../rate-limit.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
@@ -16,6 +23,8 @@ import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
 const QueryRequest = z.object({
   question: z.string().min(1),
   orgId: z.string().min(1),
+  /** Continúa esa conversación (debe ser del mismo token y workspace); sin ella, abre una nueva. */
+  conversationId: z.string().min(1).optional(),
 });
 
 const QueryResponse = z.object({
@@ -70,6 +79,8 @@ const QueryResponse = z.object({
       query: z.string(),
     })
     .nullable(),
+  // La conversación a la que pertenece este turno (null si no se guardó).
+  conversation: z.object({ id: z.string(), seq: z.number() }).nullable(),
   claims_summary: z.object({
     total: z.number(),
     verified: z.number(),
@@ -94,6 +105,7 @@ const EMPTY_TOPOLOGY: TopologyViewData = { nodes: [], edges: [] };
 export const queryRoutes: FastifyPluginAsync = async (app) => {
   const perHour = app.config.queryRateLimitPerHour ?? 0;
   const limiter = perHour > 0 ? createWindowLimiter({ limit: perHour, windowMs: 3_600_000 }) : null;
+  const conversations = createConversationStore(app.db);
   const resolveWorkspaceLain = createWorkspaceLainResolver({
     db: app.db,
     defaultAdapter: app.lain,
@@ -107,6 +119,8 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         body: QueryRequest,
         response: {
           200: QueryResponse,
+          404: z.object({ code: z.string(), detail: z.string() }),
+          409: z.object({ code: z.string(), detail: z.string() }),
           429: z.object({
             type: z.string(),
             title: z.string(),
@@ -130,7 +144,21 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
             detail: `Question limit reached for this access token (${perHour} per hour). Try again in about ${minutes} min.`,
           });
       }
-      const { question, orgId } = req.body as z.infer<typeof QueryRequest>;
+      const { question, orgId, conversationId } = req.body as z.infer<typeof QueryRequest>;
+      const owner = ownerOf(req.authToken?.token ?? 'anonymous');
+
+      // Una conversación ajena (o de otro workspace) no existe para quien pregunta.
+      const prior = conversationId ? await conversations.get(owner, conversationId, orgId) : null;
+      if (conversationId && !prior) {
+        return reply.code(404).send({ code: 'NotFound', detail: 'conversation not found' });
+      }
+      if (prior && prior.turns.length >= MAX_TURNS_PER_CONVERSATION) {
+        return reply.code(409).send({
+          code: 'ConversationFull',
+          detail: `this conversation reached ${MAX_TURNS_PER_CONVERSATION} turns: start a new one`,
+        });
+      }
+      const history = prior ? buildHistory(prior.turns) : undefined;
       const lain = (await resolveWorkspaceLain(orgId)) ?? app.lain;
 
       // Análisis estructural SIEMPRE, con o sin modelo (P08): la topología
@@ -159,11 +187,13 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           claims: [],
           claims_summary: NO_CLAIMS,
           map_focus: null,
+          conversation: null,
         };
       }
 
       const result = await investigate({
         nudgeSubmit: true,
+        ...(history ? { history } : {}),
         question,
         lain,
         model: model.provider,
@@ -200,7 +230,27 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         'investigator finished',
       );
 
+      // El turno se guarda con lo que el motor dijo de cada afirmación: es lo que
+      // alimenta el libro de hechos del siguiente.
+      let saved: { id: string; seq: number } | null = null;
+      try {
+        const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
+        const seq = await conversations.append(conv.id, {
+          question,
+          answer: result.answer ?? '',
+          status: result.explanationStatus,
+          claims: result.claims,
+          focus,
+          model: result.effectiveModel,
+        });
+        saved = { id: conv.id, seq };
+      } catch (e) {
+        // La respuesta ya se calculó: no se pierde por no poder guardarla.
+        if (!(e instanceof ConversationFullError)) req.log.warn({ err: e }, 'turn not saved');
+      }
+
       return {
+        conversation: saved,
         answer: result.answer ?? '',
         explanation_status: result.explanationStatus,
         topology,

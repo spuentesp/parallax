@@ -14,6 +14,7 @@
 
 import type { LainView } from '@parallax/shared/lain';
 import { INVESTIGATOR_DEFAULTS } from '../config.js';
+import type { History } from '../conversation/history.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import {
   type Claim,
@@ -181,6 +182,8 @@ export interface InvestigateOptions {
    * Lo activa /api/query; por defecto se acepta la prosa.
    */
   nudgeSubmit?: boolean;
+  /** Memoria de la conversación (ver conversation/history.ts); sin ella, pregunta suelta. */
+  history?: History;
   maxResultChars?: number;
 }
 
@@ -324,8 +327,16 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   const mapBlock = workspaceMap
     ? `Workspace map (from the engine, fixed view):\n${workspaceMap}`
     : '';
+  // Lo que acompaña a la pregunta: el mapa del workspace y, si lo hay, el libro
+  // de hechos de la conversación.
+  const contextBlocks = [mapBlock, opts.history?.context ?? ''].filter(Boolean);
   const messages: ChatMessage[] = [
     { role: 'system', content: prFindings ? PR_SYSTEM_PROMPT : SYSTEM_PROMPT },
+    // Turnos recientes de la conversación, como hilo normal de chat.
+    ...(opts.history?.recent ?? []).flatMap((t): ChatMessage[] => [
+      { role: 'user', content: t.question },
+      { role: 'assistant', content: t.answer },
+    ]),
     {
       role: 'user',
       content:
@@ -333,8 +344,8 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
           ? [renderFindingsBlock(prFindings, opts.pr.coverage), mapBlock]
               .filter(Boolean)
               .join('\n\n')
-          : workspaceMap
-            ? `${mapBlock}\n\nQuestion: ${opts.question}`
+          : contextBlocks.length > 0
+            ? `${contextBlocks.join('\n\n')}\n\nQuestion: ${opts.question}`
             : opts.question,
     },
   ];

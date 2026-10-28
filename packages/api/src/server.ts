@@ -14,6 +14,7 @@ import lainAdapterPlugin from './plugins/lain-adapter.js';
 import orgGraphPlugin from './plugins/org-graph.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { ciRoutes } from './routes/ci.js';
+import { conversationRoutes } from './routes/conversations.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
 import { mapRoutes } from './routes/map.js';
@@ -53,6 +54,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(queryRoutes);
   await app.register(workspaceRoutes);
   await app.register(mapRoutes);
+  await app.register(conversationRoutes);
   await app.register(whoamiRoutes);
   await app.register(ciRoutes);
 

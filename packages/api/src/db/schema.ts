@@ -122,3 +122,39 @@ export const workspaceCi = sqliteTable('workspace_ci', {
   reportComments: integer('report_comments', { mode: 'boolean' }).notNull().default(false),
   updatedAt: integer('updated_at').notNull(),
 });
+
+export const conversation = sqliteTable(
+  'conversation',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    title: text('title').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ownerIdx: index('idx_conversation_owner').on(t.owner, t.workspaceId, t.updatedAt),
+  }),
+);
+
+export const turn = sqliteTable(
+  'turn',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversation.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    question: text('question').notNull(),
+    answer: text('answer').notNull(),
+    status: text('status').notNull(),
+    claimsJson: text('claims_json').notNull(),
+    focusJson: text('focus_json'),
+    model: text('model'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    seqIdx: uniqueIndex('idx_turn_seq').on(t.conversationId, t.seq),
+  }),
+);
