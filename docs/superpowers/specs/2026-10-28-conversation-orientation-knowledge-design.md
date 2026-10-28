@@ -1,7 +1,7 @@
-# Conversation memory, orientation and knowledge sources — plan
+# Onboarding: conversation memory, orientation and knowledge sources — plan
 
 **Date:** 2026-10-28
-**Status:** proposed. Phases 1–3 are scoped for the hackathon deadline (Oct 30, 10:00 PT); phase 4 is design only.
+**Status:** approved scope: the **technical** onboarding (phases 1–3) for the hackathon deadline (Oct 30, 10:00 PT). Phase 4 (knowledge sources) is design only, built only if time remains. The people side of onboarding (owners, conventions, how we work) is out of scope.
 **Scope:** `packages/api` (conversations, briefing, knowledge interface), `packages/web` (thread, orientation screen), `packages/shared` (DTOs).
 
 ## 1. Why
@@ -13,22 +13,25 @@ The product is *the brain over a deterministic engine*: Lain knows what the code
 
 Longer term, an organization's knowledge is not only code: wikis, ADRs, runbooks. That knowledge must be usable **without weakening the one property that makes Parallax trustworthy** (facts come from the engine, not the model).
 
-## 2. The use case that drives everything (also the demo)
+## 2. What onboarding is, and the use case that drives it
 
-*"I'm new. I need to add a delivery note to checkout, and it crosses repos. Where do I need to be careful?"* — on Saleor (API, dashboard, storefront).
+Onboarding is not Q&A about code. It is getting a new engineer from "I know nothing" to "I can make my first change without breaking someone else". Q&A is the mechanism; the product is a **guided path**:
 
-The ladder the product must support, general → specific:
-
-| # | Question (as the user would ask it) | What the answer must be built from |
+| Stage | What the user gets | Built from |
 |---|---|---|
-| 1 | What repos are there and what does each do? | orientation briefing (deterministic) |
-| 2 | Where does checkout live, and who talks to it? | map + `consumers_of` → verified relations, focus on map |
-| 3 | Which operations does the storefront use for checkout? the dashboard? | endpoints per consumer, evidence ids |
-| 4 | Which files in the storefront call `checkoutLinesUpdate`? | evidence ids → file:line, "View source" |
-| 5 | If I change that mutation, who else breaks? | `trace_impact` consumers across repos, with provenance |
-| 6 | What am I not seeing? | coverage / unresolved: unindexed repos, inferred-only links |
+| 1. Orient | the system on one screen: what exists, how big, how divided | deterministic briefing |
+| 2. Capabilities | which repos/services implement checkout, orders… | map grouped by contracts and names, labelled heuristic |
+| 3. Interfaces | the contracts everyone depends on, hubs, consumers | graph + provenance |
+| 4. Walk a flow | one request traced across repos, narrated | engine path; Nemotron narrates; every hop verified |
+| 5. Your task | "add a delivery note to checkout" → touchpoints (repos, endpoints, files), consumers, risks, a checklist | impact tracing + unindexed / inferred-only gaps |
+| 6. Check yourself | questions the engine can grade ("which repo consumes X?") | graph-generated, engine-adjudicated |
+| 7. Take it with you | exportable notes of everything verified | the conversation ledger |
 
-Acceptance for the whole plan: this six-step session runs on the live Saleor workspace, follow-ups work without restating context, every relation claimed is engine-verified, and the final answer names the **repos and files** to be careful with.
+**For the deadline:** stages 1, 4, 5 are the demo; 3 comes with the briefing; 2 only if quick; **6 and 7 are the first things cut**.
+
+**Grounding:** stages 1, 3, 4, 5 and the coverage part of 6 come from the engine and are verifiable. Stage 2 is partly heuristic (no domain/team concept). Ownership, conventions, how to run/test and *why* decisions were made are not in the code — they need knowledge sources (phase 4) and would be labelled "documented", never "verified".
+
+**Driving scenario (Saleor: API, dashboard, storefront):** *"I'm new. I need to add a delivery note to checkout, and it crosses repos."* The path above must run on the live workspace, follow-ups must work without restating context, every relation claimed must be engine-verified, and stage 5 must name the repos **and files** involved and what could break.
 
 ## 3. Phase 1 — Conversation memory (target: ~½ day)
 
@@ -83,11 +86,14 @@ Optional (only if time remains): a single Nemotron call that turns the *same* br
 
 Tests: briefing built from a real topology (fake engine at the transport edge); every number traceable to the graph; unindexed repos appear under "not known".
 
-## 5. Phase 3 — The guided session as demo (target: with the deployment dry run)
+## 5. Phase 3 — The onboarding path (target: with the deployment dry run)
 
-- Run the six-step ladder on the live workspace; record actual answers; fix prompt/tool gaps that appear (this is how the text-tool-call and truncation bugs were found).
-- Add the file-level step: answers carry `file:line` evidence ids; the UI renders them as links that open the source view. If an answer cannot name a file, it says so.
-- Output: the script for the video (docs/hackathon/video-script.md) and a regression test that replays the ladder against a scripted model + fixture engine.
+- A path state (`orient → flow → task`, optional `capabilities`) stored with the conversation: which stage, what was seen, the user's task statement.
+- Each stage = a deterministic scaffold (what to look at on the map, which question to ask next) + a Nemotron-written explanation whose relation claims are engine-verified.
+- **Walk a flow:** pick an entry point (a storefront operation), follow engine consumers/`trace_impact` hop by hop; the model narrates; the UI highlights each hop on the map in order.
+- **Your task:** the user states the change; the investigator returns touchpoints with `file:line` evidence ids (rendered as "View source" links), the consumers on other repos, and a risk list (inferred-only links, unindexed repos). If it cannot name a file, it says so.
+- Run the whole path live, record real answers, fix gaps that appear (this is how the text-tool-call and truncation bugs were found).
+- Output: the video script (docs/hackathon/video-script.md) and a regression test replaying the path against a scripted model + fixture engine.
 
 ## 6. Phase 4 — Knowledge sources, RAG and a knowledge graph (design only for now)
 
