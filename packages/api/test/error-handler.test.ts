@@ -24,6 +24,13 @@ async function makeApp() {
   app.get('/boom', async () => {
     throw new Error('unexpected');
   });
+  app.get('/status/:code', async (req) => {
+    const { code } = req.params as { code: string };
+    throw Object.assign(new Error(`status ${code}`), { statusCode: Number(code) });
+  });
+  app.get('/string-status', async () => {
+    throw Object.assign(new Error('string status'), { statusCode: '400' });
+  });
   return app;
 }
 
@@ -60,6 +67,43 @@ describe('error-handler plugin', () => {
     const r = await app.inject({ method: 'GET', url: '/boom' });
     expect(r.statusCode).toBe(500);
     expect(r.json().traceId).toMatch(/^[a-z0-9]{8,}$/);
+    await app.close();
+  });
+
+  it('passes a client error status through with its own title and detail', async () => {
+    const app = await makeApp();
+    const r = await app.inject({ method: 'GET', url: '/status/415' });
+    expect(r.statusCode).toBe(415);
+    expect(r.json()).toEqual({
+      type: 'about:blank',
+      title: 'Bad Request',
+      status: 415,
+      detail: 'status 415',
+      traceId: expect.any(String),
+    });
+    await app.close();
+  });
+
+  it('covers the whole 4xx range, both ends included', async () => {
+    const app = await makeApp();
+    expect((await app.inject({ method: 'GET', url: '/status/400' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/status/499' })).statusCode).toBe(499);
+    await app.close();
+  });
+
+  it('turns a 5xx status into the generic 500, not the error status', async () => {
+    const app = await makeApp();
+    const r = await app.inject({ method: 'GET', url: '/status/503' });
+    expect(r.statusCode).toBe(500);
+    expect(r.json().title).toBe('Internal Server Error');
+    expect(r.json().detail).toBe('unexpected error');
+    await app.close();
+  });
+
+  it('ignores a status that is not a number', async () => {
+    const app = await makeApp();
+    const r = await app.inject({ method: 'GET', url: '/string-status' });
+    expect(r.statusCode).toBe(500);
     await app.close();
   });
 });

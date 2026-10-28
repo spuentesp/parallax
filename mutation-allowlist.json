@@ -62,6 +62,48 @@
       "mutator": "MethodExpression",
       "description": "r.uri",
       "reason": "Equivalente a nivel de sistema: el trim del filtro del componente es redundante porque useCreateWorkspace ya descarta uris en blanco antes del POST."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/status.ts",
+      "mutator": "StringLiteral",
+      "description": "\"Stryker was here!\"",
+      "reason": "Equivalente: el fallback de `impact?.class ?? ''` sólo se compara con 'Verified' y 'NeedsInvestigation', así que cualquier cadena que no sea esas dos produce el mismo resultado. Ningún cálculo de estado lee ese valor."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "StringLiteral",
+      "description": "\"\"",
+      "reason": "Equivalente: `startsWith('')` siempre es verdadero, pero el resultado no cambia. Una cabecera sin el prefijo `sha256=` nunca puede igualar el digest esperado, que empieza por ese prefijo, así que la comparación en tiempo constante la rechaza igual."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "StringLiteral",
+      "description": "\"Stryker was here!\"",
+      "reason": "Equivalente: `p.repository?.full_name ?? ''` sin repositorio produce owner o repo vacíos y `parsePullRequestEvent` devuelve null en ambos casos antes de usar `fullName`."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.head.repo",
+      "reason": "Equivalente: `pr.head` ya se comprobó (`headSha` vacío devuelve null) antes de llegar a esta línea, así que el `?.` nunca se evalúa sobre undefined."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.base.ref",
+      "reason": "Equivalente: `pr.base` ya se comprobó (`baseSha` vacío devuelve null) antes de llegar a esta línea."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.head.ref",
+      "reason": "Equivalente: `pr.head` ya se comprobó (`headSha` vacío devuelve null) antes de llegar a esta línea."
     }
   ]
 }
