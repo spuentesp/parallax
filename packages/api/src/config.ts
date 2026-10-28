@@ -56,7 +56,7 @@ export const INVESTIGATOR_DEFAULTS = {
   nemotronPlannerModel: 'nvidia/nemotron-3-super-120b-a12b',
   nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
   investigatorMaxToolCalls: 16,
-  investigatorMaxModelMs: 120_000,
+  investigatorMaxModelMs: 180_000,
   investigatorMaxTokens: 4096,
 } as const;
 

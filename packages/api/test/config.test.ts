@@ -96,7 +96,7 @@ describe('loadConfig', () => {
     });
     const d = investigatorSettings(base);
     expect(d.maxToolCalls).toBe(16);
-    expect(d.maxModelMs).toBe(120_000);
+    expect(d.maxModelMs).toBe(180_000);
     expect(d.baseUrl).toBe('https://api.tokenfactory.nebius.com/v1');
     expect(d.workerModel).toContain('Nemotron');
 

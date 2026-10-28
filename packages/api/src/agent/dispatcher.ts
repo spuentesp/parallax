@@ -28,6 +28,7 @@ import {
 import { z } from 'zod';
 import { INVESTIGATOR_DEFAULTS } from '../config.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
+import { CODE_TOOL_ARGS, CODE_TOOL_DESCRIPTIONS, CODE_TOOLS, type CodeTool } from './code-tools.js';
 import type { ToolCall, ToolSpec } from './nemotron.js';
 
 export const DISPATCHER_TOOLS = [
@@ -43,7 +44,10 @@ export const DISPATCHER_TOOLS = [
   'get_coverage',
 ] as const;
 
-export type DispatcherTool = (typeof DISPATCHER_TOOLS)[number];
+// Contratos + código: lo que el investigador puede pedir a LAIN (sólo lectura).
+export const ALL_TOOLS = [...DISPATCHER_TOOLS, ...CODE_TOOLS] as const;
+
+export type DispatcherTool = (typeof ALL_TOOLS)[number];
 
 export type DispatchErrorCode =
   | 'unknown_tool'
@@ -73,6 +77,7 @@ const ModelArgsSchemas = {
   read_source: ReadSourceArgs.omit({ snapshot: true }),
   list_unresolved: ListUnresolvedArgs.omit({ snapshot: true }),
   get_coverage: GetCoverageArgs.omit({ snapshot: true }),
+  ...CODE_TOOL_ARGS,
 } as const;
 
 const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
@@ -95,6 +100,7 @@ const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
     'Unresolved inbound calls in the view — what the engine could NOT bind. Paginated; unknowns live here.',
   get_coverage:
     'What the view reviewed and what it could not: coverage.complete and scope (reviewed/unreviewed).',
+  ...CODE_TOOL_DESCRIPTIONS,
 };
 
 export interface DispatchTruncation {
@@ -192,7 +198,7 @@ export class LainDispatcher {
   // Specs que ven el modelo: exactamente el conjunto de lectura, sin snapshot.
   // Esta lista es la prueba de que no se amplían permisos (P07).
   toolSpecs(): ToolSpec[] {
-    return DISPATCHER_TOOLS.map((name) => ({
+    return ALL_TOOLS.map((name) => ({
       type: 'function',
       function: {
         name,
@@ -313,7 +319,7 @@ export class LainDispatcher {
         tool,
         callId,
         code: 'unknown_tool',
-        message: `unknown tool "${tool}". Allowed tools: ${DISPATCHER_TOOLS.join(', ')}. Permissions are not widened on request.`,
+        message: `unknown tool "${tool}". Allowed tools: ${ALL_TOOLS.join(', ')}. Permissions are not widened on request.`,
         latencyMs: Date.now() - t0,
       };
     }
@@ -425,6 +431,15 @@ export class LainDispatcher {
         return this.lain.listUnresolved({ ...(args as object), snapshot } as never);
       case 'get_coverage':
         return this.lain.getCoverage({ ...(args as object), snapshot } as never);
+      default: {
+        // Herramientas de código: el modelo dice `repo`, LAIN espera `repo_id`.
+        // El código no depende del snapshot de contratos.
+        const { repo, ...rest } = args as { repo?: string } & Record<string, unknown>;
+        return this.lain.codeTool(tool as CodeTool, {
+          ...rest,
+          ...(repo ? { repo_id: repo } : {}),
+        });
+      }
     }
   }
 
@@ -646,7 +661,7 @@ export function summarizeConsumers(
 }
 
 function isDispatcherTool(name: string): name is DispatcherTool {
-  return (DISPATCHER_TOOLS as readonly string[]).includes(name);
+  return (ALL_TOOLS as readonly string[]).includes(name);
 }
 
 // Repo de una ref: GlobalId `repo:Node:...` o EvidenceRef `repo@sha:path:line`.

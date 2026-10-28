@@ -42,6 +42,8 @@ import type {
 // de docs/lain-tool-schemas.json. Las 13 del paquete contracts.
 // Las del grafo crudo (query_graph y anexas) viven en el paquete `raw`,
 // que hay que load_package antes de usarlas.
+import type { CodeTool } from '../agent/code-tools.js';
+
 export interface LainAdapter {
   readonly analyzerVersion: string;
   readonly apiVersion: '1';
@@ -70,4 +72,6 @@ export interface LainAdapter {
   getCodeSnippet(req: GetCodeSnippetArgs): Promise<LainTextResponse>;
   explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse>;
   getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse>;
+  /** Herramienta de código de LAIN de la lista permitida (sólo lectura), markdown plano. */
+  codeTool(tool: CodeTool, args: Record<string, unknown>): Promise<LainTextResponse>;
 }

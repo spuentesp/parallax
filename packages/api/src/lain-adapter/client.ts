@@ -41,6 +41,7 @@ import type {
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
+import { type CodeTool, isCodeTool } from '../agent/code-tools.js';
 import { LainCallError } from './errors.js';
 import type { LainAdapter } from './types.js';
 
@@ -398,6 +399,14 @@ export class RealLainAdapter implements LainAdapter {
       symbol: req.symbol,
       ...(req.repo_id ? { repo_id: req.repo_id } : {}),
     });
+  }
+
+  async codeTool(tool: CodeTool, args: Record<string, unknown>): Promise<LainTextResponse> {
+    // Defensa en profundidad: sólo herramientas de lectura de la lista.
+    if (!isCodeTool(tool)) {
+      throw LainCallError.parse({ code: 'LainUnavailable', message: `not a code tool: ${tool}` });
+    }
+    return this.callText(tool, args);
   }
 }
 

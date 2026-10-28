@@ -137,7 +137,7 @@ describe('investigate loop', () => {
     expect(result.explanationStatus).toBe('available');
     expect(result.citations.accepted).toEqual([EVID]);
     expect(result.effectiveModel).toBe('fake/nemotron');
-    expect(result.promptVersion).toBe('parallax-investigator-v4');
+    expect(result.promptVersion).toBe('parallax-investigator-v5');
     // LAIN fue llamado con la vista fijada (live por defecto).
     expect(getLainMockCalls().some((c) => c.tool === 'get_service' && c.snapshot === 'live')).toBe(
       true,
@@ -383,7 +383,7 @@ describe('INV 2 — engine fields stay engine fields', () => {
     expect(payload.engine_finding_classes.every((f) => f.class === 'NeedsInvestigation')).toBe(
       true,
     );
-    expect(payload.prompt_version).toBe('parallax-investigator-v4');
+    expect(payload.prompt_version).toBe('parallax-investigator-v5');
     expect(payload.tool_calls).toHaveLength(1);
   });
 });

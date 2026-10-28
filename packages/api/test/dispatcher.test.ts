@@ -3,7 +3,7 @@
 // corte declarado.
 
 import { describe, expect, it } from 'vitest';
-import { createDispatcher, DISPATCHER_TOOLS, summarizeConsumers } from '../src/agent/dispatcher.js';
+import { ALL_TOOLS, createDispatcher, summarizeConsumers } from '../src/agent/dispatcher.js';
 import type { ToolCall } from '../src/agent/nemotron.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
@@ -16,7 +16,7 @@ describe('LainDispatcher', () => {
   it('exposes only read tools and never a snapshot parameter', () => {
     const d = createDispatcher({ lain: createLainMock(), view: 'live' });
     const specs = d.toolSpecs();
-    expect(specs.map((s) => s.function.name).sort()).toEqual([...DISPATCHER_TOOLS].sort());
+    expect(specs.map((s) => s.function.name).sort()).toEqual([...ALL_TOOLS].sort());
     // P07: no se amplían permisos — ninguna tool de escritura/publicación.
     const names = specs.map((s) => s.function.name);
     expect(names).not.toContain('publish');
@@ -56,7 +56,7 @@ describe('LainDispatcher', () => {
       expect(r.message).toContain('list_services');
     }
     // Las specs ofrecidas no cambian tras el rechazo.
-    expect(d.toolSpecs().map((s) => s.function.name)).toEqual([...DISPATCHER_TOOLS]);
+    expect(d.toolSpecs().map((s) => s.function.name)).toEqual([...ALL_TOOLS]);
   });
 
   it('rejects invalid schema before touching LAIN', async () => {
