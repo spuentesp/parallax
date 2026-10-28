@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:heldout": "vitest run --config vitest.heldout.config.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "gate:release": "tsx scripts/gate-g1.ts && tsx scripts/gate-g2.ts && tsx scripts/gate-graph.ts && tsx scripts/gate-g3.ts",
+    "gate:release": "tsx scripts/gate-g1.ts && tsx scripts/gate-g2.ts && tsx scripts/gate-graph.ts && tsx --env-file-if-exists=../../.env scripts/gate-g3.ts",
     "gate:saleor": "tsx scripts/gate-saleor.ts",
     "gate:graphql": "tsx scripts/gate-graphql.ts"
   },

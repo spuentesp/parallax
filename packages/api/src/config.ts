@@ -13,15 +13,17 @@ const AppConfigSchema = z.object({
   lainUrl: z.string().url().optional(),
   mcpTransport: z.enum(['stdio', 'http-sse']).default('stdio'),
   authTokens: z.array(AuthToken).min(1),
-  nemotronToken: z.string().optional(),
+  // Credencial de Nebius Token Factory (NEBIUS_TOKEN): es del proveedor, no del
+  // modelo, que es configurable.
+  nebiusToken: z.string().optional(),
   // Endpoint y modelos del investigador (§14): configurables porque el modelo
   // efectivo es una condición experimental, no una constante del código. Los
   // defaults viven en investigatorSettings() para no romper AppConfig en tests.
   nemotronBaseUrl: z.string().url().optional(),
   nemotronPlannerModel: z.string().min(1).optional(),
   nemotronWorkerModel: z.string().min(1).optional(),
-  // Presupuesto de investigación (§6): ocho llamadas y 120 s de modelo por
-  // consulta, medidos y reportados en la demo.
+  // Presupuesto de investigación (§6): 16 llamadas (eran 8) y 120 s de modelo
+  // por consulta, medidos y reportados en la demo.
   investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
   investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
   webBundlePath: z.string().default('./packages/web/dist'),
@@ -47,11 +49,20 @@ export const INVESTIGATOR_DEFAULTS = {
   nemotronBaseUrl: 'https://api.tokenfactory.nebius.com/v1',
   nemotronPlannerModel: 'nvidia/nemotron-3-super-120b-a12b',
   nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
-  investigatorMaxToolCalls: 8,
+  investigatorMaxToolCalls: 16,
   investigatorMaxModelMs: 120_000,
 } as const;
 
-export function investigatorSettings(cfg: AppConfig): {
+export function investigatorSettings(
+  cfg: Pick<
+    AppConfig,
+    | 'nemotronBaseUrl'
+    | 'nemotronPlannerModel'
+    | 'nemotronWorkerModel'
+    | 'investigatorMaxToolCalls'
+    | 'investigatorMaxModelMs'
+  >,
+): {
   baseUrl: string;
   plannerModel: string;
   workerModel: string;
@@ -64,6 +75,35 @@ export function investigatorSettings(cfg: AppConfig): {
     workerModel: cfg.nemotronWorkerModel ?? INVESTIGATOR_DEFAULTS.nemotronWorkerModel,
     maxToolCalls: cfg.investigatorMaxToolCalls ?? INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
     maxModelMs: cfg.investigatorMaxModelMs ?? INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
+  };
+}
+
+// Un valor vacío en el .env (`NEBIUS_TOKEN=`) es "sin configurar", no un token.
+function nonEmpty(value: string | undefined): string | undefined {
+  return value === undefined || value.trim() === '' ? undefined : value;
+}
+
+/**
+ * ÚNICO lugar que lee las variables del modelo (credencial, endpoint, modelos).
+ * `loadConfig` y los gates pasan por aquí; ninguno lee `process.env` por su
+ * cuenta ni con otro nombre.
+ */
+export function modelEnv(
+  env: NodeJS.ProcessEnv,
+): Pick<
+  AppConfig,
+  'nebiusToken' | 'nemotronBaseUrl' | 'nemotronPlannerModel' | 'nemotronWorkerModel'
+> {
+  // NEMOTRON_TOKEN fue el nombre anterior. Aceptarlo en silencio mantendría dos
+  // fuentes de verdad; ignorarlo en silencio apagaría el modelo sin decir por qué.
+  if (nonEmpty(env.NEMOTRON_TOKEN) !== undefined) {
+    throw new Error('NEMOTRON_TOKEN was renamed to NEBIUS_TOKEN: set NEBIUS_TOKEN and remove it');
+  }
+  return {
+    nebiusToken: nonEmpty(env.NEBIUS_TOKEN),
+    nemotronBaseUrl: env.NEMOTRON_BASE_URL,
+    nemotronPlannerModel: env.NEMOTRON_PLANNER_MODEL,
+    nemotronWorkerModel: env.NEMOTRON_WORKER_MODEL,
   };
 }
 
@@ -86,10 +126,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     lainUrl: env.LAIN_URL,
     mcpTransport: env.PARALLAX_MCP_TRANSPORT,
     authTokens,
-    nemotronToken: env.NEMOTRON_TOKEN ?? env.NEBIUS_TOKEN,
-    nemotronBaseUrl: env.NEMOTRON_BASE_URL,
-    nemotronPlannerModel: env.NEMOTRON_PLANNER_MODEL,
-    nemotronWorkerModel: env.NEMOTRON_WORKER_MODEL,
+    ...modelEnv(env),
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
     webBundlePath: env.WEB_BUNDLE_PATH,

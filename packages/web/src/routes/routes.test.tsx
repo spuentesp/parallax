@@ -75,6 +75,36 @@ describe('routes render in isolation', () => {
     expect(screen.getByText(/no puede promover NeedsInvestigation a Verified/i)).toBeTruthy();
   });
 
+  it('Assessment shows the model explanation text next to its status, and what was left unexplained', async () => {
+    server.use(
+      http.get('/api/assessments/a_1', () =>
+        HttpResponse.json({
+          assessment: {
+            ...sampleReport,
+            explanation: {
+              status: 'failed:findings_unaddressed',
+              revision: 0,
+              model: 'nemotron',
+              narrative:
+                'Two changes.\n- F1 EndpointRemoved [engine: Verified]\n  F2 NOT EXPLAINED',
+              unaddressed: ['F2'],
+            },
+          },
+        }),
+      ),
+    );
+    renderWithQuery(
+      <MemoryRouter initialEntries={['/assessments/a_1']}>
+        <Routes>
+          <Route path="/assessments/:assessmentId" element={<Assessment />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('failed:findings_unaddressed')).toBeTruthy();
+    expect(screen.getByText(/F1 EndpointRemoved \[engine: Verified\]/)).toBeTruthy();
+    expect(screen.getByText(/F2 NOT EXPLAINED/)).toBeTruthy();
+  });
+
   it('the report crossing the wire satisfies the shared contract', () => {
     // Sanity: el handler por defecto sirve exactamente el shape que consume la UI.
     expect(sampleReport.evidence).toEqual([]);

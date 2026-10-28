@@ -1,9 +1,9 @@
+import type { LainView } from '@parallax/shared/lain';
 import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
-import { NemotronProvider } from '../agent/nemotron.js';
-import { investigatorSettings } from '../config.js';
+import { investigatorModel } from '../agent/model.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
-import { AssessmentWorker, type ExplainOutcome } from '../worker/assessment-worker.js';
+import { AssessmentWorker, type AssessmentWorkerDeps } from '../worker/assessment-worker.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -11,12 +11,8 @@ declare module 'fastify' {
   }
 }
 
-type ExplainFn = (args: {
-  orgId: string;
-  viewId: string;
-  question: string;
-  engineFindings: unknown[];
-}) => Promise<ExplainOutcome>;
+// El contrato de explain vive en el worker: una sola declaración.
+type ExplainFn = NonNullable<AssessmentWorkerDeps['explain']>;
 
 // Un solo worker por proceso. Cada organización es un workspace con su propio
 // servidor LAIN, así que el worker resuelve el adaptador por org en vez de
@@ -32,11 +28,10 @@ export default fp(
 
     // Sin token Nemotron no se inyecta explain: el paso registra
     // failed:no_model_configured y el informe estructural sale igual (P08).
-    const nemotronToken = fastify.config.nemotronToken;
-    const settings = investigatorSettings(fastify.config);
+    const model = investigatorModel(fastify.config);
     // El tipo va en la declaración, no en los parámetros: el parser de Stryker
     // (babel) no acepta `async (args: T): R => …` dentro de un ternario.
-    const explain: ExplainFn | undefined = nemotronToken
+    const explain: ExplainFn | undefined = model
       ? async (args) => {
           const lain = await getLain(args.orgId);
           if (!lain) {
@@ -46,28 +41,24 @@ export default fp(
               payload: null,
             };
           }
-          const nemotron = new NemotronProvider({
-            baseUrl: settings.baseUrl,
-            apiKey: nemotronToken,
-            plannerModel: settings.plannerModel,
-            workerModel: settings.workerModel,
-            timeoutMs: Math.min(60_000, settings.maxModelMs),
-          });
           const result = await investigate({
             question: args.question,
             lain,
-            model: nemotron,
+            model: model.provider,
             view: args.viewId,
-            budget: {
-              maxToolCalls: settings.maxToolCalls,
-              maxModelMs: settings.maxModelMs,
-            },
+            budget: model.budget,
             engineFindings: args.engineFindings,
-            endpointLabel: settings.baseUrl,
+            // Los hallazgos del motor entran en el contexto y se explican por id.
+            pr: {
+              changes: args.engineFindings,
+              coverage: args.coverage ?? {},
+              baseView: args.baseView as LainView | undefined,
+            },
+            endpointLabel: model.settings.baseUrl,
           });
           const payload = serializeExplanation(result, {
             question: args.question,
-            endpointLabel: settings.baseUrl,
+            endpointLabel: model.settings.baseUrl,
             engineFindings: args.engineFindings,
           });
           return {
