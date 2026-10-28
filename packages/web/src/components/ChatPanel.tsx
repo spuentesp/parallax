@@ -5,6 +5,7 @@ import type {
   ClaimVerdictDto,
   ConversationSummaryDto,
   MapFocusDto,
+  ProgressEventDto,
 } from '../api/hooks.js';
 
 export interface ChatMessage {
@@ -39,6 +40,7 @@ export function ChatPanel({
   topSlot,
   renderCard,
   onStartTour,
+  progress = [],
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => void;
@@ -62,6 +64,8 @@ export function ChatPanel({
   renderCard?: (card: NonNullable<ChatMessage['card']>) => React.ReactNode;
   /** Ofrece empezar el recorrido guiado cuando no hay conversación. */
   onStartTour?: () => void;
+  /** Lo que el investigador va haciendo mientras responde (en vivo). */
+  progress?: ProgressEventDto[];
 }): React.ReactElement {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -224,7 +228,7 @@ export function ChatPanel({
             </div>
           </div>
         ))}
-        {loading && <Investigating />}
+        {loading && <Investigating progress={progress} />}
         <div ref={bottomRef} />
       </div>
 
@@ -347,26 +351,78 @@ function Verdicts({ verdicts }: { verdicts: ClaimVerdictDto[] }): React.ReactEle
 }
 
 /**
- * Mientras el modelo lee código y el motor comprueba cada afirmación pasan de
- * decenas de segundos a un par de minutos: sin señal de vida parece colgado.
- * Se dice qué está pasando y cuánto lleva (el límite del servidor es de 3 minutos).
+ * Mientras el modelo lee código y el motor comprueba cada afirmación pasan de decenas de
+ * segundos a un par de minutos: sin señal de vida parece colgado. Se muestra QUÉ está
+ * haciendo (cada lectura al motor, en vivo) y cuánto lleva.
  */
-function Investigating(): React.ReactElement {
+function Investigating({ progress }: { progress: ProgressEventDto[] }): React.ReactElement {
   const [secs, setSecs] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setSecs((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, []);
+  const tools = progress.filter(
+    (e): e is Extract<ProgressEventDto, { type: 'tool' }> => e.type === 'tool',
+  );
+  const last = progress[progress.length - 1];
+  const rounds = progress.filter((e) => e.type === 'round');
+  const lastRound = rounds[rounds.length - 1] as
+    | Extract<ProgressEventDto, { type: 'round' }>
+    | undefined;
+  const wrap = progress.find((e) => e.type === 'wrapup');
+  const doing =
+    last?.type === 'verify'
+      ? `Checking ${last.claims} claim${last.claims === 1 ? '' : 's'} against the code…`
+      : last?.type === 'round' && last.forced
+        ? 'Writing the answer…'
+        : last?.type === 'round'
+          ? tools.length === 0
+            ? 'Planning the first read…'
+            : 'Deciding the next step…'
+          : last?.type === 'wrapup'
+            ? 'Wrapping up…'
+            : tools.length > 0
+              ? 'Reading the result…'
+              : 'Starting…';
   return (
-    <div className="space-y-0.5 text-sm text-muted" data-testid="investigating">
+    <div className="space-y-1 text-sm text-muted" data-testid="investigating">
       <div className="flex items-center gap-2">
         <div className="animate-pulse w-2 h-2 rounded-full bg-accent" />
-        Investigating… <span className="tabular-nums">{secs} s</span>
+        <span>
+          Investigating… <span className="tabular-nums">{secs} s</span>
+        </span>
+        {lastRound && (
+          <span className="ml-auto text-[11px] tabular-nums" data-testid="progress-count">
+            {lastRound.toolCallsUsed} of {lastRound.maxToolCalls} reads
+          </span>
+        )}
       </div>
-      <p className="pl-4 text-[11px]">
-        Reading the code with the engine, then checking each claim against it
-        {secs > 45 ? '. A thorough answer can take a couple of minutes.' : '.'}
+      <p className="pl-4 text-[11px]" data-testid="progress-doing">
+        {doing}
       </p>
+      {tools.length > 0 && (
+        <ul className="space-y-0.5 pl-4 text-[11px]" data-testid="progress-steps">
+          {tools.slice(-5).map((t, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: la lista sólo crece por el final
+            <li key={i} className={t.ok ? '' : 'text-warning'}>
+              <span aria-hidden="true">{t.ok ? '✓' : '·'}</span>{' '}
+              <span className="font-mono">{t.tool}</span>
+              {t.summary ? <span> · {t.summary}</span> : null}
+              {!t.ok && t.note ? <span> (refused: {t.note.replace(/_/g, ' ')})</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {wrap && (
+        <p className="pl-4 text-[11px] text-warning" data-testid="progress-wrapup">
+          {wrap.type === 'wrapup' && wrap.reason === 'locations'
+            ? 'Asking for the code locations to be checkable…'
+            : 'Enough reading: asking for the answer now.'}
+        </p>
+      )}
+      {secs > 45 && (
+        <p className="pl-4 text-[11px]">A thorough answer can take a couple of minutes.</p>
+      )}
     </div>
   );
 }

@@ -4,9 +4,9 @@
 // workspace. Sin modelo configurado, el análisis estructural sigue disponible
 // y explanation_status hace el fallo visible (P08).
 
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { investigate, serializeExplanation } from '../agent/investigator.js';
+import { investigate, type ProgressEvent, serializeExplanation } from '../agent/investigator.js';
 import { type MapFocus, mapFocusFromClaims } from '../agent/map-focus.js';
 import { investigatorModel } from '../agent/model.js';
 import { buildHistory } from '../conversation/history.js';
@@ -132,68 +132,67 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     defaultAdapter: app.lain,
   });
 
-  app.post(
-    '/api/query',
-    {
-      config: { scopes: ['read'] },
-      schema: {
-        body: QueryRequest,
-        response: {
-          200: QueryResponse,
-          404: z.object({ code: z.string(), detail: z.string() }),
-          409: z.object({ code: z.string(), detail: z.string() }),
-          429: z.object({
-            type: z.string(),
-            title: z.string(),
-            status: z.number(),
-            detail: z.string(),
-          }),
-        },
-      },
-    },
-    async (req, reply) => {
-      const taken = limiter?.take(req.authToken?.token ?? 'anonymous');
-      if (taken && !taken.ok) {
-        const minutes = Math.ceil(taken.retryAfterMs / 60_000);
-        return reply
-          .code(429)
-          .header('retry-after', String(Math.ceil(taken.retryAfterMs / 1000)))
-          .send({
-            type: 'about:blank',
-            title: 'Too Many Requests',
-            status: 429,
-            detail: `Question limit reached for this access token (${perHour} per hour). Try again in about ${minutes} min.`,
-          });
-      }
-      const { question, orgId, conversationId } = req.body as z.infer<typeof QueryRequest>;
-      const owner = ownerOf(req.authToken?.token ?? 'anonymous');
+  type Outcome =
+    | { status: 200; body: z.infer<typeof QueryResponse> }
+    | { status: number; body: unknown; headers?: Record<string, string> };
 
-      // Una conversación ajena (o de otro workspace) no existe para quien pregunta.
-      const prior = conversationId ? await conversations.get(owner, conversationId, orgId) : null;
-      if (conversationId && !prior) {
-        return reply.code(404).send({ code: 'NotFound', detail: 'conversation not found' });
-      }
-      if (prior && prior.turns.length >= MAX_TURNS_PER_CONVERSATION) {
-        return reply.code(409).send({
+  /**
+   * La consulta entera, sin tocar la respuesta HTTP: la ruta JSON y la de streaming
+   * (progreso en vivo) la comparten. Los fallos de antes del modelo (límite, conversación
+   * ajena o llena) se devuelven como resultado, no se lanzan.
+   */
+  const handle = async (
+    req: FastifyRequest,
+    onProgress?: (e: ProgressEvent) => void,
+  ): Promise<Outcome> => {
+    const taken = limiter?.take(req.authToken?.token ?? 'anonymous');
+    if (taken && !taken.ok) {
+      const minutes = Math.ceil(taken.retryAfterMs / 60_000);
+      return {
+        status: 429,
+        headers: { 'retry-after': String(Math.ceil(taken.retryAfterMs / 1000)) },
+        body: {
+          type: 'about:blank',
+          title: 'Too Many Requests',
+          status: 429,
+          detail: `Question limit reached for this access token (${perHour} per hour). Try again in about ${minutes} min.`,
+        },
+      };
+    }
+    const { question, orgId, conversationId } = req.body as z.infer<typeof QueryRequest>;
+    const owner = ownerOf(req.authToken?.token ?? 'anonymous');
+
+    // Una conversación ajena (o de otro workspace) no existe para quien pregunta.
+    const prior = conversationId ? await conversations.get(owner, conversationId, orgId) : null;
+    if (conversationId && !prior) {
+      return { status: 404, body: { code: 'NotFound', detail: 'conversation not found' } };
+    }
+    if (prior && prior.turns.length >= MAX_TURNS_PER_CONVERSATION) {
+      return {
+        status: 409,
+        body: {
           code: 'ConversationFull',
           detail: `this conversation reached ${MAX_TURNS_PER_CONVERSATION} turns: start a new one`,
-        });
-      }
-      const history = prior ? buildHistory(prior.turns) : undefined;
-      const lain = (await resolveWorkspaceLain(orgId)) ?? app.lain;
+        },
+      };
+    }
+    const history = prior ? buildHistory(prior.turns) : undefined;
+    const lain = (await resolveWorkspaceLain(orgId)) ?? app.lain;
 
-      // Análisis estructural SIEMPRE, con o sin modelo (P08): la topología
-      // no depende de Nemotron.
-      // Se pide ya y se espera al final: no retrasa al investigador (en Saleor son ~10 s
-      // de lecturas pesadas), y se reutiliza unos minutos entre preguntas.
-      const topologyP = topologyFor(orgId, () => buildEndpointTopology(lain));
+    // Análisis estructural SIEMPRE, con o sin modelo (P08): la topología
+    // no depende de Nemotron.
+    // Se pide ya y se espera al final: no retrasa al investigador (en Saleor son ~10 s
+    // de lecturas pesadas), y se reutiliza unos minutos entre preguntas.
+    const topologyP = topologyFor(orgId, () => buildEndpointTopology(lain));
 
-      const model = investigatorModel(app.config);
-      if (!model) {
-        const topology = await topologyP;
-        // Fallo visible, no un silencio: la explicación no existe y el motivo
-        // queda en el estado (INV: nunca fingir que el modelo explicó).
-        return {
+    const model = investigatorModel(app.config);
+    if (!model) {
+      const topology = await topologyP;
+      // Fallo visible, no un silencio: la explicación no existe y el motivo
+      // queda en el estado (INV: nunca fingir que el modelo explicó).
+      return {
+        status: 200,
+        body: {
           answer:
             'Nemotron no está configurado (NEBIUS_TOKEN): no hay explicación del modelo. El análisis estructural del workspace sigue disponible en topology.',
           explanation_status: 'failed:no_model_configured',
@@ -207,71 +206,75 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           claims_summary: NO_CLAIMS,
           map_focus: null,
           conversation: null,
-        };
-      }
-
-      const result = await investigate({
-        nudgeSubmit: true,
-        ...(history ? { history } : {}),
-        question,
-        lain,
-        model: model.provider,
-        view: 'live',
-        budget: model.budget,
-        maxTokens: model.settings.maxTokens,
-        ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
-        endpointLabel: model.settings.baseUrl,
-      });
-
-      const topology = await topologyP;
-
-      // El foco sólo puede nombrar nodos que el MAPA tiene: se valida contra el
-      // mismo grafo cacheado que sirve /map/view. Un workspace sin LAIN propio
-      // (el investigador usó el adapter por defecto) o con el LAIN caído no
-      // tiene mapa al que apuntar.
-      const mapGraph = await app.orgGraphs.load(orgId, false);
-      const focus: MapFocus | null = mapGraph.ok
-        ? mapFocusFromClaims(result.claims, new Set(mapGraph.graph.nodes.map((n) => n.id)))
-        : null;
-
-      // Serialización INV 2: la prosa del modelo no toca datos del motor; el
-      // payload queda listo para auditoría (modelo, endpoint, prompt_version).
-      const payload = serializeExplanation(result, {
-        question,
-        endpointLabel: model.settings.baseUrl,
-      });
-      req.log.info(
-        {
-          explanation_status: result.explanationStatus,
-          model: result.effectiveModel,
-          tool_calls: result.toolCallLog.length,
-          citations_accepted: result.citations.accepted.length,
-          citations_rejected: result.citations.rejected.length,
-          prompt_version: payload.prompt_version,
         },
-        'investigator finished',
-      );
+      };
+    }
 
-      // El turno se guarda con lo que el motor dijo de cada afirmación: es lo que
-      // alimenta el libro de hechos del siguiente.
-      let saved: { id: string; seq: number } | null = null;
-      try {
-        const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
-        const seq = await conversations.append(conv.id, {
-          question,
-          answer: result.answer ?? '',
-          status: result.explanationStatus,
-          claims: result.claims,
-          focus,
-          model: result.effectiveModel,
-        });
-        saved = { id: conv.id, seq };
-      } catch (e) {
-        // La respuesta ya se calculó: no se pierde por no poder guardarla.
-        if (!(e instanceof ConversationFullError)) req.log.warn({ err: e }, 'turn not saved');
-      }
+    const result = await investigate({
+      nudgeSubmit: true,
+      ...(history ? { history } : {}),
+      question,
+      lain,
+      model: model.provider,
+      view: 'live',
+      budget: model.budget,
+      maxTokens: model.settings.maxTokens,
+      ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
+      endpointLabel: model.settings.baseUrl,
+      ...(onProgress ? { onProgress } : {}),
+    });
 
-      return {
+    const topology = await topologyP;
+
+    // El foco sólo puede nombrar nodos que el MAPA tiene: se valida contra el
+    // mismo grafo cacheado que sirve /map/view. Un workspace sin LAIN propio
+    // (el investigador usó el adapter por defecto) o con el LAIN caído no
+    // tiene mapa al que apuntar.
+    const mapGraph = await app.orgGraphs.load(orgId, false);
+    const focus: MapFocus | null = mapGraph.ok
+      ? mapFocusFromClaims(result.claims, new Set(mapGraph.graph.nodes.map((n) => n.id)))
+      : null;
+
+    // Serialización INV 2: la prosa del modelo no toca datos del motor; el
+    // payload queda listo para auditoría (modelo, endpoint, prompt_version).
+    const payload = serializeExplanation(result, {
+      question,
+      endpointLabel: model.settings.baseUrl,
+    });
+    req.log.info(
+      {
+        explanation_status: result.explanationStatus,
+        model: result.effectiveModel,
+        tool_calls: result.toolCallLog.length,
+        citations_accepted: result.citations.accepted.length,
+        citations_rejected: result.citations.rejected.length,
+        prompt_version: payload.prompt_version,
+      },
+      'investigator finished',
+    );
+
+    // El turno se guarda con lo que el motor dijo de cada afirmación: es lo que
+    // alimenta el libro de hechos del siguiente.
+    let saved: { id: string; seq: number } | null = null;
+    try {
+      const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
+      const seq = await conversations.append(conv.id, {
+        question,
+        answer: result.answer ?? '',
+        status: result.explanationStatus,
+        claims: result.claims,
+        focus,
+        model: result.effectiveModel,
+      });
+      saved = { id: conv.id, seq };
+    } catch (e) {
+      // La respuesta ya se calculó: no se pierde por no poder guardarla.
+      if (!(e instanceof ConversationFullError)) req.log.warn({ err: e }, 'turn not saved');
+    }
+
+    return {
+      status: 200,
+      body: {
         conversation: saved,
         answer: result.answer ?? '',
         explanation_status: result.explanationStatus,
@@ -294,7 +297,77 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         claims: result.claims,
         claims_summary: result.claimsSummary,
         map_focus: focus,
+      },
+    };
+  };
+
+  const errorSchemas = {
+    404: z.object({ code: z.string(), detail: z.string() }),
+    409: z.object({ code: z.string(), detail: z.string() }),
+    429: z.object({
+      type: z.string(),
+      title: z.string(),
+      status: z.number(),
+      detail: z.string(),
+    }),
+  };
+  const send = (reply: FastifyReply, o: Outcome) => {
+    for (const [k, v] of Object.entries(
+      (o as { headers?: Record<string, string> }).headers ?? {},
+    )) {
+      reply.header(k, v);
+    }
+    return reply.code(o.status).send(o.body);
+  };
+
+  app.post(
+    '/api/query',
+    {
+      config: { scopes: ['read'] },
+      schema: { body: QueryRequest, response: { 200: QueryResponse, ...errorSchemas } },
+    },
+    async (req, reply) => send(reply, await handle(req)),
+  );
+
+  // Lo mismo, pero con el progreso EN VIVO (server-sent events): cada ronda del modelo,
+  // cada lectura al motor y la comprobación de afirmaciones, y al final el resultado.
+  // Un fallo de antes del modelo (límite, conversación ajena) responde JSON normal.
+  app.post(
+    '/api/query/stream',
+    {
+      config: { scopes: ['read'] },
+      schema: { body: QueryRequest, response: errorSchemas },
+    },
+    async (req, reply) => {
+      let opened = false;
+      const emit = (event: string, data: unknown) => {
+        if (!opened) {
+          opened = true;
+          reply.hijack();
+          reply.raw.writeHead(200, {
+            'content-type': 'text/event-stream; charset=utf-8',
+            'cache-control': 'no-cache, no-transform',
+            connection: 'keep-alive',
+            'x-accel-buffering': 'no',
+          });
+        }
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
       };
+      try {
+        const out = await handle(req, (e) => emit('progress', e));
+        if (out.status !== 200) {
+          // Aún no se abrió el flujo (los fallos previos al modelo no emiten progreso).
+          if (!opened) return send(reply, out);
+          emit('error', out.body);
+        } else {
+          emit('result', QueryResponse.parse(out.body));
+        }
+      } catch (e) {
+        if (!opened) throw e;
+        emit('error', { code: 'InternalError', detail: e instanceof Error ? e.message : 'failed' });
+      }
+      reply.raw.end();
+      return reply;
     },
   );
 };

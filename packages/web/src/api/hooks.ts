@@ -11,6 +11,7 @@ import type {
   OrgNode,
 } from '@parallax/shared/org-map';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { ApiClient, ApiEndpointNotImplemented } from './client.js';
 import { currentToken } from './token.js';
 
@@ -612,15 +613,36 @@ export interface AskResponse {
   map_focus: MapFocusDto | null;
 }
 
+/** Un paso del investigador, tal como llega mientras trabaja (ver ProgressEvent en la API). */
+export type ProgressEventDto =
+  | { type: 'round'; round: number; toolCallsUsed: number; maxToolCalls: number; forced: boolean }
+  | { type: 'tool'; tool: string; summary: string; ok: boolean; ms: number; note?: string }
+  | { type: 'wrapup'; reason: 'budget' | 'locations' }
+  | { type: 'verify'; claims: number };
+
 export function useAsk(orgId: string | undefined) {
-  return useMutation({
-    mutationFn: (vars: { question: string; conversationId?: string | undefined }) =>
-      client.post<AskResponse>('/api/query', {
+  // Lo que va pasando mientras responde. Se vacía al empezar cada pregunta.
+  const [progress, setProgress] = useState<ProgressEventDto[]>([]);
+  const mutation = useMutation({
+    mutationFn: async (vars: { question: string; conversationId?: string | undefined }) => {
+      setProgress([]);
+      const body = {
         question: vars.question,
         orgId: orgId ?? '',
         ...(vars.conversationId ? { conversationId: vars.conversationId } : {}),
-      }),
+      };
+      const streamed = await client.postSse<AskResponse>(
+        '/api/query/stream',
+        body,
+        (event, data) => {
+          if (event === 'progress') setProgress((p) => [...p, data as ProgressEventDto]);
+        },
+      );
+      // Un servidor sin flujo responde igual por la ruta normal (sin progreso).
+      return streamed ?? client.post<AskResponse>('/api/query', body);
+    },
   });
+  return Object.assign(mutation, { progress });
 }
 
 // ── Conversaciones (memoria del investigador, por token) ────────────────────

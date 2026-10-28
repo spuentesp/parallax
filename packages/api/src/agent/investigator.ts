@@ -54,6 +54,49 @@ import {
   verifyPrSubmission,
 } from './pr-explain.js';
 
+/**
+ * Progreso en vivo de una investigación: lo que el usuario ve mientras espera.
+ * `summary` es una frase corta y legible del argumento principal (la consulta, el
+ * símbolo, el archivo); nunca el resultado completo.
+ */
+export type ProgressEvent =
+  | { type: 'round'; round: number; toolCallsUsed: number; maxToolCalls: number; forced: boolean }
+  | { type: 'tool'; tool: string; summary: string; ok: boolean; ms: number; note?: string }
+  | { type: 'wrapup'; reason: 'budget' | 'locations' }
+  | { type: 'verify'; claims: number };
+
+/** "search_code · checkout shipping address" en vez de un JSON de argumentos. */
+export function summarizeCall(argsJson: string): string {
+  let args: Record<string, unknown> = {};
+  try {
+    args = JSON.parse(argsJson || '{}') as Record<string, unknown>;
+  } catch {
+    return '';
+  }
+  const order = [
+    'query',
+    'name',
+    'symbol',
+    'path',
+    'service',
+    'key',
+    'endpoint',
+    'from',
+    'to',
+    'node_id',
+    'repo',
+  ];
+  const parts: string[] = [];
+  for (const k of order) {
+    const v = args[k];
+    if (typeof v === 'string' && v)
+      parts.push(k === 'repo' ? `in ${v}` : k === 'node_id' ? v.slice(0, 8) : v);
+    if (typeof args.line === 'number' && k === 'path' && typeof v === 'string')
+      parts[parts.length - 1] = `${v}:${args.line}`;
+  }
+  return parts.join(' · ').slice(0, 110);
+}
+
 /** Llamadas a herramienta que se aceptan de UNA respuesta del modelo. */
 const MAX_CALLS_PER_ROUND = 8;
 
@@ -184,6 +227,8 @@ export interface InvestigateOptions {
   engineFindings?: unknown[];
   modelRole?: 'planner' | 'worker';
   maxTokens?: number;
+  /** Se llama con cada paso (ronda del modelo, lectura al motor, verificación): progreso en vivo. */
+  onProgress?: (e: ProgressEvent) => void;
   /** Razonamiento interno del modelo (ver NemotronProvider.complete); sin indicar, el del servidor. */
   thinking?: boolean;
   /**
@@ -435,6 +480,13 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
       (used >= budget.maxToolCalls - 1 ||
         rounds >= budget.maxToolCalls ||
         deadline - nowMs() < budget.maxModelMs * 0.3);
+    opts.onProgress?.({
+      type: 'round',
+      round: rounds + 1,
+      toolCallsUsed: used,
+      maxToolCalls: budget.maxToolCalls,
+      forced: mustSubmit,
+    });
     let resp: NemotronResponse;
     try {
       resp = await opts.model.complete(messages, {
@@ -613,6 +665,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
         const hasLocation = (qa.claims ?? []).some((c) => c.kind === 'location');
         if (stated.length > 0 && !hasLocation) {
           locationPushedBack = true;
+          opts.onProgress?.({ type: 'wrapup', reason: 'locations' });
           reject(
             'location_claims_missing',
             `Your answer states code locations (${stated.slice(0, 6).join(', ')}) but submits no location claim. Call submit_answer again with the same answer plus one location claim per file:line you state: repo, path, line, and "contains" = the exact symbol or text that must be on or near that line. The engine reads the code back to verify them.`,
@@ -662,6 +715,14 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
         truncated: result.ok && result.truncated != null,
       });
       messages.push({ role: 'tool', tool_call_id: call.id, content });
+      opts.onProgress?.({
+        type: 'tool',
+        tool: result.tool,
+        summary: summarizeCall(call.function?.arguments ?? ''),
+        ok: result.ok,
+        ms: result.latencyMs,
+        ...(result.ok ? {} : { note: result.code }),
+      });
       if (!result.ok && result.code === 'budget_exhausted') {
         // No se corta la ronda: cada tool_call restante recibe también su
         // budget_exhausted tipado (el historial role=tool debe estar completo
@@ -677,6 +738,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
       Math.max(usedNow, rounds + 1) >= Math.ceil(budget.maxToolCalls * SOFT_NUDGE_AT)
     ) {
       softNudged = true;
+      opts.onProgress?.({ type: 'wrapup', reason: 'budget' });
       messages.push({
         role: 'user',
         content: `You have used ${usedNow} of ${budget.maxToolCalls} tool calls. Unless one specific fact is still missing, stop researching and call submit_answer now with what you have, saying plainly what you could not verify.`,
@@ -740,6 +802,9 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
 
   // El motor adjudica las afirmaciones de relación; una contradicha se señala en
   // el veredicto y en el resumen, sin tocar la prosa ni el estado.
+  if (answer != null && submittedClaims.length > 0) {
+    opts.onProgress?.({ type: 'verify', claims: submittedClaims.length });
+  }
   const claims =
     answer != null && submittedClaims.length > 0
       ? await verifyClaims(submittedClaims, {

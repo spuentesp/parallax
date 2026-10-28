@@ -198,6 +198,7 @@ export function AssistantDock({
   const panel = (
     <ChatPanel
       topSlot={topSlot}
+      progress={ask.progress}
       renderCard={(card) =>
         card === 'orient' ? (
           <OrientCard workspaceId={workspaceId} onSelect={focusNode} />

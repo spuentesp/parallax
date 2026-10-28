@@ -72,6 +72,63 @@ export class ApiClient {
     return (await res.json()) as T;
   }
 
+  /**
+   * POST que responde con server-sent events. `onEvent` recibe cada evento a medida que
+   * llega; devuelve el dato del evento `result`. Devuelve null si el servidor no ofrece
+   * el flujo (404 o una respuesta que no es un flujo): el llamador usa la ruta normal.
+   */
+  async postSse<T>(
+    path: string,
+    body: unknown,
+    onEvent: (event: string, data: unknown) => void,
+  ): Promise<T | null> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'POST',
+      headers: this.headers({ 'content-type': 'application/json', accept: 'text/event-stream' }),
+      body: JSON.stringify(body),
+    });
+    if (res.status === 404 || res.status === 405) return null;
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    if (!(res.headers.get('content-type') ?? '').includes('text/event-stream') || !res.body) {
+      return null;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: T | undefined;
+    let failure: unknown;
+    const dispatch = (block: string): void => {
+      const event = /^event: (.*)$/m.exec(block)?.[1];
+      const raw = /^data: (.*)$/m.exec(block)?.[1];
+      if (!event || raw === undefined) return;
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (event === 'result') result = data as T;
+      else if (event === 'error') failure = data;
+      else onEvent(event, data);
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (value) buffer += decoder.decode(value, { stream: !done });
+      let at = buffer.indexOf('\n\n');
+      while (at >= 0) {
+        dispatch(buffer.slice(0, at));
+        buffer = buffer.slice(at + 2);
+        at = buffer.indexOf('\n\n');
+      }
+      if (done) break;
+    }
+    if (buffer.trim()) dispatch(buffer);
+    if (failure !== undefined) throw new ApiError(500, failure);
+    if (result === undefined)
+      throw new ApiError(502, { detail: 'the stream ended without a result' });
+    return result;
+  }
+
   private async send<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
