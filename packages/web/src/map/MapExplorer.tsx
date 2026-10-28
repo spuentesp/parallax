@@ -10,7 +10,7 @@
 
 import type { MapMeta, OrgGraphFilters, Provenance } from '@parallax/shared/org-map';
 import type * as React from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
 import { CodeInspector } from './CodeInspector.js';
@@ -68,6 +68,9 @@ export function isDescendant(
   return false;
 }
 
+/** Por encima de esto, abrir todos los repos al entrar sería ruido: se deja cerrado. */
+const AUTO_OPEN_MAX_REPOS = 12;
+
 export function MapExplorer({ workspaceId }: { workspaceId: string }): React.ReactElement {
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(params), [params]);
@@ -112,6 +115,21 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
       ),
     [setParams],
   );
+
+  // Al abrir, los repos se muestran con sus servicios dentro: tres cajas
+  // cerradas no cuentan nada. Una sola vez, y sólo si no hay foco ni demasiados.
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (autoOpened.current || !serverView || q.isPlaceholderData) return;
+    autoOpened.current = true;
+    if (focus) return;
+    const roots = serverView.nodes.filter(
+      (n) => n.parent === null && n.kind === 'repo' && n.childCount > 0 && !n.expanded,
+    );
+    if (roots.length > 0 && roots.length <= AUTO_OPEN_MAX_REPOS) {
+      setExpanded((prev) => new Set([...prev, ...roots.map((n) => n.id)]));
+    }
+  }, [serverView, focus, q.isPlaceholderData]);
 
   // Lo que el servidor reveló por su cuenta (foco, selección fijada) pasa a ser
   // estado del cliente: así abrir/cerrar actúa sobre lo que realmente se ve.

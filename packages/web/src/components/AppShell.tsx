@@ -52,7 +52,9 @@ function NavIcon({ name }: { name: (typeof NAV_ITEMS)[number]['icon'] }): React.
 
 export function AppShell(): React.ReactElement {
   const location = useLocation();
-  const { orgId } = useParams();
+  // En /workspaces/:id el workspace es el org: la barra lateral no cambia de forma.
+  const { orgId: orgParam, id: workspaceParam } = useParams();
+  const orgId = orgParam ?? workspaceParam;
   const who = useWhoami();
   const signOut = useSignOut();
   const targetFor = (base: string): string => {

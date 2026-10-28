@@ -2,15 +2,12 @@ import type * as React from 'react';
 import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import {
-  fetchGraphChildren,
-  fetchGraphSnippet,
   type TopologyFilters,
   useEvidence,
   useWorkspace,
-  useWorkspaceGraph,
   useWorkspaceTopology,
 } from '../api/hooks.js';
-import { CodeGraphTree } from '../components/CodeGraphTree.js';
+import { AssistantDock } from '../components/AssistantDock.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
 import { RepoManager } from '../components/RepoManager.js';
@@ -24,9 +21,9 @@ export function WorkspaceDetail(): React.ReactElement {
   // enfocado en un nodo (?tab=map&focus=…).
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
-  const tab: 'map' | 'repos' | 'contracts' | 'graph' =
-    rawTab === 'repos' || rawTab === 'contracts' || rawTab === 'graph' ? rawTab : 'map';
-  const setTab = (next: 'map' | 'repos' | 'contracts' | 'graph') =>
+  const tab: 'map' | 'repos' | 'contracts' =
+    rawTab === 'repos' || rawTab === 'contracts' ? rawTab : 'map';
+  const setTab = (next: 'map' | 'repos' | 'contracts') =>
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -38,7 +35,6 @@ export function WorkspaceDetail(): React.ReactElement {
   const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id, filters);
-  const graphQuery = useWorkspaceGraph(tab === 'graph' ? id : undefined);
   const evidence = useEvidence();
   const [cited, setCited] = useState<EvidenceItem[] | null>(null);
 
@@ -81,14 +77,13 @@ export function WorkspaceDetail(): React.ReactElement {
         </div>
       </div>
 
-      {/* Pestañas: mapa (jerarquía + relaciones), contratos y grafo de código */}
+      {/* Pestañas: mapa (jerarquía, relaciones y código), repos y contratos */}
       <div className="flex items-center gap-2" data-testid="workspace-tabs">
         {(
           [
             ['map', 'Map'],
             ['repos', 'Repositories'],
             ['contracts', 'Contracts'],
-            ['graph', 'Code graph'],
           ] as const
         ).map(([key, label]) => (
           <button
@@ -157,28 +152,7 @@ export function WorkspaceDetail(): React.ReactElement {
         </>
       )}
 
-      {tab === 'graph' && (
-        <div>
-          <div className="flex items-baseline justify-between mb-2">
-            <h2 className="font-semibold">Code graph</h2>
-            <span className="text-xs text-muted">
-              Expands node by node from LAIN&apos;s knowledge graph
-              {graphQuery.data?.lainUrl ? ` · ${graphQuery.data.lainUrl}` : ''}
-            </span>
-          </div>
-          {graphQuery.isLoading ? (
-            <div className="h-[320px] rounded-xl border border-border flex items-center justify-center text-sm text-muted">
-              Loading code graph from LAIN…
-            </div>
-          ) : (
-            <CodeGraphTree
-              data={graphQuery.data ?? { graph: { repos: [] }, source: 'none' as const }}
-              fetchChildren={(ref) => fetchGraphChildren(id ?? '', ref)}
-              fetchSnippet={(repo, symbol) => fetchGraphSnippet(id ?? '', repo, symbol)}
-            />
-          )}
-        </div>
-      )}
+      {id ? <AssistantDock workspaceId={id} /> : null}
     </div>
   );
 }

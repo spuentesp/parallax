@@ -41,6 +41,18 @@ describe('AppShell navigation', () => {
     expect(assessments.getAttribute('aria-current')).toBe('page');
   });
 
+  it('inside a workspace page the sidebar keeps the org context: Map and Assessments point at that workspace, Workspaces is current', () => {
+    renderAt('/workspaces/acme');
+    expect(screen.getByRole('link', { name: /^map$/i }).getAttribute('href')).toBe('/orgs/acme');
+    expect(screen.getByRole('link', { name: /^assessments$/i }).getAttribute('href')).toBe(
+      '/orgs/acme/assessments',
+    );
+    expect(screen.getByRole('link', { name: /^workspaces$/i }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByRole('link', { name: /^map$/i }).getAttribute('aria-current')).toBeNull();
+  });
+
   it('hides Assessments outside an org (no dead-end bounce)', () => {
     renderAt('/orgs');
     expect(screen.queryByRole('link', { name: /^assessments$/i })).toBeNull();

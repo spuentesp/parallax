@@ -141,19 +141,22 @@ function renderRouted(url: string) {
 }
 
 describe('MapExplorer', () => {
-  it('opens on the top level and loads children only when a node is opened', async () => {
+  it('asks for the top level first, then opens the repos on its own so services show; closing one is respected', async () => {
     const requests: Posted[] = [];
     serveMap(requests);
     renderExplorer();
 
     const outline = await screen.findByTestId('map-outline');
-    expect(within(outline).getByText('orders')).toBeTruthy();
-    expect(within(outline).queryByText('orders-api')).toBeNull();
     expect(requests[0]?.expand).toEqual([]);
-
-    fireEvent.click(within(outline).getByRole('button', { name: 'Expand orders' }));
+    // Sin pulsar nada: los hijos de los repos llegan.
     expect(await within(outline).findByText('orders-api')).toBeTruthy();
-    expect(requests.at(-1)?.expand).toEqual(['repo:orders']);
+    expect(requests.at(-1)?.expand).toEqual(['repo:orders', 'repo:web']);
+
+    // Cerrar uno se respeta: la apertura automática es de una sola vez.
+    fireEvent.click(within(outline).getByRole('button', { name: 'Collapse orders' }));
+    await waitFor(() => expect(requests.at(-1)?.expand).toEqual(['repo:web']));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(requests.at(-1)?.expand).toEqual(['repo:web']);
   });
 
   it('shows how much of the graph is on screen and how fresh it is', async () => {

@@ -46,12 +46,26 @@ describe('WorkspaceDetail', () => {
     });
     renderWithQuery(<RouterProvider router={router} />);
     expect(await screen.findByTestId('map-explorer')).toBeTruthy();
-    fireEvent.click(screen.getByTestId('tab-graph'));
+    fireEvent.click(screen.getByTestId('tab-contracts'));
     const q = new URLSearchParams(router.state.location.search);
-    expect([q.get('tab'), q.get('focus')]).toEqual(['graph', 'svc:a']);
+    expect([q.get('tab'), q.get('focus')]).toEqual(['contracts', 'svc:a']);
     expect(router.state.historyAction).toBe('REPLACE');
-    expect(screen.getByTestId('tab-graph').className).toMatch(/bg-accent/);
+    expect(screen.getByTestId('tab-contracts').className).toMatch(/bg-accent/);
     expect(screen.getByTestId('tab-map').className).not.toMatch(/bg-accent/);
+  });
+
+  it('the old Code graph tab is gone (the map has the code layer); its old link lands on the map', async () => {
+    renderAt('/workspaces/ws1?tab=graph');
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
+    expect(screen.queryByTestId('tab-graph')).toBeNull();
+    expect(screen.getByTestId('tab-map').className).toMatch(/bg-accent/);
+  });
+
+  it('offers the assistant here too, on every tab, so the map never appears without it', async () => {
+    renderAt('/workspaces/ws1');
+    expect(await screen.findByRole('button', { name: 'Ask the architecture' })).toBeTruthy();
+    fireEvent.click(screen.getByTestId('tab-repos'));
+    expect(screen.getByRole('button', { name: 'Ask the architecture' })).toBeTruthy();
   });
 
   it('has a Repositories tab that opens the repository manager, deep-linkable', async () => {

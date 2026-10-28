@@ -442,6 +442,9 @@ describe('MapExplorer outline wiring', () => {
     const posts = serve();
     mount();
     const o = within(await screen.findByTestId('map-outline'));
+    // Primero se asienta la apertura automática de los repos al entrar.
+    await waitFor(() => expect(posts.length).toBeGreaterThanOrEqual(2));
+    await new Promise((r) => setTimeout(r, 100));
     const before = posts.length;
     fireEvent.doubleClick(o.getByText('beta'));
     await new Promise((r) => setTimeout(r, 100));

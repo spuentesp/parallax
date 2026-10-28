@@ -3,10 +3,10 @@ import { HttpResponse, http } from 'msw';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ConversationSummaryDto, TurnDto } from '../api/hooks.js';
+import { turnsToMessages } from '../components/AssistantDock.js';
 import { routes } from '../router.js';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
-import { turnsToMessages } from './OrgLayout.js';
 
 afterEach(cleanup);
 

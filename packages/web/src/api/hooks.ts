@@ -278,14 +278,6 @@ export function codeNodeKey(repo: string, type: string, name: string): string {
   return `${repo}|${type}|${name}`;
 }
 
-export function useWorkspaceGraph(id: string | undefined) {
-  return useQuery({
-    queryKey: ['workspace-graph', id],
-    queryFn: () => client.get<GraphRootResponse>(`/api/workspaces/${id}/graph`),
-    enabled: id != null,
-  });
-}
-
 // La expansión es imperativa (no un hook por fila): cada nodo abierto tiene
 // su propia caché en el árbol y varias filas pueden estar expandidas a la vez.
 export function fetchGraphChildren(
