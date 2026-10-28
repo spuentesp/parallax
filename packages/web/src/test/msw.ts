@@ -62,6 +62,9 @@ export const handlers = [
     }),
   ),
   http.get('/api/workspaces/:id/repos', () => HttpResponse.json({ repos: [] })),
+  http.get('/api/workspaces/:id/repos/status', () =>
+    HttpResponse.json({ source: 'unconfigured', repos: [], untracked: [] }),
+  ),
   http.get('/api/workspaces/:id/topology', () =>
     HttpResponse.json({ topology: { nodes: [], edges: [] }, source: 'mock' }),
   ),

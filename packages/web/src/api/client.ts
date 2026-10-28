@@ -59,7 +59,20 @@ export class ApiClient {
     return this.send<T>('PUT', path, body);
   }
 
-  private async send<T>(method: 'POST' | 'PUT', path: string, body: unknown): Promise<T> {
+  async patch<T>(path: string, body: unknown): Promise<T> {
+    return this.send<T>('PATCH', path, body);
+  }
+
+  async del<T>(path: string): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: 'DELETE',
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+    return (await res.json()) as T;
+  }
+
+  private async send<T>(method: 'POST' | 'PUT' | 'PATCH', path: string, body: unknown): Promise<T> {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: this.headers({ 'content-type': 'application/json' }),

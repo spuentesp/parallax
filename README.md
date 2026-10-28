@@ -108,6 +108,15 @@ questions, but you cannot rebuild the graph or change workspaces.
 4. **Assess a PR.** *Assessments* shows the impact report of a pull request on
    the other repos that consume what it changes.
 
+**Configuring repositories (no model involved).** In a workspace, the
+*Repositories* tab shows each configured repository and whether Lain has it
+indexed (`Indexed · <commit>`, `Not reviewed`, or `Not in LAIN`), lists
+repositories Lain indexed that the workspace does not have, lets you add and
+remove repositories, edit the Lain server, and shows a ready-to-use `repos.yaml`
+for Lain. The architecture tree itself is built deterministically from what Lain
+indexed. Adding a repository in Parallax does not make Lain index it: add it to
+Lain's `repos.yaml` and re-index, then use *Re-check status*.
+
 **What it does and does not claim.** A relationship shown as deterministic is
 backed by the analysis; a claim the model makes that the engine cannot confirm is
 flagged, never silently kept. The map reflects the repositories configured in the

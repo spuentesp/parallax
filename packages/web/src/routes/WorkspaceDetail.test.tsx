@@ -53,4 +53,11 @@ describe('WorkspaceDetail', () => {
     expect(screen.getByTestId('tab-graph').className).toMatch(/bg-accent/);
     expect(screen.getByTestId('tab-map').className).not.toMatch(/bg-accent/);
   });
+
+  it('has a Repositories tab that opens the repository manager, deep-linkable', async () => {
+    renderAt('/workspaces/ws1?tab=repos');
+    expect(await screen.findByTestId('repo-manager')).toBeTruthy();
+    expect(screen.getByTestId('tab-repos').className).toMatch(/bg-accent/);
+    expect(screen.queryByTestId('map-explorer')).toBeNull();
+  });
 });

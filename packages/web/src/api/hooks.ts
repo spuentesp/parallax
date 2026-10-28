@@ -337,12 +337,97 @@ export function useCreateWorkspace() {
   });
 }
 
-export function useAddRepo() {
+// ── Configuración del workspace: repos, servidor LAIN, estado de indexado ──
+
+export type RepoIndexState = 'indexed' | 'unreviewed' | 'not_in_lain';
+
+export interface RepoStatus {
+  id: string;
+  uri: string;
+  sha: string | null;
+  local: string | null;
+  lainRepoId: string;
+  state: RepoIndexState;
+  commit?: string;
+  dirty?: boolean;
+}
+
+export interface RepoStatusResponse {
+  source: 'lain' | 'unconfigured' | 'error' | 'none';
+  error?: string;
+  repos: RepoStatus[];
+  untracked: Array<{ repo: string; commit: string }>;
+}
+
+export function useRepoStatus(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['repo-status', workspaceId],
+    queryFn: () => client.get<RepoStatusResponse>(`/api/workspaces/${workspaceId}/repos/status`),
+    enabled: workspaceId != null,
+  });
+}
+
+/** Tras cualquier cambio de configuración: lo que se muestra y el mapa se rehacen. */
+function useInvalidateWorkspace(workspaceId: string) {
+  const qc = useQueryClient();
+  return () => {
+    for (const key of [
+      'workspace',
+      'workspaces',
+      'repo-status',
+      'org-map',
+      'org-map-node',
+      'org-map-search',
+      'lain-config',
+      'workspace-topology',
+      'workspace-graph',
+    ]) {
+      void qc.invalidateQueries({ queryKey: [key] });
+    }
+    void qc.invalidateQueries({ queryKey: ['workspace', workspaceId] });
+  };
+}
+
+export function useAddRepo(workspaceId: string) {
+  const done = useInvalidateWorkspace(workspaceId);
   return useMutation({
-    mutationFn: (vars: {
-      workspaceId: string;
-      repo: { uri: string; sha?: string; local?: string };
-    }) => client.post(`/api/workspaces/${vars.workspaceId}/repos`, vars.repo),
+    mutationFn: (repo: { uri: string; sha?: string; local?: string }) =>
+      client.post(`/api/workspaces/${workspaceId}/repos`, repo),
+    onSuccess: done,
+  });
+}
+
+export function useRemoveRepo(workspaceId: string) {
+  const done = useInvalidateWorkspace(workspaceId);
+  return useMutation({
+    mutationFn: (repoId: string) => client.del(`/api/workspaces/${workspaceId}/repos/${repoId}`),
+    onSuccess: done,
+  });
+}
+
+export function useUpdateWorkspace(workspaceId: string) {
+  const done = useInvalidateWorkspace(workspaceId);
+  return useMutation({
+    mutationFn: (patch: { name?: string; description?: string | null; lainUrl?: string | null }) =>
+      client.patch(`/api/workspaces/${workspaceId}`, patch),
+    onSuccess: done,
+  });
+}
+
+export function useDeleteWorkspace(workspaceId: string) {
+  const done = useInvalidateWorkspace(workspaceId);
+  return useMutation({
+    mutationFn: () => client.del(`/api/workspaces/${workspaceId}`),
+    onSuccess: done,
+  });
+}
+
+export function useLainConfig(workspaceId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['lain-config', workspaceId],
+    queryFn: () =>
+      client.get<{ config: string | null }>(`/api/workspaces/${workspaceId}/lain-config`),
+    enabled: workspaceId != null && enabled,
   });
 }
 

@@ -13,6 +13,7 @@ import {
 import { CodeGraphTree } from '../components/CodeGraphTree.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
+import { RepoManager } from '../components/RepoManager.js';
 import { MapExplorer } from '../map/MapExplorer.js';
 
 const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
@@ -23,9 +24,9 @@ export function WorkspaceDetail(): React.ReactElement {
   // enfocado en un nodo (?tab=map&focus=…).
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
-  const tab: 'map' | 'contracts' | 'graph' =
-    rawTab === 'contracts' || rawTab === 'graph' ? rawTab : 'map';
-  const setTab = (next: 'map' | 'contracts' | 'graph') =>
+  const tab: 'map' | 'repos' | 'contracts' | 'graph' =
+    rawTab === 'repos' || rawTab === 'contracts' || rawTab === 'graph' ? rawTab : 'map';
+  const setTab = (next: 'map' | 'repos' | 'contracts' | 'graph') =>
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev);
@@ -85,6 +86,7 @@ export function WorkspaceDetail(): React.ReactElement {
         {(
           [
             ['map', 'Map'],
+            ['repos', 'Repositories'],
             ['contracts', 'Contracts'],
             ['graph', 'Code graph'],
           ] as const
@@ -104,6 +106,8 @@ export function WorkspaceDetail(): React.ReactElement {
       </div>
 
       {tab === 'map' && id && <MapExplorer workspaceId={id} />}
+
+      {tab === 'repos' && <RepoManager workspace={ws} />}
 
       {tab === 'contracts' && (
         <>
@@ -175,40 +179,6 @@ export function WorkspaceDetail(): React.ReactElement {
           )}
         </div>
       )}
-
-      {/* Repositories */}
-      <div>
-        <h2 className="font-semibold mb-2">Repositories</h2>
-        <div className="rounded-xl border border-border overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-bg text-muted">
-              <tr>
-                <th className="text-left font-medium px-4 py-2">URI</th>
-                <th className="text-left font-medium px-4 py-2">SHA</th>
-                <th className="text-left font-medium px-4 py-2">Local path</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ws.repos.map((r) => (
-                <tr key={r.id} className="border-t border-border">
-                  <td className="px-4 py-2 font-mono text-xs break-all">{r.uri}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted">
-                    {r.sha ? r.sha.slice(0, 10) : '—'}
-                  </td>
-                  <td className="px-4 py-2 font-mono text-xs text-muted">{r.local ?? '—'}</td>
-                </tr>
-              ))}
-              {ws.repos.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-4 py-6 text-center text-muted">
-                    No repositories configured.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
