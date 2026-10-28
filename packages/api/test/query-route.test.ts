@@ -6,7 +6,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createLainMock } from '../src/lain-adapter/mock.js';
+import { toOrgGraph } from '../src/org-graph.js';
 import { buildApp } from '../src/server.js';
+import { buildEndpointTopology } from '../src/topology.js';
 
 type ModelTurn = { content: string | null; tool?: string; args?: unknown };
 
@@ -117,5 +120,62 @@ describe('POST /api/query budget', () => {
     const r = await ask();
     expect(r.json().claims_summary).toMatchObject({ verified: 1 });
     expect(r.json().map_focus).toBeNull();
+  });
+
+  it('returns a map focus built from verified claims and validated against the map graph', async () => {
+    stubModel([
+      {
+        content: null,
+        tool: 'submit_answer',
+        args: {
+          answer: 'billing consumes orders.',
+          claims: [
+            { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+          ],
+        },
+      },
+    ]);
+    await start(8);
+    // El mapa del workspace (aquí el motor mock): lo que el agente cita debe estar en él.
+    const graph = toOrgGraph(await buildEndpointTopology(createLainMock()));
+    app.orgGraphs = { load: async () => ({ ok: true, graph, meta: { source: 'lain' } }) };
+    const r = await ask();
+    const focus = r.json().map_focus as {
+      seed: string;
+      ids: string[];
+      relations: Array<{
+        consumer: string;
+        provider: string;
+        polarity: string;
+        uses: number;
+        complete: boolean;
+      }>;
+      query: string;
+    };
+    expect(focus.ids).toEqual(expect.arrayContaining(['svc:billing', 'svc:orders']));
+    expect(focus.relations[0]).toMatchObject({
+      consumer: 'billing',
+      provider: 'orders',
+      polarity: 'present',
+      complete: true,
+    });
+    expect(focus.relations[0]?.uses).toBeGreaterThan(0);
+    expect(new URLSearchParams(focus.query).get('focus')).toBe(focus.seed);
+
+    // Si el mapa no tiene esos nodos, no hay foco.
+    app.orgGraphs = { load: async () => ({ ok: true, graph: { nodes: [], edges: [] }, meta: {} }) };
+    stubModel([
+      {
+        content: null,
+        tool: 'submit_answer',
+        args: {
+          answer: 'x',
+          claims: [
+            { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+          ],
+        },
+      },
+    ]);
+    expect((await ask()).json().map_focus).toBeNull();
   });
 });
