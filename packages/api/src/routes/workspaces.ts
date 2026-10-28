@@ -12,7 +12,6 @@ import {
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import { GitHubReader, type OpenPrItem, PrUrlError, parseGithubRepoUri } from '../github/reader.js';
-import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import { buildEndpointTopology } from '../topology.js';
 
@@ -251,7 +250,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -351,7 +350,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -420,7 +419,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -490,7 +489,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -552,7 +551,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -620,7 +619,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         .map((r) => `${r.id}: sin checkout local (repo.local); el escaneo lo omite`);
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 60_000,
