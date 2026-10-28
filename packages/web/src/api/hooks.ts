@@ -581,7 +581,15 @@ export interface MapFocusDto {
 export interface ClaimVerdictDto {
   claim:
     | { kind: 'relation'; consumer: string; provider: string; polarity: 'present' | 'absent' }
-    | { kind: 'note'; text: string };
+    | { kind: 'note'; text: string }
+    | {
+        kind: 'location';
+        repo: string;
+        path: string;
+        line: number;
+        contains: string;
+        text: string;
+      };
   verdict: 'verified' | 'contradicted' | 'unverifiable' | 'supported' | 'unsupported';
   reason: string;
   engine?: { uses: number; endpoints: string[]; complete: boolean };
@@ -747,5 +755,39 @@ export function useAssessLooseEnds(workspaceId: string | undefined) {
         {},
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['loose-ends', workspaceId] }),
+  });
+}
+
+// ── ¿Qué código implementa este endpoint? (coincidencia por nombre) ─────────
+
+export interface ImplementationDto {
+  key: string;
+  repo: string;
+  tried: string[];
+  candidates: Array<{ id: string; type: string; name: string; path: string; line: number }>;
+  registeredIn: Array<{ name: string; path: string }>;
+  basis: 'name_match';
+  error?: string;
+}
+
+export function useImplementation(
+  workspaceId: string | undefined,
+  key: string,
+  repo: string | null,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ['map-implementation', workspaceId, repo, key],
+    queryFn: () => {
+      const qs = new URLSearchParams({ key, repo: repo ?? '' });
+      return client.get<{
+        source: 'lain' | 'unconfigured' | 'error';
+        result?: ImplementationDto;
+        error?: string;
+      }>(`/api/workspaces/${workspaceId}/map/implementation?${qs}`);
+    },
+    enabled: enabled && workspaceId != null && repo != null,
+    staleTime: 10 * 60_000,
+    retry: false,
   });
 }

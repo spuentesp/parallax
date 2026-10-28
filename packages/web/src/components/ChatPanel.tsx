@@ -165,8 +165,12 @@ export function ChatPanel({
               <p className="whitespace-pre-wrap">{m.content}</p>
               {m.role === 'assistant' && m.claims && m.claims.total > 0 && (
                 <p className="text-[11px] text-muted" data-testid="claims-summary">
-                  {m.claims.verified} verified · {m.claims.contradicted} contradicted ·{' '}
-                  {m.claims.unverifiable} unverifiable
+                  {summaryParts(m.claims).map((p, i) => (
+                    <span key={p.label} title={p.meaning} className={p.tone}>
+                      {i > 0 ? ' · ' : ''}
+                      {p.count} {p.label}
+                    </span>
+                  ))}
                 </p>
               )}
               {m.role === 'assistant' && m.verdicts && m.verdicts.length > 0 && (
@@ -241,8 +245,52 @@ const VERDICT_STYLE: Record<ClaimVerdictDto['verdict'], string> = {
   unsupported: 'text-warning',
 };
 
+/**
+ * El resumen dice lo que HAY, sin ceros que confundan: "0 verified" junto a 4
+ * afirmaciones respaldadas por evidencia parecía que nada se había comprobado.
+ * `verified`/`contradicted` los adjudica el motor por sí mismo; `supported` es
+ * "cita evidencia que el motor entregó", no una comprobación independiente.
+ */
+export function summaryParts(
+  c: AskResponse['claims_summary'],
+): Array<{ count: number; label: string; meaning: string; tone: string }> {
+  return [
+    {
+      count: c.verified,
+      label: 'verified',
+      meaning: 'The engine checked it itself',
+      tone: 'text-success',
+    },
+    {
+      count: c.contradicted,
+      label: 'contradicted',
+      meaning: 'The engine says it is wrong',
+      tone: 'text-error',
+    },
+    {
+      count: c.supported,
+      label: 'supported',
+      meaning: 'Backed by evidence the engine delivered; not independently checked',
+      tone: '',
+    },
+    {
+      count: c.unsupported,
+      label: 'unsupported',
+      meaning: 'No delivered evidence backs it',
+      tone: 'text-warning',
+    },
+    {
+      count: c.unverifiable,
+      label: 'unverifiable',
+      meaning: 'The engine cannot decide it (scope or access)',
+      tone: 'text-warning',
+    },
+  ].filter((p) => p.count > 0);
+}
+
 function claimText(c: ClaimVerdictDto['claim']): string {
   if (c.kind === 'note') return c.text;
+  if (c.kind === 'location') return `${c.repo}:${c.path}:${c.line} "${c.contains}"`;
   return `${c.consumer} ${c.polarity === 'present' ? '→' : '↛'} ${c.provider}`;
 }
 

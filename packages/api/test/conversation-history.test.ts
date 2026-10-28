@@ -37,6 +37,34 @@ describe('factsLedger', () => {
     ]);
   });
 
+  it('locations the engine read (or could not find) become facts; unverifiable ones do not', () => {
+    const loc = (contains: string, verdict: 'verified' | 'contradicted' | 'unverifiable') => ({
+      claim: {
+        kind: 'location' as const,
+        repo: 'saleor',
+        path: 'a/b.py',
+        line: 12,
+        contains,
+        text: 't',
+      },
+      verdict,
+      evidence: { accepted: [], receipts: [], rejected: [] },
+    });
+    const l = factsLedger([
+      turn(1, {
+        claims: [
+          loc('checkout_lines_update', 'verified'),
+          loc('ghost', 'contradicted'),
+          loc('x', 'unverifiable'),
+        ] as never,
+      }),
+    ]);
+    expect(l).toEqual([
+      'saleor:a/b.py:12 "checkout_lines_update": engine verified',
+      'saleor:a/b.py:12 "ghost": engine contradicted',
+    ]);
+  });
+
   it('keeps the latest verdict for the same relation, and treats presence and absence as different claims', () => {
     const l = factsLedger([
       turn(1, { claims: [rel('a', 'b', 'unverifiable'), rel('a', 'b', 'verified', 'absent')] }),

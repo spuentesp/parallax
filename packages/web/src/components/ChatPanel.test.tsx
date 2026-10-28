@@ -98,7 +98,65 @@ describe('ChatPanel', () => {
     ]);
     const summaries = screen.getAllByTestId('claims-summary');
     expect(summaries).toHaveLength(1);
-    expect(summaries[0]?.textContent).toBe('2 verified · 1 contradicted · 0 unverifiable');
+    // Sólo lo que hay: nada de "0 unverifiable".
+    expect(summaries[0]?.textContent).toBe('2 verified · 1 contradicted');
+  });
+
+  it('the summary lists every kind of verdict that exists, with what each one means — no misleading zeros', () => {
+    setup([
+      {
+        role: 'assistant',
+        content: 'a',
+        claims: {
+          total: 5,
+          verified: 0,
+          contradicted: 0,
+          unverifiable: 0,
+          supported: 4,
+          unsupported: 1,
+        },
+      },
+    ]);
+    const s = screen.getByTestId('claims-summary');
+    expect(s.textContent).toBe('4 supported · 1 unsupported');
+    expect(s.querySelector('[title^="Backed by evidence"]')?.textContent).toMatch(/4 supported/);
+    expect(s.textContent).not.toMatch(/0 verified/);
+  });
+
+  it('a location claim reads as repo:path:line, with what the engine found there', () => {
+    setup([
+      {
+        role: 'assistant',
+        content: 'a',
+        claims: {
+          total: 1,
+          verified: 1,
+          contradicted: 0,
+          unverifiable: 0,
+          supported: 0,
+          unsupported: 0,
+        },
+        verdicts: [
+          {
+            claim: {
+              kind: 'location',
+              repo: 'saleor',
+              path: 'saleor/checkout/utils.py',
+              line: 440,
+              contains: 'change_shipping_address_in_checkout',
+              text: 't',
+            },
+            verdict: 'verified',
+            reason:
+              'the engine read saleor:saleor/checkout/utils.py:440 (±5 lines) and "change_shipping_address_in_checkout" is there',
+          },
+        ],
+      },
+    ]);
+    expect(
+      screen.getByText('saleor:saleor/checkout/utils.py:440 "change_shipping_address_in_checkout"'),
+    ).toBeTruthy();
+    expect(screen.getByText(/the engine read saleor:saleor\/checkout\/utils\.py:440/)).toBeTruthy();
   });
 
   it('shows a failed explanation status but never a healthy one', () => {

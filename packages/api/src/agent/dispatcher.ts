@@ -260,6 +260,12 @@ export class LainDispatcher {
       .join('\n');
   }
 
+  /** ¿Es `name` un repo de la vista analizada? */
+  async hasRepo(name: string): Promise<boolean> {
+    if (!this.catalog) await this.loadCatalog();
+    return this.catalog?.repos.has(name) ?? false;
+  }
+
   /** Ids que el motor ya entregó fuera de una lectura del modelo (p. ej. los hallazgos de un PR). */
   deliverEvidence(ids: readonly string[]): void {
     for (const id of ids) this.delivered.add(id);

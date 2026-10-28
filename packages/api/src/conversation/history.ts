@@ -44,6 +44,16 @@ export function factsLedger(turns: readonly StoredTurn[]): string[] {
   const latest = new Map<string, string>();
   for (const t of turns) {
     for (const c of t.claims) {
+      if (c.claim.kind === 'location') {
+        // Un lugar del código que el motor leyó (o no encontró): cuenta como hecho.
+        if (c.verdict !== 'verified' && c.verdict !== 'contradicted') continue;
+        const l = c.claim;
+        latest.set(
+          `loc:${l.repo}:${l.path}:${l.line}:${l.contains}`,
+          `${l.repo}:${l.path}:${l.line} "${clip(l.contains, 60)}": engine ${c.verdict}`,
+        );
+        continue;
+      }
       if (c.claim.kind !== 'relation') continue;
       if (
         c.verdict !== 'verified' &&

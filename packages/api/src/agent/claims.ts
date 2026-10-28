@@ -31,7 +31,25 @@ const NoteClaim = z
   })
   .strict();
 
-export const Claim = z.discriminatedUnion('kind', [RelationClaim, NoteClaim]);
+/**
+ * "Esto vive aquí": un lugar del código. El motor lee esas líneas y comprueba que
+ * lo que se dice que hay ahí (`contains`) esté de verdad. Es lo que permite
+ * verificar una respuesta sobre código, que no tiene ids de evidencia de contrato.
+ */
+const LocationClaim = z
+  .object({
+    kind: z.literal('location'),
+    repo: z.string().min(1),
+    path: z.string().min(1),
+    line: z.number().int().min(1),
+    /** Texto exacto (un símbolo, una operación) que debe aparecer en esa línea o muy cerca. */
+    contains: z.string().min(1).max(200),
+    /** Lo que la respuesta afirma que hay ahí, en una frase. */
+    text: z.string().min(1),
+  })
+  .strict();
+
+export const Claim = z.discriminatedUnion('kind', [RelationClaim, NoteClaim, LocationClaim]);
 export type Claim = z.infer<typeof Claim>;
 
 export const SubmitAnswerArgs = z
@@ -47,7 +65,7 @@ export const SUBMIT_TOOL_SPEC: ToolSpec = {
   function: {
     name: SUBMIT_TOOL,
     description:
-      'Finish the investigation. `answer` is the explanation for a human (markdown, cite evidence ids as [ev:<id>]). `claims` are the checkable statements behind it: a `relation` claim says a service consumes (polarity "present") or does not consume ("absent") another service and the engine will verify it; a `note` claim is any other statement and needs at least one evidence id. Only claim relations between services of the workspace map.',
+      'Finish the investigation. `answer` is the explanation for a human (markdown, cite evidence ids as [ev:<id>]). `claims` are the checkable statements behind it: a `relation` claim says a service consumes (polarity "present") or does not consume ("absent") another service and the engine will verify it; a `location` claim says WHERE code lives (repo, path, line, and `contains`: the exact symbol or text that must appear on or within a few lines of that line): the engine reads the lines back and verifies it, so use one for every file:line you state; a `note` claim is any other statement and needs at least one evidence id. Only claim relations between services of the workspace map.',
     parameters: z.toJSONSchema(SubmitAnswerArgs) as Record<string, unknown>,
   },
 };
@@ -105,6 +123,8 @@ export interface ClaimVerifierDeps {
   resolveService: (name: string) => Promise<{ service: string; repo: string } | null>;
   /** Valida refs de evidencia contra lo que el backend entregó (INV 1). */
   validateRefs: (refs: string[]) => Promise<ClaimEvidence>;
+  /** ¿Es un repo de la vista analizada? (un lugar fuera de ella no se juzga). */
+  hasRepo?: (name: string) => Promise<boolean>;
 }
 
 const NO_EVIDENCE: ClaimEvidence = { accepted: [], receipts: [], rejected: [] };
@@ -225,12 +245,81 @@ async function verifyRelation(
       };
 }
 
+/** Líneas ± alrededor de la citada donde se busca `contains`. */
+const LOCATION_WINDOW = 5;
+
+async function verifyLocation(
+  claim: Extract<Claim, { kind: 'location' }>,
+  deps: ClaimVerifierDeps,
+): Promise<ClaimResult> {
+  const where = `${claim.repo}:${claim.path}:${claim.line}`;
+  const base = { claim, evidence: NO_EVIDENCE };
+  if (deps.hasRepo && !(await deps.hasRepo(claim.repo))) {
+    return {
+      ...base,
+      verdict: 'unverifiable',
+      reason: `repo "${claim.repo}" is not in the analyzed view; the engine cannot read it`,
+    };
+  }
+  let text: string;
+  try {
+    text = (
+      await deps.lain.getCodeSnippet({
+        path: claim.path,
+        repo_id: claim.repo,
+        line: claim.line,
+        context_lines: LOCATION_WINDOW,
+      })
+    ).text;
+  } catch (e) {
+    return {
+      ...base,
+      verdict: 'unverifiable',
+      reason: `engine could not read ${where}: ${e instanceof Error ? e.message : String(e)}`,
+    };
+  }
+  // El motor contesta "Error: Not found…" como texto: el sitio no existe (se contradice).
+  if (/^Error: Not found/i.test(text)) {
+    return {
+      ...base,
+      verdict: 'contradicted',
+      reason: `${where} does not exist in the index: ${text
+        .replace(/^Error: Not found:\s*/i, '')
+        .split('\n')[0]
+        ?.slice(0, 160)}`,
+    };
+  }
+  if (/^(Config error|Error):/i.test(text)) {
+    return {
+      ...base,
+      verdict: 'unverifiable',
+      reason: `engine could not read ${where}: ${text.split('\n')[0]?.slice(0, 160)}`,
+    };
+  }
+  if (text.toLowerCase().includes(claim.contains.toLowerCase())) {
+    return {
+      ...base,
+      verdict: 'verified',
+      reason: `the engine read ${where} (±${LOCATION_WINDOW} lines) and "${claim.contains}" is there`,
+    };
+  }
+  return {
+    ...base,
+    verdict: 'contradicted',
+    reason: `the engine read ${where} (±${LOCATION_WINDOW} lines) and "${claim.contains}" is not there`,
+  };
+}
+
 export async function verifyClaims(
   claims: readonly Claim[],
   deps: ClaimVerifierDeps,
 ): Promise<ClaimResult[]> {
   const out: ClaimResult[] = [];
   for (const claim of claims) {
+    if (claim.kind === 'location') {
+      out.push(await verifyLocation(claim, deps));
+      continue;
+    }
     const evidence = claim.evidence?.length ? await deps.validateRefs(claim.evidence) : NO_EVIDENCE;
     if (claim.kind === 'relation') {
       out.push(await verifyRelation(claim, deps, evidence));
@@ -247,4 +336,19 @@ export async function verifyClaims(
     });
   }
   return out;
+}
+
+const FILE_EXT = 'py|ts|tsx|js|jsx|mjs|cjs|graphql|gql|go|rs|java|kt|rb|php|cs|swift|sql';
+
+/**
+ * `ruta/archivo.ext:línea` que una respuesta afirma. Es lo que el motor puede
+ * leer de vuelta: si hay alguno y el modelo no mandó afirmaciones de lugar, se le
+ * devuelve la entrega una vez.
+ */
+export function extractFileLines(text: string): string[] {
+  const re = new RegExp(
+    `(?<![\\w/.-])((?:[\\w.-]+/)+[\\w.-]+\\.(?:${FILE_EXT})):(\\d{1,6})\\b`,
+    'g',
+  );
+  return [...new Set([...text.matchAll(re)].map((m) => `${m[1]}:${m[2]}`))];
 }

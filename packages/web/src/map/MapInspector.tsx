@@ -7,7 +7,7 @@ import type { EndpointLink, NodeDetail, NodeRelation } from '@parallax/shared/or
 import type * as React from 'react';
 import { useState } from 'react';
 import { ApiError } from '../api/client.js';
-import { useMapNode } from '../api/hooks.js';
+import { useImplementation, useMapNode } from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -197,6 +197,10 @@ function Detail({
         </>
       ) : null}
 
+      {node.kind === 'endpoint' && node.contract === 'graphql' && (
+        <ImplementedBy workspaceId={workspaceId} endpointKey={node.label} repo={lainRepo} />
+      )}
+
       {node.kind === 'repo' && node.meta.lainRepoId === null && (
         <p className="p-5 text-xs text-muted" data-testid="repo-no-code">
           Code browsing is unavailable for this repository: its name in the contract analysis does
@@ -384,6 +388,84 @@ function EndpointLinks({
             <li className="px-1.5 text-[10px] text-muted">+{hidden} more endpoints not listed</li>
           )}
         </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Un contrato GraphQL sólo apunta a su SDL. Esto busca, bajo demanda, el código que
+ * lo implementa por NOMBRE en el índice de LAIN: el símbolo y su archivo:línea los
+ * da el motor; que sea "la implementación" es una coincidencia de nombre y así se rotula.
+ */
+function ImplementedBy({
+  workspaceId,
+  endpointKey,
+  repo,
+}: {
+  workspaceId: string;
+  endpointKey: string;
+  repo: string | null;
+}): React.ReactElement {
+  const [wanted, setWanted] = useState(false);
+  const q = useImplementation(workspaceId, endpointKey, repo, wanted);
+  const r = q.data?.result;
+  return (
+    <div className="p-5 space-y-2" data-testid="implemented-by">
+      <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">Implemented by</h4>
+      {!repo ? (
+        <p className="text-[11px] text-muted">Code search is unavailable for this repository.</p>
+      ) : !wanted ? (
+        <button
+          type="button"
+          onClick={() => setWanted(true)}
+          className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-bg"
+        >
+          Find implementation
+        </button>
+      ) : q.isPending ? (
+        <p className="text-[11px] text-muted">Searching the code index…</p>
+      ) : q.isError || q.data?.source === 'error' ? (
+        <p className="text-[11px] text-warning">
+          The lookup failed{q.data?.error ? `: ${q.data.error}` : ''}.
+        </p>
+      ) : !r ? (
+        <p className="text-[11px] text-muted">No LAIN server configured.</p>
+      ) : r.error ? (
+        <p className="text-[11px] text-muted">{r.error}.</p>
+      ) : r.candidates.length === 0 ? (
+        <p className="text-[11px] text-muted">
+          No class or function named {r.tried.map((t) => `"${t}"`).join(', ')} in this repository
+          (not proof there is none: the implementation may be named differently).
+        </p>
+      ) : (
+        <>
+          <p className="text-[10px] text-muted">
+            Found by <b>name match</b> in LAIN&apos;s code index: the location is the engine&apos;s,
+            the link to this endpoint is inferred.
+          </p>
+          <ul className="space-y-1">
+            {r.candidates.map((c) => (
+              <li key={c.id} className="font-mono text-xs break-all">
+                <span className="text-muted">{c.type} </span>
+                {c.path}:{c.line}
+              </li>
+            ))}
+          </ul>
+          {r.registeredIn.length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted">Registered in</p>
+              <ul className="space-y-0.5">
+                {r.registeredIn.map((g) => (
+                  <li key={`${g.name}|${g.path}`} className="text-xs">
+                    <span className="font-medium">{g.name}</span>{' '}
+                    <span className="font-mono text-[11px] text-muted break-all">{g.path}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

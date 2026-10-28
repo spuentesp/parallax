@@ -21,6 +21,7 @@ import {
   type ClaimEvidence,
   type ClaimResult,
   type ClaimsSummary,
+  extractFileLines,
   SUBMIT_TOOL,
   SUBMIT_TOOL_SPEC,
   SubmitAnswerArgs,
@@ -55,7 +56,7 @@ import {
 /** Fracción del presupuesto de lecturas a partir de la cual se pide cerrar. */
 const SOFT_NUDGE_AT = 0.6;
 
-export const PROMPT_VERSION = 'parallax-investigator-v5';
+export const PROMPT_VERSION = 'parallax-investigator-v6';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
 // las pruebas inyectan un modelo guionizado y P08 se prueba sin modelo.
@@ -210,7 +211,7 @@ Method:
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
 6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.
-7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
+7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. If you state any file:line in your answer you MUST add a location claim for it (an answer with file:line and no location claim is sent back). Every file:line you state goes in a location claim (repo, path, line, and "contains": the exact symbol or text that must be on or within a few lines of that line): the engine reads the code back and verifies it. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
 8. Keep "answer" short (about 200 words): summarize and cite a few representative evidence ids; do not enumerate every endpoint. The claims carry the checkable facts, and a reply that is too long is cut off and lost.`;
 
 function nowMs(): number {
@@ -375,6 +376,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let pushedBack = false;
   let submitNudged = false;
   let softNudged = false;
+  let locationPushedBack = false;
   let submittedClaims: Claim[] = [];
   let prSubmission: PrSubmitArgs | null = null;
 
@@ -582,6 +584,21 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
         );
         continue;
       }
+      // Una respuesta que afirma archivo:línea sin afirmaciones de lugar deja lo más
+      // concreto que dice sin comprobar: se devuelve UNA vez para que el motor lo lea.
+      if (!opts.pr && !locationPushedBack) {
+        const qa = checked.data as SubmitAnswerArgs;
+        const stated = extractFileLines(qa.answer);
+        const hasLocation = (qa.claims ?? []).some((c) => c.kind === 'location');
+        if (stated.length > 0 && !hasLocation) {
+          locationPushedBack = true;
+          reject(
+            'location_claims_missing',
+            `Your answer states code locations (${stated.slice(0, 6).join(', ')}) but submits no location claim. Call submit_answer again with the same answer plus one location claim per file:line you state: repo, path, line, and "contains" = the exact symbol or text that must be on or near that line. The engine reads the code back to verify them.`,
+          );
+          continue;
+        }
+      }
       toolCallLog.push({
         toolCallId: submit.id,
         tool: SUBMIT_TOOL,
@@ -709,6 +726,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
           view,
           resolveService: (name) => dispatcher.resolveService(name),
           validateRefs: cleanedValidate,
+          hasRepo: (name) => dispatcher.hasRepo(name),
         })
       : [];
   const claimsSummary = summarizeClaims(claims);

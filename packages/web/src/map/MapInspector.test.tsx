@@ -357,3 +357,100 @@ describe('MapInspector — which endpoints sit behind a relation', () => {
     expect(view.queryByRole('button', { name: /endpoint/ })).toBeNull();
   });
 });
+
+describe('MapInspector — which code implements a GraphQL operation', () => {
+  const repoNode = on('repo:saleor', 'repo', { label: 'saleor', meta: { lainRepoId: 'saleor' } });
+  const op = (over: Partial<OrgNode> = {}) =>
+    on('ep:g', 'endpoint', {
+      label: 'graphql:mutation:checkoutShippingAddressUpdate',
+      parent: 'svc:orders',
+      contract: 'graphql',
+      ...over,
+    });
+  const withPath = (node: OrgNode, repo: OrgNode | null = repoNode) =>
+    detail({
+      node,
+      path: [on('svc:orders', 'service', { label: 'orders' }), ...(repo ? [repo] : [])],
+    });
+  const serveImpl = (body: object, seen: URLSearchParams[] = []) =>
+    server.use(
+      http.get('/api/workspaces/:id/map/implementation', ({ request }) => {
+        seen.push(new URL(request.url).searchParams);
+        return HttpResponse.json(body);
+      }),
+    );
+
+  it('looks nothing up until asked; then shows file:line labelled as a name match, and where it is registered', async () => {
+    const seen: URLSearchParams[] = [];
+    serveImpl(
+      {
+        source: 'lain',
+        result: {
+          key: 'k',
+          repo: 'saleor',
+          tried: ['CheckoutShippingAddressUpdate'],
+          basis: 'name_match',
+          candidates: [
+            {
+              id: 'u',
+              type: 'class',
+              name: 'CheckoutShippingAddressUpdate',
+              path: 'saleor/graphql/checkout/mutations/checkout_shipping_address_update.py',
+              line: 46,
+            },
+          ],
+          registeredIn: [{ name: 'CheckoutMutations', path: 'saleor/graphql/checkout/schema.py' }],
+        },
+      },
+      seen,
+    );
+    setup(withPath(op()));
+    const view = within(await screen.findByTestId('implemented-by'));
+    expect(seen).toHaveLength(0);
+    fireEvent.click(view.getByRole('button', { name: 'Find implementation' }));
+    expect(await view.findByText(/checkout_shipping_address_update\.py:46/)).toBeTruthy();
+    expect(view.getByText('name match').tagName).toBe('B');
+    expect(view.getByText('CheckoutMutations')).toBeTruthy();
+    expect(seen[0]?.get('repo')).toBe('saleor');
+    expect(seen[0]?.get('key')).toBe('graphql:mutation:checkoutShippingAddressUpdate');
+  });
+
+  it('says plainly when nothing matched, without claiming there is no implementation', async () => {
+    serveImpl({
+      source: 'lain',
+      result: {
+        key: 'k',
+        repo: 'saleor',
+        tried: ['Ghost', 'ghost'],
+        basis: 'name_match',
+        candidates: [],
+        registeredIn: [],
+      },
+    });
+    setup(withPath(op()));
+    const view = within(await screen.findByTestId('implemented-by'));
+    fireEvent.click(view.getByRole('button', { name: 'Find implementation' }));
+    expect(
+      (await view.findByText(/No class or function named "Ghost", "ghost"/)).textContent,
+    ).toMatch(/not proof there is none/);
+  });
+
+  it('an engine error is shown as a failed lookup', async () => {
+    serveImpl({ source: 'error', error: 'lain unreachable' });
+    setup(withPath(op()));
+    const view = within(await screen.findByTestId('implemented-by'));
+    fireEvent.click(view.getByRole('button', { name: 'Find implementation' }));
+    expect((await view.findByText(/The lookup failed: lain unreachable/)).textContent).toBeTruthy();
+  });
+
+  it('only GraphQL operations get it (HTTP routes already point at their handler); a repo without code search says so', async () => {
+    setup(withPath(op({ contract: 'http', label: 'http:GET /x' })));
+    await screen.findByTestId('map-inspector');
+    expect(screen.queryByTestId('implemented-by')).toBeNull();
+    cleanup();
+    setup(withPath(op(), on('repo:x', 'repo', { label: 'x', meta: { lainRepoId: null } })));
+    expect((await screen.findByTestId('implemented-by')).textContent).toMatch(
+      /Code search is unavailable/,
+    );
+  });
+});

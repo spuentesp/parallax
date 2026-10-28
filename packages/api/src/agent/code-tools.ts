@@ -52,6 +52,13 @@ export const CODE_TOOL_ARGS = {
   get_cross_repo_blast_radius: z.object({ symbol, repo, depth: limit(4) }).strict(),
   find_related: z.object({ symbol, repo, limit: limit(25) }).strict(),
   get_coupling_radar: z.object({ symbol, repo }).strict(),
+  get_cross_runtime_callers: z
+    .object({
+      /** El UUID entre comillas invertidas que devuelven find_symbol / search_code. */
+      node_id: z.string().min(8),
+      repo: z.string().min(1),
+    })
+    .strict(),
   get_code_snippet: z
     .object({
       path: z.string().min(1),
@@ -90,6 +97,8 @@ export const CODE_TOOL_DESCRIPTIONS: Record<CodeTool, string> = {
   find_related: 'Graph neighbours and co-change partners of a symbol.',
   get_coupling_radar:
     'Files that change together with this symbol (hidden coupling from git history).',
+  get_cross_runtime_callers:
+    'Where a handler is wired in: the GraphQL resolvers / HTTP routes / gRPC services that use it. node_id is the UUID in backticks from find_symbol or search_code results; repo is required.',
   get_code_snippet:
     'Source of a file with context around a line. Use to show the code behind an answer.',
 };
