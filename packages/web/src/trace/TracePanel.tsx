@@ -131,9 +131,7 @@ function Link({ link }: { link?: TraceLinkDto | undefined }): React.ReactElement
             {link.note ? <span className="text-muted"> · {link.note}</span> : null}{' '}
             <span className={b?.tone}>· {b?.label}</span>
           </span>
-        ) : (
-          <span className="text-muted">no link recorded between these two</span>
-        )}
+        ) : null}
       </div>
     </div>
   );

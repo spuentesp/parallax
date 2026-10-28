@@ -397,6 +397,7 @@ export function MapExplorer({
                       onToggle={toggle}
                       focusing={focus !== null}
                       onClearFocus={() => setParam({ focus: null, hops: null })}
+                      onTrace={(key, service) => setTrace({ key, service })}
                     />
                   )}
                 </aside>

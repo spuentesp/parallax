@@ -88,6 +88,8 @@ export const traceRoutes: FastifyPluginAsync = async (app) => {
       seed,
       lain,
       model: model.provider,
+      // El recorrido exige leer código de verdad: el modelo grande lo hace mucho mejor que el rápido.
+      modelRole: 'planner',
       maxTokens: model.settings.maxTokens,
       ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
       ...(onProgress ? { onProgress } : {}),
