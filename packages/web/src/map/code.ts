@@ -19,6 +19,8 @@ export type CodeEntry =
       state: 'ready';
       children: CodeGraphNode[];
       truncated: boolean;
+      /** Ruido que se dejó fuera de la lista (tests, ocultos, utilidades), contado. */
+      hidden?: number;
       communications: CodeGraphCommGroup[];
     };
 
@@ -101,6 +103,7 @@ function codeNode(
       ...(entry?.state === 'loading' ? { loading: true } : {}),
       ...(entry?.state === 'error' ? { error: entry.message } : {}),
       ...(entry?.state === 'ready' && entry.truncated ? { truncated: true } : {}),
+      ...(entry?.state === 'ready' && entry.hidden ? { hiddenNoise: entry.hidden } : {}),
     },
     childCount: 0,
     expanded: open.has(id),
@@ -154,6 +157,7 @@ export function mergeCode(
         ...(entry?.state === 'loading' ? { loading: true } : {}),
         ...(entry?.state === 'error' ? { error: entry.message } : {}),
         ...(entry?.state === 'ready' && entry.truncated ? { truncated: true } : {}),
+        ...(entry?.state === 'ready' && entry.hidden ? { hiddenNoise: entry.hidden } : {}),
       },
       childCount: 0,
       expanded: open.has(rootId),

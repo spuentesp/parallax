@@ -185,7 +185,16 @@ export function MapOutline({
                 className="text-[11px] text-muted py-0.5"
                 style={{ paddingLeft: 8 + (row.depth + 1) * 16 + 22 }}
               >
-                The engine capped this listing — more exist than shown.
+                Showing the first entries — more exist than shown.
+              </p>
+            )}
+            {n.expanded && typeof n.meta.hiddenNoise === 'number' && n.meta.hiddenNoise > 0 && (
+              <p
+                className="text-[11px] text-muted py-0.5"
+                data-testid="code-hidden-note"
+                style={{ paddingLeft: 8 + (row.depth + 1) * 16 + 22 }}
+              >
+                {n.meta.hiddenNoise} hidden: dot folders, tests, stories, tooling.
               </p>
             )}
             {n.expanded && hidden > 0 && (

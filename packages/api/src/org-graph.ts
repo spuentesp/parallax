@@ -267,7 +267,12 @@ export function filterOrgGraph(graph: OrgGraph, f: OrgGraphFilters): OrgGraph {
 
 export const DEFAULT_CHILD_LIMIT = 50;
 
+/** Un grupo abierto con más hijos visibles que esto dibuja sus relaciones al grupo, no a cada hijo. */
+export const FANOUT_LIMIT = 12;
+
 export interface ProjectionOptions {
+  /** Con más hijos visibles que esto, las relaciones se elevan al grupo (salvo las de lo fijado). */
+  fanoutLimit?: number;
   /** Tope de hijos mostrados por nodo expandido (los más conectados primero). */
   childLimit?: number;
   /** Tope propio por padre ("mostrar más" sube el de ese padre). */
@@ -339,7 +344,24 @@ export function projectOrgGraph(
   const visibleNodes = graph.nodes.filter(visible);
   const visibleIds = new Set(visibleNodes.map((n) => n.id));
 
+  // Un grupo abierto con decenas de operaciones: una línea por operación es una
+  // mancha. Sus relaciones se dibujan al grupo (con el total) y las de cada
+  // operación reaparecen cuando se la selecciona o enfoca (`pinned`).
+  const visibleKids = new Map<string, number>();
+  for (const n of visibleNodes) {
+    if (n.parent !== null) visibleKids.set(n.parent, (visibleKids.get(n.parent) ?? 0) + 1);
+  }
+  const fanout = opts.fanoutLimit ?? FANOUT_LIMIT;
+  const crowdedParent = (id: string): string | null => {
+    const n = byId.get(id);
+    if (!n || n.kind !== 'endpoint' || n.parent === null) return null;
+    if (opts.pinned?.has(id)) return null;
+    return (visibleKids.get(n.parent) ?? 0) > fanout && visibleIds.has(n.parent) ? n.parent : null;
+  };
+
   const lift = (id: string): string | null => {
+    const crowded = visibleIds.has(id) ? crowdedParent(id) : null;
+    if (crowded !== null) return crowded;
     if (visibleIds.has(id)) return id;
     for (const a of ancestorsOf(id, byId)) if (visibleIds.has(a)) return a;
     return null;

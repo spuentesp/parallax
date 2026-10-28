@@ -44,25 +44,41 @@ describe('deriveLainRepoId', () => {
   });
 });
 
-describe('buildGraphRoot (mock engine)', () => {
-  it('returns the high-level structure per repo, typed and classified', async () => {
-    const root = await buildGraphRoot(createLainMock(), ['orders']);
-    expect(root.repos).toHaveLength(1);
-    const orders = root.repos[0];
-    expect(orders?.error).toBeUndefined();
-    const types = new Set(orders?.nodes.map((n) => n.type));
-    expect(types.has('File')).toBe(true);
-    expect(types.has('HttpRoute')).toBe(true);
-    expect(types.has('Topic')).toBe(true);
-    expect(orders?.nodes.find((n) => n.name === 'main.rs')?.kind).toBe('container');
-    expect(orders?.nodes.find((n) => n.name === 'POST /api/orders')?.kind).toBe('route');
-    expect(orders?.truncated).toBe(false);
+import { isNoise } from '../src/code-graph.js';
+import { fakeCodeEngine } from './fake-code-engine.js';
+
+describe('buildGraphRoot — the top of a repo is its top-level folders', () => {
+  const engine = fakeCodeEngine({
+    '': ['package.json', 'README.md'],
+    src: ['index.tsx'],
+    'src/components': ['Button.tsx', 'Button.test.tsx'],
+    'src/orders/components': ['OrderList.tsx'],
+    scripts: ['build.ts'],
+    docs: ['guide.md'],
+    '.github': ['CODEOWNERS'],
+    e2e: ['login.spec.ts'],
+    __mocks__: ['fs.ts'],
   });
 
-  it('marks truncation when the repo returns exactly the limit', async () => {
-    const root = await buildGraphRoot(createLainMock(), ['orders'], 5);
-    expect(root.repos[0]?.nodes).toHaveLength(5);
-    expect(root.repos[0]?.truncated).toBe(true);
+  it('lists only directories no other directory contains — never a flat dump of every file', async () => {
+    const root = await buildGraphRoot(engine, ['web']);
+    const names = root.repos[0]?.nodes.map((n) => n.name);
+    expect(names).toEqual(['docs', 'scripts', 'src']);
+    // Los nombres repetidos más abajo ("components" x2) no se confunden con la cima.
+    expect(root.repos[0]?.nodes.every((n) => n.type === 'Namespace')).toBe(true);
+  });
+
+  it('declares what it left out (hidden folders, e2e, mocks) instead of silently dropping it', async () => {
+    const root = await buildGraphRoot(engine, ['web']);
+    expect(root.repos[0]?.hidden).toBe(3);
+  });
+
+  it('shows everything when asked', async () => {
+    const root = await buildGraphRoot(engine, ['web'], undefined, { all: true });
+    expect(root.repos[0]?.nodes.map((n) => n.name).sort()).toEqual(
+      ['.github', '__mocks__', 'docs', 'e2e', 'scripts', 'src'].sort(),
+    );
+    expect(root.repos[0]?.hidden).toBe(0);
   });
 
   it('surfaces a per-repo error instead of failing the whole workspace', async () => {
@@ -75,6 +91,58 @@ describe('buildGraphRoot (mock engine)', () => {
     const root = await buildGraphRoot(broken, ['missing']);
     expect(root.repos[0]?.nodes).toEqual([]);
     expect(root.repos[0]?.error).toContain('repo not found');
+  });
+});
+
+describe('opening a folder — directories first, noise counted not listed', () => {
+  const engine = fakeCodeEngine({
+    src: ['zeta.ts', 'alpha.ts', 'alpha.test.ts', 'Card.stories.tsx', '.eslintrc.js'],
+    'src/components': [],
+    'src/__mocks__': [],
+  });
+
+  it('puts folders before files, then sorts by name, and hides tests/stories/dotfiles with a count', async () => {
+    const res = await buildGraphChildren(engine, { repo: 'web', type: 'Namespace', name: 'src' });
+    expect(res.children.map((c) => `${c.type}:${c.name}`)).toEqual([
+      'Namespace:components',
+      'File:alpha.ts',
+      'File:zeta.ts',
+    ]);
+    // alpha.test.ts, Card.stories.tsx, .eslintrc.js y la carpeta __mocks__.
+    expect(res.childrenHidden).toBe(4);
+  });
+
+  it('`all` returns them too', async () => {
+    const res = await buildGraphChildren(
+      engine,
+      { repo: 'web', type: 'Namespace', name: 'src' },
+      { all: true },
+    );
+    expect(res.children).toHaveLength(7);
+    expect(res.childrenHidden).toBe(0);
+  });
+});
+
+describe('isNoise', () => {
+  it('hides what does not help to understand a repo, by name', () => {
+    for (const n of [
+      '.github',
+      '__mocks__',
+      '__snapshots__',
+      'node_modules',
+      'e2e',
+      'testUtils',
+      'fixtures',
+    ]) {
+      expect(isNoise({ name: n, type: 'Namespace' }), n).toBe(true);
+    }
+    for (const n of ['a.test.ts', 'a.spec.tsx', 'a.stories.tsx', 'a.snap', '.env']) {
+      expect(isNoise({ name: n, type: 'File' }), n).toBe(true);
+    }
+    for (const n of ['src', 'orders', 'checkout'])
+      expect(isNoise({ name: n, type: 'Namespace' }), n).toBe(false);
+    for (const n of ['index.ts', 'Button.tsx', 'README.md'])
+      expect(isNoise({ name: n, type: 'File' }), n).toBe(false);
   });
 });
 

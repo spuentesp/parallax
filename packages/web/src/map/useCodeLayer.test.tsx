@@ -152,6 +152,7 @@ describe('useCodeLayer', () => {
       state: 'ready',
       children: [],
       truncated: false,
+      hidden: 0,
       communications: [],
     });
   });

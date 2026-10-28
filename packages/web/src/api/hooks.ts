@@ -235,6 +235,8 @@ export interface CodeGraphRepoRoot {
   repo: string;
   nodes: CodeGraphNode[];
   truncated: boolean;
+  /** Carpetas de la cima que se dejaron fuera por ser ruido. */
+  hidden?: number;
   error?: string;
 }
 
@@ -256,6 +258,8 @@ export interface CodeGraphChildrenResponse {
   node?: { repo: string; type: string; name: string };
   children?: CodeGraphNode[];
   childrenTruncated?: boolean;
+  /** Hijos que se dejaron fuera por ser ruido (tests, historias, ocultos). */
+  childrenHidden?: number;
   communications?: CodeGraphCommGroup[];
   hasCommunication?: boolean;
   source?: 'lain' | 'unconfigured' | 'error';

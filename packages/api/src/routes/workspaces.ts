@@ -520,7 +520,9 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       schema: {
         params: z.object({ id: z.string().min(1) }),
         // `repo` limita la raíz a un repo (el mapa abre el código repo a repo).
-        querystring: z.object({ repo: z.string().min(1).optional() }).loose(),
+        querystring: z
+          .object({ repo: z.string().min(1).optional(), all: z.string().optional() })
+          .loose(),
       },
     },
     async (req, reply) => {
@@ -550,12 +552,15 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         // no del id interno del workspace.
         const all = repos.map((r) => deriveLainRepoId(r));
         const only = (req.query as { repo?: string }).repo;
+        const showAll = (req.query as { all?: string }).all === '1';
         if (only !== undefined && !all.includes(only)) {
           return reply
             .code(400)
             .send({ code: 'BadRequest', detail: `repo '${only}' is not part of this workspace` });
         }
-        const graph = await buildGraphRoot(client, only === undefined ? all : [only]);
+        const graph = await buildGraphRoot(client, only === undefined ? all : [only], undefined, {
+          all: showAll,
+        });
         return { graph, source: 'lain' as const, lainUrl: ws[0].lainUrl, workspace };
       } catch (e) {
         return {
@@ -582,12 +587,18 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
             repo: z.string().min(1),
             type: z.string().min(1),
             name: z.string().min(1),
+            all: z.string().optional(),
           })
           .loose(),
       },
     },
     async (req, reply) => {
-      const { repo, type, name } = req.query as { repo: string; type: string; name: string };
+      const { repo, type, name, all } = req.query as {
+        repo: string;
+        type: string;
+        name: string;
+        all?: string;
+      };
       const ws = await app.db
         .select()
         .from(schema.workspace)
@@ -616,7 +627,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           apiVersion: '1',
           timeoutMs: 20_000,
         });
-        const result = await buildGraphChildren(client, { repo, type, name });
+        const result = await buildGraphChildren(client, { repo, type, name }, { all: all === '1' });
         return { ...result, source: 'lain' as const };
       } catch (e) {
         return {

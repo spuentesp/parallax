@@ -54,6 +54,7 @@ export function useCodeLayer(workspaceId: string): CodeLayer {
               state: 'ready',
               children: root.nodes,
               truncated: root.truncated,
+              hidden: root.hidden ?? 0,
               communications: [],
             });
           })
@@ -70,6 +71,7 @@ export function useCodeLayer(workspaceId: string): CodeLayer {
             state: 'ready',
             children: res.children ?? [],
             truncated: res.childrenTruncated ?? false,
+            hidden: res.childrenHidden ?? 0,
             communications: res.communications ?? [],
           });
         })

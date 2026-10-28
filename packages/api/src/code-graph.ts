@@ -41,7 +41,26 @@ export const COMM_EDGE_TYPES = [
 ] as const;
 
 export const ROOT_LIMIT = 200;
-export const CHILDREN_LIMIT = 100;
+export const CHILDREN_LIMIT = 60;
+/** Cuántos hijos se piden al motor antes de filtrar ruido y recortar a CHILDREN_LIMIT. */
+const CHILDREN_FETCH = 400;
+/** Tope de directorios al buscar la cima de un repo. */
+const DIR_FETCH = 20_000;
+
+// Ruido de estructura: carpetas y archivos que no ayudan a entender qué hace un
+// repo (ocultos, tests, mocks, historias, utilidades de prueba). No se borran:
+// se cuentan y se declaran ("N ocultos"), y se pueden pedir con `all`.
+const NOISE_DIR =
+  /^(\.[^/]*|__\w+__|node_modules|e2e|e2e-legacy|tests?|testUtils|storybookUtils|fixtures)$/i;
+const NOISE_FILE = /(\.(test|spec|stories)\.[cm]?[jt]sx?$|\.snap$|^\.)/i;
+
+export function isNoise(node: { name: string; type: string }): boolean {
+  return CONTAINER_DIR_TYPES.has(node.type)
+    ? NOISE_DIR.test(node.name)
+    : NOISE_FILE.test(node.name);
+}
+
+const CONTAINER_DIR_TYPES = new Set(['Namespace', 'Package']);
 export const COMM_LIMIT = 50;
 
 export type CodeNodeKind = 'container' | 'symbol' | 'route' | 'schema' | 'other';
@@ -58,6 +77,8 @@ export interface CodeGraphNode {
 export interface CodeGraphRepoRoot {
   repo: string;
   nodes: CodeGraphNode[];
+  /** Carpetas de la cima que se dejaron fuera por ser ruido (ocultas, tests, utilidades). */
+  hidden?: number;
   /** true si la consulta devolvió exactamente el límite (puede haber más). */
   truncated: boolean;
   error?: string;
@@ -83,6 +104,8 @@ export interface GraphChildrenResult {
   node: NodeRef;
   children: CodeGraphNode[];
   childrenTruncated: boolean;
+  /** Hijos que se dejaron fuera por ser ruido (tests, historias, ocultos). */
+  childrenHidden?: number;
   /** Vecinos agrupados por arista; vacío (no ausente) = sin comunicación. */
   communications: CodeGraphCommGroup[];
   hasCommunication: boolean;
@@ -137,27 +160,54 @@ function findOps(ref: { type: string; name: string }): {
   return { op: 'find', type: ref.type, name: { exact: ref.name } };
 }
 
-/** Raíz de un repo: estructura de alto nivel, acotada y marcada si se corta. */
+/**
+ * Raíz de un repo: sus carpetas de primer nivel — directorios que ningún otro
+ * directorio contiene —, no una lista plana de archivos. Se ordenan por nombre;
+ * el ruido (ocultas, tests, utilidades) se cuenta aparte y se declara.
+ */
 export async function buildRepoRoot(
   adapter: LainAdapter,
   repo: string,
-  limit = ROOT_LIMIT,
+  _limit = ROOT_LIMIT,
+  opts: { all?: boolean } = {},
 ): Promise<CodeGraphRepoRoot> {
-  const spec: QueryGraphSpec = {
+  const types = [...CONTAINER_DIR_TYPES];
+  const everyDir: QueryGraphSpec = {
     ops: [
-      { op: 'find', type: [...ROOT_NODE_TYPES] },
-      { op: 'sort', by: 'name' },
-      { op: 'limit', count: limit },
+      { op: 'find', type: types },
+      { op: 'limit', count: DIR_FETCH },
+    ],
+  };
+  const innerDirs: QueryGraphSpec = {
+    ops: [
+      { op: 'find', type: types },
+      { op: 'connect', edge: 'Contains', direction: 'outgoing', depth: 1, target: { type: types } },
+      { op: 'limit', count: DIR_FETCH },
     ],
   };
   try {
-    const res = await adapter.queryGraph({ query: spec, repo_id: repo });
-    const nodes = res.nodes.map(toCodeNode).sort((a, b) => a.name.localeCompare(b.name));
+    const [all, inner] = await Promise.all([
+      adapter.queryGraph({ query: everyDir, repo_id: repo }),
+      adapter.queryGraph({ query: innerDirs, repo_id: repo }),
+    ]);
+    // Se compara por id del motor: los nombres se repiten (hay muchos "components").
+    const contained = new Set(inner.nodes.map((n) => n.id));
+    const top = all.nodes.filter((n) => !contained.has(n.id)).map(toCodeNode);
+    const shown = opts.all ? top : top.filter((n) => !isNoise(n));
+    const seen = new Set<string>();
+    const nodes = shown
+      .filter((n) => {
+        const k = `${n.type}:${n.name}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
     return {
       repo,
       nodes,
-      // Si llegó al límite, puede haber más nodos de los que vemos.
-      truncated: res.nodes.length >= limit,
+      hidden: top.length - shown.length,
+      truncated: all.nodes.length >= DIR_FETCH,
     };
   } catch (e) {
     return {
@@ -173,10 +223,11 @@ export async function buildGraphRoot(
   adapter: LainAdapter,
   repos: readonly string[],
   limit = ROOT_LIMIT,
+  opts: { all?: boolean } = {},
 ): Promise<GraphRootResult> {
   const out: CodeGraphRepoRoot[] = [];
   for (const repo of repos) {
-    out.push(await buildRepoRoot(adapter, repo, limit));
+    out.push(await buildRepoRoot(adapter, repo, limit, opts));
   }
   return { repos: out };
 }
@@ -189,7 +240,7 @@ export async function buildGraphRoot(
 export async function buildGraphChildren(
   adapter: LainAdapter,
   ref: NodeRef,
-  limits: { children?: number; comm?: number } = {},
+  limits: { children?: number; comm?: number; all?: boolean } = {},
 ): Promise<GraphChildrenResult> {
   const childrenLimit = limits.children ?? CHILDREN_LIMIT;
   const commLimit = limits.comm ?? COMM_LIMIT;
@@ -198,15 +249,24 @@ export async function buildGraphChildren(
     ops: [
       findOps(ref),
       { op: 'connect', edge: 'Contains', direction: 'outgoing', depth: 1 },
-      { op: 'limit', count: childrenLimit },
+      { op: 'limit', count: Math.max(CHILDREN_FETCH, childrenLimit) },
     ],
   };
   const containsRes = await adapter.queryGraph({ query: containsSpec, repo_id: ref.repo });
   // Contains saliente no incluye la semilla, pero se filtra por si el motor
   // cambia de opinión: un nodo no es su propio hijo.
-  const children = containsRes.nodes
+  const own = containsRes.nodes
     .map(toCodeNode)
     .filter((n) => !(n.type === ref.type && n.name === ref.name));
+  // Carpetas primero (para orientarse), luego el resto por nombre; el ruido se
+  // cuenta y se declara en vez de llenar la lista.
+  const visible = limits.all ? own : own.filter((n) => !isNoise(n));
+  const ranked = [...visible].sort(
+    (a, b) =>
+      Number(CONTAINER_DIR_TYPES.has(b.type)) - Number(CONTAINER_DIR_TYPES.has(a.type)) ||
+      a.name.localeCompare(b.name),
+  );
+  const children = ranked.slice(0, childrenLimit);
 
   const communications: CodeGraphCommGroup[] = [];
   for (const edge of COMM_EDGE_TYPES) {
@@ -240,7 +300,10 @@ export async function buildGraphChildren(
   return {
     node: ref,
     children,
-    childrenTruncated: containsRes.nodes.length >= childrenLimit,
+    childrenTruncated:
+      ranked.length > childrenLimit ||
+      containsRes.nodes.length >= Math.max(CHILDREN_FETCH, childrenLimit),
+    childrenHidden: own.length - visible.length,
     communications,
     hasCommunication,
   };

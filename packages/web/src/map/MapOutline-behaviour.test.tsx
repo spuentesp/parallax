@@ -163,7 +163,7 @@ describe('MapOutline rows', () => {
 
   it('notes a capped code listing and offers "+N more…" at the right indent for capped children', () => {
     const h = setup();
-    expect(screen.getByText(/engine capped this listing/i)).toBeTruthy();
+    expect(screen.getByText(/more exist than shown/i)).toBeTruthy();
     const more = screen.getByRole('button', { name: '+3 more…' });
     expect(more.style.paddingLeft).toBe(`${8 + 2 * 16 + 22}px`);
     fireEvent.click(more);
@@ -171,7 +171,7 @@ describe('MapOutline rows', () => {
     // Sin recorte no hay ni nota ni botón.
     cleanup();
     setup({ view: { nodes: nodes.filter((x) => x.id !== 'g'), hiddenChildren: { s: 0 } } });
-    expect(screen.queryByText(/engine capped/i)).toBeNull();
+    expect(screen.queryByText(/more exist than shown/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /more…/ })).toBeNull();
   });
 
@@ -182,7 +182,7 @@ describe('MapOutline rows', () => {
         hiddenChildren: { c1: 2 },
       },
     });
-    expect(screen.queryByText(/engine capped/i)).toBeNull();
+    expect(screen.queryByText(/more exist than shown/i)).toBeNull();
     expect(screen.queryByRole('button', { name: /more…/ })).toBeNull();
   });
 });
@@ -255,5 +255,36 @@ describe('MapOutline interaction', () => {
     );
     expect(screen.getByText('Nothing to show for these filters.')).toBeTruthy();
     expect(screen.queryByRole('tree')).toBeNull();
+  });
+});
+
+describe('MapOutline — hidden noise is declared', () => {
+  it('an open code folder says how many tests/hidden entries were left out; a closed one says nothing', () => {
+    setup({
+      view: {
+        nodes: [
+          n({
+            id: 'open',
+            kind: 'file',
+            childCount: 0,
+            expanded: true,
+            lazy: true,
+            meta: { hiddenNoise: 7 },
+          }),
+          n({
+            id: 'shut',
+            kind: 'file',
+            childCount: 0,
+            expanded: false,
+            lazy: true,
+            meta: { hiddenNoise: 9 },
+          }),
+        ],
+        hiddenChildren: {},
+      },
+    });
+    const notes = screen.getAllByTestId('code-hidden-note');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.textContent).toMatch(/7 hidden/);
   });
 });

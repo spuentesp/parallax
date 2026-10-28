@@ -118,7 +118,7 @@ export function contractGroup(key: string, boundConsumers: number): ContractGrou
     if (rest.startsWith('ANY ') && boundConsumers === 0) {
       return {
         key: 'http-methodless',
-        label: 'HTTP patterns without a method',
+        label: 'HTTP patterns (no method)',
         note: 'Route-like strings the engine found with no HTTP method, and nothing calls them. In browser code these are usually event names or test data, not real routes; in server code they can be catch-all URL patterns. Shown separately so they do not mix with real routes.',
       };
     }

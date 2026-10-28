@@ -33,7 +33,7 @@ describe('contractGroup — what a contract is called on the map', () => {
     ]) {
       expect(contractGroup(noisy, 0), noisy).toMatchObject({
         key: 'http-methodless',
-        label: 'HTTP patterns without a method',
+        label: 'HTTP patterns (no method)',
       });
     }
     // Sin método PERO alguien la consume: no es un patrón huérfano.

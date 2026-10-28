@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import { buildApp } from '../src/server.js';
+import { fakeCodeEngine } from './fake-code-engine.js';
 
 describe('workspace code-graph routes', () => {
   let dir: string;
@@ -69,6 +70,7 @@ describe('workspace code-graph routes', () => {
     });
 
     it('returns the roots of every workspace repo, or only the requested one', async () => {
+      app.lainClientFor = async () => fakeCodeEngine({ src: ['index.ts'], docs: ['a.md'] });
       const id = await workspace('http://lain.test', [
         'https://github.com/acme/orders.git',
         'https://github.com/acme/billing.git',
