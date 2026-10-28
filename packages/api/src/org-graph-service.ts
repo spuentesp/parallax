@@ -21,6 +21,8 @@ export type LoadedOrgGraph =
 
 export interface OrgGraphService {
   load(workspaceId: string, refresh: boolean): Promise<LoadedOrgGraph>;
+  /** El workspace cambió (repos, LAIN): el grafo cacheado ya no vale. */
+  invalidate(workspaceId: string): void;
 }
 
 export function createOrgGraphService(deps: {
@@ -37,6 +39,9 @@ export function createOrgGraphService(deps: {
   const getClient = deps.getClient ?? getLainClient;
 
   return {
+    invalidate(workspaceId) {
+      cache.invalidatePrefix(`${workspaceId}|`);
+    },
     async load(workspaceId, refresh) {
       const rows = await deps.db
         .select()

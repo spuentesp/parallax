@@ -81,6 +81,12 @@ export class OrgGraphCache {
     this.entries.delete(key);
   }
 
+  /** Olvida todas las entradas cuya clave empieza por `prefix` (p. ej. un workspace). */
+  invalidatePrefix(prefix: string): void {
+    for (const key of [...this.entries.keys()])
+      if (key.startsWith(prefix)) this.entries.delete(key);
+  }
+
   private snapshot(key: string, entry: Entry, stale: boolean): CachedGraph {
     return {
       graph: entry.graph,

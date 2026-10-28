@@ -142,7 +142,10 @@ describe('POST /api/query budget', () => {
     await start(8);
     // El mapa del workspace (aquí el motor mock): lo que el agente cita debe estar en él.
     const graph = toOrgGraph(await buildEndpointTopology(createLainMock()));
-    app.orgGraphs = { load: async () => ({ ok: true, graph, meta: { source: 'lain' } }) };
+    app.orgGraphs = {
+      invalidate: () => {},
+      load: async () => ({ ok: true, graph, meta: { source: 'lain' } }),
+    };
     const r = await ask();
     const focus = r.json().map_focus as {
       seed: string;
@@ -167,7 +170,10 @@ describe('POST /api/query budget', () => {
     expect(new URLSearchParams(focus.query).get('focus')).toBe(focus.seed);
 
     // Si el mapa no tiene esos nodos, no hay foco.
-    app.orgGraphs = { load: async () => ({ ok: true, graph: { nodes: [], edges: [] }, meta: {} }) };
+    app.orgGraphs = {
+      invalidate: () => {},
+      load: async () => ({ ok: true, graph: { nodes: [], edges: [] }, meta: {} }),
+    };
     stubModel([
       {
         content: null,

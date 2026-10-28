@@ -9,7 +9,10 @@ declare module 'fastify' {
 
 export default fp(
   async (fastify) => {
-    fastify.decorate('orgGraphs', createOrgGraphService({ db: fastify.db }));
+    fastify.decorate(
+      'orgGraphs',
+      createOrgGraphService({ db: fastify.db, getClient: (c) => fastify.lainClientFor(c) }),
+    );
   },
-  { name: 'org-graph', dependencies: ['db'] },
+  { name: 'org-graph', dependencies: ['db', 'lain-adapter'] },
 );
