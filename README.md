@@ -60,8 +60,9 @@ pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
 The api uses `LAIN_ADAPTER=mock` by default. Use
-[Lain v0.11.0](https://github.com/spuentesp/lain/releases/tag/v0.11.0) for the
-GraphQL provider and binding fixes. Start its HTTP server with your workspace's
+[Lain v0.13.0](https://github.com/spuentesp/lain/releases/tag/v0.13.0) for the
+GraphQL provider and binding fixes, and for the indexing performance changes
+that earlier needed a local patch. Start its HTTP server with your workspace's
 `repos.yaml`; Parallax loads the `contracts` package when the server starts with
 the default core profile.
 
@@ -69,20 +70,8 @@ the default core profile.
 lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
-Large Saleor workspaces also need the
-[indexing performance patch](patches/lain-0.11.0-indexing-performance.patch).
-The published v0.11.0 binary repeatedly validates entire SDL documents and
-recompiles HTTP tree-sitter queries, fixed router-prefix regexes and bundled
-WebSocket and event idioms per source file. Field-access analysis also copies
-the graph for each file. The patch reuses this setup across a scan. To build the patched
-engine from a v0.11.0 checkout:
-
-```bash
-git apply /path/to/parallax/patches/lain-0.11.0-indexing-performance.patch
-cargo test --lib server::sensors::
-cargo build --release --bin lain --bin lain-git-sidecar
-./target/release/lain server --config /path/to/repos.yaml --transport http --port 9999
-```
+The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
+is superseded: v0.13.0 includes that work, so no patch is needed.
 
 Point Parallax at that server:
 
@@ -151,7 +140,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-0.11.0 pnpm gate:graphql
+LAIN_BIN=/path/to/lain-0.13.0 pnpm gate:graphql
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the

@@ -1,6 +1,6 @@
 // Self-contained release gate: every graph fact comes from committed source
 // scanned by the released binary. No graph/database state is hand-inserted.
-// LAIN_BIN=/path/to/lain-0.11.0 pnpm gate:graphql
+// LAIN_BIN=/path/to/lain-0.13.0 pnpm gate:graphql
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
@@ -103,7 +103,7 @@ async function start(providesGraphql: boolean, binding?: string): Promise<LainAd
     }
   }
   const lain = await createLainClient({ lainUrl: url, apiVersion: '1', maxRetries: 0 });
-  assert.equal(lain.analyzerVersion, '0.11.0');
+  assert.equal(lain.analyzerVersion, '0.13.0');
   await waitForIndexedRepos(lain, repoNames, 60_000);
   return lain;
 }
