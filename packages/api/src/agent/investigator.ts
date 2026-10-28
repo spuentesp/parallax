@@ -34,6 +34,7 @@ import {
   type LainDispatcher,
   type Receipt,
 } from './dispatcher.js';
+import { memoizeReads } from './memo-lain.js';
 import {
   type ChatMessage,
   hasTextToolCall,
@@ -215,7 +216,7 @@ Method:
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
 6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.
-7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. If you state any file:line in your answer you MUST add a location claim for it (an answer with file:line and no location claim is sent back). Every file:line you state goes in a location claim (repo, path, line, and "contains": the exact symbol or text that must be on or within a few lines of that line): the engine reads the code back and verifies it. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
+7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. If you state any file:line in your answer you MUST add a location claim for it (an answer with file:line and no location claim is sent back). Every file:line you state goes in a location claim (repo, path, line, and "contains": the exact symbol or text that must be on or within a few lines of that line): the engine reads the code back and verifies it (if the location comes from an engine evidence id, also put that id in the claim's "evidence", and make "contains" a name that is literally in the source). Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
 8. Copy each file path exactly as a tool printed it. Start the answer with the finding itself: never restate the question, the task or the workspace map. A location claim's line must be a line you actually saw in a tool result (where the symbol is defined or used), never a guess such as line 1.
 9. Keep "answer" short (about 200 words): summarize and cite a few representative evidence ids; do not enumerate every endpoint. The claims carry the checkable facts, and a reply that is too long is cut off and lost.`;
 
@@ -318,7 +319,9 @@ export function detectClassificationConflicts(
  * un fallo del modelo deja el estado failed:<reason> con el traza medido; la
  * parte estructural (aristas observadas) sobrevive al fallo.
  */
-export async function investigate(opts: InvestigateOptions): Promise<InvestigationResult> {
+export async function investigate(raw: InvestigateOptions): Promise<InvestigationResult> {
+  // Las lecturas pesadas repetidas (get_service) se hacen una vez por investigación.
+  const opts: InvestigateOptions = { ...raw, lain: memoizeReads(raw.lain) };
   const budget: InvestigatorBudget = {
     maxToolCalls: Math.min(
       opts.budget?.maxToolCalls ?? DEFAULT_INVESTIGATOR_BUDGET.maxToolCalls,

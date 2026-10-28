@@ -3,7 +3,7 @@
 // Not found…", "Config error…") con un motor falso en el borde.
 
 import { describe, expect, it } from 'vitest';
-import { Claim, SubmitAnswerArgs, verifyClaims } from '../src/agent/claims.js';
+import { Claim, parseAnchorId, SubmitAnswerArgs, verifyClaims } from '../src/agent/claims.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
 
@@ -136,6 +136,75 @@ describe('location claims', () => {
     const [r] = await verifyClaims([loc({ repo: 'saleor', path: 'saleor/nope.py' })], deps(lain));
     expect(r?.verdict).toBe('contradicted');
     expect(calls).toHaveLength(2);
+  });
+
+  it('parses the path and line out of an engine anchor id, even when the name carries colons', () => {
+    expect(
+      parseAnchorId(
+        'saleor:Function:saleor/checkout/delivery_context.py:assign_delivery_method_to_checkout:771',
+      ),
+    ).toEqual({ path: 'saleor/checkout/delivery_context.py', line: 771 });
+    expect(
+      parseAnchorId(
+        'storefront:Function:src/checkout/graphql/checkout.graphql:graphql-call%3Amutation%3AcheckoutLinesUpdate:205',
+      ),
+    ).toEqual({ path: 'src/checkout/graphql/checkout.graphql', line: 205 });
+    expect(
+      parseAnchorId(
+        'saleor:HttpRoute:saleor/urls.py:ANY ^plugins/(?P<plugin_id>[.0-9A-Za-z_\\-]+)/:35',
+      ),
+    ).toEqual({ path: 'saleor/urls.py', line: 35 });
+    expect(parseAnchorId('not an anchor')).toBeNull();
+  });
+
+  it('an engine anchor that resolves to the same file and line verifies the location, even if the "text" is the node\'s synthetic name', async () => {
+    const { lain, calls } = engine(() => FILE);
+    const anchor =
+      'storefront:Function:src/checkout/graphql/checkout.graphql:graphql-call%3Amutation%3AcheckoutLinesUpdate:205';
+    const withEv = (line: number) =>
+      loc({
+        repo: 'storefront',
+        path: 'src/checkout/graphql/checkout.graphql',
+        line,
+        contains: 'graphql-call:mutation:checkoutLinesUpdate',
+        evidence: [anchor],
+      });
+    const d = {
+      ...deps(lain, ['storefront']),
+      validateRefs: async (refs: string[]) => ({ accepted: refs, receipts: [], rejected: [] }),
+    };
+    const [ok] = await verifyClaims([withEv(205)], d);
+    expect(ok?.verdict).toBe('verified');
+    expect(ok?.reason).toMatch(
+      /anchor the engine delivered resolves to storefront:src\/checkout\/graphql\/checkout\.graphql:205/,
+    );
+    expect(calls).toHaveLength(0); // no hizo falta releer el código
+    // Un ancla de OTRA línea no respalda esta: se cae a leer el código, y el texto no está.
+    const [bad] = await verifyClaims([withEv(300)], d);
+    expect(bad?.verdict).toBe('contradicted');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('an anchor the backend did not deliver gives no support (the id is not taken on faith)', async () => {
+    const { lain } = engine(() => FILE);
+    const d = {
+      ...deps(lain),
+      validateRefs: async () => ({
+        accepted: [],
+        receipts: [],
+        rejected: [{ ref: 'x', reason: 'not delivered' }],
+      }),
+    };
+    const [r] = await verifyClaims(
+      [
+        loc({
+          evidence: ['saleor:Function:saleor/checkout/utils.py:made_up:440'],
+          contains: 'nothere',
+        }),
+      ],
+      d,
+    );
+    expect(r?.verdict).toBe('contradicted');
   });
 
   it('the schema demands what makes it checkable: a line and the text that must be there', () => {

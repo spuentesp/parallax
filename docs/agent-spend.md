@@ -74,3 +74,24 @@ The chat summary no longer prints misleading zeros ("0 verified" next to 4 *supp
 
 - Variance: the model sometimes submits `note` claims where `relation` or `location` claims would be verifiable; the loop nudges once, it does not loop.
 - `INVESTIGATOR_THINKING` is exposed for experiments; the measured default is "leave unset".
+
+
+## Update: the guided tour, measured chapter by chapter (2026-10-28, evening)
+
+Four model chapters in one conversation on Saleor (3 → 6, "add a delivery note to checkout"), model default thinking.
+
+| Stage | Chapter times (s) | Total | Claims (verified / contradicted / other) |
+|---|---|---|---|
+| Start of the day | 52 · 103 · 156 · 122 | **433 s** | mostly unverifiable |
+| After the first guards + location claims | 52 · 103 · 156 · 122 (same loop) | 433 s | 4/4, 4/6, 6/7, 2/4 |
+| After the fixes below | **60 · 36 · 34 · 63** | **193 s** | 2/4 · 5/5 · 5/5 · 5/8 (2 contradicted: real model mistakes) |
+
+What the real runs found, in order:
+
+1. **A degenerate reply, not slow thinking.** With the final call forced to `submit_answer`, the model answered with **256–280 identical tool calls in one reply** (`finish: length`, 4,096 output tokens). The loop answered each one, so the history grew 16k → 56k input tokens over three rounds at 16–24 s each. Fix: forced rounds ask for one call (`parallel_tool_calls: false`) and **at most 8 calls (1 when forced) are accepted from any single reply**. Measured on the same chapter: model time 92 s → 21 s, input 200k → 113k tokens, every round 1–5 s.
+2. **Heavy reads repeated.** `get_service` (660 KB, ~4 s) was fetched by the tool, by `consumers_of` and once per relation claim. It is now read once per investigation; the structural topology is built in parallel with the investigation and reused for 5 minutes.
+3. **A bug the tests could not see:** memoising the adapter with `{...lain}` dropped every method of the real client (it is a class; the test mock is a plain object), so the model could not read code and every claim became "supported/unsupported". Found because verification suddenly fell to zero in the real run; fixed with a `Proxy` and a class-based test.
+4. **Verification fixes:** a path with the repo name added or dropped is tried both ways (Saleor's repo has a top-level folder with the same name); a location claim can cite an engine evidence id that resolves to the same `path:line` (the engine's synthetic names like `graphql-call:mutation:x` are not literal source text); the prompt says to copy paths exactly as the tool printed them and never to guess a line.
+5. **Chapter 3 asked for the impossible** ("trace ONE request" for a feature that does not exist yet). It now traces the closest existing request in at most five hops and stops at the first hop it cannot find.
+
+The remaining wait is the model reading code (34–54 s per chapter) plus the engine; the UI shows what is happening and for how long.

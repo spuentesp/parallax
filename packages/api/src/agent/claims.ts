@@ -46,6 +46,8 @@ const LocationClaim = z
     contains: z.string().min(1).max(200),
     /** Lo que la respuesta afirma que hay ahí, en una frase. */
     text: z.string().min(1),
+    /** Ids de evidencia que el motor entregó para este lugar (p. ej. el ancla de una llamada GraphQL). */
+    evidence: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -248,12 +250,35 @@ async function verifyRelation(
 /** Líneas ± alrededor de la citada donde se busca `contains`. */
 const LOCATION_WINDOW = 5;
 
+/** `repo:Tipo:ruta:nombre:línea` → ruta y línea del ancla (el nombre puede llevar ':'). */
+export function parseAnchorId(id: string): { path: string; line: number } | null {
+  const m = /^[^:]+:[^:]+:([^:]+):.*:(\d+)$/.exec(id);
+  return m ? { path: m[1] as string, line: Number(m[2]) } : null;
+}
+
+const samePath = (a: string, b: string): boolean =>
+  a === b || a.endsWith(`/${b}`) || b.endsWith(`/${a}`);
+
 async function verifyLocation(
   claim: Extract<Claim, { kind: 'location' }>,
   deps: ClaimVerifierDeps,
+  evidence: ClaimEvidence,
 ): Promise<ClaimResult> {
   const where = `${claim.repo}:${claim.path}:${claim.line}`;
-  const base = { claim, evidence: NO_EVIDENCE };
+  const base = { claim, evidence };
+  // Un ancla que el motor entregó y que resuelve a ESTE archivo y línea lo respalda,
+  // aunque el "texto" sea el nombre sintético del nodo (graphql-call:…) y no esté
+  // literalmente en el código.
+  const anchor = evidence.accepted
+    .map(parseAnchorId)
+    .find((a) => a !== null && a.line === claim.line && samePath(a.path, claim.path));
+  if (anchor) {
+    return {
+      ...base,
+      verdict: 'verified',
+      reason: `an anchor the engine delivered resolves to ${where}`,
+    };
+  }
   if (deps.hasRepo && !(await deps.hasRepo(claim.repo))) {
     return {
       ...base,
@@ -329,11 +354,11 @@ export async function verifyClaims(
 ): Promise<ClaimResult[]> {
   const out: ClaimResult[] = [];
   for (const claim of claims) {
+    const evidence = claim.evidence?.length ? await deps.validateRefs(claim.evidence) : NO_EVIDENCE;
     if (claim.kind === 'location') {
-      out.push(await verifyLocation(claim, deps));
+      out.push(await verifyLocation(claim, deps, evidence));
       continue;
     }
-    const evidence = claim.evidence?.length ? await deps.validateRefs(claim.evidence) : NO_EVIDENCE;
     if (claim.kind === 'relation') {
       out.push(await verifyRelation(claim, deps, evidence));
       continue;

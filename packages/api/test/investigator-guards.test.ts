@@ -208,3 +208,67 @@ describe('investigate — the loop converges', () => {
     expect(assistant?.tool_calls?.length).toBe(8);
   });
 });
+
+import { memoizeReads } from '../src/agent/memo-lain.js';
+
+describe('memoizeReads — the heavy read is paid once per investigation', () => {
+  it('the same get_service/list call is answered from memory; different arguments are not', async () => {
+    let n = 0;
+    const base = createLainMock();
+    const lain = {
+      ...base,
+      getService: async (a: never) => {
+        n++;
+        return base.getService(a);
+      },
+    };
+    const m = memoizeReads(lain as never);
+    const a = await m.getService({ snapshot: 'live', service: 'billing' } as never);
+    const b = await m.getService({ snapshot: 'live', service: 'billing' } as never);
+    await m.getService({ snapshot: 'live', service: 'orders' } as never);
+    expect(b).toBe(a);
+    expect(n).toBe(2);
+  });
+
+  it('works with a CLASS-based adapter (the real client): prototype methods survive, `this` still works', async () => {
+    class RealLike {
+      readonly analyzerVersion = 't';
+      readonly apiVersion = '1' as const;
+      private calls = 0;
+      async getService() {
+        this.calls++;
+        return { consumers: [], calls: this.calls };
+      }
+      async getCodeSnippet(a: { path: string }) {
+        return { text: `code of ${a.path} (${this.analyzerVersion})` };
+      }
+      async codeTool(tool: string) {
+        return { text: `ran ${tool}` };
+      }
+    }
+    const m = memoizeReads(new RealLike() as never) as unknown as RealLike;
+    expect((await m.getCodeSnippet({ path: 'a.ts' })).text).toBe('code of a.ts (t)');
+    expect((await m.codeTool('search_code')).text).toBe('ran search_code');
+    const x = (await m.getService()) as { calls: number };
+    const y = (await m.getService()) as { calls: number };
+    expect(y).toBe(x);
+    expect(x.calls).toBe(1);
+    expect(m.analyzerVersion).toBe('t');
+  });
+
+  it('a failure is not remembered: the next attempt asks again', async () => {
+    let n = 0;
+    const lain = {
+      ...createLainMock(),
+      listServices: async () => {
+        n++;
+        if (n === 1) throw new Error('boom');
+        return { items: [], scope: { configured_only: true, reviewed: [], unreviewed: [] } };
+      },
+    };
+    const m = memoizeReads(lain as never);
+    await expect(m.listServices({ snapshot: 'live' } as never)).rejects.toThrow('boom');
+    await expect(m.listServices({ snapshot: 'live' } as never)).resolves.toBeTruthy();
+    expect(n).toBe(2);
+  });
+});

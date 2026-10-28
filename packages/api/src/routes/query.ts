@@ -109,6 +109,24 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
   const perHour = app.config.queryRateLimitPerHour ?? 0;
   const limiter = perHour > 0 ? createWindowLimiter({ limit: perHour, windowMs: 3_600_000 }) : null;
   const conversations = createConversationStore(app.db);
+  // La topología estructural cambia poco: se reutiliza unos minutos por workspace.
+  const TOPOLOGY_TTL_MS = 5 * 60_000;
+  const topologyCache = new Map<string, { at: number; value: TopologyViewData }>();
+  const topologyFor = async (
+    orgId: string,
+    build: () => Promise<TopologyViewData>,
+  ): Promise<TopologyViewData> => {
+    const hit = topologyCache.get(orgId);
+    if (hit && Date.now() - hit.at < TOPOLOGY_TTL_MS) return hit.value;
+    try {
+      const value = await build();
+      topologyCache.set(orgId, { at: Date.now(), value });
+      return value;
+    } catch {
+      // Un LAIN caído no impide responder con explanation_status de fallo.
+      return EMPTY_TOPOLOGY;
+    }
+  };
   const resolveWorkspaceLain = createWorkspaceLainResolver({
     db: app.db,
     defaultAdapter: app.lain,
@@ -166,15 +184,13 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
 
       // Análisis estructural SIEMPRE, con o sin modelo (P08): la topología
       // no depende de Nemotron.
-      let topology: TopologyViewData = EMPTY_TOPOLOGY;
-      try {
-        topology = await buildEndpointTopology(lain);
-      } catch {
-        // Un LAIN caído no impide responder con explanation_status de fallo.
-      }
+      // Se pide ya y se espera al final: no retrasa al investigador (en Saleor son ~10 s
+      // de lecturas pesadas), y se reutiliza unos minutos entre preguntas.
+      const topologyP = topologyFor(orgId, () => buildEndpointTopology(lain));
 
       const model = investigatorModel(app.config);
       if (!model) {
+        const topology = await topologyP;
         // Fallo visible, no un silencio: la explicación no existe y el motivo
         // queda en el estado (INV: nunca fingir que el modelo explicó).
         return {
@@ -206,6 +222,8 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
         endpointLabel: model.settings.baseUrl,
       });
+
+      const topology = await topologyP;
 
       // El foco sólo puede nombrar nodos que el MAPA tiene: se valida contra el
       // mismo grafo cacheado que sirve /map/view. Un workspace sin LAIN propio

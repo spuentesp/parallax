@@ -53,7 +53,7 @@ export const CHAPTERS: Chapter[] = [
     asks: 'What really happens when someone does this?',
     kind: 'ask',
     prompt: ({ role, task }) =>
-      `My task is: "${task}". Pick the EXISTING request that is closest to what my task needs (if my task is a new feature, the nearest feature that already works; say which one you chose and why) and trace it end to end across the repositories: which UI code starts it, which API operation receives it, which resolver and domain function handle it, and which side effects or background tasks follow. ${startFrom(role)} ${EVIDENCE}`,
+      `My task is: "${task}". Pick the EXISTING request that is closest to what my task needs (if my task is a new feature, the nearest feature that already works; say which one you chose and why) and trace it across the repositories in at most five hops: the UI code that starts it, the API operation that receives it, the resolver, the domain function, and (only if you actually find one) a side effect or background task. Stop at the first hop you cannot find and say so. ${startFrom(role)} ${EVIDENCE}`,
   },
   {
     n: 4,
