@@ -4,6 +4,8 @@
 /* biome-ignore-all lint/suspicious/noExplicitAny: test-only mock */
 /* biome-ignore-all lint/correctness/noUnusedImports: polyfill */
 
+import { afterAll, beforeEach } from 'vitest';
+
 if (typeof HTMLCanvasElement !== 'undefined') {
   (HTMLCanvasElement.prototype as any).getContext = () => ({
     fillRect: () => {},
@@ -64,6 +66,16 @@ if (typeof globalThis.IntersectionObserver === 'undefined') {
     observe() {}
     unobserve() {}
     disconnect() {}
-    takeRecords() { return []; }
+    takeRecords() {
+      return [];
+    }
   };
 }
+
+// Borde de red para los tests: MSW intercepta fetch. Un request sin handler
+// falla el test (regla AGENTS.md #2: mock solo en el borde de proceso).
+import { server } from './msw.js';
+
+server.listen({ onUnhandledRequest: 'error' });
+beforeEach(() => server.resetHandlers());
+afterAll(() => server.close());

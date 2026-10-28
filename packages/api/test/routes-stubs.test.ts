@@ -25,15 +25,17 @@ describe('stub routes (assessments, proposals, publications)', () => {
 
   const auth = { authorization: 'Bearer t' };
 
-  it('POST /assessments with valid input returns 501 with NotImplemented', async () => {
+  it('POST /publications is refused: dry run, nothing is ever sent', async () => {
     const r = await app.inject({
       method: 'POST',
-      url: '/api/assessments',
+      url: '/api/publications',
       headers: auth,
-      payload: { prUrl: 'https://github.com/org/repo/pull/1', orgId: 'o' },
+      payload: { assessmentId: 'a_1', target: 'github:org/repo#1' },
     });
     expect(r.statusCode).toBe(501);
     expect(r.json().code).toBe('NotImplemented');
+    expect(r.body).toMatch(/dry run/i);
+    expect(r.body).toMatch(/nothing is ever sent to GitHub/i);
   });
 
   it('POST /assessments with invalid body returns 400 (Problem Details)', async () => {
@@ -46,18 +48,18 @@ describe('stub routes (assessments, proposals, publications)', () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it('GET /assessments/:id returns 501', async () => {
+  it('GET /assessments/:id returns 404 for an unknown assessment', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/assessments/a_1', headers: auth });
-    expect(r.statusCode).toBe(501);
+    expect(r.statusCode).toBe(404);
   });
 
-  it('GET /assessments/:id/events returns 501', async () => {
+  it('GET /assessments/:id/events returns 404 for an unknown assessment', async () => {
     const r = await app.inject({
       method: 'GET',
       url: '/api/assessments/a_1/events',
       headers: auth,
     });
-    expect(r.statusCode).toBe(501);
+    expect(r.statusCode).toBe(404);
   });
 
   it('POST /proposals returns 501', async () => {

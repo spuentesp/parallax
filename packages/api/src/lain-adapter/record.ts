@@ -4,13 +4,23 @@ export interface MockCall {
     | 'get_service'
     | 'prepare_snapshot'
     | 'get_snapshot'
+    | 'list_contracts'
+    | 'get_contract'
+    | 'list_unresolved'
+    | 'check_binding'
     | 'diff_contracts'
     | 'trace_impact'
     | 'get_coverage'
     | 'resolve_evidence'
-    | 'read_source';
+    | 'read_source'
+    | 'query_graph'
+    | 'describe_schema'
+    | 'load_package'
+    | 'get_code_snippet'
+    | 'explain_symbol'
+    | 'get_call_sites';
   readonly args: unknown;
-  readonly view?: string;
+  readonly snapshot?: string;
   readonly at: number;
 }
 

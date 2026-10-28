@@ -1,0 +1,859 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 3395a500..7ac1825f 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -3,6 +3,21 @@
+ All notable changes to LAIN are documented here. Versions follow
+ [Semantic Versioning](https://semver.org/).
+ 
++## Unreleased
++
++### Fixed
++
++- Large-workspace indexing: GraphQL SDL keyword probes now reuse validated
++  strings instead of validating the entire schema for every token. HTTP route
++  and client scans reuse compiled tree-sitter queries per framework within a
++  scan, and rebuild them after loading each scan's configuration. Fixed router
++  prefix regexes and bundled WebSocket idioms compile once instead of once
++  per file. Event scans compile topic and schedule idioms once per language
++  per scan, preserving repository-local overrides. Field-access scans collect
++  outbound call sites once instead of cloning the graph for each file. Source
++  locations, provider/consumer facts and per-repository overrides retain their
++  existing semantics.
++
+ ## 0.11.0 — 2026-10-20
+ 
+ ### Added
+diff --git a/src/server/sensors/event_sensor.rs b/src/server/sensors/event_sensor.rs
+index c6295312..c9eeb732 100644
+--- a/src/server/sensors/event_sensor.rs
++++ b/src/server/sensors/event_sensor.rs
+@@ -71,6 +71,17 @@ use crate::server::sensors::util_tokenize::strip_line_comment;
+ use std::collections::{BTreeMap, BTreeSet};
+ use std::path::Path;
+ 
++type TopicIdioms = (
++    Vec<util::CompiledIdiom>,
++    Vec<util::CompiledIdiom>,
++    Vec<util::CompiledIdiom>,
++);
++
++#[cfg(test)]
++thread_local! {
++    static IDIOM_SET_COMPILE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
++}
++
+ const DEFAULT_BROKER: &str = "kafka";
+ 
+ /// Hub identity anchor — the `path` component of the hub's ID only.
+@@ -134,6 +145,7 @@ pub fn scan_workspace_event(
+ 
+     // Load once per scan so every site uses the same repo-local patterns.
+     let patterns = Patterns::with_overrides(root)?;
++    let mut idioms: Vec<(Lang, TopicIdioms)> = Vec::new();
+ 
+     let mut all_nodes: Vec<GraphNode> = Vec::new();
+     let mut all_edges: Vec<GraphEdge> = Vec::new();
+@@ -153,9 +165,21 @@ pub fn scan_workspace_event(
+     };
+     for (path, content, ext) in crate::server::sensors::util::scan_files(root, any_ext) {
+         let ext = ext.as_str();
++        let Some(lang) = ext_to_lang(ext) else {
++            continue;
++        };
++        let index = idioms
++            .iter()
++            .position(|(cached_lang, _)| *cached_lang == lang)
++            .unwrap_or_else(|| {
++                #[cfg(test)]
++                IDIOM_SET_COMPILE_COUNT.with(|count| count.set(count.get() + 1));
++                idioms.push((lang, util::topic_idioms_for(&patterns, lang)));
++                idioms.len() - 1
++            });
+         let path_str = graph_path(root, &path);
+         let constants = collect_same_file_constants(&content, ext);
+-        let sites = detect_sites(&content, ext, &constants, &patterns);
++        let sites = detect_sites(&content, ext, &constants, &idioms[index].1);
+         let (nodes, edges) =
+             emit_sites(&sites, &path_str, namespace, graph, &mut emitted_topic_ids);
+         all_nodes.extend(nodes);
+@@ -401,14 +425,10 @@ fn detect_sites(
+     content: &str,
+     ext: &str,
+     constants: &BTreeMap<String, String>,
+-    patterns: &Patterns,
++    idioms: &TopicIdioms,
+ ) -> Vec<DetectedSite> {
+     let mut out: Vec<DetectedSite> = Vec::new();
+-    let lang = match ext_to_lang(ext) {
+-        Some(l) => l,
+-        None => return out,
+-    };
+-    let (producers, consumers, scheduled) = util::topic_idioms_for(patterns, lang);
++    let (producers, consumers, scheduled) = idioms;
+     let lines: Vec<&str> = content.lines().collect();
+     for (idx, raw) in lines.iter().enumerate() {
+         let line_num = idx as u32 + 1;
+@@ -420,7 +440,7 @@ fn detect_sites(
+         if trimmed.is_empty() {
+             continue;
+         }
+-        for m in util::walk_idioms(&producers, line, line_num) {
++        for m in util::walk_idioms(producers, line, line_num) {
+             if let Some(value) = resolve_idiom_capture(&m, constants) {
+                 out.push(DetectedSite {
+                     kind: SiteKind::Produces,
+@@ -431,7 +451,7 @@ fn detect_sites(
+                 });
+             }
+         }
+-        for m in util::walk_idioms(&consumers, line, line_num) {
++        for m in util::walk_idioms(consumers, line, line_num) {
+             match resolve_idiom_capture(&m, constants) {
+                 Some(value) => out.push(DetectedSite {
+                     kind: SiteKind::Consumes,
+@@ -464,7 +484,7 @@ fn detect_sites(
+                 }
+             }
+         }
+-        for m in util::walk_idioms(&scheduled, line, line_num) {
++        for m in util::walk_idioms(scheduled, line, line_num) {
+             // The walker returns the spec (or a Celery-marker
+             // match with no spec). Project to `(topic, owner_name,
+             // broker)` based on the framework id.
+@@ -915,6 +935,43 @@ mod tests {
+         p
+     }
+ 
++    #[test]
++    fn workspace_compiles_event_idioms_once_per_language_and_reloads_on_rescan() {
++        let dir = tempfile::tempdir().unwrap();
++        for index in 0..16 {
++            std::fs::write(
++                dir.path().join(format!("producer{index}.ts")),
++                format!("producer.send({{ topic: 'orders.{index}' }});"),
++            )
++            .unwrap();
++        }
++        let graph = empty_db();
++        let ns = RepoNamespace::for_test();
++        IDIOM_SET_COMPILE_COUNT.with(|count| count.set(0));
++        scan_workspace_event(&graph, dir.path(), &ns).unwrap();
++        assert_eq!(IDIOM_SET_COMPILE_COUNT.with(|count| count.get()), 1);
++        assert_eq!(
++            graph
++                .all_nodes()
++                .iter()
++                .filter(|n| n.node_type == NodeType::Topic)
++                .count(),
++            16
++        );
++        std::fs::write(dir.path().join("producer0.ts"), "// removed producer").unwrap();
++        IDIOM_SET_COMPILE_COUNT.with(|count| count.set(0));
++        scan_workspace_event(&graph, dir.path(), &ns).unwrap();
++        assert_eq!(IDIOM_SET_COMPILE_COUNT.with(|count| count.get()), 1);
++        assert_eq!(
++            graph
++                .all_nodes()
++                .iter()
++                .filter(|n| n.node_type == NodeType::Topic)
++                .count(),
++            15
++        );
++    }
++
+     #[test]
+     fn escaped_backslash_before_comment_does_not_emit_phantom_topic() {
+         let dir = tempfile::tempdir().unwrap();
+diff --git a/src/server/sensors/field_access_sensor.rs b/src/server/sensors/field_access_sensor.rs
+index 2aff4c4a..cf947289 100644
+--- a/src/server/sensors/field_access_sensor.rs
++++ b/src/server/sensors/field_access_sensor.rs
+@@ -174,6 +174,7 @@ pub fn scan_workspace_field_access(
+     // we collect them here so rule 5/6 can find the calling /
+     // callee relationships.
+     let calls_by_function: BTreeMap<String, BTreeSet<String>> = collect_calls_by_function(graph);
++    let http_calls = collect_http_calls(graph);
+ 
+     // Wrap the per-file emission + scope walk in
+     // `with_current_patterns` so the deep walker helpers
+@@ -186,12 +187,11 @@ pub fn scan_workspace_field_access(
+         let by_lang = |p: &Path| lang_for_path(&p.to_string_lossy());
+         for (path, content, lang) in super::util::scan_files(root, by_lang) {
+             let path_str = graph_path(root, &path);
+-            emissions.extend(detect_emissions(
++            emissions.extend(detect_emissions_with_http_calls(
+                 &path_str,
+                 &content,
+                 lang,
+-                graph,
+-                &calls_by_function,
++                &http_calls,
+             ));
+         }
+ 
+@@ -335,6 +335,11 @@ struct CallSite {
+     consumer_line: u32,
+ }
+ 
++#[cfg(test)]
++thread_local! {
++    static HTTP_CALL_COLLECTION_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
++}
++
+ /// Discover every outbound HTTP call site in this repo. We look up
+ /// the `SendsHttp` edges the http_client_sensor wrote in phase one
+ /// and record the call id plus the source path and line. Used both
+@@ -343,6 +348,8 @@ struct CallSite {
+ ///
+ /// Reserved for PR 9.
+ fn collect_http_calls(graph: &GraphDatabase) -> BTreeMap<String, CallSite> {
++    #[cfg(test)]
++    HTTP_CALL_COLLECTION_COUNT.with(|count| count.set(count.get() + 1));
+     let mut out: BTreeMap<String, CallSite> = BTreeMap::new();
+     let nodes = graph.get_all_nodes();
+     let calls: BTreeMap<String, String> = nodes
+@@ -401,14 +408,22 @@ pub fn detect_emissions(
+     lang: Lang,
+     graph: &GraphDatabase,
+     _calls_by_function: &BTreeMap<String, BTreeSet<String>>,
++) -> Vec<FieldAccessEmission> {
++    detect_emissions_with_http_calls(path, content, lang, &collect_http_calls(graph))
++}
++
++fn detect_emissions_with_http_calls(
++    path: &str,
++    content: &str,
++    lang: Lang,
++    calls: &BTreeMap<String, CallSite>,
+ ) -> Vec<FieldAccessEmission> {
+     let Some(tree) = parse(lang, content) else {
+         return Vec::new();
+     };
+     let src = content.as_bytes();
+-    let calls = collect_http_calls(graph);
+     let mut emissions: Vec<FieldAccessEmission> = Vec::new();
+-    for (function_id, call_site) in &calls {
++    for (function_id, call_site) in calls {
+         // Only call sites that live in the file being scanned —
+         // anything else would analyze this file's tree against
+         // another file's call line.
+@@ -6111,7 +6126,20 @@ async function fetch_data() { return await fetch(\"/a\"); }
+             call_line,
+         );
+         let repo_id = RepoId::new("fixture").unwrap();
++        for index in 0..16 {
++            write_py(
++                root,
++                &format!("src/extra{index}.py"),
++                "def local():\n    return 1\n",
++            );
++        }
++        HTTP_CALL_COLLECTION_COUNT.with(|count| count.set(0));
+         scan_workspace_field_access(&graph, root, &ns, &repo_id).unwrap();
++        assert_eq!(
++            HTTP_CALL_COLLECTION_COUNT.with(|count| count.get()),
++            1,
++            "workspace scan must collect the graph's HTTP calls once, regardless of file count"
++        );
+ 
+         // Gap 1: the caller frame's read landed — S's own frame
+         // never touches `customer_id`, so this FieldRef can only come
+diff --git a/src/server/sensors/graphql_provider_sensor.rs b/src/server/sensors/graphql_provider_sensor.rs
+index d5b3908d..e067cff1 100644
+--- a/src/server/sensors/graphql_provider_sensor.rs
++++ b/src/server/sensors/graphql_provider_sensor.rs
+@@ -35,6 +35,7 @@ use crate::federation::contracts::model::{
+ };
+ use crate::graph::{graph_path, GraphDatabase, SensorOwner};
+ use crate::schema::{EdgeType, GraphEdge, GraphNode, NodeType, RepoNamespace};
++use crate::server::sensors::util_tokenize::starts_with_keyword;
+ use std::path::Path;
+ 
+ // ─── Public sensor shape ───────────────────────────────────────────────
+@@ -318,7 +319,7 @@ fn extract_root_type_blocks(content: &str) -> Vec<RootTypeBlock> {
+             i += 1;
+             continue;
+         }
+-        if starts_with_keyword(bytes, i, "type") {
++        if starts_with_keyword(content, i, "type") {
+             // Consume `type`.
+             i += "type".len();
+             while i < bytes.len() && (bytes[i] as char).is_ascii_whitespace() {
+@@ -341,7 +342,7 @@ fn extract_root_type_blocks(content: &str) -> Vec<RootTypeBlock> {
+             // `implements A & B` clause between the type name
+             // and the `{`. Consume them before requiring the
+             // opening brace.
+-            let Some(brace_pos) = skip_type_modifiers(bytes, i, &mut line_no) else {
++            let Some(brace_pos) = skip_type_modifiers(content, i, &mut line_no) else {
+                 continue;
+             };
+             i = brace_pos;
+@@ -418,7 +419,7 @@ pub fn extract_object_type_blocks(content: &str) -> Vec<ObjectTypeBlock> {
+             i += 1;
+             continue;
+         }
+-        if starts_with_keyword(bytes, i, "type") {
++        if starts_with_keyword(&joined, i, "type") {
+             i += "type".len();
+             while i < bytes.len() && (bytes[i] as char).is_ascii_whitespace() {
+                 if bytes[i] == b'\n' {
+@@ -442,7 +443,7 @@ pub fn extract_object_type_blocks(content: &str) -> Vec<ObjectTypeBlock> {
+             }
+             // Federation SDL allows `@directive(...)` and
+             // `implements A & B` between the name and the `{`.
+-            let Some(brace_pos) = skip_type_modifiers(bytes, i, &mut line_no) else {
++            let Some(brace_pos) = skip_type_modifiers(&joined, i, &mut line_no) else {
+                 continue;
+             };
+             i = brace_pos;
+@@ -484,24 +485,6 @@ pub fn extract_object_type_blocks(content: &str) -> Vec<ObjectTypeBlock> {
+     out
+ }
+ 
+-/// True when `bytes[at..]` starts with `kw` and the surrounding
+-/// characters are word boundaries (the byte before is not
+-/// alphanumeric / `_`, and the byte after is not alphanumeric /
+-/// `_`). The graphql SDL grammar is open enough that
+-/// `starts_with_keyword(bytes, 0, "type")` must not match
+-/// `types` or `atype` — without the boundary check those would
+-/// land in the field-parser's identifier path and yield junk.
+-/// Thin wrapper around
+-/// `crate::server::sensors::util_tokenize::starts_with_keyword` so
+-/// the per-sensor API stays unchanged.
+-fn starts_with_keyword(bytes: &[u8], at: usize, kw: &str) -> bool {
+-    let s = match std::str::from_utf8(bytes) {
+-        Ok(s) => s,
+-        Err(_) => return false,
+-    };
+-    crate::server::sensors::util_tokenize::starts_with_keyword(s, at, kw)
+-}
+-
+ fn is_ident_continue(b: u8) -> bool {
+     (b as char).is_ascii_alphanumeric() || b == b'_'
+ }
+@@ -513,7 +496,8 @@ fn is_ident_continue(b: u8) -> bool {
+ /// the type-name reader must allow it. Returns the position of
+ /// the `{` on success, or `None` when the next non-space byte
+ /// is neither a directive, an `implements` clause, nor `{`.
+-fn skip_type_modifiers(bytes: &[u8], at: usize, line_no: &mut u32) -> Option<usize> {
++fn skip_type_modifiers(content: &str, at: usize, line_no: &mut u32) -> Option<usize> {
++    let bytes = content.as_bytes();
+     let mut i = at;
+     let mut consumed = false;
+     loop {
+@@ -558,7 +542,7 @@ fn skip_type_modifiers(bytes: &[u8], at: usize, line_no: &mut u32) -> Option<usi
+             consumed = true;
+             continue;
+         }
+-        if starts_with_keyword(bytes, i, "implements") {
++        if starts_with_keyword(content, i, "implements") {
+             i += "implements".len();
+             loop {
+                 while i < bytes.len() && (bytes[i] as char).is_ascii_whitespace() {
+@@ -731,6 +715,33 @@ fn parse_field_decls(from: &str) -> Vec<FieldDecl> {
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn parses_large_sdl_without_revalidating_the_document_per_token() {
++        // Large schemas have many non-root declarations. A whole-document
++        // UTF-8 check at every keyword probe made this input quadratic.
++        let mut source =
++            String::from("\"\"\"Catalog description: café ☕\"\"\"\n# schema documentation\n");
++        for i in 0..65_536 {
++            source.push_str(&format!("scalar Scalar{i}\n"));
++        }
++        source.push_str("type Query { product: Product }\ntype Product { id: ID! }\n");
++        let started = std::time::Instant::now();
++        let providers = parse_sdl_providers(&source, "large.graphql");
++        let objects = extract_object_type_blocks(&source);
++        assert_eq!(providers.len(), 1);
++        assert_eq!(providers[0].field, "product");
++        assert_eq!(providers[0].site.path, "large.graphql");
++        assert!(providers[0].site.line > 65_536);
++        assert_eq!(objects.len(), 1);
++        assert_eq!(objects[0].name, "Product");
++        assert_eq!(objects[0].fields[0].name, "id");
++        assert_eq!(objects[0].fields[0].return_type, "ID!");
++        assert!(
++            started.elapsed() < std::time::Duration::from_secs(5),
++            "a 1 MiB SDL must parse within five seconds, including in debug builds"
++        );
++    }
++
+     #[test]
+     fn parses_query_root_fields() {
+         let src = "\
+diff --git a/src/server/sensors/http_client_sensor.rs b/src/server/sensors/http_client_sensor.rs
+index 58fd4e6f..919737ed 100644
+--- a/src/server/sensors/http_client_sensor.rs
++++ b/src/server/sensors/http_client_sensor.rs
+@@ -56,6 +56,13 @@ use std::collections::BTreeMap;
+ use std::path::Path;
+ use tree_sitter::{Node, Query, QueryCursor, StreamingIterator};
+ 
++type OutboundQueries = BTreeMap<String, Option<Query>>;
++
++#[cfg(test)]
++thread_local! {
++    static QUERY_COMPILE_COUNT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
++}
++
+ // ─── Public sensor shape ───────────────────────────────────────────────
+ 
+ /// One HTTP consumer call site, pre-graph-emission. Public so callers
+@@ -120,6 +127,7 @@ pub fn scan_workspace_clients(
+     let mut all_edges: Vec<GraphEdge> = Vec::new();
+     let patterns = Patterns::with_overrides(root)?;
+     let patterns: &Patterns = &patterns;
++    let mut queries = OutboundQueries::new();
+ 
+     let by_lang = |p: &Path| match p.extension().and_then(|e| e.to_str()).unwrap_or("") {
+         "py" => Some(Lang::Python),
+@@ -133,7 +141,7 @@ pub fn scan_workspace_clients(
+         _ => None,
+     };
+     for (path, content, lang) in crate::server::sensors::util::scan_files(root, by_lang) {
+-        let calls = detect_calls(&path, &content, lang, patterns);
++        let calls = detect_calls_with_queries(&path, &content, lang, patterns, &mut queries);
+         for mut call in calls {
+             call.path = graph_path(root, Path::new(&call.path));
+             let (nodes, edges) = build_graph(graph, &call, namespace);
+@@ -178,6 +186,18 @@ pub fn detect_calls(
+     content: &str,
+     lang: Lang,
+     patterns: &Patterns,
++) -> Vec<HttpClientCall> {
++    detect_calls_with_queries(path, content, lang, patterns, &mut OutboundQueries::new())
++}
++
++// A cache belongs to one scan's immutable Patterns, never to a process or
++// pointer address. The next scan loads overrides before creating a new cache.
++fn detect_calls_with_queries(
++    path: &Path,
++    content: &str,
++    lang: Lang,
++    patterns: &Patterns,
++    queries: &mut OutboundQueries,
+ ) -> Vec<HttpClientCall> {
+     let Some(tree) = parse_for_lang(lang, content) else {
+         return Vec::new();
+@@ -205,7 +225,16 @@ pub fn detect_calls(
+         if !has_query_content(body) {
+             continue;
+         }
+-        let Ok(query) = Query::new(&grammar, body) else {
++        let key = format!("{lang_yaml}/{}", framework.id);
++        let Some(query) = queries
++            .entry(key)
++            .or_insert_with(|| {
++                #[cfg(test)]
++                QUERY_COMPILE_COUNT.with(|count| count.set(count.get() + 1));
++                Query::new(&grammar, body).ok()
++            })
++            .as_ref()
++        else {
+             continue;
+         };
+ 
+@@ -216,7 +245,7 @@ pub fn detect_calls(
+         let url_idx = query.capture_index_for_name("url");
+ 
+         let mut cursor = QueryCursor::new();
+-        let mut matches = cursor.matches(&query, tree.root_node(), src);
++        let mut matches = cursor.matches(query, tree.root_node(), src);
+ 
+         while let Some(m) = matches.next() {
+             let call_node = call_idx.and_then(|i| m.nodes_for_capture_index(i).next());
+@@ -1973,6 +2002,67 @@ fn enclosing_sends_http_edge(
+ mod tests {
+     use super::*;
+ 
++    #[test]
++    fn workspace_reuses_outbound_queries_and_reloads_overrides() {
++        let root = tempfile::tempdir().unwrap();
++        for i in 0..16 {
++            std::fs::write(
++                root.path().join(format!("client_{i}.py")),
++                format!(
++                    "import requests\nresponse = requests.get(\"http://orders/api/order{i}\")\n"
++                ),
++            )
++            .unwrap();
++        }
++        let graph = GraphDatabase::new(&root.path().join("graph.bin")).unwrap();
++        let ns = RepoNamespace::for_test();
++        let repo = RepoId::new("outbound-query-reuse").unwrap();
++        let patterns = Patterns::patterns();
++        let frameworks: Vec<_> = patterns.outbound_patterns(Lang::Python).collect();
++        QUERY_COMPILE_COUNT.with(|count| count.set(0));
++        assert_eq!(
++            scan_workspace_clients(&graph, root.path(), &ns, &repo).unwrap(),
++            16
++        );
++        let compilations = QUERY_COMPILE_COUNT.with(std::cell::Cell::get);
++        assert!(
++            compilations > 0 && compilations <= frameworks.len(),
++            "{compilations} compilations for {} frameworks and 16 files",
++            frameworks.len()
++        );
++        assert_eq!(
++            graph
++                .get_all_nodes()
++                .iter()
++                .filter(|node| node.node_type == NodeType::HttpClientCall)
++                .count(),
++            16
++        );
++
++        let overrides = root.path().join(".lain/patterns/python");
++        std::fs::create_dir_all(&overrides).unwrap();
++        for framework in frameworks {
++            std::fs::write(
++                overrides.join(format!("{}.scm", framework.id)),
++                "; no outbound query\n",
++            )
++            .unwrap();
++        }
++        QUERY_COMPILE_COUNT.with(|count| count.set(0));
++        assert_eq!(
++            scan_workspace_clients(&graph, root.path(), &ns, &repo).unwrap(),
++            0
++        );
++        assert_eq!(QUERY_COMPILE_COUNT.with(std::cell::Cell::get), 0);
++        assert!(
++            !graph
++                .get_all_nodes()
++                .iter()
++                .any(|node| node.node_type == NodeType::HttpClientCall),
++            "updated .scm bodies must retract the previous consumer facts"
++        );
++    }
++
+     #[test]
+     fn truncate_url_expr_caps_at_200_chars() {
+         let s = "x".repeat(500);
+diff --git a/src/server/sensors/http_sensor.rs b/src/server/sensors/http_sensor.rs
+index 3e4cceaf..b2f7cebe 100644
+--- a/src/server/sensors/http_sensor.rs
++++ b/src/server/sensors/http_sensor.rs
+@@ -42,6 +42,7 @@ use crate::server::sensors::patterns::{Patterns, RoutePattern};
+ use crate::server::sensors::util::{parse_for_lang, Lang};
+ use std::cell::Cell;
+ use std::collections::BTreeMap;
++use std::sync::LazyLock;
+ use tree_sitter::{StreamingIterator, Tree};
+ 
+ // Test-only instrumentation for the per-call-loop hoist. The
+@@ -53,6 +54,15 @@ thread_local! {
+     pub(crate) static SCAN_PARSE_COUNT: Cell<usize> = const { Cell::new(0) };
+ }
+ 
++// Count actual query compilation at its process-local resource boundary.
++// A workspace scan must pay this cost per framework, not per source file.
++#[cfg(test)]
++thread_local! {
++    static QUERY_COMPILE_COUNT: Cell<usize> = const { Cell::new(0) };
++}
++
++type RouteQueries = BTreeMap<String, Option<tree_sitter::Query>>;
++
+ /// Current value of the per-thread parse counter. Tests read
+ /// `before` and `after` around a scan call to compute the delta.
+ pub fn scan_parse_count() -> usize {
+@@ -191,6 +201,18 @@ pub fn scan_file_for_routes(
+     path: &std::path::Path,
+     content: &str,
+     patterns: &Patterns,
++) -> Vec<HttpRoute> {
++    scan_file_for_routes_with_queries(path, content, patterns, &mut RouteQueries::new())
++}
++
++// Owned by one workspace scan and its fixed Patterns instance. A rescan
++// rebuilds the cache after loading overrides, so no query can outlive its
++// configuration or leak into another repository.
++fn scan_file_for_routes_with_queries(
++    path: &std::path::Path,
++    content: &str,
++    patterns: &Patterns,
++    queries: &mut RouteQueries,
+ ) -> Vec<HttpRoute> {
+     let extension = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+ 
+@@ -260,7 +282,8 @@ pub fn scan_file_for_routes(
+         // the regex missed. An empty body (just a comment line)
+         // skips tree-sitter entirely. The pre-parsed tree is
+         // reused — `parse_for_lang` ran exactly once above.
+-        if let Some(ts) = try_treesitter_extract(patterns, key, content, path, parsed_tree.as_ref())
++        if let Some(ts) =
++            try_treesitter_extract(patterns, key, content, path, parsed_tree.as_ref(), queries)
+         {
+             for mut r in ts {
+                 if let Some(prefix) = router_prefix_for_receiver(&r, &router_prefixes) {
+@@ -298,6 +321,7 @@ fn try_treesitter_extract(
+     content: &str,
+     path: &std::path::Path,
+     tree: Option<&Tree>,
++    queries: &mut RouteQueries,
+ ) -> Option<Vec<HttpRoute>> {
+     let (lang_yaml, framework) = pattern_key.split_once('-')?;
+     let lang = lang_for_yaml_key(lang_yaml)?;
+@@ -325,10 +349,17 @@ fn try_treesitter_extract(
+         return None;
+     }
+ 
+-    let grammar = crate::server::sensors::util::language_for(lang);
+-    let query = tree_sitter::Query::new(&grammar, body).ok()?;
++    let query = queries
++        .entry(scm_key)
++        .or_insert_with(|| {
++            #[cfg(test)]
++            QUERY_COMPILE_COUNT.with(|count| count.set(count.get() + 1));
++            let grammar = crate::server::sensors::util::language_for(lang);
++            tree_sitter::Query::new(&grammar, body).ok()
++        })
++        .as_ref()?;
+     let mut cursor = tree_sitter::QueryCursor::new();
+-    let mut matches = cursor.matches(&query, tree.root_node(), content.as_bytes());
++    let mut matches = cursor.matches(query, tree.root_node(), content.as_bytes());
+ 
+     let mut routes = Vec::new();
+     let mut path_idx: Option<u32> = None;
+@@ -428,33 +459,37 @@ fn extract_router_prefixes(content: &str, extension: &str) -> BTreeMap<String, S
+ 
+     if extension == "py" {
+         // FastAPI: `router = APIRouter(prefix="/api/v1")`
+-        let re = regex::Regex::new(r#"(\w+)\s*=\s*APIRouter\s*\(\s*prefix\s*=\s*["']([^"']+)["']"#)
+-            .unwrap();
+-        for cap in re.captures_iter(content) {
++        static FASTAPI_PREFIX: LazyLock<regex::Regex> = LazyLock::new(|| {
++            regex::Regex::new(r#"(\w+)\s*=\s*APIRouter\s*\(\s*prefix\s*=\s*["']([^"']+)["']"#)
++                .unwrap()
++        });
++        for cap in FASTAPI_PREFIX.captures_iter(content) {
+             out.insert(cap[1].to_string(), cap[2].to_string());
+         }
+ 
+         // Flask: `bp = Blueprint("name", __name__, url_prefix="/api")`
+-        let re = regex::Regex::new(
+-            r#"(\w+)\s*=\s*Blueprint\s*\([^)]*url_prefix\s*=\s*["']([^"']+)["']"#,
+-        )
+-        .unwrap();
+-        for cap in re.captures_iter(content) {
++        static FLASK_PREFIX: LazyLock<regex::Regex> = LazyLock::new(|| {
++            regex::Regex::new(r#"(\w+)\s*=\s*Blueprint\s*\([^)]*url_prefix\s*=\s*["']([^"']+)["']"#)
++                .unwrap()
++        });
++        for cap in FLASK_PREFIX.captures_iter(content) {
+             out.insert(cap[1].to_string(), cap[2].to_string());
+         }
+     } else if extension == "rs" {
+         // axum: `.nest("/api", router)` where `router` is defined
+         // in the same file. Match `let router = Router::new()...`
+         // for the receiver name; the prefix is from `.nest("…", router)`.
+-        let def_re = regex::Regex::new(r"let\s+(\w+)\s*=\s*Router::new").unwrap();
+-        let nest_re =
+-            regex::Regex::new(r#"\.nest\s*\(\s*["']([^"']+)["']\s*,\s*(\w+)\s*\)"#).unwrap();
+-        for nest_cap in nest_re.captures_iter(content) {
++        static ROUTER_DEFINITION: LazyLock<regex::Regex> =
++            LazyLock::new(|| regex::Regex::new(r"let\s+(\w+)\s*=\s*Router::new").unwrap());
++        static ROUTER_NEST: LazyLock<regex::Regex> = LazyLock::new(|| {
++            regex::Regex::new(r#"\.nest\s*\(\s*["']([^"']+)["']\s*,\s*(\w+)\s*\)"#).unwrap()
++        });
++        for nest_cap in ROUTER_NEST.captures_iter(content) {
+             let prefix = &nest_cap[1];
+             let receiver = &nest_cap[2];
+             // Only apply when the receiver is bound to `Router::new()`
+             // in this file.
+-            if def_re.is_match(content) {
++            if ROUTER_DEFINITION.is_match(content) {
+                 out.entry(receiver.to_string())
+                     .or_insert_with(|| prefix.to_string());
+             }
+@@ -467,8 +502,10 @@ fn extract_router_prefixes(content: &str, extension: &str) -> BTreeMap<String, S
+         // braces; this is a coarse approximation but covers the
+         // common shape. The matcher's prefix tolerance (§7.4) is the
+         // broader net when this approximation misses.
+-        let scope_re = regex::Regex::new(r#"web::scope\s*\(\s*["']([^"']+)["']\s*\)"#).unwrap();
+-        for scope_cap in scope_re.captures_iter(content) {
++        static ACTIX_SCOPE: LazyLock<regex::Regex> = LazyLock::new(|| {
++            regex::Regex::new(r#"web::scope\s*\(\s*["']([^"']+)["']\s*\)"#).unwrap()
++        });
++        for scope_cap in ACTIX_SCOPE.captures_iter(content) {
+             // Map the prefix to a sentinel key — the regex-based
+             // extraction below only attaches the prefix to handlers
+             // declared inside `scope("/prefix")`. We use the prefix
+@@ -642,11 +679,12 @@ pub fn scan_workspace_routes(
+     let mut all_edges: Vec<GraphEdge> = Vec::new();
+     let patterns = Patterns::with_overrides(root)?;
+     let patterns: &Patterns = &patterns;
++    let mut queries = RouteQueries::new();
+ 
+     for (path, content, _) in crate::server::sensors::util::scan_files(root, |p| {
+         crate::server::sensors::util::ext_in(p, crate::server::sensors::util::SOURCE_EXTS)
+     }) {
+-        let mut routes = scan_file_for_routes(&path, &content, patterns);
++        let mut routes = scan_file_for_routes_with_queries(&path, &content, patterns, &mut queries);
+         for r in &mut routes {
+             r.handler_path = crate::graph::graph_path(root, std::path::Path::new(&r.handler_path));
+         }
+@@ -1413,6 +1451,84 @@ fun Application.module() {
+         );
+     }
+ 
++    #[test]
++    fn workspace_processes_every_file_with_bounded_query_compilation() {
++        let root = tempfile::tempdir().unwrap();
++        for i in 0..16 {
++            std::fs::write(
++                root.path().join(format!("routes_{i}.py")),
++                format!("@app.get(\"/route{i}\")\ndef handler_{i}():\n    pass\n"),
++            )
++            .unwrap();
++        }
++        let overrides = root.path().join(".lain/patterns/python");
++        std::fs::create_dir_all(&overrides).unwrap();
++        // A query-only route makes cache invalidation observable in the graph,
++        // independently of the regex route path and compilation counter.
++        std::fs::write(
++            root.path().join("query_only.py"),
++            "register_extra(\"/query-only\", query_handler)\n",
++        )
++        .unwrap();
++        std::fs::write(
++            overrides.join("fastapi-route.scm"),
++            r#"
++(call
++  function: (identifier) @_callee
++  arguments: (argument_list (string) @path (identifier) @handler)
++  (#eq? @_callee "register_extra"))
++"#,
++        )
++        .unwrap();
++        let graph = GraphDatabase::new(&root.path().join("graph.bin")).unwrap();
++        let ns = RepoNamespace::for_test();
++        let repo = RepoId::new("query-reuse").unwrap();
++        let frameworks = get_route_patterns(Patterns::patterns())
++            .keys()
++            .filter(|key| key.starts_with("python-"))
++            .count();
++        QUERY_COMPILE_COUNT.with(|count| count.set(0));
++        assert_eq!(
++            scan_workspace_routes(&graph, root.path(), &ns, &repo).unwrap(),
++            17
++        );
++        let compilations = QUERY_COMPILE_COUNT.with(Cell::get);
++        assert!(
++            compilations > 0 && compilations <= frameworks,
++            "{compilations} query compilations for {frameworks} frameworks and 16 files"
++        );
++        assert_eq!(
++            graph
++                .get_all_nodes()
++                .iter()
++                .filter(|node| node.node_type == NodeType::HttpRoute)
++                .count(),
++            17
++        );
++
++        // A new scan observes new .scm bodies instead of reusing stale queries.
++        for framework in ["fastapi", "flask", "django"] {
++            std::fs::write(
++                overrides.join(format!("{framework}-route.scm")),
++                "; no supplementary query\n",
++            )
++            .unwrap();
++        }
++        QUERY_COMPILE_COUNT.with(|count| count.set(0));
++        assert_eq!(
++            scan_workspace_routes(&graph, root.path(), &ns, &repo).unwrap(),
++            16
++        );
++        assert_eq!(QUERY_COMPILE_COUNT.with(Cell::get), 0);
++        assert!(
++            !graph
++                .get_all_nodes()
++                .iter()
++                .any(|node| node.name.contains("/query-only")),
++            "changing the .scm override must retract the old supplementary route"
++        );
++    }
++
+     /// An override `.scm` body that is only comments (or blank
+     /// lines) carries no query: the walker returns `None` instead
+     /// of compiling an empty query.
+@@ -1441,6 +1557,7 @@ fun Application.module() {
+             content,
+             std::path::Path::new("app.py"),
+             Some(&tree),
++            &mut RouteQueries::new(),
+         );
+         assert!(
+             out.is_none(),
+diff --git a/src/server/sensors/websocket_sensor.rs b/src/server/sensors/websocket_sensor.rs
+index 53ad9222..2f6daa56 100644
+--- a/src/server/sensors/websocket_sensor.rs
++++ b/src/server/sensors/websocket_sensor.rs
+@@ -96,19 +96,27 @@ fn extract_websocket_patterns(content: &str) -> Vec<(String, String, String, u32
+     // `Vec<IdiomMatch>` per line; the pre-Tier-1 emission shape
+     // `(client_url, server_route, handler_name, line)` is
+     // preserved.
+-    let patterns = Patterns::patterns();
+-    let (clients, servers, handlers) = util::websocket_idioms_for(patterns);
++    // This scanner reads the immutable bundled registry, so its compiled
++    // idioms can share the same lifetime instead of recompiling per file.
++    type WebsocketIdioms = (
++        Vec<util::CompiledIdiom>,
++        Vec<util::CompiledIdiom>,
++        Vec<util::CompiledIdiom>,
++    );
++    static IDIOMS: OnceLock<WebsocketIdioms> = OnceLock::new();
++    let (clients, servers, handlers) =
++        IDIOMS.get_or_init(|| util::websocket_idioms_for(Patterns::patterns()));
+ 
+     for (line_no, line) in content.lines().enumerate() {
+         let line_num = line_no as u32 + 1;
+         // Server routes
+-        for m in util::walk_idioms(&servers, line, line_num) {
++        for m in util::walk_idioms(servers, line, line_num) {
+             if let Some(route) = m.literal.as_deref() {
+                 endpoints.push((String::new(), route.to_string(), String::new(), line_num));
+             }
+         }
+         // Client URLs (both URL-literal and `new WebSocket(…)`).
+-        for m in util::walk_idioms(&clients, line, line_num) {
++        for m in util::walk_idioms(clients, line, line_num) {
+             if let Some(url) = m.literal.as_deref() {
+                 endpoints.push((url.to_string(), String::new(), String::new(), line_num));
+             }
+@@ -119,7 +127,7 @@ fn extract_websocket_patterns(content: &str) -> Vec<(String, String, String, u32
+         // `on{open,…}`) is kept in `literal` so the alternation
+         // matches the four `on{…}` shapes in a single
+         // non-optional branch.
+-        for m in util::walk_idioms(&handlers, line, line_num) {
++        for m in util::walk_idioms(handlers, line, line_num) {
+             if let Some(handler_name) = m.identifier.as_deref() {
+                 endpoints.push((
+                     String::new(),
+@@ -309,6 +317,20 @@ mod tests {
+     use crate::schema::RepoNamespace;
+     use tempfile::tempdir;
+ 
++    #[test]
++    fn repeated_websocket_extraction_reuses_registry_compilation() {
++        let source = r#"const ws = new WebSocket("ws://orders/events/stream");"#;
++        let expected = extract_websocket_patterns(source);
++        assert!(expected
++            .iter()
++            .any(|(url, _, _, _)| url == "ws://orders/events/stream"));
++        let started = std::time::Instant::now();
++        for _ in 0..1024 {
++            assert_eq!(extract_websocket_patterns(source), expected);
++        }
++        assert!(started.elapsed() < std::time::Duration::from_secs(5));
++    }
++
+     #[test]
+     fn websocket_sensor_extracts_provider_and_consumer_facts() {
+         let tmp = tempdir().unwrap();

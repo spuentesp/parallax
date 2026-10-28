@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { useEffect, useState } from 'react';
 
 // Design tokens for the org dev tool aesthetic (Linear/Vercel style).
 export const THEME = {
@@ -35,8 +36,6 @@ export function useTheme() {
   }, [dark]);
   return { dark, toggle: () => setDark((d) => !d) };
 }
-
-import { useEffect, useState } from 'react';
 
 export function ThemeToggle(): React.ReactElement {
   const { dark, toggle } = useTheme();

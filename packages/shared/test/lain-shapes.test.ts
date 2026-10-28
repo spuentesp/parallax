@@ -65,10 +65,10 @@ describe('lain evidence', () => {
   it('LainEvidence has view + ref', () => {
     const e = LainEvidence.parse({
       id: 'e1',
-      view: 'snapshot:abc',
+      view: 'snap_abc123',
       ref: { repo: 'orders', sha: 'b5bf29a', path: 'src/main.rs' },
     });
-    expect(e.view).toBe('snapshot:abc');
+    expect(e.view).toBe('snap_abc123');
   });
   it('paginate slices a list and reports truncation', () => {
     const items = Array.from({ length: 250 }, (_, i) => i);

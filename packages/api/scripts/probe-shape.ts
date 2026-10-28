@@ -8,7 +8,7 @@ async function main() {
   const raw = await fetch('http://localhost:9999/mcp', {
     method: 'POST',
     headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_services', arguments: { view: 'live' } } }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_services', arguments: { snapshot: 'live' } } }),
   });
   const body = await raw.json() as any;
   console.log('=== raw result ===');

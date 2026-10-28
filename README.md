@@ -59,7 +59,21 @@ pnpm dev:web             # web on :5173 with Vite dev server proxying /api → :
 pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
-The api uses `LAIN_ADAPTER=mock` by default. To point at a real lain server:
+The api uses `LAIN_ADAPTER=mock` by default. Use
+[Lain v0.13.0](https://github.com/spuentesp/lain/releases/tag/v0.13.0) for the
+GraphQL provider and binding fixes, and for the indexing performance changes
+that earlier needed a local patch. Start its HTTP server with your workspace's
+`repos.yaml`; Parallax loads the `contracts` package when the server starts with
+the default core profile.
+
+```bash
+lain server --config /path/to/repos.yaml --transport http --port 9999
+```
+
+The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
+is superseded: v0.13.0 includes that work, so no patch is needed.
+
+Point Parallax at that server:
 
 ```bash
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
@@ -89,19 +103,65 @@ parallax/
 └─ .github/     CI
 ```
 
-## Roadmap
+Testing follows an anti-reward-hacking protocol: property-based and model-based
+tests (`test/prop/`), a held-out composition suite (`test-heldout/`) owned by a
+red-team agent, and a mutation gate over each PR diff (run locally, not in CI). See
+`docs/testing/red-team-protocol.md`.
 
-This is **subproject 1 of 7**. See `docs/superpowers/specs/2026-10-13-parallax-foundation-design.md` for the full scope and the seven subprojects.
+## Release checks
 
-| Subproject | Status |
-|---|---|
-| 1 — Foundation & Scaffolding | this repo, in progress |
-| 2 — LainAdapter & Fixture (G0+G1) | awaits lain PRs #317/#318 merge |
-| 3 — Assessment Worker & Persistencia (G2) | planned |
-| 4 — Map UI & MCP de producto (G2) | planned |
-| 5 — Nemotron Investigator (G3) | planned |
-| 6 — PR Flow, Publicación & Demo (G4) | planned |
-| 7 — Post-MVP (P1) | post-hackathon |
+Run the local checks with `pnpm test`, `pnpm test:heldout`, `pnpm typecheck`,
+`pnpm lint`, and `pnpm build`.
+
+The integration gates use a real Lain server. The contracts fixture needs the
+repos and commits listed in `test-repos/contracts-fixture/repos.yaml`:
+
+```bash
+lain server --config test-repos/contracts-fixture/repos.yaml --transport http --port 9997
+LAIN_URL=http://localhost:9997/mcp DATABASE_PATH=/tmp/parallax-release-g2.db \
+  NEMOTRON_WORKER_MODEL=nvidia/nemotron-3-super-120b-a12b pnpm gate:release
+```
+
+`gate:release` checks contracts and evidence, persisted assessments and recovery,
+code graph expansion (including the 0.11 `edges` and `paths` output), and the
+investigator. Its G2 runner recreates `DATABASE_PATH`, so use a disposable DB.
+G3 reads `NEBIUS_TOKEN` from the environment or `.env` for live model calls;
+without a token it reports that those calls were skipped. Scripted model checks
+still run against the real Lain fixture.
+
+The live model gate passed with Nemotron Super as the worker on 2026-10-21.
+The default Lightning worker timed out in that run; the command above selects
+the tested model without changing the application default.
+
+The GraphQL release gate needs only Git and the release binary. It creates
+small committed source repos in a temporary directory, boots Lain with the
+core profile, verifies the ambiguity before configuration, applies the advisor's
+binding YAML verbatim, and checks the automatic dependency after suppressing
+copied providers. It cleans up the servers and temporary repos when it exits.
+
+```bash
+LAIN_BIN=/path/to/lain-0.13.0 pnpm gate:graphql
+```
+
+For Saleor, apply the advisor's `provides_graphql: false` entry to the
+`saleor-dashboard` service in the Lain configuration and restart/reindex. Keep
+`NEXT_PUBLIC_SALEOR_API_URL` on the `saleor-api` provider. Then run:
+
+```bash
+LAIN_URL=http://localhost:9999/mcp pnpm gate:saleor
+```
+
+This gate waits for all repos to finish indexing, then checks the provider
+catalog, resolved storefront operations, GraphQL binding YAML, and the
+`storefront → endpoint → saleor-api` path returned by Parallax. The default
+indexing deadline is 15 minutes; set `LAIN_INDEX_TIMEOUT_MS` for a larger
+workspace. Other unresolved calls remain visible.
+
+The PR evaluation extension has a read-only listing API. The web picker and
+webhook/status automation remain in the
+[PR evaluation design](docs/superpowers/specs/2026-10-20-pr-evaluation-design.md).
+The status-writing credential and reporting defaults still need a decision
+before implementation.
 
 ## License
 

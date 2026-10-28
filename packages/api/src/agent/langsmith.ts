@@ -7,7 +7,9 @@ let client: Client | null = null;
 
 export function getLangSmithClient(): Client | null {
   if (client) return client;
-  const apiKey = process.env.LANGSMITH_API_KEY;
+  // El .env del hackathon trae LANGSMITH_KEY; el SDK espera LANGSMITH_API_KEY.
+  // Aceptamos ambos para que el tracing no dependa del nombre de la variable.
+  const apiKey = process.env.LANGSMITH_API_KEY ?? process.env.LANGSMITH_KEY;
   if (!apiKey) return null;
   client = new Client({ apiKey });
   return client;

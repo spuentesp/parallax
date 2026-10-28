@@ -1,0 +1,67 @@
+{
+  "entries": [
+    {
+      "package": "@parallax/mcp",
+      "file": "src/index.ts",
+      "mutator": "BlockStatement",
+      "description": "{}",
+      "reason": "Wiring del bin (try/catch alrededor de loadEntryConfig + runStdio). El comportamiento queda pinneado por los tests subprocess de test/index.test.ts (exit codes, stderr y handshake stdio); la cobertura de procesos hijos no es visible para stryker."
+    },
+    {
+      "package": "@parallax/mcp",
+      "file": "src/index.ts",
+      "mutator": "CallExpression",
+      "description": ";",
+      "reason": "Wiring del bin (console.error/process.exit del catch). Cubierto por los tests subprocess de test/index.test.ts; la cobertura de procesos hijos no es visible para stryker."
+    },
+    {
+      "package": "@parallax/mcp",
+      "file": "src/server.ts",
+      "mutator": "BlockStatement",
+      "description": "{}",
+      "reason": "runStdio: wiring del transporte stdio. Ejercitado de punta a punta por el handshake MCP de test/index.test.ts; la cobertura del proceso hijo no es visible para stryker."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/worker/state.ts",
+      "mutator": "EqualityOperator",
+      "description": "a <= b",
+      "reason": "Equivalente: canonicalJson compara claves de un objeto, que son únicas, así que a === b nunca ocurre y <= es idéntico a <."
+    },
+    {
+      "package": "@parallax/web",
+      "file": "src/routes/Workspaces.tsx",
+      "mutator": "OptionalChaining",
+      "description": "r.uri.split('/').pop().replace",
+      "reason": "Equivalente: split('/') siempre devuelve al menos un elemento, así que pop() nunca es undefined y el ?. no cortocircuita nunca."
+    },
+    {
+      "package": "@parallax/web",
+      "file": "src/routes/Workspaces.tsx",
+      "mutator": "ConditionalExpression",
+      "description": "false",
+      "reason": "Equivalente: la guarda `if (!name.trim()) return` es inalcanzable desde la UI, porque el botón de crear está deshabilitado con la misma condición. Entrada por texto: cualquier mutante ConditionalExpression→false en este archivo queda cubierto por esta razón; revisar si cambia el archivo."
+    },
+    {
+      "package": "@parallax/web",
+      "file": "src/routes/Workspaces.tsx",
+      "mutator": "MethodExpression",
+      "description": "name",
+      "reason": "Equivalente: misma guarda inalcanzable que la entrada de ConditionalExpression (name.trim() → name). El botón está deshabilitado para nombres en blanco."
+    },
+    {
+      "package": "@parallax/web",
+      "file": "src/routes/Workspaces.tsx",
+      "mutator": "MethodExpression",
+      "description": "repos",
+      "reason": "Equivalente a nivel de sistema: useCreateWorkspace descarta las filas con uri en blanco antes de hacer POST (hooks.ts, `if (repo.uri.trim())`), así que el filtro del componente es redundante."
+    },
+    {
+      "package": "@parallax/web",
+      "file": "src/routes/Workspaces.tsx",
+      "mutator": "MethodExpression",
+      "description": "r.uri",
+      "reason": "Equivalente a nivel de sistema: el trim del filtro del componente es redundante porque useCreateWorkspace ya descarta uris en blanco antes del POST."
+    }
+  ]
+}

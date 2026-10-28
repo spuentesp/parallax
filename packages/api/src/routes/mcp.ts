@@ -4,7 +4,8 @@ import { buildMcpServer, buildTransport } from '../mcp/transport/http-sse.js';
 export const mcpRoutes: FastifyPluginAsync = async (app) => {
   if (app.config.mcpTransport !== 'http-sse') return;
 
-  const server = buildMcpServer();
+  // Mismos servicios que las rutas HTTP: worker y DB compartidos (P09).
+  const server = buildMcpServer({ db: app.db, worker: app.assessmentWorker, lain: app.lain });
   const transport = buildTransport();
   await server.connect(transport as Parameters<typeof server.connect>[0]);
 

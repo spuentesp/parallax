@@ -6,7 +6,7 @@ async function main() {
     apiVersion: '1',
   });
   console.log('handshake OK — apiVersion:', a.apiVersion, 'analyzerVersion:', a.analyzerVersion);
-  const services = await a.listServices('live');
+  const services = await a.listServices({ snapshot: 'live' });
   console.log('listServices →', JSON.stringify(services, null, 2).slice(0, 600));
 }
 main().catch((e) => {
