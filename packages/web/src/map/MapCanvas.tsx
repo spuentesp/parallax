@@ -35,6 +35,7 @@ export function buildStyle(): StylesheetJson {
   const accent = TOKEN('--color-accent', '#2563eb');
   const repo = TOKEN('--color-repo', '#7c3aed');
   const service = TOKEN('--color-service', '#2563eb');
+  const group = TOKEN('--color-group', '#0891b2');
   const endpoint = TOKEN('--color-endpoint', '#d97706');
   const codeC = TOKEN('--color-code', '#64748b');
   const fileC = TOKEN('--color-file', '#65a30d');
@@ -82,6 +83,19 @@ export function buildStyle(): StylesheetJson {
         width: 'data(w)',
         height: 'data(h)',
         padding: '0px',
+      },
+    },
+    {
+      selector: 'node.group',
+      style: {
+        shape: 'round-rectangle',
+        'background-color': group,
+        'background-opacity': 0.12,
+        'border-color': group,
+        width: 'data(w)',
+        height: 'data(h)',
+        padding: '0px',
+        'font-weight': 600,
       },
     },
     {

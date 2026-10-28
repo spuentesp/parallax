@@ -12,7 +12,12 @@ import {
 } from '../src/org-graph.js';
 import { OrgGraphCache } from '../src/org-graph-cache.js';
 import { viewOrgGraph } from '../src/org-graph-view.js';
-import { buildEndpointTopology, endpointNodeId, serviceNodeId } from '../src/topology.js';
+import {
+  buildEndpointTopology,
+  endpointNodeId,
+  groupNodeId,
+  serviceNodeId,
+} from '../src/topology.js';
 
 // El grafo sale del camino real (buildEndpointTopology sobre un LAIN falso en
 // el borde del proceso): nada se inserta a mano en el modelo.
@@ -110,6 +115,9 @@ const reports = serviceNodeId('reports');
 const orders = serviceNodeId('orders');
 const getOrder = endpointNodeId(GET_ORDER, 'orders');
 
+const httpGroup = groupNodeId('orders', 'http');
+const topicGroup = groupNodeId('orders', 'topic');
+
 describe('toOrgGraph — procedencia', () => {
   it('marks static bindings deterministic and heuristic ones inferred with confidence', () => {
     const det = graph.edges.find((e) => e.source === billing && e.target === getOrder);
@@ -134,9 +142,15 @@ describe('toOrgGraph — procedencia', () => {
     });
   });
 
-  it('carries containment in parent, not as edges', () => {
+  it('carries containment in parent, not as edges: endpoint → group of its kind → service', () => {
     expect(graph.edges.every((e) => e.kind === 'consumes' || e.kind === 'servedBy')).toBe(true);
-    expect(graph.nodes.find((n) => n.id === getOrder)?.parent).toBe(orders);
+    expect(graph.nodes.find((n) => n.id === getOrder)?.parent).toBe(httpGroup);
+    expect(graph.nodes.find((n) => n.id === httpGroup)).toMatchObject({
+      kind: 'group',
+      label: 'HTTP routes',
+      parent: orders,
+    });
+    expect(graph.nodes.find((n) => n.id === topicGroup)?.label).toBe('Topics and events');
     expect(graph.nodes.find((n) => n.id === getOrder)?.contract).toBe('http');
   });
 });
@@ -164,15 +178,19 @@ describe('projectOrgGraph — niveles y agregación', () => {
     const one = projectOrgGraph(graph, new Set(['repo:orders']));
     expect(one.nodes.some((n) => n.id === orders)).toBe(true);
     expect(one.nodes.some((n) => n.id === getOrder)).toBe(false);
+    // Servicio abierto: se ven sus GRUPOS (tipos de contrato), no cientos de endpoints.
     const two = projectOrgGraph(graph, new Set(['repo:orders', orders]));
-    expect(two.nodes.some((n) => n.id === getOrder)).toBe(true);
+    expect(two.nodes.some((n) => n.id === httpGroup)).toBe(true);
+    expect(two.nodes.some((n) => n.id === getOrder)).toBe(false);
+    const three = projectOrgGraph(graph, new Set(['repo:orders', orders, httpGroup]));
+    expect(three.nodes.some((n) => n.id === getOrder)).toBe(true);
     // Un expandido sin su ancestro abierto no aparece.
     const orphan = projectOrgGraph(graph, new Set([orders]));
     expect(orphan.nodes.some((n) => n.id === getOrder)).toBe(false);
   });
 
   it('lifts edges to endpoint level once visible, and drops containment self-edges', () => {
-    const p = projectOrgGraph(graph, new Set(['repo:orders', orders]));
+    const p = projectOrgGraph(graph, new Set(['repo:orders', orders, httpGroup]));
     expect(p.edges.some((e) => e.source === 'repo:billing' && e.target === getOrder)).toBe(true);
     expect(p.edges.some((e) => e.kind === 'servedBy')).toBe(false);
   });
@@ -184,26 +202,42 @@ describe('projectOrgGraph — niveles y agregación', () => {
 });
 
 describe('projectOrgGraph — tope de hijos', () => {
-  const open = new Set(['repo:orders', orders, 'repo:billing', 'repo:analytics']);
+  const open = new Set([
+    'repo:orders',
+    orders,
+    httpGroup,
+    topicGroup,
+    'repo:billing',
+    'repo:analytics',
+  ]);
   const listOrders = endpointNodeId(LIST_ORDERS, 'orders');
+  const created = endpointNodeId(CREATED, 'orders');
 
-  it('keeps the most connected children and says how many it left out', () => {
-    const p = projectOrgGraph(graph, open, { childLimit: 1 });
+  it('keeps the most connected children of each group and says how many it left out', () => {
+    // El servicio muestra todos sus grupos; el tope de 1 actúa sobre los endpoints de cada grupo.
+    const p = projectOrgGraph(graph, open, { childLimit: 1, limits: { [orders]: 10 } });
     const shown = p.nodes.filter((n) => n.kind === 'endpoint').map((n) => n.id);
-    expect(shown).toEqual([listOrders]);
-    expect(p.hiddenChildren[orders]).toBe(2);
+    expect(shown.sort()).toEqual([created, listOrders].sort());
+    expect(p.hiddenChildren[httpGroup]).toBe(1);
   });
 
   it('never drops the relations of hidden children: they roll up to the parent', () => {
-    const p = projectOrgGraph(graph, open, { childLimit: 1 });
-    const reportsToOrders = p.edges.find((e) => e.source === reports && e.target === orders);
+    const p = projectOrgGraph(graph, open, { childLimit: 1, limits: { [orders]: 10 } });
+    const reportsToOrders = p.edges.find((e) => e.source === reports && e.target === httpGroup);
     expect(reportsToOrders).toMatchObject({ provenance: 'inferred', count: 1 });
   });
 
   it('pins and per-parent limits override the cap', () => {
-    const pinned = projectOrgGraph(graph, open, { childLimit: 1, pinned: new Set([getOrder]) });
+    const pinned = projectOrgGraph(graph, open, {
+      childLimit: 1,
+      limits: { [orders]: 10 },
+      pinned: new Set([getOrder]),
+    });
     expect(pinned.nodes.some((n) => n.id === getOrder)).toBe(true);
-    const more = projectOrgGraph(graph, open, { childLimit: 1, limits: { [orders]: 3 } });
+    const more = projectOrgGraph(graph, open, {
+      childLimit: 1,
+      limits: { [orders]: 10, [httpGroup]: 3 },
+    });
     expect(more.hiddenChildren).toEqual({});
     expect(more.nodes.filter((n) => n.kind === 'endpoint')).toHaveLength(3);
   });
@@ -266,7 +300,7 @@ describe('describeNode — "quién consume este endpoint"', () => {
     expect([...byPeer.keys()].sort()).toEqual([billing, reports].sort());
     expect(byPeer.get(billing)?.provenance).toBe('deterministic');
     expect(byPeer.get(reports)?.provenance).toBe('inferred');
-    expect(d?.path.map((n) => n.id)).toEqual([orders, 'repo:orders']);
+    expect(d?.path.map((n) => n.id)).toEqual([httpGroup, orders, 'repo:orders']);
   });
 
   it('for a service aggregates consumers across all its endpoints', () => {
@@ -297,7 +331,7 @@ describe('describeNode — "quién consume este endpoint"', () => {
 
   it('the provider side lists the endpoints a consumer depends on', () => {
     const rel = describeNode(graph, billing)?.providers.find((p) => p.peer.id === orders);
-    expect(rel?.links.every((l) => l.endpoint.parent === orders)).toBe(true);
+    expect(rel?.links.every((l) => l.endpoint.parent?.startsWith('grp:orders:'))).toBe(true);
     expect(rel?.links.some((l) => l.endpoint.id === getOrder)).toBe(true);
   });
 

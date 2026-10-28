@@ -9,7 +9,7 @@ export type Provenance = 'deterministic' | 'inferred';
  * puerta al grafo de código de un repo; `file` (contenedores: archivo, módulo,
  * paquete) y `symbol` (funciones, clases, rutas…) se piden al vuelo a LAIN.
  */
-export type OrgNodeKind = 'repo' | 'service' | 'endpoint' | 'code' | 'file' | 'symbol';
+export type OrgNodeKind = 'repo' | 'service' | 'group' | 'endpoint' | 'code' | 'file' | 'symbol';
 export type OrgEdgeKind = 'consumes' | 'servedBy';
 
 export interface OrgNode {

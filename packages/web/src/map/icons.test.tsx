@@ -47,6 +47,7 @@ describe('KindIcon', () => {
     expect(KIND_LABEL).toEqual({
       repo: 'Repository',
       service: 'Service',
+      group: 'Contract group',
       endpoint: 'Endpoint',
       code: 'Code',
       file: 'File / module',

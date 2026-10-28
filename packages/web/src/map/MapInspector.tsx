@@ -118,6 +118,18 @@ function Detail({
         >
           {node.label}
         </h3>
+        {node.kind === 'group' && (
+          <div className="space-y-1" data-testid="group-note">
+            {typeof node.meta.contracts === 'number' && (
+              <p className="text-xs text-muted">
+                {node.meta.contracts} contract{node.meta.contracts === 1 ? '' : 's'} in this group
+              </p>
+            )}
+            {typeof node.meta.note === 'string' && (
+              <p className="text-xs leading-snug text-muted">{node.meta.note}</p>
+            )}
+          </div>
+        )}
         {detail.path.length > 0 && (
           <p className="text-xs text-muted">
             {[...detail.path].reverse().map((p, i) => (

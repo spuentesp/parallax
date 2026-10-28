@@ -4,6 +4,7 @@ import {
   buildEndpointTopology,
   contractKind,
   endpointNodeId,
+  groupNodeId,
   resolveServiceForPath,
   serviceNodeId,
 } from '../src/topology.js';
@@ -132,9 +133,25 @@ describe('buildEndpointTopology', () => {
     const byId = new Map(t.nodes.map((n) => [n.id, n]));
     expect(byId.get(serviceNodeId('shipping'))?.parent).toBe('repo:platform');
     expect(byId.get(serviceNodeId('orders'))?.parent).toBe('repo:orders');
-    expect(byId.get(endpointNodeId('http:GET /api/orders/{}', 'orders'))?.parent).toBe(
-      serviceNodeId('orders'),
-    );
+    // endpoint → grupo de su tipo → servicio → repo
+    const ep = byId.get(endpointNodeId('http:GET /api/orders/{}', 'orders'));
+    expect(ep?.parent).toBe(groupNodeId('orders', 'http'));
+    expect(byId.get(groupNodeId('orders', 'http'))).toMatchObject({
+      kind: 'group',
+      label: 'HTTP routes',
+      parent: serviceNodeId('orders'),
+    });
+  });
+
+  it('counts the contracts in each group, so the map can say it without opening it', async () => {
+    const t = await buildEndpointTopology(fake);
+    const groups = t.nodes.filter((n) => n.kind === 'group');
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) {
+      const children = t.nodes.filter((n) => n.parent === g.id).length;
+      expect(g.meta?.contracts).toBe(children);
+      expect(children).toBeGreaterThan(0);
+    }
   });
 
   it('filters by binding and confidence', async () => {
@@ -204,7 +221,9 @@ describe('buildEndpointTopology — dueño de un endpoint', () => {
       listContracts: async () => ({ items: [], cursor: null }),
     } as unknown as LainAdapter;
     const t = await buildEndpointTopology(lonely);
-    expect(t.nodes.find((x) => x.id === endpointNodeId(KEY, 'b'))?.parent).toBe(serviceNodeId('b'));
+    expect(t.nodes.find((x) => x.id === endpointNodeId(KEY, 'b'))?.parent).toBe(
+      groupNodeId('b', 'http'),
+    );
     expect(t.edges.find((e) => e.kind === 'consumes')?.target).toBe(endpointNodeId(KEY, 'b'));
     expect(t.stats.byKind.http).toBe(1);
   });

@@ -8,6 +8,7 @@ import type * as React from 'react';
 const COLOR: Record<OrgNodeKind, string> = {
   repo: 'var(--color-repo)',
   service: 'var(--color-service)',
+  group: 'var(--color-group)',
   endpoint: 'var(--color-endpoint)',
   code: 'var(--color-code)',
   file: 'var(--color-file)',
@@ -49,6 +50,15 @@ export function KindIcon({
       )}
       {kind === 'service' && (
         <rect x="2.5" y="3.5" width="11" height="9" rx="2.5" fill={c} opacity="0.85" />
+      )}
+      {kind === 'group' && (
+        <path
+          d="M2.5 4.5h11M2.5 8h11M2.5 11.5h7"
+          fill="none"
+          stroke={c}
+          strokeWidth="1.8"
+          strokeLinecap="round"
+        />
       )}
       {kind === 'endpoint' && (
         <path
@@ -98,6 +108,7 @@ export function KindIcon({
 export const KIND_LABEL: Record<OrgNodeKind, string> = {
   repo: 'Repository',
   service: 'Service',
+  group: 'Contract group',
   endpoint: 'Endpoint',
   code: 'Code',
   file: 'File / module',

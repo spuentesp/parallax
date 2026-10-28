@@ -258,6 +258,7 @@ describe('buildStyle', () => {
       'node',
       'node.repo',
       'node.service',
+      'node.group',
       'node.endpoint',
       'node.code',
       'node.file',
@@ -299,7 +300,7 @@ describe('buildStyle', () => {
   });
 
   it('leaf sizes come from data so the layout and the drawing agree', () => {
-    for (const k of ['repo', 'service', 'endpoint', 'code', 'file', 'symbol']) {
+    for (const k of ['repo', 'service', 'group', 'endpoint', 'code', 'file', 'symbol']) {
       expect(rule(`node.${k}`)).toMatchObject({ width: 'data(w)', height: 'data(h)' });
     }
   });

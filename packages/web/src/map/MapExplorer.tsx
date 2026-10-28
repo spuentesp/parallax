@@ -677,7 +677,7 @@ function Legend({ open, onToggle }: { open: boolean; onToggle: () => void }): Re
       {open && (
         <>
           <div className="flex items-center gap-3">
-            {(['repo', 'service', 'endpoint'] as const).map((k) => (
+            {(['repo', 'service', 'group', 'endpoint'] as const).map((k) => (
               <span key={k} className="inline-flex items-center gap-1">
                 <KindIcon kind={k} size={12} />
                 {KIND_LABEL[k]}

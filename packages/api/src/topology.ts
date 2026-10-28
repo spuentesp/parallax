@@ -17,7 +17,7 @@ import type { LainAdapter } from './lain-adapter/types.js';
 // endpoint. Colapsar un repo oculta lo que contiene y las aristas que
 // dependen de ello.
 
-export type NodeKind = 'repo' | 'service' | 'endpoint';
+export type NodeKind = 'repo' | 'service' | 'group' | 'endpoint';
 /** Sitios de llamada que se conservan por endpoint consumido. */
 const MAX_SITES = 3;
 
@@ -76,6 +76,55 @@ export function serviceNodeId(service: string): string {
 }
 export function endpointNodeId(key: string, service: string): string {
   return `ep:${key}@${service}`;
+}
+
+export function groupNodeId(service: string, group: string): string {
+  return `grp:${service}:${group}`;
+}
+
+/** Grupo de contratos bajo un servicio: lo que el usuario entiende, no lo que el sensor emite. */
+export interface ContractGroup {
+  key: string;
+  label: string;
+  /** Qué significa el grupo (se muestra al seleccionarlo); sólo si hay algo que aclarar. */
+  note?: string;
+}
+
+/**
+ * A qué grupo pertenece un contrato. La clave del motor decide el tipo
+ * (GraphQL query/mutation, tarea Celery, HTTP…). Las rutas HTTP SIN método
+ * ("ANY") que nadie llama se separan: el sensor de rutas de LAIN también
+ * reporta cadenas con forma de ruta (nombres de evento del navegador, datos de
+ * prueba), y mezclarlas con las rutas reales llena el mapa de ruido. No se
+ * esconden ni se borran: van a su propio grupo, rotulado, y siguen siendo
+ * contratos del motor.
+ */
+export function contractGroup(key: string, boundConsumers: number): ContractGroup {
+  const kind = contractKind(key);
+  const rest = key.slice(kind.length + 1);
+  if (kind === 'graphql') {
+    const op = rest.split(':')[0];
+    if (op === 'query') return { key: 'gql-query', label: 'GraphQL queries' };
+    if (op === 'mutation') return { key: 'gql-mutation', label: 'GraphQL mutations' };
+    if (op === 'subscription') return { key: 'gql-subscription', label: 'GraphQL subscriptions' };
+    return { key: 'gql-other', label: 'GraphQL (other)' };
+  }
+  if (kind === 'topic') {
+    return rest.startsWith('celery/')
+      ? { key: 'celery', label: 'Celery tasks' }
+      : { key: 'topic', label: 'Topics and events' };
+  }
+  if (kind === 'http') {
+    if (rest.startsWith('ANY ') && boundConsumers === 0) {
+      return {
+        key: 'http-methodless',
+        label: 'HTTP patterns without a method',
+        note: 'Route-like strings the engine found with no HTTP method, and nothing calls them. In browser code these are usually event names or test data, not real routes; in server code they can be catch-all URL patterns. Shown separately so they do not mix with real routes.',
+      };
+    }
+    return { key: 'http', label: 'HTTP routes' };
+  }
+  return { key: `other-${kind}`, label: `Other contracts (${kind})` };
 }
 
 export function contractKind(key: string): string {
@@ -144,6 +193,27 @@ export async function buildEndpointTopology(
   // key de contrato → servicio dueño, en orden de alta (el primero gana).
   const endpointOwner = new Map<string, string>();
 
+  // Cada endpoint cuelga de un GRUPO del servicio (queries, mutaciones, tareas, rutas…).
+  const ensureGroup = (service: string, key: string, bound: number): string => {
+    const g = contractGroup(key, bound);
+    const id = groupNodeId(service, g.key);
+    if (!nodes.has(id)) {
+      nodes.set(id, {
+        id,
+        label: g.label,
+        kind: 'group',
+        parent: serviceNodeId(service),
+        meta: {
+          service,
+          group: g.key,
+          contractKind: contractKind(key),
+          ...(g.note ? { note: g.note } : {}),
+        },
+      });
+    }
+    return id;
+  };
+
   const ensureRepo = (repo: string | null | undefined): string | null => {
     if (!repo) return null;
     const id = repoNodeId(repo);
@@ -198,9 +268,9 @@ export async function buildEndpointTopology(
       id: epId,
       label: key,
       kind: 'endpoint',
-      // El endpoint cuelga del servicio que lo expone; así colapsar el repo
-      // oculta también sus contratos.
-      parent: ownerId,
+      // El endpoint cuelga de un grupo del servicio que lo expone; así colapsar
+      // el repo (o el servicio, o el grupo) oculta también sus contratos.
+      parent: ensureGroup(owner, key, item.bound_consumers ?? 0),
       meta: {
         service: owner,
         contractKind: kind,
@@ -312,7 +382,8 @@ export async function buildEndpointTopology(
             id: epId,
             label: ekey,
             kind: 'endpoint',
-            parent: serviceNodeId(ownerOfKey),
+            // Alguien lo consume (por eso está aquí): no es un patrón huérfano.
+            parent: ensureGroup(ownerOfKey, ekey, 1),
             meta: { service: ownerOfKey, contractKind: contractKind(ekey) },
           });
           byKind[contractKind(ekey)] = (byKind[contractKind(ekey)] ?? 0) + 1;
@@ -360,6 +431,16 @@ export async function buildEndpointTopology(
         }
       }
     }
+  }
+
+  // Cuántos contratos tiene cada grupo (el mapa lo muestra sin abrirlo).
+  const perGroup = new Map<string, number>();
+  for (const n of nodes.values()) {
+    if (n.kind === 'endpoint' && n.parent)
+      perGroup.set(n.parent, (perGroup.get(n.parent) ?? 0) + 1);
+  }
+  for (const n of nodes.values()) {
+    if (n.kind === 'group') n.meta = { ...n.meta, contracts: perGroup.get(n.id) ?? 0 };
   }
 
   const all = [...nodes.values()];
