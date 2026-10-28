@@ -49,7 +49,8 @@ const send = (text: string) => {
   });
   fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 };
-const open = () => fireEvent.click(screen.getByRole('button', { name: 'Ask the architecture' }));
+// En el mapa el asistente ya está abierto y pegado a la derecha: no hay nada que abrir.
+const open = () => {};
 
 describe('turnsToMessages', () => {
   it('turns stored turns into the chat thread, with the engine verdict summary of each', () => {
@@ -228,9 +229,13 @@ describe('the assistant thread', () => {
 
     for (const section of ['repos', 'contracts', 'assessments']) {
       await router.navigate(`/orgs/acme/${section}`);
+      // Fuera del mapa el asistente flota y empieza cerrado: un clic y el hilo está ahí.
+      fireEvent.click(await screen.findByRole('button', { name: 'Ask the architecture' }));
       expect(await screen.findByText('reply 1'), section).toBeTruthy();
       expect(screen.getByLabelText('Ask about your architecture'), section).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }));
     }
+    fireEvent.click(screen.getByRole('button', { name: 'Ask the architecture' }));
     // La URL de esta sección ya no lleva ?conv=, pero el hilo sigue siendo el mismo.
     expect(new URLSearchParams(router.state.location.search).get('conv')).toBeNull();
     send('on assessments');

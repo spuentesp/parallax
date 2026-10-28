@@ -18,13 +18,24 @@ import { type ChatMessage, ChatPanel, summarizeVerdicts } from './ChatPanel.js';
 // La conversación vive en el servidor y en la URL (?conv=): recargar o abrir el
 // enlace recupera el hilo.
 
-export function AssistantDock({ workspaceId }: { workspaceId: string }): React.ReactElement {
+export function AssistantDock({
+  workspaceId,
+  docked = false,
+}: {
+  workspaceId: string;
+  /** En el mapa el asistente va pegado a la derecha y abierto; en el resto, flota y empieza cerrado. */
+  docked?: boolean;
+}): React.ReactElement {
   const orgId = workspaceId;
   const [params, setParams] = useSearchParams();
   const ask = useAsk(orgId);
   const qc = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [chatOpen, setChatOpen] = useState(false);
+  // Abierto/cerrado por separado: ocultarlo en el mapa no lo abre sobre otra sección.
+  const [openDocked, setOpenDocked] = useState(true);
+  const [openFloating, setOpenFloating] = useState(false);
+  const chatOpen = docked ? openDocked : openFloating;
+  const setChatOpen = docked ? setOpenDocked : setOpenFloating;
 
   // La conversación vive en el servidor y en la URL (?conv=): recargar la página
   // o abrir el enlace recupera el hilo.
@@ -60,7 +71,8 @@ export function AssistantDock({ workspaceId }: { workspaceId: string }): React.R
     if (!convId || !conv.data || loadedFor === convId) return;
     setMessages(turnsToMessages(conv.data.turns));
     setLoadedFor(convId);
-    setChatOpen(true);
+    setOpenDocked(true);
+    setOpenFloating(true);
   }, [convId, conv.data, loadedFor]);
 
   // Una conversación que acabamos de crear existe aunque la lectura aún no la vea.
@@ -120,6 +132,57 @@ export function AssistantDock({ workspaceId }: { workspaceId: string }): React.R
       { replace: true },
     );
 
+  const panel = (
+    <ChatPanel
+      messages={messages}
+      onSend={handleSend}
+      loading={ask.isPending}
+      onShowOnMap={showOnMap}
+      conversations={convs.data?.conversations ?? []}
+      activeId={missing ? null : convId}
+      onNew={startNew}
+      onOpen={(id) => {
+        setMessages([]);
+        setLoadedFor(null);
+        setConv(id);
+      }}
+      onDelete={(id) =>
+        del.mutate(id, {
+          onSuccess: () => {
+            if (id === convId) startNew();
+          },
+        })
+      }
+      notice={
+        missing
+          ? 'That conversation is not available (it was deleted, or it belongs to another access token). Your next question starts a new one.'
+          : null
+      }
+      docked={docked}
+      {...(docked ? { onClose: () => setChatOpen(false) } : {})}
+    />
+  );
+
+  if (docked) {
+    return chatOpen ? (
+      <aside
+        className="w-[25rem] max-w-[40vw] shrink-0 h-full border-l border-border"
+        aria-label="Assistant"
+      >
+        {panel}
+      </aside>
+    ) : (
+      <button
+        type="button"
+        onClick={() => setChatOpen(true)}
+        aria-label="Ask the architecture"
+        className="shrink-0 w-9 h-full border-l border-border bg-surface text-xs text-accent hover:bg-bg [writing-mode:vertical-rl] py-4"
+      >
+        Ask the architecture
+      </button>
+    );
+  }
+
   return (
     <>
       <button
@@ -131,34 +194,7 @@ export function AssistantDock({ workspaceId }: { workspaceId: string }): React.R
         {chatOpen ? 'Hide assistant' : 'Ask the architecture'}
       </button>
       {chatOpen && (
-        <div className="fixed bottom-20 right-6 z-30 w-[26rem] h-[36rem] max-h-[75vh]">
-          <ChatPanel
-            messages={messages}
-            onSend={handleSend}
-            loading={ask.isPending}
-            onShowOnMap={showOnMap}
-            conversations={convs.data?.conversations ?? []}
-            activeId={missing ? null : convId}
-            onNew={startNew}
-            onOpen={(id) => {
-              setMessages([]);
-              setLoadedFor(null);
-              setConv(id);
-            }}
-            onDelete={(id) =>
-              del.mutate(id, {
-                onSuccess: () => {
-                  if (id === convId) startNew();
-                },
-              })
-            }
-            notice={
-              missing
-                ? 'That conversation is not available (it was deleted, or it belongs to another access token). Your next question starts a new one.'
-                : null
-            }
-          />
-        </div>
+        <div className="fixed bottom-20 right-6 z-30 w-[26rem] h-[36rem] max-h-[75vh]">{panel}</div>
       )}
     </>
   );

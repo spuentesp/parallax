@@ -24,7 +24,7 @@ describe('routes render in isolation', () => {
     expect(screen.getByRole('heading', { name: /^workspaces$/i })).toBeTruthy();
   });
 
-  it('OrgLayout shows the org id in heading', () => {
+  it('OrgLayout renders the map for the org', async () => {
     renderWithQuery(
       <MemoryRouter initialEntries={['/orgs/acme']}>
         <Routes>
@@ -34,7 +34,7 @@ describe('routes render in isolation', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /acme/i })).toBeTruthy();
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
   });
 
   it('Assessment shows the not-found state when the report is missing', async () => {

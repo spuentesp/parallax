@@ -240,6 +240,7 @@ export function MapCanvas({
   const host = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const lastSig = useRef('');
+  const touched = useRef(false);
   // Posiciones de primer nivel del reparto anterior: abrir un nodo no baraja el resto.
   const topRef = useRef<ReadonlyMap<string, Point>>(new Map());
   // Los handlers de Cytoscape se registran una vez: leen siempre lo último.
@@ -273,6 +274,28 @@ export function MapCanvas({
     // Gancho de inspección para las comprobaciones en navegador real (dev).
     if (import.meta.env.DEV) (window as unknown as { __parallaxCy?: Core }).__parallaxCy = cy;
 
+    // El usuario toma la vista (arrastra/rueda): desde ahí deja de encuadrarse solo.
+    const take = () => {
+      touched.current = true;
+    };
+    host.current?.addEventListener('wheel', take, { passive: true });
+    host.current?.addEventListener('pointerdown', take);
+
+    // Cuántos nodos caen dentro del lienzo visible (comprobable desde fuera).
+    const reportVisible = () => {
+      const box = cy.container();
+      if (!box) return;
+      const w = box.clientWidth;
+      const h = box.clientHeight;
+      const visible = cy.nodes().filter((n) => {
+        const b = n.renderedBoundingBox();
+        return b.x2 > 0 && b.y2 > 0 && b.x1 < w && b.y1 < h;
+      }).length;
+      host.current?.setAttribute('data-visible', String(visible));
+    };
+    cy.on('viewport layoutstop add remove position', reportVisible);
+    reportVisible();
+
     const ro = new ResizeObserver(() => {
       cy.resize();
       const pending = cy.scratch('pendingFit') as { first: boolean } | null | undefined;
@@ -280,6 +303,9 @@ export function MapCanvas({
         cy.scratch('pendingFit', null);
         if (pending.first) cy.fit(undefined, 40);
         host.current?.setAttribute('data-layout', 'done');
+      } else if (!touched.current && cy.nodes().nonempty()) {
+        // El hueco cambió (se abrió/cerró el chat o el esquema): sin vista propia, se reencuadra.
+        cy.fit(undefined, 40);
       }
     });
     if (host.current) ro.observe(host.current);
@@ -288,6 +314,8 @@ export function MapCanvas({
     const mo = new MutationObserver(() => cy.style(buildStyle()));
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => {
+      host.current?.removeEventListener('wheel', take);
+      host.current?.removeEventListener('pointerdown', take);
       ro.disconnect();
       mo.disconnect();
       cy.destroy();
@@ -338,8 +366,14 @@ export function MapCanvas({
         // todo el grafo: el usuario no pierde el hilo ni queda mirando un vacío.
         const fresh = added as cytoscape.Collection | null;
         if (state === 'done' && !first && fresh?.nodes().nonempty()) {
-          const target = fresh.nodes().union(fresh.nodes().ancestors());
-          cy.animate({ fit: { eles: target, padding: 70 }, duration: 220 });
+          if (touched.current) {
+            const target = fresh.nodes().union(fresh.nodes().ancestors());
+            cy.animate({ fit: { eles: target, padding: 70 }, duration: 220 });
+          } else {
+            // Si el usuario aún no movió la vista (apertura automática, filtros), se
+            // encuadra TODO: nada puede quedar fuera de pantalla sin que lo sepa.
+            cy.fit(undefined, 40);
+          }
         }
       }
     }

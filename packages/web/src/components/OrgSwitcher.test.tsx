@@ -21,7 +21,9 @@ describe('OrgSwitcher', () => {
   it('outside a workspace page it still shows the card: there is no workspace yet, and a way to create one', async () => {
     at('/orgs');
     expect(await screen.findByText('No workspace yet')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /create one/i }).getAttribute('href')).toBe('/orgs');
+    expect(screen.getByRole('link', { name: /create a workspace/i }).getAttribute('href')).toBe(
+      '/orgs',
+    );
   });
 
   it('outside a workspace page it shows the workspace in use', async () => {

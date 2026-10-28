@@ -161,8 +161,7 @@ describe('leaving the map and coming back', () => {
 describe('product chrome', () => {
   it('identifies the product and offers the theme toggle', () => {
     renderAt('/orgs');
-    expect(screen.getByText('Parallax')).toBeTruthy();
-    expect(screen.getByText('Architecture command center')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Parallax' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeTruthy();
   });
 });

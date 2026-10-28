@@ -5,8 +5,8 @@ import { useCurrentOrg } from '../nav/currentOrg.js';
 
 type OrgSummary = { id: string; name?: string };
 
-// El workspace actual, siempre visible, con la salida a la lista. Mismo lugar y
-// misma forma en todas las pantallas.
+// El workspace actual, siempre visible y en el mismo lugar: una pastilla con su
+// inicial y nombre, que lleva a la lista. Compacta: el espacio es del mapa.
 export function OrgSwitcher(): React.ReactElement {
   const { orgId, loading } = useCurrentOrg();
   const { data } = useOrgs();
@@ -21,12 +21,14 @@ export function OrgSwitcher(): React.ReactElement {
       : 'No workspace yet';
 
   return (
-    <div className="px-3 py-2.5 mb-2 rounded-lg bg-bg border border-border">
-      <div className="text-[11px] uppercase tracking-wide text-muted">Workspace</div>
-      <div className="text-sm font-medium truncate">{name}</div>
-      <Link to="/orgs" className="text-xs text-accent hover:underline">
-        {orgId ? 'All workspaces →' : 'Create one →'}
-      </Link>
-    </div>
+    <Link
+      to="/orgs"
+      title={orgId ? `${name} — all workspaces` : 'Create a workspace'}
+      aria-label={orgId ? `All workspaces (current: ${name})` : 'Create a workspace'}
+      className="block rounded-lg border border-border bg-bg px-1 py-1.5 text-center hover:border-accent transition-colors"
+    >
+      <span className="block text-[9px] uppercase tracking-wide text-muted">Workspace</span>
+      <span className="block truncate text-[11px] font-medium">{name}</span>
+    </Link>
   );
 }

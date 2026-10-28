@@ -31,6 +31,8 @@ export function ChatPanel({
   onOpen,
   onDelete,
   notice,
+  docked = false,
+  onClose,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => void;
@@ -44,6 +46,10 @@ export function ChatPanel({
   onDelete?: (id: string) => void;
   /** Aviso bajo la cabecera (p. ej. una conversación que ya no existe). */
   notice?: string | null;
+  /** Pegado al borde de la pantalla (sin tarjeta flotante). */
+  docked?: boolean;
+  /** Cierra el panel (sólo si se puede ocultar). */
+  onClose?: () => void;
 }): React.ReactElement {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -61,12 +67,14 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full rounded-xl border border-border bg-surface shadow-lg">
+    <div
+      className={`flex flex-col h-full bg-surface ${docked ? '' : 'rounded-xl border border-border shadow-lg'}`}
+    >
       <div className="px-4 py-3 border-b border-border space-y-2">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="min-w-0">
             <div className="text-sm font-semibold">Ask the architecture</div>
-            <div className="text-xs text-muted">
+            <div className="text-[11px] text-muted leading-snug">
               Answers are checked against the engine; what it confirms can be shown on the map.
             </div>
           </div>
@@ -78,6 +86,17 @@ export function ChatPanel({
               className="shrink-0 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-bg disabled:opacity-50"
             >
               New
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Hide assistant"
+              title="Hide assistant"
+              className="shrink-0 px-1.5 py-1 rounded-lg text-xs text-muted hover:bg-bg hover:text-fg"
+            >
+              ✕
             </button>
           )}
         </div>

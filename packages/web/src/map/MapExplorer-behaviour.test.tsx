@@ -303,6 +303,9 @@ describe('MapExplorer canvas area', () => {
     mount();
     expect(screen.getByText('Loading map…')).toBeTruthy();
     const legend = await screen.findByTestId('map-legend');
+    // Plegada por defecto (el espacio es del grafo); se abre a pedido.
+    expect(legend.textContent).not.toMatch(/Repository/);
+    fireEvent.click(within(legend).getByRole('button', { name: 'Legend' }));
     expect(legend.textContent).toMatch(/Repository/);
     expect(legend.textContent).toMatch(/deterministic/);
     expect(legend.textContent).toMatch(/inferred/);

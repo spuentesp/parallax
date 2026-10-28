@@ -37,14 +37,17 @@ export function useTheme() {
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
-export function ThemeToggle(): React.ReactElement {
+export function ThemeToggle({ compact = false }: { compact?: boolean }): React.ReactElement {
   const { dark, toggle } = useTheme();
   return (
     <button
       type="button"
       onClick={toggle}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-bg hover:text-fg transition-colors"
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className={`flex items-center justify-center gap-2 rounded-lg text-xs text-muted hover:bg-bg hover:text-fg transition-colors ${
+        compact ? 'h-8 w-8' : 'border border-border px-3 py-1.5'
+      }`}
     >
       <svg
         width="14"
@@ -65,7 +68,7 @@ export function ThemeToggle(): React.ReactElement {
           <path d="M13 9.5A5.5 5.5 0 116.5 3a4.5 4.5 0 006.5 6.5z" />
         )}
       </svg>
-      {dark ? 'Light' : 'Dark'}
+      {compact ? null : dark ? 'Light' : 'Dark'}
     </button>
   );
 }

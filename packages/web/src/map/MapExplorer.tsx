@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
 import { readExpanded, writeExpanded, writeMapSearch } from '../nav/mapState.js';
+import { readStored, writeStored } from '../nav/storage.js';
 import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
@@ -69,10 +70,22 @@ export function isDescendant(
   return false;
 }
 
+const OUTLINE_KEY = 'parallax.outline';
+const readOutlineOpen = (): boolean => readStored('session', OUTLINE_KEY) !== 'closed';
+const writeOutlineOpen = (open: boolean): void =>
+  writeStored('session', OUTLINE_KEY, open ? 'open' : 'closed');
+
 /** Por encima de esto, abrir todos los repos al entrar sería ruido: se deja cerrado. */
 const AUTO_OPEN_MAX_REPOS = 12;
 
-export function MapExplorer({ workspaceId }: { workspaceId: string }): React.ReactElement {
+export function MapExplorer({
+  workspaceId,
+  actions,
+}: {
+  workspaceId: string;
+  /** Acciones contextuales que van en la barra (p. ej. evaluar un PR sobre lo seleccionado). */
+  actions?: React.ReactNode;
+}): React.ReactElement {
   const [params, setParams] = useSearchParams();
   const filters = useMemo(() => filtersFromParams(params), [params]);
   const selectedId = params.get('sel');
@@ -83,6 +96,8 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(readExpanded(workspaceId) ?? []),
   );
+  const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen());
+  const [legendOpen, setLegendOpen] = useState(false);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -197,10 +212,7 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
     filters.minConfidence !== undefined;
 
   return (
-    <div
-      className="rounded-xl border border-border bg-surface overflow-hidden"
-      data-testid="map-explorer"
-    >
+    <div className="h-full flex flex-col bg-surface" data-testid="map-explorer">
       <Toolbar
         workspaceId={workspaceId}
         filters={filters}
@@ -214,28 +226,42 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
         onRefresh={() => refresh.mutate(undefined, { onSuccess: code.reset })}
         onFit={() => setFitNonce((n) => n + 1)}
         loading={q.isFetching}
+        outlineOpen={outlineOpen}
+        onToggleOutline={() => {
+          setOutlineOpen((o) => {
+            writeOutlineOpen(!o);
+            return !o;
+          });
+        }}
+        actions={actions}
       />
 
       {meta && meta.source !== 'lain' ? (
         <SourceNotice meta={meta} />
       ) : (
-        <div className="grid grid-cols-[17rem_minmax(0,1fr)_21rem] h-[calc(100vh-18rem)] min-h-[520px] border-t border-border">
-          <aside className="overflow-y-auto border-r border-border" aria-label="Structure">
-            {view ? (
-              <MapOutline
-                view={view}
-                selectedId={selectedId}
-                focusIds={focusIds}
-                onSelect={(id) => setParam({ sel: id })}
-                onToggle={toggle}
-                onMore={(id) => setLimits((l) => ({ ...l, [id]: (l[id] ?? 50) + PAGE }))}
-              />
-            ) : (
-              <p className="p-4 text-sm text-muted">
-                {q.isError ? 'Could not load the map.' : 'Loading map…'}
-              </p>
-            )}
-          </aside>
+        <div
+          className={`grid flex-1 min-h-0 border-t border-border ${
+            outlineOpen ? 'grid-cols-[14rem_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]'
+          }`}
+        >
+          {outlineOpen && (
+            <aside className="overflow-y-auto border-r border-border" aria-label="Structure">
+              {view ? (
+                <MapOutline
+                  view={view}
+                  selectedId={selectedId}
+                  focusIds={focusIds}
+                  onSelect={(id) => setParam({ sel: id })}
+                  onToggle={toggle}
+                  onMore={(id) => setLimits((l) => ({ ...l, [id]: (l[id] ?? 50) + PAGE }))}
+                />
+              ) : (
+                <p className="p-4 text-sm text-muted">
+                  {q.isError ? 'Could not load the map.' : 'Loading map…'}
+                </p>
+              )}
+            </aside>
+          )}
 
           <div className="relative bg-bg min-w-0">
             {view && view.nodes.length > 0 ? (
@@ -283,32 +309,72 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
                 </button>
               </div>
             )}
-            <Legend />
-          </div>
-
-          <aside className="overflow-y-auto border-l border-border" aria-label="Inspector">
-            {selectedId && isCodeId(selectedId) ? (
-              <CodeInspector
-                workspaceId={workspaceId}
-                nodeId={selectedId}
-                node={byId.get(selectedId)}
-                entry={code.state[selectedId]}
-                trail={trailOf(byId, selectedId)}
-                onSelect={(id) => setParam({ sel: id })}
-                onToggle={toggle}
-              />
-            ) : (
-              <MapInspector
-                workspaceId={workspaceId}
-                nodeId={selectedId}
-                onSelect={(id) => setParam({ sel: id })}
-                onFocus={(id) => setParam({ focus: id, hops: String(hops), sel: id })}
-                onToggle={toggle}
-                focusing={focus !== null}
-                onClearFocus={() => setParam({ focus: null, hops: null })}
-              />
+            {hasFilters && (
+              <div
+                className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-warning bg-surface px-3 py-1 text-xs shadow-sm"
+                data-testid="map-filter-banner"
+              >
+                <span className="text-warning">Filtered view</span>
+                <span className="text-muted">
+                  {[
+                    filters.contract ? `${filters.contract} only` : null,
+                    filters.provenance ?? null,
+                    filters.minConfidence !== undefined
+                      ? `confidence ≥ ${filters.minConfidence.toFixed(1)}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}{' '}
+                  — repos and services without a match are hidden
+                </span>
+                <button
+                  type="button"
+                  className="text-accent hover:underline"
+                  onClick={() => setParam({ contract: null, prov: null, minc: null })}
+                >
+                  show everything
+                </button>
+              </div>
             )}
-          </aside>
+            <Legend open={legendOpen} onToggle={() => setLegendOpen((o) => !o)} />
+
+            {selectedId && (
+              <div className="absolute right-3 top-3 bottom-3 z-20 flex w-[21rem] max-w-[60%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => setParam({ sel: null })}
+                  aria-label="Close inspector"
+                  title="Close"
+                  className="absolute right-2 top-2 z-10 h-6 w-6 rounded-md text-xs text-muted hover:bg-bg hover:text-fg"
+                >
+                  ✕
+                </button>
+                <aside className="flex-1 overflow-y-auto" aria-label="Inspector">
+                  {selectedId && isCodeId(selectedId) ? (
+                    <CodeInspector
+                      workspaceId={workspaceId}
+                      nodeId={selectedId}
+                      node={byId.get(selectedId)}
+                      entry={code.state[selectedId]}
+                      trail={trailOf(byId, selectedId)}
+                      onSelect={(id) => setParam({ sel: id })}
+                      onToggle={toggle}
+                    />
+                  ) : (
+                    <MapInspector
+                      workspaceId={workspaceId}
+                      nodeId={selectedId}
+                      onSelect={(id) => setParam({ sel: id })}
+                      onFocus={(id) => setParam({ focus: id, hops: String(hops), sel: id })}
+                      onToggle={toggle}
+                      focusing={focus !== null}
+                      onClearFocus={() => setParam({ focus: null, hops: null })}
+                    />
+                  )}
+                </aside>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -378,6 +444,9 @@ function Toolbar(props: {
   onRefresh: () => void;
   onFit: () => void;
   loading: boolean;
+  outlineOpen: boolean;
+  onToggleOutline: () => void;
+  actions?: React.ReactNode;
 }): React.ReactElement {
   const { filters, setParam, meta, totals } = props;
   const [now, setNow] = useState(() => Date.now());
@@ -387,62 +456,29 @@ function Toolbar(props: {
   }, []);
 
   const chip = (active: boolean) =>
-    `px-2.5 py-1 rounded-full text-xs transition-colors ${active ? 'bg-accent text-accent-fg' : 'bg-bg text-muted hover:bg-border'}`;
+    `px-2 py-0.5 rounded-full text-xs transition-colors ${active ? 'bg-accent text-accent-fg' : 'bg-bg text-muted hover:bg-border'}`;
   const prov = filters.provenance;
   const setProv = (p: Provenance | undefined) =>
     setParam({ prov: p ?? null, ...(p === 'deterministic' ? { minc: null } : {}) });
 
   return (
-    <div className="px-4 py-3 space-y-2.5" data-testid="map-toolbar">
-      <div className="flex items-center gap-3">
+    <div className="px-3 py-2" data-testid="map-toolbar">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          type="button"
+          onClick={props.onToggleOutline}
+          aria-pressed={props.outlineOpen}
+          title={props.outlineOpen ? 'Hide the structure list' : 'Show the structure list'}
+          className={`${chip(props.outlineOpen)} shrink-0`}
+        >
+          Structure
+        </button>
         <SearchBox workspaceId={props.workspaceId} onPick={props.onSelect} />
-        <div className="ml-auto flex items-center gap-3 text-xs text-muted">
-          {totals && (
-            <span className="tabular-nums" data-testid="map-totals">
-              {totals.shownNodes} of {totals.nodes} nodes · {totals.edges} relations
-            </span>
-          )}
-          {meta?.generatedAt !== undefined && (
-            <span data-testid="map-freshness" className={meta.stale ? 'text-warning' : ''}>
-              {meta.stale ? 'Stale · ' : ''}updated {ago(meta.generatedAt, now)}
-              {meta.refreshing ? ' · refreshing…' : ''}
-            </span>
-          )}
-          {meta?.lastError && (
-            <span className="text-error" title={meta.lastError}>
-              last refresh failed
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={props.onFit}
-            className="px-2 py-1 rounded-md hover:bg-border"
-            title="Fit to view"
-          >
-            Fit
-          </button>
-          <button
-            type="button"
-            onClick={props.onRefresh}
-            disabled={props.refreshing || props.readOnly}
-            title={
-              props.readOnly
-                ? 'Read-only access cannot rebuild the graph'
-                : 'Rebuild the graph from LAIN'
-            }
-            className="px-2.5 py-1 rounded-md border border-border hover:bg-border disabled:opacity-60"
-          >
-            {props.refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
-      </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <fieldset
-          className="flex items-center gap-1.5 border-0 p-0 m-0 min-w-0"
+          className="flex items-center gap-1 border-0 p-0 m-0 min-w-0"
           aria-label="Relation provenance"
         >
-          <span className="text-xs text-muted mr-1">Relations</span>
           <button
             type="button"
             aria-pressed={!prov}
@@ -457,7 +493,7 @@ function Toolbar(props: {
             className={`${chip(prov === 'deterministic')} inline-flex items-center gap-1.5`}
             onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
           >
-            <EdgeSwatch provenance="deterministic" width={18} />
+            <EdgeSwatch provenance="deterministic" width={16} />
             deterministic
           </button>
           <button
@@ -466,13 +502,13 @@ function Toolbar(props: {
             className={`${chip(prov === 'inferred')} inline-flex items-center gap-1.5`}
             onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
           >
-            <EdgeSwatch provenance="inferred" width={18} />
+            <EdgeSwatch provenance="inferred" width={16} />
             inferred
           </button>
         </fieldset>
 
         {prov !== 'deterministic' && (
-          <label className="flex items-center gap-2 text-xs text-muted">
+          <label className="flex items-center gap-1.5 text-xs text-muted">
             Min confidence
             <input
               type="range"
@@ -485,17 +521,16 @@ function Toolbar(props: {
                 setParam({ minc: v === 0 ? null : String(v) });
               }}
               aria-label="Minimum confidence of inferred relations"
-              className="w-24 accent-[var(--color-accent)]"
+              className="w-20 accent-[var(--color-accent)]"
             />
             <span className="tabular-nums w-7">{(filters.minConfidence ?? 0).toFixed(1)}</span>
           </label>
         )}
 
         <fieldset
-          className="flex items-center gap-1.5 border-0 p-0 m-0 min-w-0"
+          className="flex items-center gap-1 border-0 p-0 m-0 min-w-0"
           aria-label="Contract kind"
         >
-          <span className="text-xs text-muted mr-1">Contract</span>
           {CONTRACTS.map((c) => (
             <button
               key={c}
@@ -519,6 +554,47 @@ function Toolbar(props: {
           </button>
         )}
         {props.loading && <span className="text-xs text-muted">loading…</span>}
+
+        <div className="ml-auto flex items-center gap-2.5 text-xs text-muted">
+          {totals && (
+            <span className="tabular-nums" data-testid="map-totals">
+              {totals.shownNodes} of {totals.nodes} nodes · {totals.edges} relations
+            </span>
+          )}
+          {meta?.generatedAt !== undefined && (
+            <span data-testid="map-freshness" className={meta.stale ? 'text-warning' : ''}>
+              {meta.stale ? 'Stale · ' : ''}updated {ago(meta.generatedAt, now)}
+              {meta.refreshing ? ' · refreshing…' : ''}
+            </span>
+          )}
+          {meta?.lastError && (
+            <span className="text-error" title={meta.lastError}>
+              last refresh failed
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={props.onFit}
+            className="px-2 py-0.5 rounded-md hover:bg-border"
+            title="Fit to view"
+          >
+            Fit
+          </button>
+          <button
+            type="button"
+            onClick={props.onRefresh}
+            disabled={props.refreshing || props.readOnly}
+            title={
+              props.readOnly
+                ? 'Read-only access cannot rebuild the graph'
+                : 'Rebuild the graph from LAIN'
+            }
+            className="px-2 py-0.5 rounded-md border border-border hover:bg-border disabled:opacity-60"
+          >
+            {props.refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+          {props.actions}
+        </div>
       </div>
     </div>
   );
@@ -584,29 +660,41 @@ function SearchBox({
   );
 }
 
-function Legend(): React.ReactElement {
+function Legend({ open, onToggle }: { open: boolean; onToggle: () => void }): React.ReactElement {
   return (
     <div
-      className="absolute bottom-3 left-3 z-10 rounded-lg border border-border bg-surface/95 px-3 py-2 text-[11px] text-muted space-y-1"
+      className="absolute bottom-3 left-3 z-10 rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-[11px] text-muted space-y-1"
       data-testid="map-legend"
     >
-      <div className="flex items-center gap-3">
-        {(['repo', 'service', 'endpoint'] as const).map((k) => (
-          <span key={k} className="inline-flex items-center gap-1">
-            <KindIcon kind={k} size={12} />
-            {KIND_LABEL[k]}
-          </span>
-        ))}
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="inline-flex items-center gap-1.5">
-          <EdgeSwatch provenance="deterministic" width={22} /> deterministic
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <EdgeSwatch provenance="inferred" width={22} /> inferred (fainter = less sure)
-        </span>
-      </div>
-      <div>Dashed box = has contents · double-click to open · ×N = N relations rolled up</div>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="text-[11px] text-muted hover:text-fg"
+      >
+        {open ? 'Hide legend' : 'Legend'}
+      </button>
+      {open && (
+        <>
+          <div className="flex items-center gap-3">
+            {(['repo', 'service', 'endpoint'] as const).map((k) => (
+              <span key={k} className="inline-flex items-center gap-1">
+                <KindIcon kind={k} size={12} />
+                {KIND_LABEL[k]}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5">
+              <EdgeSwatch provenance="deterministic" width={22} /> deterministic
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <EdgeSwatch provenance="inferred" width={22} /> inferred (fainter = less sure)
+            </span>
+          </div>
+          <div>Dashed box = has contents · double-click to open · ×N = N relations rolled up</div>
+        </>
+      )}
     </div>
   );
 }

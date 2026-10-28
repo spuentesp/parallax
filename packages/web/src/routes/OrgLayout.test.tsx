@@ -49,7 +49,6 @@ describe('OrgLayout hub', () => {
   it('shows the org, the contextual action and the real map on one screen', async () => {
     serveMap([svc('orders'), svc('billing')]);
     renderHub();
-    expect(screen.getByRole('heading', { name: /acme|demo/i })).toBeTruthy();
     const outline = await screen.findByTestId('map-outline');
     expect(within(outline).getByText('orders')).toBeTruthy();
     expect(screen.getByRole('link', { name: /evaluate pr/i })).toBeTruthy();
@@ -101,7 +100,6 @@ describe('OrgLayout assistant', () => {
       ),
     );
   const ask = async (text: string) => {
-    fireEvent.click(screen.getByRole('button', { name: /ask the architecture/i }));
     fireEvent.change(screen.getByLabelText(/ask about your architecture/i), {
       target: { value: text },
     });

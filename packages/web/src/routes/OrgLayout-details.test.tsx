@@ -30,38 +30,34 @@ describe('legacy service URL', () => {
 });
 
 describe('hub header and assistant', () => {
-  it('titles the page with the workspace name, falling back to the id', async () => {
-    server.use(
-      http.get('/api/workspaces/:id', () =>
-        HttpResponse.json({ workspace: { id: 'acme', name: 'Acme platform', repos: [] } }),
-      ),
-    );
+  it('the map page has no header of its own: the workspace name lives in the sidebar and the map fills the page', async () => {
     renderAt('/orgs/acme');
-    expect(await screen.findByRole('heading', { name: 'Acme platform' })).toBeTruthy();
-    expect(screen.getAllByText('Organization').length).toBeGreaterThan(0);
-    cleanup();
-    server.use(http.get('/api/workspaces/:id', () => HttpResponse.json({ workspace: null })));
-    renderAt('/orgs/raw-id');
-    expect(screen.getByRole('heading', { name: 'raw-id' })).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'raw-id' })).toBeTruthy());
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
   });
 
-  it('the assistant starts hidden; the toggle opens and closes it and reports its state', () => {
+  it('on the map the assistant is docked and open; it can be hidden and brought back from the edge tab', () => {
     renderAt('/orgs/acme');
-    const toggle = screen.getByRole('button', { name: 'Ask the architecture' });
+    expect(screen.getByLabelText('Ask about your architecture')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask the architecture' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }));
+    expect(screen.queryByLabelText('Ask about your architecture')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Ask the architecture' }));
+    expect(screen.getByLabelText('Ask about your architecture')).toBeTruthy();
+  });
+
+  it('on the other sections it floats and starts closed; hiding it on the map does not open it there', async () => {
+    const router = renderAt('/orgs/acme');
+    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }));
+    await router.navigate('/orgs/acme/repos');
+    const toggle = await screen.findByRole('button', { name: 'Ask the architecture' });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByLabelText('Ask about your architecture')).toBeNull();
     fireEvent.click(toggle);
-    expect(
-      screen.getByRole('button', { name: 'Hide assistant' }).getAttribute('aria-expanded'),
-    ).toBe('true');
     expect(screen.getByLabelText('Ask about your architecture')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide assistant' }));
-    expect(screen.queryByLabelText('Ask about your architecture')).toBeNull();
   });
 
   const ask = (text: string) => {
-    fireEvent.click(screen.getByRole('button', { name: 'Ask the architecture' }));
     fireEvent.change(screen.getByLabelText('Ask about your architecture'), {
       target: { value: text },
     });

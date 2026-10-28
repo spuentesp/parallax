@@ -91,28 +91,28 @@ export function AppShell(): React.ReactElement {
 
   return (
     <div className="flex h-screen bg-bg text-fg">
-      <aside className="w-60 shrink-0 flex flex-col bg-surface border-r border-border">
-        <div className="p-5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg grid place-items-center bg-accent text-accent-fg font-bold">
-              P
-            </div>
-            <div className="leading-tight">
-              <div className="font-semibold text-sm">Parallax</div>
-              <div className="text-xs text-muted">Architecture command center</div>
-            </div>
-          </div>
+      <aside
+        className="w-[4.75rem] shrink-0 flex flex-col items-stretch bg-surface border-r border-border"
+        aria-label="Navigation"
+      >
+        <div
+          className="mx-auto mt-3 w-8 h-8 rounded-lg grid place-items-center bg-accent text-accent-fg font-bold"
+          title="Parallax — architecture command center"
+          role="img"
+          aria-label="Parallax"
+        >
+          P
         </div>
 
-        <div className="px-3">
+        <div className="px-1.5 mt-3">
           <OrgSwitcher />
         </div>
 
-        <nav className="flex-1 px-3 space-y-0.5" aria-label="Main">
+        <nav className="flex-1 px-1.5 mt-2 space-y-1" aria-label="Main">
           {NAV_ITEMS.map((item) => {
             const to = targetFor(item);
             const active = isActive(item);
-            const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+            const cls = `flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] leading-none transition-colors ${
               active
                 ? 'bg-accent/10 text-accent font-medium'
                 : to
@@ -124,6 +124,7 @@ export function AppShell(): React.ReactElement {
                 key={item.key}
                 to={to}
                 aria-current={active ? 'page' : undefined}
+                title={item.label}
                 className={cls}
               >
                 <NavIcon name={item.icon} />
@@ -138,27 +139,42 @@ export function AppShell(): React.ReactElement {
           })}
         </nav>
 
-        <div className="p-4 space-y-2">
+        <div className="py-3 flex flex-col items-center gap-1.5">
           {who.data?.readOnly && (
-            <p
-              className="rounded-lg border border-border bg-bg px-3 py-1.5 text-[11px] text-muted"
+            <span
+              className="rounded-md border border-border bg-bg px-1.5 py-0.5 text-[9px] text-muted"
               data-testid="read-only-badge"
+              title="Read-only access: you can explore and ask questions, not change anything."
             >
-              Read-only access: you can explore and ask questions, not change anything.
-            </p>
+              read-only
+            </span>
           )}
-          <ThemeToggle />
+          <ThemeToggle compact />
           <button
             type="button"
             onClick={signOut}
-            className="w-full rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-bg hover:text-fg transition-colors"
+            aria-label="Sign out"
+            title="Sign out"
+            className="h-8 w-8 grid place-items-center rounded-lg text-muted hover:bg-bg hover:text-fg transition-colors"
           >
-            Sign out
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6.5 2.5h-3v11h3M10 5l3 3-3 3M13 8H6.5" />
+            </svg>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto bg-bg">
+      <main className="flex-1 min-w-0 overflow-auto bg-bg">
         <Outlet />
       </main>
     </div>
