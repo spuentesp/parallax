@@ -11,7 +11,7 @@ Parallax turns an organization's multi-repo service topology into a navigable co
 - **PR impact assessment** that compares snapshots base vs. head, with findings classified by the motor (`Verified | NeedsInvestigation | NoKnownImpact`).
 - **Investigator powered by NVIDIA Nemotron** (via Nebius Token Factory): tool-calling loop with budget, persists explanations with revision, never promotes the motor's classification.
 - **MCP server** for AI agents (Claude Code, Codex, Cursor). Both stdio (local) and HTTP/SSE (remote) transports.
-- **Web SPA** served by the same api at `/app/*`.
+- **Web SPA** served by the same api at `/`.
 
 ## Architecture
 
@@ -89,6 +89,49 @@ Point Parallax at that server:
 ```bash
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
 ```
+
+## Judging and testing
+
+**Live demo and access.** The demo URL and a read-only access link are in the
+"testing instructions" of the Devpost submission. The link looks like
+`https://<demo-host>/orgs/ws_saleor?token=<read-only-token>`: it signs you in,
+removes the token from the address bar, and opens the architecture map of
+[Saleor](https://github.com/saleor/saleor) (an open-source multi-repo
+e-commerce platform: API, dashboard, storefront). Without the link the app asks
+for an access token. The token is **read-only**: you can explore the map and ask
+questions, but you cannot rebuild the graph or change workspaces.
+
+**Three-minute tour**
+
+1. **Map.** Repos open into services, services into endpoints, repos into their
+   code (files, functions). Nothing is loaded until you open it. *Solid* lines are
+   deterministic relationships (proven by the static analysis); *dashed* lines are
+   inferred ones, fainter the less sure the engine is. Use the filters to look at
+   only one of them, or one contract kind.
+2. **Inspector.** Click an endpoint: "Consumed by" lists the services that use it,
+   across repos, with how sure the engine is of each link. Click "View source" on
+   a function or file.
+3. **Ask.** Open *Ask the architecture* and try *"Which services consume the
+   checkout API, and from which repos?"*. Nemotron (served on Nebius Token
+   Factory) investigates with the engine's tools. Every relationship it claims is
+   re-checked by the engine; the answer shows how many were verified, and
+   *Show on map* jumps to exactly the subgraph the engine backs.
+4. **Assess a PR.** *Assessments* shows the impact report of a pull request on
+   the other repos that consume what it changes.
+
+**What it does and does not claim.** A relationship shown as deterministic is
+backed by the analysis; a claim the model makes that the engine cannot confirm is
+flagged, never silently kept. The map reflects the repositories configured in the
+workspace: it does not know about code that was not indexed, and it has no notion
+of team ownership. There is no cross-org "what happened this week" digest yet; PR
+impact is assessed one PR at a time.
+
+**Run it yourself.** See [Setup](#setup) and [Run (dev mode)](#run-dev-mode).
+The map needs a Lain server with your repositories indexed (see the Lain section
+above); `packages/api/scripts/seed-workspaces.ts` seeds the Saleor and Online
+Boutique demo workspaces. Set `NEBIUS_TOKEN` to enable the Nemotron investigator;
+without it the structural analysis still works and the investigator reports
+`failed:no_model_configured`.
 
 ## Use of Nemotron and Token Factory
 
