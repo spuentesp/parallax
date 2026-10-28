@@ -44,6 +44,10 @@ export const sampleReport = {
 };
 
 export const handlers = [
+  http.get('/api/conversations', () => HttpResponse.json({ conversations: [] })),
+  http.get('/api/conversations/:id', () =>
+    HttpResponse.json({ code: 'NotFound', detail: 'conversation not found' }, { status: 404 }),
+  ),
   http.get('/api/whoami', () =>
     HttpResponse.json({ orgId: 'acme', scopes: ['read', 'write'], readOnly: false }),
   ),

@@ -595,6 +595,8 @@ export interface AskResponse {
   answer: string;
   claims?: ClaimVerdictDto[];
   explanation_status: string;
+  /** La conversación a la que se guardó este turno (null si no se guardó). */
+  conversation?: { id: string; seq: number } | null;
   claims_summary: {
     total: number;
     verified: number;
@@ -608,8 +610,67 @@ export interface AskResponse {
 
 export function useAsk(orgId: string | undefined) {
   return useMutation({
-    mutationFn: (question: string) =>
-      client.post<AskResponse>('/api/query', { question, orgId: orgId ?? '' }),
+    mutationFn: (vars: { question: string; conversationId?: string | undefined }) =>
+      client.post<AskResponse>('/api/query', {
+        question: vars.question,
+        orgId: orgId ?? '',
+        ...(vars.conversationId ? { conversationId: vars.conversationId } : {}),
+      }),
+  });
+}
+
+// ── Conversaciones (memoria del investigador, por token) ────────────────────
+
+export interface ConversationSummaryDto {
+  id: string;
+  workspaceId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  turns: number;
+}
+
+export interface TurnDto {
+  seq: number;
+  question: string;
+  answer: string;
+  status: string;
+  claims: ClaimVerdictDto[];
+  focus: MapFocusDto | null;
+  model: string | null;
+  createdAt: number;
+}
+
+export function useConversations(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['conversations', workspaceId],
+    queryFn: () =>
+      client.get<{ conversations: ConversationSummaryDto[] }>(
+        `/api/conversations?workspaceId=${encodeURIComponent(workspaceId ?? '')}`,
+      ),
+    enabled: workspaceId != null,
+  });
+}
+
+export function useConversation(id: string | null) {
+  return useQuery({
+    queryKey: ['conversation', id],
+    queryFn: () =>
+      client.get<{ conversation: ConversationSummaryDto; turns: TurnDto[] }>(
+        `/api/conversations/${id}`,
+      ),
+    enabled: id != null,
+    retry: false,
+  });
+}
+
+export function useDeleteConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => client.del(`/api/conversations/${id}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['conversations'] });
+    },
   });
 }
 

@@ -1,6 +1,11 @@
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import type { AskResponse, ClaimVerdictDto, MapFocusDto } from '../api/hooks.js';
+import type {
+  AskResponse,
+  ClaimVerdictDto,
+  ConversationSummaryDto,
+  MapFocusDto,
+} from '../api/hooks.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -20,11 +25,25 @@ export function ChatPanel({
   onSend,
   loading,
   onShowOnMap,
+  conversations = [],
+  activeId = null,
+  onNew,
+  onOpen,
+  onDelete,
+  notice,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => void;
   loading: boolean;
   onShowOnMap?: (focus: MapFocusDto) => void;
+  /** Mis conversaciones de este workspace (la memoria vive en el servidor). */
+  conversations?: ConversationSummaryDto[];
+  activeId?: string | null;
+  onNew?: () => void;
+  onOpen?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  /** Aviso bajo la cabecera (p. ej. una conversación que ya no existe). */
+  notice?: string | null;
 }): React.ReactElement {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -43,11 +62,65 @@ export function ChatPanel({
 
   return (
     <div className="flex flex-col h-full rounded-xl border border-border bg-surface shadow-lg">
-      <div className="px-4 py-3 border-b border-border">
-        <div className="text-sm font-semibold">Ask the architecture</div>
-        <div className="text-xs text-muted">
-          Answers are checked against the engine; what it confirms can be shown on the map.
+      <div className="px-4 py-3 border-b border-border space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="text-sm font-semibold">Ask the architecture</div>
+            <div className="text-xs text-muted">
+              Answers are checked against the engine; what it confirms can be shown on the map.
+            </div>
+          </div>
+          {onNew && (
+            <button
+              type="button"
+              onClick={onNew}
+              disabled={loading}
+              className="shrink-0 px-2.5 py-1 rounded-lg text-xs border border-border hover:bg-bg disabled:opacity-50"
+            >
+              New
+            </button>
+          )}
         </div>
+        {conversations.length > 0 && (
+          <details className="text-xs" data-testid="conversation-list">
+            <summary className="cursor-pointer text-muted hover:text-fg">
+              Earlier conversations ({conversations.length})
+            </summary>
+            <ul className="mt-1.5 max-h-36 overflow-y-auto space-y-0.5">
+              {conversations.map((c) => (
+                <li key={c.id} className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpen?.(c.id)}
+                    aria-current={c.id === activeId ? 'true' : undefined}
+                    className={`flex-1 text-left truncate rounded px-2 py-1 hover:bg-bg ${
+                      c.id === activeId ? 'bg-accent/10 text-accent' : ''
+                    }`}
+                    title={c.title}
+                  >
+                    {c.title}
+                    <span className="text-muted"> · {c.turns}</span>
+                  </button>
+                  {onDelete && (
+                    <button
+                      type="button"
+                      aria-label={`Delete conversation ${c.title}`}
+                      onClick={() => onDelete(c.id)}
+                      className="px-1.5 text-muted hover:text-error"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+        {notice && (
+          <p className="text-xs text-warning" role="status">
+            {notice}
+          </p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -126,6 +199,19 @@ export function ChatPanel({
       </div>
     </div>
   );
+}
+
+/** Cuenta los veredictos del motor (para el resumen de una respuesta guardada). */
+export function summarizeVerdicts(v: readonly ClaimVerdictDto[]): AskResponse['claims_summary'] {
+  const n = (x: ClaimVerdictDto['verdict']) => v.filter((c) => c.verdict === x).length;
+  return {
+    total: v.length,
+    verified: n('verified'),
+    contradicted: n('contradicted'),
+    unverifiable: n('unverifiable'),
+    supported: n('supported'),
+    unsupported: n('unsupported'),
+  };
 }
 
 const VERDICT_STYLE: Record<ClaimVerdictDto['verdict'], string> = {

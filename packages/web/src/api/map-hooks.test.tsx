@@ -196,12 +196,12 @@ describe('useAsk and code fetchers', () => {
     const { wrap } = wrapper();
     const { result } = renderHook(() => useAsk('acme'), { wrapper: wrap });
     await act(async () => {
-      await result.current.mutateAsync('q?');
+      await result.current.mutateAsync({ question: 'q?' });
     });
     expect(body).toEqual({ question: 'q?', orgId: 'acme' });
     const none = renderHook(() => useAsk(undefined), { wrapper: wrap });
     await act(async () => {
-      await none.result.current.mutateAsync('x');
+      await none.result.current.mutateAsync({ question: 'x' });
     });
     expect(body).toEqual({ question: 'x', orgId: '' });
   });
