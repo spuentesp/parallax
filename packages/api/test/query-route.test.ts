@@ -45,7 +45,10 @@ describe('POST /api/query budget', () => {
   let dir: string;
   let app: Awaited<ReturnType<typeof buildApp>>;
 
-  async function start(investigatorMaxToolCalls: number): Promise<void> {
+  async function start(
+    investigatorMaxToolCalls: number,
+    queryRateLimitPerHour?: number,
+  ): Promise<void> {
     app = await buildApp({
       port: 0,
       databasePath: join(dir, 'p.db'),
@@ -55,6 +58,7 @@ describe('POST /api/query budget', () => {
       webBundlePath: dir,
       nebiusToken: 'test-token',
       investigatorMaxToolCalls,
+      ...(queryRateLimitPerHour !== undefined ? { queryRateLimitPerHour } : {}),
     });
   }
 
@@ -177,5 +181,22 @@ describe('POST /api/query budget', () => {
       },
     ]);
     expect((await ask()).json().map_focus).toBeNull();
+  });
+
+  it('stops a token that exceeds its hourly question limit, with a clear message and Retry-After', async () => {
+    stubModel([{ content: 'done, no citations' }]);
+    await start(8, 2);
+    expect((await ask()).statusCode).toBe(200);
+    expect((await ask()).statusCode).toBe(200);
+    const blocked = await ask();
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.json().detail).toMatch(/2 per hour/);
+    expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+  });
+
+  it('has no limit unless one is configured', async () => {
+    stubModel([{ content: 'done, no citations' }]);
+    await start(8);
+    for (let i = 0; i < 4; i++) expect((await ask()).statusCode).toBe(200);
   });
 });

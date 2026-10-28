@@ -10,6 +10,7 @@ import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { type MapFocus, mapFocusFromClaims } from '../agent/map-focus.js';
 import { investigatorModel } from '../agent/model.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
+import { createWindowLimiter } from '../rate-limit.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
 
 const QueryRequest = z.object({
@@ -91,6 +92,8 @@ const NO_CLAIMS = {
 const EMPTY_TOPOLOGY: TopologyViewData = { nodes: [], edges: [] };
 
 export const queryRoutes: FastifyPluginAsync = async (app) => {
+  const perHour = app.config.queryRateLimitPerHour ?? 0;
+  const limiter = perHour > 0 ? createWindowLimiter({ limit: perHour, windowMs: 3_600_000 }) : null;
   const resolveWorkspaceLain = createWorkspaceLainResolver({
     db: app.db,
     defaultAdapter: app.lain,
@@ -100,9 +103,33 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     '/api/query',
     {
       config: { scopes: ['read'] },
-      schema: { body: QueryRequest, response: { 200: QueryResponse } },
+      schema: {
+        body: QueryRequest,
+        response: {
+          200: QueryResponse,
+          429: z.object({
+            type: z.string(),
+            title: z.string(),
+            status: z.number(),
+            detail: z.string(),
+          }),
+        },
+      },
     },
-    async (req) => {
+    async (req, reply) => {
+      const taken = limiter?.take(req.authToken?.token ?? 'anonymous');
+      if (taken && !taken.ok) {
+        const minutes = Math.ceil(taken.retryAfterMs / 60_000);
+        return reply
+          .code(429)
+          .header('retry-after', String(Math.ceil(taken.retryAfterMs / 1000)))
+          .send({
+            type: 'about:blank',
+            title: 'Too Many Requests',
+            status: 429,
+            detail: `Question limit reached for this access token (${perHour} per hour). Try again in about ${minutes} min.`,
+          });
+      }
       const { question, orgId } = req.body as z.infer<typeof QueryRequest>;
       const lain = (await resolveWorkspaceLain(orgId)) ?? app.lain;
 

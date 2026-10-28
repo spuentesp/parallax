@@ -26,6 +26,9 @@ const AppConfigSchema = z.object({
   // por consulta, medidos y reportados en la demo.
   investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
   investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
+  // Tope de preguntas al investigador por token y hora (0 o ausente = sin tope).
+  // Para demos públicas: cada pregunta consume créditos de Token Factory.
+  queryRateLimitPerHour: z.coerce.number().int().min(0).optional(),
   webBundlePath: z.string().default('./packages/web/dist'),
   // Lectura de PRs de GitHub (selector y auto CI). Sólo GET: el token de escritura
   // (estado y comentarios) es otra credencial, que nunca usa el lector.
@@ -129,6 +132,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...modelEnv(env),
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
+    queryRateLimitPerHour: env.QUERY_RATE_LIMIT_PER_HOUR,
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
     githubApiBase: env.PARALLAX_GITHUB_API_BASE,
