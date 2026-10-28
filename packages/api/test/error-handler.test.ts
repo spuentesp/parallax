@@ -122,4 +122,14 @@ describe('error-handler plugin', () => {
     expect(r.json()).toMatchObject({ title: 'Internal Server Error', detail: 'unexpected error' });
     await app.close();
   });
+
+  it('does not pass a numeric status below the 4xx range through', async () => {
+    const app = await makeApp();
+    for (const code of ['302', '399']) {
+      const r = await app.inject({ method: 'GET', url: `/status/${code}` });
+      expect(r.statusCode).toBe(500);
+      expect(r.json().title).toBe('Internal Server Error');
+    }
+    await app.close();
+  });
 });
