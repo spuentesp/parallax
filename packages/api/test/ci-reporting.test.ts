@@ -417,4 +417,224 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     );
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
+
+  // El worker real, con `run` sustituido: la evaluación queda QUEUED y cada estado
+  // terminal lo llevamos nosotros con transition(), por el camino de escritura real.
+  // Sin esto, el run en curso compite con las transiciones del test (ver el hallazgo
+  // de la cola de eventos en el worker).
+  const parkedWorker = (run: (id: string) => Promise<unknown>) =>
+    new Proxy(app.assessmentWorker, {
+      get(target, prop) {
+        if (prop === 'run') return run;
+        const v = Reflect.get(target, prop) as unknown;
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+      },
+    });
+
+  const parkedDeps = (
+    log: FastifyBaseLogger,
+    writer: GitHubWriter | null,
+    worker: typeof app.assessmentWorker,
+  ) => ({
+    db: app.db,
+    worker,
+    analyzerVersion: app.lain.analyzerVersion,
+    writer,
+    publicUrl: 'https://parallax.example',
+    log,
+  });
+
+  const onlyAssessmentId = async (): Promise<string> => {
+    const rows = await app.db.select().from(schema.assessment);
+    expect(rows).toHaveLength(1);
+    return rows[0]?.id ?? '';
+  };
+
+  const writerFor = () =>
+    new GitHubWriter({
+      token: 'write-token',
+      apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
+    });
+
+  it('stays silent through non-terminal states and reports once the assessment is terminal', async () => {
+    const { log, lines } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await new Promise((r) => setTimeout(r, 100));
+    expect(statusPosts()).toHaveLength(0);
+    await app.assessmentWorker.transition(id, 'PARTIAL');
+    await until(() => statusPosts().length === 1);
+    expect(statusPosts()[0]?.body).toMatchObject({ state: 'pending' });
+    expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+  });
+
+  it('reports a failed assessment as error with the exact text', async () => {
+    const { log, lines } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'FAILED', { error: 'engine down' });
+    await until(() => statusPosts().length === 1);
+    expect(statusPosts()[0]?.body).toMatchObject({
+      state: 'error',
+      description: 'Parallax assessment failed; no result.',
+      context: 'parallax/assessment',
+    });
+    expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+  });
+
+  it('reports a cancelled assessment as pending, never as success', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'CANCELLED');
+    await until(() => statusPosts().length === 1);
+    expect(statusPosts()[0]?.body).toMatchObject({
+      state: 'pending',
+      description: 'No result conclusive: coverage is incomplete',
+    });
+  });
+
+  it('reports a ready assessment that has no coverage record as pending', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await app.assessmentWorker.transition(id, 'EXPLAINING');
+    await app.assessmentWorker.transition(id, 'READY');
+    await until(() => statusPosts().length === 1);
+    expect(statusPosts()[0]?.body).toMatchObject({ state: 'pending' });
+  });
+
+  it('logs a failed run with the assessment id and the error', async () => {
+    const { log, lines } = recordingLog();
+    const boom = new Error('run exploded');
+    const worker = parkedWorker(async () => {
+      throw boom;
+    });
+    await handlePullRequest(parkedDeps(log, null, worker), prFor());
+    await until(() => lines.some((l) => l.msg === 'PR assessment run failed'));
+    const line = lines.find((l) => l.msg === 'PR assessment run failed');
+    const id = await onlyAssessmentId();
+    expect(line?.level).toBe('error');
+    expect(line?.obj).toMatchObject({ assessment: id, err: boom });
+  });
+
+  it('logs a PR that could not start an assessment, and creates none', async () => {
+    const { log, lines } = recordingLog();
+    const boom = new Error('db down');
+    const worker = new Proxy(app.assessmentWorker, {
+      get(target, prop) {
+        if (prop === 'create') return async () => Promise.reject(boom);
+        const v = Reflect.get(target, prop) as unknown;
+        return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(target) : v;
+      },
+    });
+    const n = await handlePullRequest(parkedDeps(log, null, worker), prFor());
+    expect(n).toBe(0);
+    const line = lines.find((l) => l.msg === 'could not start PR assessment');
+    expect(line?.level).toBe('error');
+    expect(line?.obj).toMatchObject({ err: boom, repo: 'https://github.com/acme/shop.git', pr: 4 });
+    expect(await app.db.select().from(schema.assessment)).toHaveLength(0);
+  });
+
+  it('names the assessment in the no-write-token warning', async () => {
+    const { log, lines } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, null, worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await app.assessmentWorker.transition(id, 'PARTIAL');
+    await until(() => lines.some((l) => l.level === 'warn'));
+    expect(lines.find((l) => l.level === 'warn')?.obj).toEqual({ assessment: id });
+  });
+
+  it('names the assessment in the error when GitHub rejects the status', async () => {
+    ghStatus = 403;
+    const { log, lines } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await app.assessmentWorker.transition(id, 'PARTIAL');
+    await until(() => lines.some((l) => l.level === 'error'));
+    expect(lines.find((l) => l.level === 'error')?.obj).toMatchObject({ assessment: id });
+  });
+});
+
+describe('CI routes authorization and not-found bodies', () => {
+  let dir: string;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+  let wsId: string;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-ci-auth-'));
+    app = await buildApp({
+      port: 0,
+      databasePath: join(dir, 'p.db'),
+      lainAdapter: 'mock',
+      mcpTransport: 'stdio',
+      authTokens: [
+        { token: 'reader', orgId: 'o', scopes: ['read'] },
+        { token: 'writer', orgId: 'o', scopes: ['write'] },
+      ],
+      webBundlePath: join(dir, 'web'),
+    });
+    const ws = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: { authorization: 'Bearer writer' },
+      payload: { name: 'shop' },
+    });
+    wsId = ws.json().workspace.id as string;
+  });
+
+  afterEach(async () => {
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('lets a read token read CI settings and refuses it to change them', async () => {
+    const read = await app.inject({
+      method: 'GET',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: { authorization: 'Bearer reader' },
+    });
+    expect(read.statusCode).toBe(200);
+
+    const put = await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: { authorization: 'Bearer reader' },
+      payload: { mode: 'off', baseBranch: null, reportComments: false },
+    });
+    expect(put.statusCode).toBe(403);
+  });
+
+  it('refuses to read CI settings with a token that has only write scope', async () => {
+    const r = await app.inject({
+      method: 'GET',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: { authorization: 'Bearer writer' },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it('answers the exact not-found body for an unknown workspace on read', async () => {
+    const r = await app.inject({
+      method: 'GET',
+      url: '/api/workspaces/ws_nope/ci',
+      headers: { authorization: 'Bearer reader' },
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json()).toEqual({ error: 'workspace not found' });
+  });
 });

@@ -1,6 +1,8 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { afterEach, describe, expect, it } from 'vitest';
+import { useOpenPrs } from '../api/hooks.js';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 import { CiSettingsPanel } from './CiSettingsPanel.js';
@@ -216,5 +218,49 @@ describe('CiSettingsPanel', () => {
     renderWithQuery(<CiSettingsPanel orgId="ws1" />);
     const branch = (await screen.findByPlaceholderText('any branch')) as HTMLInputElement;
     expect(branch.value).toBe('');
+  });
+
+  it('saves only the CI settings, leaving other cached listings alone', async () => {
+    let prListings = 0;
+    server.use(
+      http.get('/api/workspaces/ws1/ci', () =>
+        HttpResponse.json({ mode: 'off', baseBranch: null, reportComments: false }),
+      ),
+      http.get('/api/workspaces/ws1/prs', () => {
+        prListings += 1;
+        return HttpResponse.json({ prs: [], skipped: [], errors: [], truncated: [] });
+      }),
+      http.put('/api/workspaces/ws1/ci', async ({ request }) =>
+        HttpResponse.json((await request.json()) as Record<string, unknown>),
+      ),
+    );
+    function OtherListing() {
+      useOpenPrs('ws1');
+      return null;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <CiSettingsPanel orgId="ws1" />
+        <OtherListing />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('combobox');
+    await waitFor(() => expect(prListings).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText('Saved.');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(prListings).toBe(1);
+  });
+
+  it('styles the branch filter input with its focus ring', async () => {
+    server.use(
+      http.get('/api/workspaces/ws1/ci', () =>
+        HttpResponse.json({ mode: 'off', baseBranch: null, reportComments: false }),
+      ),
+    );
+    renderWithQuery(<CiSettingsPanel orgId="ws1" />);
+    const branch = await screen.findByPlaceholderText('any branch');
+    expect(branch.className).toContain('focus:ring-2');
   });
 });

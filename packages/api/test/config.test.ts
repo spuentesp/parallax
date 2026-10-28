@@ -112,3 +112,24 @@ describe('loadConfig', () => {
     expect(c.workerModel).toBe('nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B');
   });
 });
+
+describe('loadConfig GitHub credentials', () => {
+  const base = {
+    PARALLAX_TOKENS: JSON.stringify([{ token: 't1', orgId: 'org_demo', scopes: ['read'] }]),
+  };
+
+  it('accepts a write token and a webhook secret of any length', () => {
+    const cfg = loadConfig({
+      ...base,
+      PARALLAX_GITHUB_WRITE_TOKEN: 'ab',
+      PARALLAX_GITHUB_WEBHOOK_SECRET: 'x',
+    });
+    expect(cfg.githubWriteToken).toBe('ab');
+    expect(cfg.githubWebhookSecret).toBe('x');
+  });
+
+  it('rejects an empty write token or webhook secret', () => {
+    expect(() => loadConfig({ ...base, PARALLAX_GITHUB_WRITE_TOKEN: '' })).toThrow();
+    expect(() => loadConfig({ ...base, PARALLAX_GITHUB_WEBHOOK_SECRET: '' })).toThrow();
+  });
+});

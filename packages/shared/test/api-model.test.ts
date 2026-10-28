@@ -3,6 +3,8 @@ import {
   AssessmentFindingSchema,
   AssessmentReportSchema,
   AssessmentSummarySchema,
+  CiMode,
+  WorkspaceCiSettings,
 } from '../src/domain/api-model.js';
 
 describe('API contract schemas (single source of truth)', () => {
@@ -75,5 +77,21 @@ describe('API contract schemas (single source of truth)', () => {
       completedAt: null,
     };
     expect(AssessmentSummarySchema.parse(summary)).toBeTruthy();
+  });
+});
+
+describe('workspace CI settings contract', () => {
+  it('accepts exactly the two CI modes', () => {
+    expect(CiMode.options).toEqual(['off', 'on-open-and-update']);
+    expect(CiMode.safeParse('on-open-and-update').success).toBe(true);
+    expect(CiMode.safeParse('always').success).toBe(false);
+  });
+
+  it('accepts a branch filter of any length and rejects an empty one', () => {
+    const base = { mode: 'off', reportComments: false };
+    expect(WorkspaceCiSettings.safeParse({ ...base, baseBranch: 'main' }).success).toBe(true);
+    expect(WorkspaceCiSettings.safeParse({ ...base, baseBranch: 'a' }).success).toBe(true);
+    expect(WorkspaceCiSettings.safeParse({ ...base, baseBranch: null }).success).toBe(true);
+    expect(WorkspaceCiSettings.safeParse({ ...base, baseBranch: '' }).success).toBe(false);
   });
 });
