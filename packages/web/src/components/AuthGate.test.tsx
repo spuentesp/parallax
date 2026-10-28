@@ -1,8 +1,16 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
-import { MemoryRouter } from 'react-router-dom';
+import type * as React from 'react';
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  RouterProvider,
+  useLocation,
+  useSearchParams,
+} from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { clearToken, readToken } from '../api/token.js';
+import { routes } from '../router.js';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 import { AppShell } from './AppShell.js';
@@ -28,13 +36,21 @@ function serveAuth(valid: string, scopes = ['read', 'write']) {
   );
   return seen;
 }
-const gate = () =>
+const gate = (url = '/') =>
   renderWithQuery(
-    <AuthGate>
-      <p>inside</p>
-    </AuthGate>,
+    <MemoryRouter initialEntries={[url]}>
+      <AuthGate>
+        <p>inside</p>
+        <Where />
+      </AuthGate>
+    </MemoryRouter>,
     { signedIn: false },
   );
+// Muestra la ruta del router: el token tiene que desaparecer DE AHÍ, no sólo de window.
+function Where(): React.ReactElement {
+  const l = useLocation();
+  return <output data-testid="where">{l.pathname + l.search}</output>;
+}
 
 describe('AuthGate', () => {
   it('shows a checking state, then asks for a token when there is none (without scolding)', async () => {
@@ -63,11 +79,12 @@ describe('AuthGate', () => {
 
   it('a link with ?token= signs in directly and the token leaves the address bar', async () => {
     const seen = serveAuth('linked');
-    window.history.replaceState(null, '', '/orgs/acme?token=linked&sel=svc%3Aa');
-    gate();
+    gate('/orgs/acme?token=linked&sel=svc%3Aa');
     expect(await screen.findByText('inside')).toBeTruthy();
     expect(seen[0]).toBe('Bearer linked');
-    expect(window.location.search).toBe('?sel=svc%3Aa');
+    await waitFor(() =>
+      expect(screen.getByTestId('where').textContent).toBe('/orgs/acme?sel=svc%3Aa'),
+    );
   });
 
   it('an API that is down is not a bad token: it offers a retry', async () => {
@@ -101,6 +118,51 @@ describe('AuthGate', () => {
     fireEvent.change(box, { target: { value: 'good' } });
     fireEvent.submit(box.closest('form') as HTMLFormElement);
     expect(await screen.findByText('inside')).toBeTruthy();
+  });
+});
+
+describe('AuthGate and the address bar', () => {
+  it('a later navigation never puts the token back (the router, not window, owns the URL)', async () => {
+    serveAuth('linked');
+    function Nav(): React.ReactElement {
+      const [, set] = useSearchParams();
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            set((p) => new URLSearchParams({ ...Object.fromEntries(p), focus: 'svc:a' }), {
+              replace: true,
+            })
+          }
+        >
+          focus
+        </button>
+      );
+    }
+    renderWithQuery(
+      <MemoryRouter initialEntries={['/orgs/acme?token=linked']}>
+        <AuthGate>
+          <Nav />
+          <Where />
+        </AuthGate>
+      </MemoryRouter>,
+      { signedIn: false },
+    );
+    await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/orgs/acme'));
+    fireEvent.click(screen.getByRole('button', { name: 'focus' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('where').textContent).toBe('/orgs/acme?focus=svc%3Aa'),
+    );
+    expect(readToken()).toBe('linked');
+  });
+
+  it('a link to the site root keeps the token through the redirect to /orgs', async () => {
+    serveAuth('rootlink');
+    const router = createMemoryRouter(routes, { initialEntries: ['/?token=rootlink'] });
+    renderWithQuery(<RouterProvider router={router} />, { signedIn: false });
+    await waitFor(() => expect(readToken()).toBe('rootlink'));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs'));
+    await waitFor(() => expect(router.state.location.search).toBe(''));
   });
 });
 
@@ -139,9 +201,8 @@ describe('session controls in the shell', () => {
 
   it('Sign out forgets the token and brings the token screen back', async () => {
     serveAuth('good');
-    window.history.replaceState(null, '', '/?token=good');
     renderWithQuery(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/?token=good']}>
         <AuthGate>
           <AppShell />
         </AuthGate>

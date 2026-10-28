@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type ChatMessage, ChatPanel } from './ChatPanel.js';
 
@@ -130,5 +130,61 @@ describe('ChatPanel', () => {
       />,
     );
     expect(screen.queryByRole('button', { name: /show on map/i })).toBeNull();
+  });
+
+  it('lists each claim with the engine verdict and reason, and only for answers that have any', () => {
+    setup([
+      {
+        role: 'assistant',
+        content: 'a',
+        verdicts: [
+          {
+            claim: {
+              kind: 'relation',
+              consumer: 'billing',
+              provider: 'orders',
+              polarity: 'present',
+            },
+            verdict: 'verified',
+            reason: 'engine records 3 use(s)',
+            engine: { uses: 3, endpoints: [], complete: true },
+          },
+          {
+            claim: {
+              kind: 'relation',
+              consumer: 'reports',
+              provider: 'orders',
+              polarity: 'absent',
+            },
+            verdict: 'contradicted',
+            reason: 'engine records 1 use(s) of orders by reports',
+            engine: { uses: 1, endpoints: [], complete: true },
+          },
+          {
+            claim: { kind: 'note', text: 'orders is central' },
+            verdict: 'unsupported',
+            reason: 'no cited evidence',
+          },
+        ],
+      },
+      { role: 'assistant', content: 'b', verdicts: [] },
+      {
+        role: 'user',
+        content: 'c',
+        verdicts: [{ claim: { kind: 'note', text: 'x' }, verdict: 'supported', reason: 'r' }],
+      },
+    ]);
+    const boxes = screen.getAllByTestId('verdicts');
+    expect(boxes).toHaveLength(1);
+    const box = within(boxes[0] as HTMLElement);
+    expect(box.getByText('billing → orders')).toBeTruthy();
+    expect(box.getByText('reports ↛ orders')).toBeTruthy();
+    expect(box.getByText('orders is central')).toBeTruthy();
+    expect(box.getByText('verified').className).toMatch(/text-success/);
+    expect(box.getByText('contradicted').className).toMatch(/text-error/);
+    expect(box.getByText('unsupported').className).toMatch(/text-warning/);
+    expect(box.getByText('· 3 uses')).toBeTruthy();
+    expect(box.getByText('· 1 use')).toBeTruthy();
+    expect(box.getByText('engine records 1 use(s) of orders by reports')).toBeTruthy();
   });
 });

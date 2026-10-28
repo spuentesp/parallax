@@ -37,4 +37,16 @@ describe('investigatorModel', () => {
     expect(m?.settings.workerModel).toBe('nvidia/nemotron-3-super-120b-a12b');
     expect(m?.budget.maxToolCalls).toBe(5);
   });
+
+  it('answers get 4096 tokens by default (double the old 2048), overridable and bounded', () => {
+    const base = { PARALLAX_TOKENS: tokens, NEBIUS_TOKEN: 'n' };
+    expect(INVESTIGATOR_DEFAULTS.investigatorMaxTokens).toBe(4096);
+    expect(investigatorModel(loadConfig(base))?.settings.maxTokens).toBe(4096);
+    expect(
+      investigatorModel(loadConfig({ ...base, INVESTIGATOR_MAX_TOKENS: '8192' }))?.settings
+        .maxTokens,
+    ).toBe(8192);
+    expect(() => loadConfig({ ...base, INVESTIGATOR_MAX_TOKENS: '100' })).toThrow();
+    expect(() => loadConfig({ ...base, INVESTIGATOR_MAX_TOKENS: '99999' })).toThrow();
+  });
 });

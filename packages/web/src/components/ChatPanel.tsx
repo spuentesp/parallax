@@ -1,12 +1,14 @@
 import type * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import type { AskResponse, MapFocusDto } from '../api/hooks.js';
+import type { AskResponse, ClaimVerdictDto, MapFocusDto } from '../api/hooks.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   /** Veredictos del motor sobre lo que afirma la respuesta. */
   claims?: AskResponse['claims_summary'];
+  /** Cada afirmación con lo que dijo el motor (para poder verla, no sólo contarla). */
+  verdicts?: ClaimVerdictDto[];
   /** A dónde llevar al usuario en el mapa; sólo lo que un recibo respalda. */
   focus?: MapFocusDto | null;
   /** Estado de la explicación del modelo (p. ej. failed:no_model_configured). */
@@ -75,6 +77,9 @@ export function ChatPanel({
                   {m.claims.unverifiable} unverifiable
                 </p>
               )}
+              {m.role === 'assistant' && m.verdicts && m.verdicts.length > 0 && (
+                <Verdicts verdicts={m.verdicts} />
+              )}
               {m.role === 'assistant' && m.status && m.status.startsWith('failed') && (
                 <p className="text-[11px] text-warning">Explanation: {m.status}</p>
               )}
@@ -120,5 +125,42 @@ export function ChatPanel({
         </div>
       </div>
     </div>
+  );
+}
+
+const VERDICT_STYLE: Record<ClaimVerdictDto['verdict'], string> = {
+  verified: 'text-success',
+  supported: 'text-success',
+  contradicted: 'text-error',
+  unverifiable: 'text-warning',
+  unsupported: 'text-warning',
+};
+
+function claimText(c: ClaimVerdictDto['claim']): string {
+  if (c.kind === 'note') return c.text;
+  return `${c.consumer} ${c.polarity === 'present' ? '→' : '↛'} ${c.provider}`;
+}
+
+/** Lo que el modelo afirmó y lo que el motor dijo de cada afirmación. */
+function Verdicts({ verdicts }: { verdicts: ClaimVerdictDto[] }): React.ReactElement {
+  return (
+    <details className="text-[11px]" data-testid="verdicts">
+      <summary className="cursor-pointer text-muted hover:text-fg">Engine verdicts</summary>
+      <ul className="mt-1.5 space-y-1.5">
+        {verdicts.map((v) => (
+          <li key={`${claimText(v.claim)}|${v.verdict}`}>
+            <span className="font-mono">{claimText(v.claim)}</span>{' '}
+            <span className={`font-medium ${VERDICT_STYLE[v.verdict]}`}>{v.verdict}</span>
+            {v.engine && v.engine.uses > 0 && (
+              <span className="text-muted">
+                {' '}
+                · {v.engine.uses} use{v.engine.uses === 1 ? '' : 's'}
+              </span>
+            )}
+            <div className="text-muted">{v.reason}</div>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

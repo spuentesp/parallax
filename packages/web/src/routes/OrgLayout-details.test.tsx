@@ -82,6 +82,18 @@ describe('hub header and assistant', () => {
             supported: 0,
             unsupported: 0,
           },
+          claims: [
+            {
+              claim: {
+                kind: 'relation',
+                consumer: 'billing',
+                provider: 'orders',
+                polarity: 'present',
+              },
+              verdict: 'verified',
+              reason: 'engine records 3 use(s)',
+            },
+          ],
           map_focus: null,
         }),
       ),
@@ -92,6 +104,7 @@ describe('hub header and assistant', () => {
     expect(await screen.findByText('billing consumes orders.')).toBeTruthy();
     expect(screen.getByText('Explanation: failed:no_model_configured')).toBeTruthy();
     expect(screen.getByTestId('claims-summary').textContent).toMatch(/1 verified/);
+    expect(screen.getByTestId('verdicts').textContent).toMatch(/billing → orders.*verified/);
   });
 
   it('an empty answer is said plainly, not left blank', async () => {

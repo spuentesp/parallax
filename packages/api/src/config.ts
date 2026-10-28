@@ -26,6 +26,9 @@ const AppConfigSchema = z.object({
   // por consulta, medidos y reportados en la demo.
   investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
   investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
+  // Tokens de respuesta por turno del modelo. 2048 cortaba respuestas con muchas
+  // afirmaciones y citas; el valor por defecto es el doble.
+  investigatorMaxTokens: z.coerce.number().int().min(256).max(32768).optional(),
   // Tope de preguntas al investigador por token y hora (0 o ausente = sin tope).
   // Para demos públicas: cada pregunta consume créditos de Token Factory.
   queryRateLimitPerHour: z.coerce.number().int().min(0).optional(),
@@ -54,6 +57,7 @@ export const INVESTIGATOR_DEFAULTS = {
   nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
   investigatorMaxToolCalls: 16,
   investigatorMaxModelMs: 120_000,
+  investigatorMaxTokens: 4096,
 } as const;
 
 export function investigatorSettings(
@@ -64,6 +68,7 @@ export function investigatorSettings(
     | 'nemotronWorkerModel'
     | 'investigatorMaxToolCalls'
     | 'investigatorMaxModelMs'
+    | 'investigatorMaxTokens'
   >,
 ): {
   baseUrl: string;
@@ -71,6 +76,7 @@ export function investigatorSettings(
   workerModel: string;
   maxToolCalls: number;
   maxModelMs: number;
+  maxTokens: number;
 } {
   return {
     baseUrl: cfg.nemotronBaseUrl ?? INVESTIGATOR_DEFAULTS.nemotronBaseUrl,
@@ -78,6 +84,7 @@ export function investigatorSettings(
     workerModel: cfg.nemotronWorkerModel ?? INVESTIGATOR_DEFAULTS.nemotronWorkerModel,
     maxToolCalls: cfg.investigatorMaxToolCalls ?? INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
     maxModelMs: cfg.investigatorMaxModelMs ?? INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
+    maxTokens: cfg.investigatorMaxTokens ?? INVESTIGATOR_DEFAULTS.investigatorMaxTokens,
   };
 }
 
@@ -132,6 +139,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...modelEnv(env),
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
+    investigatorMaxTokens: env.INVESTIGATOR_MAX_TOKENS,
     queryRateLimitPerHour: env.QUERY_RATE_LIMIT_PER_HOUR,
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,

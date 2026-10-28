@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { captureTokenFromUrl, clearToken, currentToken, readToken, saveToken } from './token.js';
+import { clearToken, currentToken, readToken, saveToken } from './token.js';
 
 afterEach(() => {
   clearToken();
@@ -33,27 +33,5 @@ describe('token store', () => {
     });
     clearToken();
     expect(currentToken()).toBeUndefined();
-  });
-});
-
-describe('captureTokenFromUrl', () => {
-  it('stores the link token and removes only it from the address bar', () => {
-    window.history.replaceState(null, '', '/orgs/acme?token=sekret&focus=svc%3Aa#top');
-    expect(captureTokenFromUrl()).toBe(true);
-    expect(readToken()).toBe('sekret');
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
-      '/orgs/acme?focus=svc%3Aa#top',
-    );
-    // Una segunda vez no hay nada que capturar.
-    expect(captureTokenFromUrl()).toBe(false);
-    expect(readToken()).toBe('sekret');
-  });
-
-  it('does nothing without a token, and ignores an empty one', () => {
-    window.history.replaceState(null, '', '/x?a=1');
-    expect(captureTokenFromUrl()).toBe(false);
-    window.history.replaceState(null, '', '/x?token=');
-    expect(captureTokenFromUrl()).toBe(false);
-    expect(readToken()).toBeUndefined();
   });
 });

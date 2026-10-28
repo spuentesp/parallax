@@ -32,7 +32,13 @@ import {
   type LainDispatcher,
   type Receipt,
 } from './dispatcher.js';
-import type { ChatMessage, NemotronResponse, ToolSpec } from './nemotron.js';
+import {
+  type ChatMessage,
+  hasTextToolCall,
+  type NemotronResponse,
+  stripToolMarkup,
+  type ToolSpec,
+} from './nemotron.js';
 import {
   buildFindings,
   PR_SUBMIT_SPEC,
@@ -169,6 +175,12 @@ export interface InvestigateOptions {
   toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   /** Etiqueta del endpoint configurado (sin credenciales) para el traza. */
   endpointLabel?: string;
+  /**
+   * Si el modelo cierra con prosa tras leer del motor, pedirle UNA vez que
+   * entregue con submit_answer (para que el motor verifique sus afirmaciones).
+   * Lo activa /api/query; por defecto se acepta la prosa.
+   */
+  nudgeSubmit?: boolean;
   maxResultChars?: number;
 }
 
@@ -181,7 +193,8 @@ Method:
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
 6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.
-7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.`;
+7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
+8. Keep "answer" short (about 200 words): summarize and cite a few representative evidence ids; do not enumerate every endpoint. The claims carry the checkable facts, and a reply that is too long is cut off and lost.`;
 
 function nowMs(): number {
   return Date.now();
@@ -301,7 +314,9 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   if (prFindings) dispatcher.deliverEvidence(prFindings.flatMap((f) => f.evidenceIds));
   const tools = [...dispatcher.toolSpecs(), opts.pr ? PR_SUBMIT_SPEC : SUBMIT_TOOL_SPEC];
   const modelRole = opts.modelRole ?? 'worker';
-  const maxTokens = opts.maxTokens ?? 2048;
+  // Una respuesta con muchas afirmaciones y citas supera con facilidad 2048:
+  // el valor por defecto sale de la config (INVESTIGATOR_MAX_TOKENS, 4096).
+  const maxTokens = opts.maxTokens ?? 4096;
 
   // Orientación sin gastar presupuesto: el mapa sale del mismo catálogo que fija
   // el alcance, así el modelo no gasta sus primeras llamadas descubriéndolo.
@@ -333,6 +348,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let modelMsUsed = 0;
   let retried = false;
   let pushedBack = false;
+  let submitNudged = false;
   let submittedClaims: Claim[] = [];
   let prSubmission: PrSubmitArgs | null = null;
 
@@ -428,7 +444,35 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
         rounds++;
         continue;
       }
-      answer = resp.content ?? '';
+      // Un modelo que cierra con prosa tras leer del motor no deja afirmaciones
+      // que el motor pueda verificar (ni un foco para el mapa). Se le pide UNA
+      // vez que entregue con submit_answer; si insiste en prosa, se acepta.
+      if (
+        opts.nudgeSubmit &&
+        !opts.pr &&
+        !submitNudged &&
+        resp.content &&
+        dispatcher.budgetUse().toolCallsUsed > 0
+      ) {
+        submitNudged = true;
+        // Cortada (o con la llamada a medio escribir): se pide algo más corto.
+        const cutOff = resp.finishReason === 'length' || hasTextToolCall(resp.content);
+        messages.push({
+          role: 'assistant',
+          content: cutOff ? stripToolMarkup(resp.content ?? '').slice(0, 400) : resp.content,
+        });
+        messages.push({
+          role: 'user',
+          content: cutOff
+            ? 'Your previous reply was cut off before it finished. Call submit_answer again with a SHORT "answer" (at most about 150 words, no endpoint lists) and the relation claims.'
+            : 'Now finish by calling submit_answer. Put the explanation in "answer" and every statement about which service consumes which other service in "claims" as relation claims, so the engine can verify them.',
+        });
+        rounds++;
+        continue;
+      }
+      answer = hasTextToolCall(resp.content)
+        ? stripToolMarkup(resp.content ?? '')
+        : (resp.content ?? '');
       break;
     }
 

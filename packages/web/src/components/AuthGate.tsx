@@ -1,17 +1,34 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client.js';
 import { useWhoami } from '../api/hooks.js';
-import { captureTokenFromUrl, clearToken, currentToken, saveToken } from '../api/token.js';
+import { clearToken, currentToken, saveToken } from '../api/token.js';
 
 // Puerta de acceso: la SPA sólo se muestra con un token válido. Sin token (o con
 // uno rechazado) pide uno; con un enlace `?token=` entra directo. No hay
 // cuentas: un token es un acceso con alcance (lectura / escritura) por org.
 
 export function AuthGate({ children }: { children: React.ReactNode }): React.ReactElement {
-  // Idempotente: tras guardar el token lo retira de la URL, así que repetirlo no hace nada.
-  captureTokenFromUrl();
+  // El enlace trae `?token=`: se guarda ANTES de la primera petición (aquí, al
+  // renderizar) y se quita de la URL por el router, que es quien la escribe — si
+  // se quitara por debajo (history.replaceState) el router lo volvería a poner
+  // en la siguiente navegación.
+  const [params, setParams] = useSearchParams();
+  const linked = params.get('token');
+  if (linked) saveToken(linked);
+  useEffect(() => {
+    if (!linked) return;
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('token');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [linked, setParams]);
   const who = useWhoami();
   const qc = useQueryClient();
 

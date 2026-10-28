@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import type { RouteObject } from 'react-router-dom';
-import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AuthGate } from './components/AuthGate.js';
 import { Assessment } from './routes/Assessment.js';
@@ -19,8 +19,14 @@ function OrgCatchAll(): React.ReactElement {
   return <Navigate to={`/orgs/${orgId ?? ''}`} replace />;
 }
 
+// Los redirects a la raíz conservan la query: un enlace `/?token=…` no pierde el acceso.
+function ToOrgs(): React.ReactElement {
+  const { search } = useLocation();
+  return <Navigate to={{ pathname: '/orgs', search }} replace />;
+}
+
 export const routes: RouteObject[] = [
-  { path: '/', element: <Navigate to="/orgs" replace /> },
+  { path: '/', element: <ToOrgs /> },
   {
     path: '/',
     element: (
@@ -40,7 +46,7 @@ export const routes: RouteObject[] = [
       // Compatibilidad: los deep links viejos siguen vivos.
       { path: 'assessments', element: <Navigate to="/orgs" replace /> },
       { path: 'assessments/:assessmentId', element: <LegacyAssessmentRedirect /> },
-      { path: '*', element: <Navigate to="/orgs" replace /> },
+      { path: '*', element: <ToOrgs /> },
     ],
   },
 ];

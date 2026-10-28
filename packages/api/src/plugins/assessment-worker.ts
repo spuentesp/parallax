@@ -47,6 +47,7 @@ export default fp(
             model: model.provider,
             view: args.viewId,
             budget: model.budget,
+            maxTokens: model.settings.maxTokens,
             engineFindings: args.engineFindings,
             // Los hallazgos del motor entran en el contexto y se explican por id.
             pr: {

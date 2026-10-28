@@ -581,8 +581,19 @@ export interface MapFocusDto {
   query: string;
 }
 
+/** Veredicto del motor sobre una afirmación del modelo. */
+export interface ClaimVerdictDto {
+  claim:
+    | { kind: 'relation'; consumer: string; provider: string; polarity: 'present' | 'absent' }
+    | { kind: 'note'; text: string };
+  verdict: 'verified' | 'contradicted' | 'unverifiable' | 'supported' | 'unsupported';
+  reason: string;
+  engine?: { uses: number; endpoints: string[]; complete: boolean };
+}
+
 export interface AskResponse {
   answer: string;
+  claims?: ClaimVerdictDto[];
   explanation_status: string;
   claims_summary: {
     total: number;

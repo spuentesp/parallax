@@ -1,7 +1,6 @@
 // Token de acceso de la sesión. Vive en localStorage (con try/catch: puede estar
-// bloqueado) y puede llegar en un enlace (`?token=…`), que se guarda y se quita
-// de la barra de direcciones para que no quede en el historial ni al compartir
-// la URL.
+// bloqueado). Si llega en un enlace (`?token=…`) lo guarda y lo quita de la URL
+// la puerta de acceso (AuthGate), por el router.
 
 const KEY = 'parallax_token';
 
@@ -33,14 +32,3 @@ export function clearToken(): void {
 
 let memory: string | undefined;
 export const currentToken = (): string | undefined => readToken() ?? memory;
-
-/** Guarda el token del enlace (si lo hay) y lo retira de la URL. */
-export function captureTokenFromUrl(): boolean {
-  const url = new URL(window.location.href);
-  const t = url.searchParams.get('token');
-  if (!t) return false;
-  saveToken(t);
-  url.searchParams.delete('token');
-  window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
-  return true;
-}

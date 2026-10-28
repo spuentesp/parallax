@@ -723,3 +723,157 @@ describe('P08 — explanation status honesty', () => {
     expect(result.errors).toContain('Nemotron HTTP 500: boom');
   });
 });
+
+describe('closing in prose after reading from the engine', () => {
+  it('asks once for a submit_answer, then verifies the claims the model delivers', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: 'billing consumes orders.' }),
+      submit('s1', {
+        answer: 'billing consumes orders.',
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(model.calls).toHaveLength(3);
+    // El historial es el mismo array que sigue creciendo: se busca el aviso, no "el último".
+    const nudges = (model.calls[2]?.messages ?? []).filter(
+      (m) =>
+        m.role === 'user' && String(m.content).startsWith('Now finish by calling submit_answer'),
+    );
+    expect(nudges).toHaveLength(1);
+    expect(result.claimsSummary).toMatchObject({ total: 1, verified: 1 });
+    expect(result.answer).toBe('billing consumes orders.');
+  });
+
+  it('asks only once: a model that insists on prose is accepted, with no claims', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: 'first prose' }),
+      resp({ content: 'second prose' }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(model.calls).toHaveLength(3);
+    expect(result.answer).toBe('second prose');
+    expect(result.claimsSummary.total).toBe(0);
+  });
+
+  it('does not nudge a model that already submitted, or an empty reply', async () => {
+    resetLainMock();
+    const done = new ScriptedModel([readOrders(), submit('s1', { answer: 'x', claims: [] })]);
+    await investigate({ question: 'q', lain: lainWithAnchors(), model: done, nudgeSubmit: true });
+    expect(done.calls).toHaveLength(2);
+    resetLainMock();
+    const empty = new ScriptedModel([readOrders(), resp({ content: null })]);
+    const r = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model: empty,
+      nudgeSubmit: true,
+    });
+    expect(empty.calls).toHaveLength(2);
+    expect(r.answer).toBe('');
+  });
+
+  it('without the option the prose is accepted as before', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([readOrders(), resp({ content: 'just prose' })]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(2);
+    expect(result.answer).toBe('just prose');
+  });
+
+  it('a reply that was cut off mid-call gets a "shorter" request, not a generic one', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({
+        content:
+          '<tool_call>\n<function=submit_answer>\n<parameter=answer>\nThree services consume',
+        finishReason: 'length',
+      }),
+      submit('s1', {
+        answer: 'short answer',
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    const asked = (model.calls[2]?.messages ?? [])
+      .filter((m) => m.role === 'user')
+      .map((m) => String(m.content));
+    expect(asked.some((t) => /cut off.*SHORT/.test(t))).toBe(true);
+    // El XML a medio escribir no se devuelve al modelo como si fuera su respuesta.
+    const echoed = (model.calls[2]?.messages ?? [])
+      .filter((m) => m.role === 'assistant')
+      .map((m) => String(m.content));
+    expect(echoed.some((t) => t.includes('<tool_call>'))).toBe(false);
+    expect(result.answer).toBe('short answer');
+    expect(result.claimsSummary.verified).toBe(1);
+  });
+
+  it('if the model keeps failing, the user never reads raw tool-call markup', async () => {
+    resetLainMock();
+    const cut =
+      '<tool_call>\n<function=submit_answer>\n<parameter=answer>\n## Consumers\n\nThree services';
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: cut, finishReason: 'length' }),
+      resp({ content: cut, finishReason: 'length' }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(result.answer).toBe('## Consumers\n\nThree services');
+  });
+});
+
+describe('answer length budget', () => {
+  const capture = () => {
+    const seen: Array<number | undefined> = [];
+    const model: ChatCompleter = {
+      async complete(_m, o) {
+        seen.push((o as { maxTokens?: number } | undefined)?.maxTokens);
+        return resp({ content: 'done' });
+      },
+    };
+    return { model, seen };
+  };
+
+  it('asks the model for 4096 tokens per turn by default, double the old 2048', async () => {
+    resetLainMock();
+    const { model, seen } = capture();
+    await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(seen[0]).toBe(4096);
+  });
+
+  it('uses the configured limit when given', async () => {
+    resetLainMock();
+    const { model, seen } = capture();
+    await investigate({ question: 'q', lain: lainWithAnchors(), model, maxTokens: 8192 });
+    expect(seen[0]).toBe(8192);
+  });
+});

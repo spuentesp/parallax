@@ -32,6 +32,7 @@ export function OrgLayout(): React.ReactElement {
             role: 'assistant',
             content: res.answer || 'No answer was produced.',
             claims: res.claims_summary,
+            ...(res.claims ? { verdicts: res.claims } : {}),
             focus: res.map_focus,
             status: res.explanation_status,
           },

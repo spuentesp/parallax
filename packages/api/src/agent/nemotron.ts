@@ -36,6 +36,60 @@ export interface NemotronResponse {
   latencyMs: number;
 }
 
+/**
+ * Algunos modelos (y endpoints) devuelven la llamada a una herramienta como
+ * TEXTO en `content` en vez de en `tool_calls`:
+ *
+ *   <tool_call><function=submit_answer><parameter=answer>…</parameter>
+ *   <parameter=claims>[{…}]</parameter></function></tool_call>
+ *
+ * Se leen las llamadas completas. Un parámetro que empieza por `[` o `{` se
+ * interpreta como JSON (si no es JSON válido se deja como texto); los demás son
+ * cadenas. Una llamada cortada (sin cierre) no se lee: ver `hasTextToolCall`.
+ */
+export function parseTextToolCalls(content: string | null): { calls: ToolCall[]; rest: string } {
+  if (!content?.includes('<tool_call>')) return { calls: [], rest: content ?? '' };
+  const calls: ToolCall[] = [];
+  const block = /<tool_call>\s*<function=([^>\s]+)>([\s\S]*?)<\/function>\s*<\/tool_call>/g;
+  let rest = content;
+  for (const m of content.matchAll(block)) {
+    const args: Record<string, unknown> = {};
+    for (const p of (m[2] ?? '').matchAll(/<parameter=([^>\s]+)>([\s\S]*?)<\/parameter>/g)) {
+      const raw = (p[2] ?? '').trim();
+      let value: unknown = raw;
+      if (raw.startsWith('[') || raw.startsWith('{')) {
+        try {
+          value = JSON.parse(raw);
+        } catch {
+          value = raw;
+        }
+      }
+      args[p[1] as string] = value;
+    }
+    calls.push({
+      id: `text_call_${calls.length}`,
+      type: 'function',
+      function: { name: m[1] as string, arguments: JSON.stringify(args) },
+    });
+    rest = rest.replace(m[0], '');
+  }
+  return { calls, rest: rest.trim() };
+}
+
+/** ¿Queda marcado de llamada a herramienta sin cerrar (respuesta cortada)? */
+export function hasTextToolCall(content: string | null): boolean {
+  return !!content && (content.includes('<tool_call>') || content.includes('<function='));
+}
+
+/** Quita los marcadores de una llamada cortada para que el usuario no lea XML. */
+export function stripToolMarkup(content: string): string {
+  return content
+    .replace(/<\/?tool_call>/g, '')
+    .replace(/<\/?function(=[^>]*)?>/g, '')
+    .replace(/<\/?parameter(=[^>]*)?>/g, '')
+    .trim();
+}
+
 export class NemotronProvider {
   private readonly cfg: NemotronConfig;
   private readonly timeoutMs: number;
@@ -99,10 +153,21 @@ export class NemotronProvider {
       };
       const choice = data.choices[0];
       if (!choice) throw new Error('no choices in Nemotron response');
+      let content = choice.message.content;
+      let toolCalls = choice.message.tool_calls ?? [];
+      let finishReason = choice.finish_reason;
+      if (toolCalls.length === 0) {
+        const text = parseTextToolCalls(content);
+        if (text.calls.length > 0) {
+          toolCalls = text.calls;
+          content = text.rest === '' ? null : text.rest;
+          finishReason = 'tool_calls';
+        }
+      }
       return {
-        content: choice.message.content,
-        toolCalls: choice.message.tool_calls ?? [],
-        finishReason: choice.finish_reason,
+        content,
+        toolCalls,
+        finishReason,
         usage: {
           promptTokens: data.usage?.prompt_tokens ?? 0,
           completionTokens: data.usage?.completion_tokens ?? 0,

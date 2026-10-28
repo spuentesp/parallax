@@ -163,11 +163,13 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const result = await investigate({
+        nudgeSubmit: true,
         question,
         lain,
         model: model.provider,
         view: 'live',
         budget: model.budget,
+        maxTokens: model.settings.maxTokens,
         endpointLabel: model.settings.baseUrl,
       });
 
