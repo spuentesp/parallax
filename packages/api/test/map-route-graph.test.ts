@@ -13,6 +13,7 @@ describe('map routes — con grafo', () => {
   let dir: string;
   let app: Awaited<ReturnType<typeof buildApp>>;
   let wsId: string;
+  let builds = 0;
   const headers = { authorization: 'Bearer t' };
 
   beforeEach(async () => {
@@ -25,11 +26,19 @@ describe('map routes — con grafo', () => {
       authTokens: [
         { token: 't', orgId: 'o', scopes: ['read', 'write'] },
         { token: 'ro', orgId: 'o', scopes: ['read'] },
+        { token: 'wo', orgId: 'o', scopes: ['publish'] },
       ],
       webBundlePath: join(dir, 'web'),
     });
     const mock = createLainMock();
-    app.orgGraphs = createOrgGraphService({ db: app.db, getClient: async () => mock });
+    builds = 0;
+    app.orgGraphs = createOrgGraphService({
+      db: app.db,
+      getClient: async () => {
+        builds++;
+        return mock;
+      },
+    });
     const r = await app.inject({
       method: 'POST',
       url: '/api/workspaces',
@@ -239,5 +248,39 @@ describe('map routes — con grafo', () => {
       unknownExpand: [],
       meta: { source: 'unconfigured', error: null },
     });
+  });
+
+  it('reads never rebuild the graph; only refresh does', async () => {
+    await view({});
+    await view({ expand: [] });
+    await app.inject({ method: 'GET', url: `/api/workspaces/${wsId}/map/search?q=or`, headers });
+    await app.inject({ method: 'GET', url: `/api/workspaces/${wsId}/map/node?id=ghost`, headers });
+    expect(builds).toBe(1);
+    await app.inject({ method: 'POST', url: `/api/workspaces/${wsId}/map/refresh`, headers });
+    expect(builds).toBe(2);
+  });
+
+  it('every read route needs the read scope', async () => {
+    const writeOnly = { authorization: 'Bearer wo' };
+    const reqs = [
+      { method: 'POST' as const, url: `/api/workspaces/${wsId}/map/view`, payload: {} },
+      { method: 'GET' as const, url: `/api/workspaces/${wsId}/map/node?id=x` },
+      { method: 'GET' as const, url: `/api/workspaces/${wsId}/map/search?q=ab` },
+    ];
+    for (const r of reqs) {
+      expect((await app.inject({ ...r, headers: writeOnly })).statusCode, r.url).toBe(403);
+      expect((await app.inject(r)).statusCode, r.url).toBe(401);
+    }
+  });
+
+  it('accepts both provenance values, and hops 0 means just the seed', async () => {
+    expect((await view({ filters: { provenance: 'inferred' } })).statusCode).toBe(200);
+    expect((await view({ filters: { provenance: 'deterministic' } })).statusCode).toBe(200);
+    const top = (await view({})).json() as View;
+    const repo = top.nodes[0]?.id as string;
+    const f = (await view({ focus: repo, hops: 0 })).json() as View;
+    expect(f.focus?.ids).toEqual([repo]);
+    const g = (await view({ focus: repo, hops: 2, limits: { x: 1 } })).json() as View;
+    expect(g.focus?.seed).toBe(repo);
   });
 });

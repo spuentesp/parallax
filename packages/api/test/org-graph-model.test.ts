@@ -593,3 +593,117 @@ describe('searchOrgGraph', () => {
     expect(searchOrgGraph(g, 'zzz').length).toBe(0);
   });
 });
+
+describe('model — remaining edge cases', () => {
+  const served = (source: string, target: string): OrgEdge => ({
+    ...edge(source, target),
+    id: `servedBy:${source}->${target}`,
+    kind: 'servedBy',
+  });
+  const g2: OrgGraph = {
+    nodes,
+    edges: [
+      ...graph.edges.filter((e) => e.kind === 'consumes'),
+      served('ep:A1', 'svc:A'),
+      served('ep:A2', 'svc:A'),
+    ],
+  };
+
+  it('ancestorsOf tolerates a parent that is not in the graph', () => {
+    const byId = new Map([node('a', 'service', 'ghost')].map((x) => [x.id, x]));
+    expect(ancestorsOf('a', byId)).toEqual(['ghost']);
+  });
+
+  it('structural edges survive provenance and confidence filters when both ends do', () => {
+    const f = filterOrgGraph(g2, { provenance: 'inferred' });
+    expect(f.edges.some((e) => e.id === 'servedBy:ep:A1->svc:A')).toBe(true);
+    const g = filterOrgGraph(g2, { minConfidence: 0.95 });
+    expect(g.edges.map((e) => e.id).sort()).toEqual([
+      'consumes:svc:B->ep:A1',
+      'servedBy:ep:A1->svc:A',
+    ]);
+  });
+
+  it('never leaves an edge pointing at a node the filter removed', () => {
+    const f = filterOrgGraph(g2, { minConfidence: 0.95 });
+    const kept = new Set(f.nodes.map((x) => x.id));
+    expect(f.edges.every((e) => kept.has(e.source) && kept.has(e.target))).toBe(true);
+    expect(f.edges.some((e) => e.source === 'ep:A2')).toBe(false);
+  });
+
+  it('a static edge is not dropped by a confidence floor, and an inferred one with no floor is kept', () => {
+    const lowStatic: OrgGraph = {
+      nodes,
+      edges: [edge('svc:B', 'ep:A1', { confidence: 0.1 }), inferred('svc:C', 'ep:A1', 0)],
+    };
+    expect(filterOrgGraph(lowStatic, { minConfidence: 0.5 }).edges.map((e) => e.source)).toEqual([
+      'svc:B',
+    ]);
+    expect(
+      filterOrgGraph(lowStatic, { provenance: 'inferred' }).edges.map((e) => e.source),
+    ).toEqual(['svc:C']);
+  });
+
+  it('the contract filter matches endpoints only, and keeps structural edges of matching endpoints', () => {
+    const odd: OrgGraph = {
+      nodes: [...nodes.slice(0, 4), node('svc:X', 'service', null, { contract: 'http' })],
+      edges: [served('ep:A1', 'svc:A'), edge('svc:X', 'svc:A')],
+    };
+    const f = filterOrgGraph(odd, { contract: 'http' });
+    expect(f.nodes.map((x) => x.id).sort()).toEqual(['ep:A1', 'repo:A', 'svc:A']);
+    expect(f.edges.map((e) => e.id)).toEqual(['servedBy:ep:A1->svc:A']);
+  });
+
+  it('a service filter keeps the service and its own endpoints even with no relations', () => {
+    const lone: OrgGraph = { nodes, edges: [] };
+    const f = filterOrgGraph(lone, { service: 'svc:A' });
+    expect(f.nodes.map((x) => x.id).sort()).toEqual(['ep:A1', 'ep:A2', 'repo:A', 'svc:A']);
+  });
+
+  it('projection ignores an edge to a node that is not in the graph', () => {
+    const dangling: OrgGraph = { nodes, edges: [edge('svc:B', 'nope'), edge('nope', 'svc:B')] };
+    expect(projectOrgGraph(dangling, new Set()).edges).toEqual([]);
+  });
+
+  it('describeNode follows a subtree listed children-first, and skips edges from unknown nodes', () => {
+    const reversed: OrgGraph = {
+      nodes: [
+        node('deep', 'endpoint', 'mid'),
+        node('mid', 'service', 'top'),
+        node('top', 'repo', null),
+        node('out', 'service', null),
+      ],
+      edges: [edge('out', 'deep'), edge('ghost', 'deep')],
+    };
+    const d = describeNode(reversed, 'top');
+    expect(d?.consumers.map((c) => c.peer.id)).toEqual(['out']);
+  });
+
+  it('describeNode copes with a peer whose parent is not in the graph', () => {
+    const odd: OrgGraph = {
+      nodes: [
+        node('peer', 'service', 'ghost'),
+        node('ep', 'endpoint', 'svc'),
+        node('svc', 'service', null),
+      ],
+      edges: [edge('peer', 'ep')],
+    };
+    expect(describeNode(odd, 'svc')?.consumers.map((c) => c.peer.id)).toEqual(['peer']);
+  });
+
+  it('describeNode ignores structural edges that cross the boundary', () => {
+    const cross: OrgGraph = { nodes, edges: [served('ep:A1', 'svc:C')] };
+    const d = describeNode(cross, 'svc:A');
+    expect(d?.providers).toEqual([]);
+    expect(d?.consumers).toEqual([]);
+  });
+
+  it('merging two inferred relations stays inferred, with the higher confidence', () => {
+    const two: OrgGraph = {
+      nodes,
+      edges: [inferred('svc:C', 'ep:A1', 0.3), inferred('svc:C', 'ep:A2', 0.6)],
+    };
+    const rel = describeNode(two, 'svc:A')?.consumers[0]?.edge;
+    expect(rel).toMatchObject({ provenance: 'inferred', confidence: 0.6, count: 2 });
+  });
+});

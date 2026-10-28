@@ -208,4 +208,19 @@ describe('buildEndpointTopology — dueño de un endpoint', () => {
     expect(t.edges.find((e) => e.kind === 'consumes')?.target).toBe(endpointNodeId(KEY, 'b'));
     expect(t.stats.byKind.http).toBe(1);
   });
+
+  it('a consumer naming another owner for a key keeps the first declared owner for the chain', async () => {
+    const declaredByA = {
+      ...base,
+      listContracts: async () => ({
+        items: [{ endpoint: { key: KEY, service: 'a' } }],
+        cursor: null,
+      }),
+    } as unknown as LainAdapter;
+    const t = await buildEndpointTopology(declaredByA);
+    // Se da de alta el endpoint que el consumidor nombró (dueño b), pero la arista
+    // se cierra sobre el dueño que declaró la clave primero (a).
+    expect(t.nodes.some((x) => x.id === endpointNodeId(KEY, 'b'))).toBe(true);
+    expect(t.edges.find((e) => e.kind === 'consumes')?.target).toBe(endpointNodeId(KEY, 'a'));
+  });
 });
