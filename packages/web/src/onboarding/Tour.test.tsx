@@ -187,7 +187,6 @@ describe('the guided tour', () => {
     await waitFor(() => expect(bodies).toHaveLength(1));
     const q = sentTask(bodies[0]);
     expect(q).toMatch(/Add a delivery note to checkout/);
-    expect(q).toMatch(/do not describe the workspace map/);
     expect(q).toMatch(/Start from the UI code/);
     expect(q).toMatch(/path:line .* and add a location claim/);
     // Un recién llegado con una función NUEVA necesita la más parecida que ya existe.
@@ -379,6 +378,7 @@ describe('the guided tour', () => {
         /Read docs\/adr\/0004-race-safe\.md in the saleor repository with get_code_snippet/,
       );
       expect(q).toMatch(/Add a delivery note to checkout/);
+      expect(q).toMatch(/do not describe the workspace map/);
       expect(q).toMatch(/documented/);
     });
 
