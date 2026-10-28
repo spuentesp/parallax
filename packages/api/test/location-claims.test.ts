@@ -100,6 +100,44 @@ describe('location claims', () => {
     expect(calls).toHaveLength(0);
   });
 
+  it('a path written with the repo name in front is tried without it before being called nonexistent', async () => {
+    const seen: string[] = [];
+    const { lain } = engine((a) => {
+      seen.push(a.path);
+      return a.path.startsWith('saleor/') ? 'Error: Not found: Path not found: /x' : FILE;
+    });
+    const [r] = await verifyClaims(
+      [loc({ repo: 'saleor', path: 'saleor/checkout/utils.py' })],
+      deps(lain),
+    );
+    // La ruta real del repo "saleor" empieza por "saleor/": se prueba tal cual y luego sin el prefijo.
+    expect(seen).toEqual(['saleor/checkout/utils.py', 'checkout/utils.py']);
+    expect(r?.verdict).toBe('verified');
+    expect(r?.reason).toMatch(/saleor:checkout\/utils\.py:440/);
+  });
+
+  it('and the other way round: the model dropped a top-level folder that is named like the repo', async () => {
+    const seen: string[] = [];
+    const { lain } = engine((a) => {
+      seen.push(a.path);
+      return a.path.startsWith('saleor/') ? FILE : 'Error: Not found: Path not found: /x';
+    });
+    const [r] = await verifyClaims(
+      [loc({ repo: 'saleor', path: 'checkout/utils.py' })],
+      deps(lain),
+    );
+    expect(seen).toEqual(['checkout/utils.py', 'saleor/checkout/utils.py']);
+    expect(r?.verdict).toBe('verified');
+    expect(r?.reason).toMatch(/saleor:saleor\/checkout\/utils\.py:440/);
+  });
+
+  it('a genuinely missing file is still contradicted after both tries', async () => {
+    const { lain, calls } = engine(() => 'Error: Not found: Path not found: /x');
+    const [r] = await verifyClaims([loc({ repo: 'saleor', path: 'saleor/nope.py' })], deps(lain));
+    expect(r?.verdict).toBe('contradicted');
+    expect(calls).toHaveLength(2);
+  });
+
   it('the schema demands what makes it checkable: a line and the text that must be there', () => {
     const base = { kind: 'location', repo: 'r', path: 'p', text: 't' };
     expect(Claim.safeParse({ ...base, line: 1 }).success).toBe(false); // sin contains

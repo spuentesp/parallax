@@ -18,6 +18,9 @@ export interface ChatMessage {
   focus?: MapFocusDto | null;
   /** Estado de la explicación del modelo (p. ej. failed:no_model_configured). */
   status?: string;
+  /** Recorrido guiado: cabecera de capítulo, y (si es una tarjeta) cuál. */
+  label?: string;
+  card?: 'orient' | 'doors';
 }
 
 export function ChatPanel({
@@ -33,6 +36,9 @@ export function ChatPanel({
   notice,
   docked = false,
   onClose,
+  topSlot,
+  renderCard,
+  onStartTour,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => void;
@@ -50,6 +56,12 @@ export function ChatPanel({
   docked?: boolean;
   /** Cierra el panel (sólo si se puede ocultar). */
   onClose?: () => void;
+  /** Entre la cabecera y la conversación (la barra del recorrido guiado). */
+  topSlot?: React.ReactNode;
+  /** Pinta una tarjeta determinista (sin modelo) dentro de la conversación. */
+  renderCard?: (card: NonNullable<ChatMessage['card']>) => React.ReactNode;
+  /** Ofrece empezar el recorrido guiado cuando no hay conversación. */
+  onStartTour?: () => void;
 }): React.ReactElement {
   const [input, setInput] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -142,11 +154,22 @@ export function ChatPanel({
         )}
       </div>
 
+      {topSlot}
+
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
+        {messages.length === 0 && !topSlot && (
           <div className="text-center text-sm py-8 text-muted">
             <div>Ask something like:</div>
             <div className="italic mt-1">“Who consumes the orders API?”</div>
+            {onStartTour && (
+              <button
+                type="button"
+                onClick={onStartTour}
+                className="mt-4 rounded-lg bg-accent px-3 py-1.5 text-xs text-accent-fg"
+              >
+                New here? Take the guided tour
+              </button>
+            )}
           </div>
         )}
         {messages.map((m, i) => (
@@ -162,7 +185,17 @@ export function ChatPanel({
                   : 'bg-bg text-fg border border-border'
               }`}
             >
-              <p className="whitespace-pre-wrap">{m.content}</p>
+              {m.label && <p className="text-xs font-semibold">{m.label}</p>}
+              {m.card && renderCard ? (
+                renderCard(m.card)
+              ) : m.label && m.role === 'user' ? (
+                <details className="text-[11px] opacity-90">
+                  <summary className="cursor-pointer">What I asked</summary>
+                  <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
+                </details>
+              ) : (
+                <p className="whitespace-pre-wrap">{m.content}</p>
+              )}
               {m.role === 'assistant' && m.claims && m.claims.total > 0 && (
                 <p className="text-[11px] text-muted" data-testid="claims-summary">
                   {summaryParts(m.claims).map((p, i) => (
@@ -191,12 +224,7 @@ export function ChatPanel({
             </div>
           </div>
         ))}
-        {loading && (
-          <div className="flex items-center gap-2 text-sm text-muted">
-            <div className="animate-pulse w-2 h-2 rounded-full bg-accent" />
-            Investigating…
-          </div>
-        )}
+        {loading && <Investigating />}
         <div ref={bottomRef} />
       </div>
 
@@ -315,5 +343,30 @@ function Verdicts({ verdicts }: { verdicts: ClaimVerdictDto[] }): React.ReactEle
         ))}
       </ul>
     </details>
+  );
+}
+
+/**
+ * Mientras el modelo lee código y el motor comprueba cada afirmación pasan de
+ * decenas de segundos a un par de minutos: sin señal de vida parece colgado.
+ * Se dice qué está pasando y cuánto lleva (el límite del servidor es de 3 minutos).
+ */
+function Investigating(): React.ReactElement {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSecs((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="space-y-0.5 text-sm text-muted" data-testid="investigating">
+      <div className="flex items-center gap-2">
+        <div className="animate-pulse w-2 h-2 rounded-full bg-accent" />
+        Investigating… <span className="tabular-nums">{secs} s</span>
+      </div>
+      <p className="pl-4 text-[11px]">
+        Reading the code with the engine, then checking each claim against it
+        {secs > 45 ? '. A thorough answer can take a couple of minutes.' : '.'}
+      </p>
+    </div>
   );
 }

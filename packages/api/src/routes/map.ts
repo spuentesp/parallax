@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { buildBriefing } from '../onboarding/briefing.js';
 import { describeNode, searchOrgGraph } from '../org-graph.js';
 import { viewOrgGraph } from '../org-graph-view.js';
 
@@ -76,6 +77,23 @@ export const mapRoutes: FastifyPluginAsync = async (app) => {
       const detail = describeNode(loaded.graph, (req.query as { id: string }).id);
       if (!detail) return reply.code(404).send({ code: 'NodeNotFound' });
       return { detail, meta: loaded.meta };
+    },
+  );
+
+  // Orientación para quien llega: qué hay, cuáles son las puertas y quién usa qué.
+  // Determinista (sin modelo), sobre el mismo grafo cacheado que dibuja el mapa.
+  app.get(
+    '/api/workspaces/:id/map/briefing',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req) => {
+      const loaded = await load((req.params as { id: string }).id, false);
+      if (!loaded.ok) {
+        return { briefing: null, meta: { source: loaded.source, error: loaded.error ?? null } };
+      }
+      return { briefing: buildBriefing(loaded.graph), meta: loaded.meta };
     },
   );
 

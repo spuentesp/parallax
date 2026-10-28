@@ -71,13 +71,13 @@ describe('ChatPanel', () => {
     fireEvent.change(input(), { target: { value: 'x' } });
     fireEvent.keyDown(input(), { key: 'Enter' });
     expect(loading.onSend).not.toHaveBeenCalled();
-    expect(screen.getByText('Investigating…')).toBeTruthy();
+    expect(screen.getByTestId('investigating').textContent).toMatch(/Investigating… 0 s/);
     expect((screen.getByRole('button', { name: '…' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('does not say it is investigating when it is not', () => {
     setup([{ role: 'user', content: 'q' }]);
-    expect(screen.queryByText('Investigating…')).toBeNull();
+    expect(screen.queryByTestId('investigating')).toBeNull();
   });
 
   it('aligns user and assistant messages differently', () => {

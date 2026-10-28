@@ -791,3 +791,49 @@ export function useImplementation(
     retry: false,
   });
 }
+
+// ── Orientación: qué hay, cuáles son las puertas, quién usa qué ─────────────
+
+export interface BriefingDto {
+  totals: { repos: number; services: number; contracts: number; relations: number };
+  repos: Array<{
+    id: string;
+    name: string;
+    lainRepoId: string | null;
+    services: Array<{
+      id: string;
+      name: string;
+      contracts: number;
+      groups: Array<{ key: string; label: string; count: number; note?: string }>;
+    }>;
+  }>;
+  relations: Array<{
+    from: string;
+    to: string;
+    uses: number;
+    deterministic: number;
+    inferred: number;
+    contractsUsed: number;
+  }>;
+  hubs: Array<{ service: string; repo: string | null; consumerServices: number; uses: number }>;
+  topOperations: Array<{
+    key: string;
+    service: string;
+    group: string | null;
+    uses: number;
+    consumers: number;
+  }>;
+  gaps: Array<{ repo: string; reason: string }>;
+}
+
+export function useBriefing(workspaceId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['map-briefing', workspaceId],
+    queryFn: () =>
+      client.get<{ briefing: BriefingDto | null; meta: MapMeta }>(
+        `/api/workspaces/${workspaceId}/map/briefing`,
+      ),
+    enabled: workspaceId != null && enabled,
+    staleTime: 60_000,
+  });
+}

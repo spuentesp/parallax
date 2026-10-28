@@ -59,14 +59,18 @@ describe('dispatcher — no repeating, no hammering', () => {
 });
 
 class Recording implements ChatCompleter {
-  readonly seen: Array<{ messages: ChatMessage[]; toolChoice: unknown }> = [];
+  readonly seen: Array<{ messages: ChatMessage[]; toolChoice: unknown; parallel?: boolean }> = [];
   private n = 0;
   constructor(private readonly reply: (n: number, toolChoice: unknown) => NemotronResponse) {}
   async complete(
     messages: ChatMessage[],
-    opts?: { toolChoice?: unknown },
+    opts?: { toolChoice?: unknown; parallelToolCalls?: boolean },
   ): Promise<NemotronResponse> {
-    this.seen.push({ messages: structuredClone(messages), toolChoice: opts?.toolChoice });
+    this.seen.push({
+      messages: structuredClone(messages),
+      toolChoice: opts?.toolChoice,
+      ...(opts?.parallelToolCalls !== undefined ? { parallel: opts.parallelToolCalls } : {}),
+    });
     return this.reply(this.n++, opts?.toolChoice);
   }
 }
@@ -139,5 +143,68 @@ describe('investigate — the loop converges', () => {
       budget: { maxToolCalls: 2, maxModelMs: 10_000 },
     }).catch(() => undefined);
     expect(model.seen.every((s) => s.toolChoice === 'none')).toBe(true);
+  });
+
+  it('forcing the delivery asks the server for ONE call (parallel off); normal rounds do not', async () => {
+    const { model } = await run();
+    const forced = model.seen.filter((s) => s.toolChoice && typeof s.toolChoice === 'object');
+    expect(forced.length).toBeGreaterThan(0);
+    expect(forced.every((s) => s.parallel === false)).toBe(true);
+    expect(
+      model.seen
+        .filter((s) => !s.toolChoice || typeof s.toolChoice === 'string')
+        .every((s) => s.parallel === undefined),
+    ).toBe(true);
+  });
+
+  it('a reply with hundreds of tool calls is a degenerate repetition: only the first few are kept, and the history stays small', async () => {
+    // Lo que se observó de verdad: al forzar la entrega, 256–280 submit_answer en una respuesta.
+    const flood = (n: number, toolChoice: unknown): NemotronResponse =>
+      toolChoice && typeof toolChoice === 'object'
+        ? resp(
+            Array.from({ length: 280 }, (_, i) =>
+              call(`s${n}_${i}`, 'submit_answer', { answer: 'Done here.', claims: [] }),
+            ),
+          )
+        : resp([call(`c${n}`, 'search_code', { query: `try ${n}` })]);
+    const model = new Recording(flood);
+    const result = await investigate({
+      question: 'where is X?',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      budget: { maxToolCalls: 4, maxModelMs: 60_000 },
+    });
+    expect(result.answer).toBe('Done here.');
+    expect(
+      result.errors.some((e) => /280 tool calls in one reply; only the first 1 were kept/.test(e)),
+    ).toBe(true);
+    // Ninguna ronda posterior arrastra cientos de mensajes de herramienta.
+    const biggest = Math.max(...model.seen.map((s) => s.messages.length));
+    expect(biggest).toBeLessThan(40);
+  });
+
+  it('an ordinary round also has a ceiling on calls (8), the rest are dropped', async () => {
+    const many = (n: number): NemotronResponse =>
+      n === 0
+        ? resp(
+            Array.from({ length: 30 }, (_, i) => call(`m${i}`, 'search_code', { query: `q${i}` })),
+          )
+        : resp([call('s', 'submit_answer', { answer: 'ok', claims: [] })]);
+    const model = new Recording((n) => many(n));
+    const result = await investigate({
+      question: 'q',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      budget: { maxToolCalls: 20, maxModelMs: 60_000 },
+    });
+    // Tope por herramienta: de las 8 aceptadas, sólo 4 se ejecutan; el resto se rechaza.
+    expect(result.toolCallLog.filter((c) => c.tool === 'search_code' && c.ok)).toHaveLength(4);
+    expect(
+      result.errors.some((e) => /30 tool calls in one reply; only the first 8 were kept/.test(e)),
+    ).toBe(true);
+    const assistant = model.seen[1]?.messages.find((m) => m.role === 'assistant' && m.tool_calls);
+    expect(assistant?.tool_calls?.length).toBe(8);
   });
 });

@@ -155,3 +155,33 @@ Blocks E and F are **reserved**: if A–D slip, cut C's optional model summary a
 ## 10. Out of scope (stated so it is not promised)
 
 Cross-org activity digests ("what changed this week"), team/ownership metadata, doc ingestion, vector search, write-back to Lain's configuration, accounts and roles.
+
+
+## 11. Revision 2026-10-28 (evening): onboarding as a long, guided dialog
+
+Phase 3 above sketched seven stages. After walking through what a newcomer actually needs, the path becomes **fourteen chapters** of one conversation. A newcomer is not trying to learn the code, they are trying to stop being afraid of it: where things are, how they connect, what is safe to touch, how this team works.
+
+| # | Newcomer's question | What is shown | Source |
+|---|---|---|---|
+| 1 | What is this and how big? | repos, languages, purpose, entry points | engine: `understand_repository`, `list_entry_points` |
+| 2 | What are the main concepts? | domain words, where defined, naming conventions | code index + name matching (labelled) |
+| 3 | What are the doors? | public API by kind (queries, mutations, subscriptions, tasks, webhooks) and who uses each | contract groups (built) |
+| 4 | Follow one request end to end | storefront action → operation → resolver → domain → side effects → tasks, hop by hop on the map | `get_call_chain`, `get_cross_runtime_callers`, `trace_impact` |
+| 5 | Where does the real logic live? | layering, the few central symbols | `find_anchors`, architecture tools |
+| 6 | What does the data look like? | models, tables, relations | table contracts (partial) |
+| 7 | What breaks if I change X? | blast radius, untested dependents, co-change | `get_blast_radius`, `find_untested_functions`, `get_coupling_radar` |
+| 8 | Where do I hook in? | plugins, webhooks, apps | contracts + code search |
+| 9 | How do we work here? | run/test, conventions, owners, PR flow | **files in the repos** (README, CONTRIBUTING, CODEOWNERS, docs/), labelled *documented* |
+| 10 | What is risky or messy? | loose ends, dead code, hubs, weakly tested areas | classifier (built), `find_dead_code` |
+| 11 | Why is it like this? | recent history of a file, who changes it | git tools (design only) |
+| 12 | Your task | the closest existing feature to copy, touchpoints with verified `file:line`, tests to write, risks | all of the above |
+| 13 | Check yourself | engine-graded questions | engine |
+| 14 | Take it with you | notes: glossary, task map, reading list | verified-facts ledger |
+
+**Form.** The assistant leads and asks back: first the role and the task, then it branches (frontend starts at the storefront side, backend at the API). Each chapter has one rhythm: the question, a grounded answer with locations and the map lighting up, one plain-language "so what", and a nudge to the next step. Progress lives with the conversation (resume later). Free questions are allowed between chapters.
+
+**Every statement carries its origin:** *verified* (the engine read it), *documented* (a repo file said it), *inferred* (name match or heuristic), *suggested* (model advice).
+
+**Honest gaps.** The "why" (decisions, history) needs git and ADRs. The data model is only partly visible to the engine. Team context (who to ask, unwritten rules) is not in code; only `CODEOWNERS` and CONTRIBUTING can point at it, if the repo has them.
+
+**Deadline cut.** Build 1, 3, 4, 7, 9 and 12 (mostly assembled from tools already verified against the live engine). 4 and 12 are the demo. 1 and 3 need no model.

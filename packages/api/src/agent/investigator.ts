@@ -53,10 +53,13 @@ import {
   verifyPrSubmission,
 } from './pr-explain.js';
 
+/** Llamadas a herramienta que se aceptan de UNA respuesta del modelo. */
+const MAX_CALLS_PER_ROUND = 8;
+
 /** Fracción del presupuesto de lecturas a partir de la cual se pide cerrar. */
 const SOFT_NUDGE_AT = 0.6;
 
-export const PROMPT_VERSION = 'parallax-investigator-v6';
+export const PROMPT_VERSION = 'parallax-investigator-v7';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
 // las pruebas inyectan un modelo guionizado y P08 se prueba sin modelo.
@@ -69,6 +72,7 @@ export interface ChatCompleter {
       toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
       maxTokens?: number;
       thinking?: boolean;
+      parallelToolCalls?: boolean;
     },
   ): Promise<NemotronResponse>;
 }
@@ -212,7 +216,8 @@ Method:
 5. If a tool result declares a cut (truncation), ask for a narrower detail call instead of guessing the omitted part.
 6. If you cannot verify something, say it is unknown. Never hide uncertainty. Answer in the language of the question.
 7. Finish by calling submit_answer. Put the explanation for the human in "answer". Put every statement about whether one service consumes another in "claims" as a relation claim (polarity "present" or "absent"): the engine verifies those itself, so an absence needs no code anchor. If you state any file:line in your answer you MUST add a location claim for it (an answer with file:line and no location claim is sent back). Every file:line you state goes in a location claim (repo, path, line, and "contains": the exact symbol or text that must be on or within a few lines of that line): the engine reads the code back and verifies it. Every other statement you want checked goes in a note claim with the evidence ids that support it. Each tool result carries a "receipt" id (q:N) you may cite for what a query returned.
-8. Keep "answer" short (about 200 words): summarize and cite a few representative evidence ids; do not enumerate every endpoint. The claims carry the checkable facts, and a reply that is too long is cut off and lost.`;
+8. Copy each file path exactly as a tool printed it. Start the answer with the finding itself: never restate the question, the task or the workspace map. A location claim's line must be a line you actually saw in a tool result (where the symbol is defined or used), never a guess such as line 1.
+9. Keep "answer" short (about 200 words): summarize and cite a few representative evidence ids; do not enumerate every endpoint. The claims carry the checkable facts, and a reply that is too long is cut off and lost.`;
 
 function nowMs(): number {
   return Date.now();
@@ -437,6 +442,8 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
           : (opts.toolChoice ?? 'auto'),
         maxTokens,
         ...(opts.thinking !== undefined ? { thinking: opts.thinking } : {}),
+        // Forzando la entrega, UNA llamada: con varias el modelo la repetía hasta agotar los tokens.
+        ...(mustSubmit ? { parallelToolCalls: false } : {}),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -459,6 +466,17 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       status = isTimeoutError(e) ? 'failed:model_timeout' : 'failed:model_error';
       errors.push(message);
       break;
+    }
+
+    // Una respuesta con cientos de llamadas es una repetición degenerada, no un plan:
+    // se conservan las primeras (una sola si se forzó la entrega). Si no, cada una
+    // recibe su mensaje de herramienta y el historial crece decenas de miles de tokens.
+    const maxCalls = mustSubmit ? 1 : MAX_CALLS_PER_ROUND;
+    if (resp.toolCalls.length > maxCalls) {
+      errors.push(
+        `model sent ${resp.toolCalls.length} tool calls in one reply; only the first ${maxCalls} were kept`,
+      );
+      resp = { ...resp, toolCalls: resp.toolCalls.slice(0, maxCalls) };
     }
 
     modelMsUsed += resp.latencyMs;

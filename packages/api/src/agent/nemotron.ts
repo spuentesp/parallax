@@ -112,6 +112,8 @@ export class NemotronProvider {
        * "pensaba" sin presupuesto. Sin indicar, se respeta el valor por defecto del servidor.
        */
       thinking?: boolean;
+      /** false = una sola llamada a herramienta por respuesta (al forzar la entrega, el modelo repetía la llamada cientos de veces). */
+      parallelToolCalls?: boolean;
     } = {},
   ): Promise<NemotronResponse> {
     const model = opts.model === 'planner' ? this.cfg.plannerModel : this.cfg.workerModel;
@@ -120,6 +122,9 @@ export class NemotronProvider {
       messages,
       max_tokens: opts.maxTokens ?? 4096,
     };
+    if (opts.parallelToolCalls !== undefined && opts.tools?.length) {
+      body.parallel_tool_calls = opts.parallelToolCalls;
+    }
     if (opts.thinking !== undefined) {
       body.chat_template_kwargs = { enable_thinking: opts.thinking };
     }

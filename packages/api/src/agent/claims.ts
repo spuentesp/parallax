@@ -261,16 +261,29 @@ async function verifyLocation(
       reason: `repo "${claim.repo}" is not in the analyzed view; the engine cannot read it`,
     };
   }
-  let text: string;
+  // La ruta es relativa al repo. Los modelos a veces la escriben con el nombre del
+  // repo delante ("saleor-dashboard/src/…") o sin la carpeta que se llama igual que
+  // él: se prueban ambas formas antes de dar el sitio por inexistente.
+  const paths = [claim.path];
+  // Y al revés: a veces la carpeta de primer nivel del repo se llama como el repo
+  // (saleor/saleor/checkout/…) y el modelo la quita.
+  if (claim.path.startsWith(`${claim.repo}/`)) paths.push(claim.path.slice(claim.repo.length + 1));
+  else paths.push(`${claim.repo}/${claim.path}`);
+  let text = '';
+  let usedPath = claim.path;
   try {
-    text = (
-      await deps.lain.getCodeSnippet({
-        path: claim.path,
-        repo_id: claim.repo,
-        line: claim.line,
-        context_lines: LOCATION_WINDOW,
-      })
-    ).text;
+    for (const path of paths) {
+      text = (
+        await deps.lain.getCodeSnippet({
+          path,
+          repo_id: claim.repo,
+          line: claim.line,
+          context_lines: LOCATION_WINDOW,
+        })
+      ).text;
+      usedPath = path;
+      if (!/^Error: Not found/i.test(text)) break;
+    }
   } catch (e) {
     return {
       ...base,
@@ -300,7 +313,7 @@ async function verifyLocation(
     return {
       ...base,
       verdict: 'verified',
-      reason: `the engine read ${where} (±${LOCATION_WINDOW} lines) and "${claim.contains}" is there`,
+      reason: `the engine read ${claim.repo}:${usedPath}:${claim.line} (±${LOCATION_WINDOW} lines) and "${claim.contains}" is there`,
     };
   }
   return {

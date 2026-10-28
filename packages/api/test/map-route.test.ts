@@ -53,6 +53,28 @@ describe('map routes — estados sin grafo', () => {
     expect(body.meta.error).toBeTruthy();
   });
 
+  it('briefing: "none"/"unconfigured"/error states are named, and it needs auth', async () => {
+    const get = (id: string, authed = true) =>
+      app.inject({
+        method: 'GET',
+        url: `/api/workspaces/${id}/map/briefing`,
+        ...(authed ? { headers } : {}),
+      });
+    expect((await get('ws_nope')).json()).toMatchObject({
+      briefing: null,
+      meta: { source: 'none' },
+    });
+    expect((await get(await createWorkspace())).json()).toMatchObject({
+      briefing: null,
+      meta: { source: 'unconfigured' },
+    });
+    expect((await get(await createWorkspace('http://127.0.0.1:9'))).json()).toMatchObject({
+      briefing: null,
+      meta: { source: 'error' },
+    });
+    expect((await get('x', false)).statusCode).toBe(401);
+  });
+
   it('requires auth and the write scope to refresh', async () => {
     const id = await createWorkspace();
     expect(

@@ -11,6 +11,10 @@ import {
   useDeleteConversation,
 } from '../api/hooks.js';
 import { readConv, writeConv } from '../nav/mapState.js';
+import { DoorsCard, OrientCard } from '../onboarding/Cards.js';
+import { CHAPTERS, DEFAULT_TASK, type TourContext } from '../onboarding/chapters.js';
+import { TourBar, TourSetup } from '../onboarding/TourBar.js';
+import { useOnboarding } from '../onboarding/useOnboarding.js';
 import { type ChatMessage, ChatPanel, summarizeVerdicts } from './ChatPanel.js';
 
 // El asistente ("Ask the architecture") es UNO para toda la app: se monta en el
@@ -78,8 +82,8 @@ export function AssistantDock({
   // Una conversación que acabamos de crear existe aunque la lectura aún no la vea.
   const missing = convId !== null && conv.isError && loadedFor !== convId;
 
-  const handleSend = (text: string) => {
-    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+  const handleSend = (text: string, label?: string) => {
+    setMessages((prev) => [...prev, { role: 'user', content: text, ...(label ? { label } : {}) }]);
     ask.mutate(
       { question: text, conversationId: missing ? undefined : (convId ?? undefined) },
       {
@@ -132,8 +136,76 @@ export function AssistantDock({
       { replace: true },
     );
 
+  // ── Recorrido guiado ──────────────────────────────────────────────────────
+  const tour = useOnboarding(workspaceId);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const focusNode = (id: string) => showOnMap({ seed: id, ids: [id], relations: [], query: '' });
+
+  const openChapter = (n: number, ctx: TourContext) => {
+    const ch = CHAPTERS.find((c) => c.n === n);
+    if (!ch) return;
+    const label = `Chapter ${ch.n} · ${ch.title}`;
+    if (ch.kind === 'card') {
+      setMessages((prev) => [...prev, { role: 'assistant', content: '', card: ch.card, label }]);
+    } else {
+      handleSend(ch.prompt(ctx), label);
+    }
+  };
+  const tourCtx = (): TourContext | null =>
+    tour.state ? { role: tour.state.role, task: tour.state.task } : null;
+
+  const topSlot = setupOpen ? (
+    <div className="border-b border-border p-3">
+      <TourSetup
+        onCancel={() => setSetupOpen(false)}
+        onStart={(role, task) => {
+          tour.start(role, task);
+          setSetupOpen(false);
+          openChapter(1, { role, task: task.trim() || DEFAULT_TASK });
+        }}
+      />
+    </div>
+  ) : tour.state && tour.state.current !== null ? (
+    <TourBar
+      state={tour.state}
+      busy={ask.isPending}
+      onGo={(n) => {
+        const ctx = tourCtx();
+        tour.goTo(n);
+        if (ctx) openChapter(n, ctx);
+      }}
+      onFinish={tour.finish}
+      onLeave={tour.leave}
+    />
+  ) : tour.state ? (
+    <div
+      className="flex items-center justify-between border-b border-border px-4 py-2 text-[11px]"
+      data-testid="tour-done"
+    >
+      <span className="text-success">
+        ✓ Tour complete: you can keep asking, or go back over a chapter.
+      </span>
+      <button
+        type="button"
+        onClick={() => setSetupOpen(true)}
+        className="text-accent hover:underline"
+      >
+        Restart
+      </button>
+    </div>
+  ) : null;
+
   const panel = (
     <ChatPanel
+      topSlot={topSlot}
+      renderCard={(card) =>
+        card === 'orient' ? (
+          <OrientCard workspaceId={workspaceId} onSelect={focusNode} />
+        ) : (
+          <DoorsCard workspaceId={workspaceId} onSelect={focusNode} />
+        )
+      }
+      onStartTour={() => setSetupOpen(true)}
       messages={messages}
       onSend={handleSend}
       loading={ask.isPending}
