@@ -59,6 +59,7 @@ export const CODE_TOOL_ARGS = {
       repo: z.string().min(1),
     })
     .strict(),
+  find_docs: z.object({ query: z.string().min(1), repo, limit: limit(25) }).strict(),
   get_code_snippet: z
     .object({
       path: z.string().min(1),
@@ -99,6 +100,8 @@ export const CODE_TOOL_DESCRIPTIONS: Record<CodeTool, string> = {
     'Files that change together with this symbol (hidden coupling from git history).',
   get_cross_runtime_callers:
     'Where a handler is wired in: the GraphQL resolvers / HTTP routes / gRPC services that use it. node_id is the UUID in backticks from find_symbol or search_code results; repo is required.',
+  find_docs:
+    "Find the repositories' own DOCUMENTATION (README, ADRs / architecture decisions, AGENTS.md / CLAUDE.md conventions, CONTRIBUTING, docs/) about a topic. Use for any 'why', 'how do we', 'what are the conventions' or 'what was decided' question BEFORE reading code. Returns doc paths; read one with get_code_snippet.",
   get_code_snippet:
     'Source of a file with context around a line. Use to show the code behind an answer.',
 };

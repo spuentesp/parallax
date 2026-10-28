@@ -187,6 +187,7 @@ describe('the guided tour', () => {
     await waitFor(() => expect(bodies).toHaveLength(1));
     const q = sentTask(bodies[0]);
     expect(q).toMatch(/Add a delivery note to checkout/);
+    expect(q).toMatch(/do not describe the workspace map/);
     expect(q).toMatch(/Start from the UI code/);
     expect(q).toMatch(/path:line .* and add a location claim/);
     // Un recién llegado con una función NUEVA necesita la más parecida que ya existe.
@@ -305,5 +306,101 @@ describe('the guided tour', () => {
     mount();
     await startTour();
     expect(await screen.findByText(/no LAIN server configured/i)).toBeTruthy();
+  });
+
+  describe('chapter 5 — what the team wrote down', () => {
+    const docs = [
+      {
+        repo: 'saleor',
+        path: 'AGENTS.md',
+        kind: 'conventions',
+        title: 'Saleor',
+        summary: 'Deployment model.',
+      },
+      {
+        repo: 'saleor',
+        path: 'docs/adr/0004-race-safe.md',
+        kind: 'decision',
+        title: 'Balance adjustments must be race-safe',
+        summary: 'Money movement can be concurrent.',
+      },
+      ...[1, 2, 3, 4, 5].map((i) => ({
+        repo: 'saleor',
+        path: `docs/adr/000${i}-x.md`,
+        kind: 'decision',
+        title: `ADR ${i}`,
+        summary: '',
+      })),
+    ];
+    const goToDocs = async () => {
+      server.use(
+        http.get('/api/workspaces/:id/docs', () => HttpResponse.json({ source: 'lain', docs })),
+      );
+      serveBriefing();
+      mount();
+      await startTour();
+      await screen.findByTestId('orient-card');
+      for (let i = 1; i < 5; i++) {
+        await waitFor(() =>
+          expect(
+            (screen.getByRole('button', { name: /^Next:/ }) as HTMLButtonElement).disabled,
+          ).toBe(false),
+        );
+        next();
+      }
+      return screen.findByTestId('docs-card');
+    };
+
+    it('lists the documents the repos carry, grouped by what they are for, with what each one says', async () => {
+      serveQuery([]);
+      const card = await goToDocs();
+      expect(card.textContent).toMatch(/7 documents/);
+      expect(within(card).getByText('Conventions for working here · 1')).toBeTruthy();
+      expect(within(card).getByText(/Decisions \(ADRs\) · 6/)).toBeTruthy();
+      expect(within(card).getByText('Money movement can be concurrent.')).toBeTruthy();
+      // lo largo se pliega
+      expect(within(card).queryByTestId('doc-docs/adr/0005-x.md')).toBeNull();
+      fireEvent.click(within(card).getByRole('button', { name: 'Show all 6' }));
+      expect(within(card).getByTestId('doc-docs/adr/0005-x.md')).toBeTruthy();
+    });
+
+    it('"Explain" asks the assistant to READ that file and tie it to the task, naming the repo and path', async () => {
+      const bodies: Array<Record<string, unknown>> = [];
+      serveQuery(bodies);
+      const card = await goToDocs();
+      fireEvent.click(
+        within(within(card).getByTestId('doc-docs/adr/0004-race-safe.md')).getByRole('button', {
+          name: 'Explain',
+        }),
+      );
+      await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+      const q = sentTask(bodies.at(-1));
+      expect(q).toMatch(
+        /Read docs\/adr\/0004-race-safe\.md in the saleor repository with get_code_snippet/,
+      );
+      expect(q).toMatch(/Add a delivery note to checkout/);
+      expect(q).toMatch(/documented/);
+    });
+
+    it('says plainly when the repos carry no documentation', async () => {
+      server.use(
+        http.get('/api/workspaces/:id/docs', () => HttpResponse.json({ source: 'lain', docs: [] })),
+      );
+      serveBriefing();
+      mount();
+      await startTour();
+      await screen.findByTestId('orient-card');
+      for (let i = 1; i < 5; i++) {
+        await waitFor(() =>
+          expect(
+            (screen.getByRole('button', { name: /^Next:/ }) as HTMLButtonElement).disabled,
+          ).toBe(false),
+        );
+        next();
+      }
+      expect((await screen.findByTestId('docs-card')).textContent).toMatch(
+        /No documentation files were found/,
+      );
+    });
   });
 });

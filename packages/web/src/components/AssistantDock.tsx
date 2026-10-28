@@ -11,8 +11,13 @@ import {
   useDeleteConversation,
 } from '../api/hooks.js';
 import { readConv, writeConv } from '../nav/mapState.js';
-import { DoorsCard, OrientCard } from '../onboarding/Cards.js';
-import { CHAPTERS, DEFAULT_TASK, type TourContext } from '../onboarding/chapters.js';
+import { DocsCard, DoorsCard, OrientCard } from '../onboarding/Cards.js';
+import {
+  CHAPTERS,
+  DEFAULT_TASK,
+  explainDocPrompt,
+  type TourContext,
+} from '../onboarding/chapters.js';
 import { TourBar, TourSetup } from '../onboarding/TourBar.js';
 import { useOnboarding } from '../onboarding/useOnboarding.js';
 import { type ChatMessage, ChatPanel, summarizeVerdicts } from './ChatPanel.js';
@@ -203,6 +208,16 @@ export function AssistantDock({
       renderCard={(card) =>
         card === 'orient' ? (
           <OrientCard workspaceId={workspaceId} onSelect={focusNode} />
+        ) : card === 'docs' ? (
+          <DocsCard
+            workspaceId={workspaceId}
+            onExplain={(d) =>
+              handleSend(
+                explainDocPrompt(d, tour.state?.task ?? DEFAULT_TASK),
+                `Reading · ${d.title || d.path}`,
+              )
+            }
+          />
         ) : (
           <DoorsCard workspaceId={workspaceId} onSelect={focusNode} />
         )

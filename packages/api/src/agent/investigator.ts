@@ -103,7 +103,7 @@ const MAX_CALLS_PER_ROUND = 8;
 /** Fracción del presupuesto de lecturas a partir de la cual se pide cerrar. */
 const SOFT_NUDGE_AT = 0.6;
 
-export const PROMPT_VERSION = 'parallax-investigator-v7';
+export const PROMPT_VERSION = 'parallax-investigator-v8';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
 // las pruebas inyectan un modelo guionizado y P08 se prueba sin modelo.
@@ -255,7 +255,7 @@ const SYSTEM_PROMPT = `You are Parallax's architecture investigator. You answer 
 
 Method:
 1. Gather facts with the tools before answering. The workspace map in the question already lists the services, so do not call list_services just to learn them. consumers_of summarizes who consumes a service and through which endpoints, each with a citable evidence id; get_service gives the raw detail; trace_impact shows who depends on an endpoint; resolve_evidence/read_source verify code locations; list_unresolved and get_coverage tell you what remains unknown.
-1b. Code questions ("where is X implemented", "what does changing X break", "how does A reach B") use the code tools, not the contract tools: search_code or search_org to LOCATE a feature by words, find_symbol for an exact name, get_context / get_call_sites / get_call_chain to follow it, get_blast_radius or get_cross_repo_blast_radius for what a change affects, find_anchors / understand_repository to orient in a repo. They return file:line; you may state those locations, but a code location is not evidence of a service relation: relation claims still rest on consumers_of / trace_impact. Do not guess paths for read_source: find them with search_code first. Stop researching once you can answer: about 6 calls is usually enough.
+1b. Code questions ("where is X implemented", "what does changing X break", "how does A reach B") use the code tools, not the contract tools: search_code or search_org to LOCATE a feature by words, find_symbol for an exact name, get_context / get_call_sites / get_call_chain to follow it, get_blast_radius or get_cross_repo_blast_radius for what a change affects, find_anchors / understand_repository to orient in a repo. They return file:line; you may state those locations, but a code location is not evidence of a service relation: relation claims still rest on consumers_of / trace_impact. Do not guess paths for read_source: find them with search_code first. For "why", "how do we", conventions, decisions or how to run/test/contribute, use find_docs FIRST: the repositories document themselves (ADRs, AGENTS.md / CLAUDE.md, CONTRIBUTING, README, docs/). Read the one best file with get_code_snippet, quote it, and add a location claim whose contains field is a phrase from the line you read; say "documented" for what comes from a doc and "observed" for what comes from code, and when they disagree say so. If nothing is documented, say that. Stop researching once you can answer: about 6 calls is usually enough.
 2. Every factual conclusion MUST cite at least one evidence id you actually received in tool results. Write the id exactly as it appears in the tool result inside the marker, with no angle brackets, quotes or placeholders, for example [ev:billing:Function:src/main.py:fetch_me:35]. Evidence ids are the long anchor strings found in tool results (fields like site.id or caller.id); service names and tool names are not evidence ids. Never invent ids, paths or refs. If you did not receive an id, do not cite it.
 3. You cannot change engine classifications. If a finding is NeedsInvestigation or NoKnownImpact, keep it; explain what is unknown and what evidence would resolve it.
 4. For design proposals (e.g. a BFF): identify existing contracts/capabilities to reuse, separate DECISIONS from HYPOTHESES explicitly, and list open operational questions. A proposal must not modify the observed map — mark every hypothetical relation as such.
@@ -397,7 +397,12 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
     : '';
   // Lo que acompaña a la pregunta: el mapa del workspace y, si lo hay, el libro
   // de hechos de la conversación.
-  const contextBlocks = [mapBlock, opts.history?.context ?? ''].filter(Boolean);
+  // Documentación de los propios repos que parece tratar el tema (sin gastar lecturas).
+  const docLines = opts.pr ? '' : await dispatcher.docsFor(opts.question);
+  const docsBlock = docLines
+    ? `Documentation files in the repositories that may cover this (read the best one with get_code_snippet before answering a why / convention / decision question, and cite it):\n${docLines}`
+    : '';
+  const contextBlocks = [mapBlock, docsBlock, opts.history?.context ?? ''].filter(Boolean);
   const messages: ChatMessage[] = [
     { role: 'system', content: prFindings ? PR_SYSTEM_PROMPT : SYSTEM_PROMPT },
     // Turnos recientes de la conversación, como hilo normal de chat.

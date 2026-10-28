@@ -25,7 +25,7 @@ export interface ChatMessage {
   status?: string;
   /** Recorrido guiado: cabecera de capítulo, y (si es una tarjeta) cuál. */
   label?: string;
-  card?: 'orient' | 'doors';
+  card?: 'orient' | 'doors' | 'docs';
 }
 
 export function ChatPanel({
@@ -202,7 +202,7 @@ export function ChatPanel({
                   <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
                 </details>
               ) : (
-                <p className="whitespace-pre-wrap">{m.content}</p>
+                <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p>
               )}
               {m.role === 'assistant' && m.roadmap && <RoadmapView roadmap={m.roadmap} />}
               {m.role === 'assistant' && m.claims && m.claims.total > 0 && (

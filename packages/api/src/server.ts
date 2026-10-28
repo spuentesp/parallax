@@ -15,6 +15,7 @@ import orgGraphPlugin from './plugins/org-graph.js';
 import { assessmentRoutes } from './routes/assessments.js';
 import { ciRoutes } from './routes/ci.js';
 import { conversationRoutes } from './routes/conversations.js';
+import { docsRoutes } from './routes/docs.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
 import { implementationRoutes } from './routes/implementation.js';
@@ -60,6 +61,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(conversationRoutes);
   await app.register(looseEndsRoutes);
   await app.register(implementationRoutes);
+  await app.register(docsRoutes);
   await app.register(traceRoutes);
   await app.register(whoamiRoutes);
   await app.register(ciRoutes);

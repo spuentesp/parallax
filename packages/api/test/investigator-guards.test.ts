@@ -272,3 +272,87 @@ describe('memoizeReads — the heavy read is paid once per investigation', () =>
     expect(n).toBe(2);
   });
 });
+
+describe('find_docs — the repositories document themselves', () => {
+  const searchText = `## search_code: x (mode=lexical, fell_back=false)
+
+1. **0004-race-safe-balance-adjustments.md** file docs/adr/0004-race-safe-balance-adjustments.md anchor=0.00 (\`aaa\`)
+2. **gift_card_balance_adjusted_event** function saleor/giftcard/events.py:33 anchor=0.37 (\`bbb\`)
+3. **AGENTS.md** file AGENTS.md anchor=0.10 (\`ccc\`)
+`;
+  const lain = (seen: Array<Record<string, unknown>>, text = searchText) =>
+    ({
+      ...createLainMock(),
+      codeTool: async (_t: string, a: Record<string, unknown>) => {
+        seen.push(a);
+        return { text: a.repo_id === 'orders' ? text : '## search_code: x\n\nNo results.' };
+      },
+    }) as never;
+
+  it('keeps only documentation files, asks every repo of the catalog, and says how to read one', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const d = createDispatcher({ lain: lain(seen), view: 'live' });
+    const r = await d.execute(call('a', 'find_docs', { query: 'race safe' }));
+    expect(r.ok).toBe(true);
+    const text = JSON.stringify(r);
+    expect(text).toContain('orders: docs/adr/0004-race-safe-balance-adjustments.md');
+    expect(text).toContain('orders: AGENTS.md');
+    expect(text).not.toContain('events.py');
+    expect(text).toContain('get_code_snippet');
+    expect(seen.map((s) => s.repo_id).sort()).toEqual(
+      [...new Set(seen.map((s) => s.repo_id))].sort(),
+    );
+    expect(seen.length).toBeGreaterThan(1);
+  });
+
+  it('a named repo is the only one asked', async () => {
+    const seen: Array<Record<string, unknown>> = [];
+    const d = createDispatcher({ lain: lain(seen), view: 'live' });
+    await d.execute(call('a', 'find_docs', { query: 'x', repo: 'orders' }));
+    expect(seen.map((s) => s.repo_id)).toEqual(['orders']);
+  });
+
+  it('no match says so plainly and tells the model to fall back to code', async () => {
+    const d = createDispatcher({ lain: lain([], 'nothing'), view: 'live' });
+    const r = await d.execute(call('a', 'find_docs', { query: 'zzz' }));
+    expect(JSON.stringify(r)).toMatch(/No documentation file matched/);
+  });
+
+  it('is capped like the other searches', () => {
+    expect(PER_TOOL_CAP.find_docs).toBe(3);
+  });
+
+  it("docsFor: finds the ADR whose name shares the question's words, ignores symbols and generic READMEs", async () => {
+    const byQuery: Record<string, string> = {
+      gift: '1. **README.md** file README.md anchor=0\n',
+      balance:
+        '1. **0004-race-safe-balance-adjustments.md** file docs/adr/0004-race-safe-balance-adjustments.md anchor=0\n2. **x** function a/b.py:1 anchor=0\n',
+      adjustments:
+        '1. **0004-race-safe-balance-adjustments.md** file docs/adr/0004-race-safe-balance-adjustments.md anchor=0\n',
+    };
+    const l = {
+      ...createLainMock(),
+      codeTool: async (_t: string, a: Record<string, unknown>) => ({
+        text: a.repo_id === 'orders' ? (byQuery[a.query as string] ?? '') : '',
+      }),
+    } as never;
+    const d = createDispatcher({ lain: l, view: 'live' });
+    const out = await d.docsFor('Why must gift card balance adjustments be race-safe?');
+    expect(out).toBe('- orders: docs/adr/0004-race-safe-balance-adjustments.md');
+  });
+
+  it('docsFor: nothing relevant is an empty string, and an engine failure never throws', async () => {
+    const none = createDispatcher({ lain: lain([], 'nothing'), view: 'live' });
+    expect(await none.docsFor('Explain the checkout totals')).toBe('');
+    const boom = createDispatcher({
+      lain: {
+        ...createLainMock(),
+        codeTool: async () => {
+          throw new Error('down');
+        },
+      } as never,
+      view: 'live',
+    });
+    expect(await boom.docsFor('Explain the checkout totals')).toBe('');
+  });
+});

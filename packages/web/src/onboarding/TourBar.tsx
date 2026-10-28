@@ -20,8 +20,9 @@ export function TourSetup({
     >
       <p className="font-semibold">Guided tour</p>
       <p className="text-muted">
-        Six short chapters, from &quot;what is this&quot; to &quot;where do I start&quot;. Tell me
-        who you are and what you are here to do, and I will aim the answers at it.
+        {CHAPTERS.length} short chapters, from &quot;what is this&quot; to &quot;where do I
+        start&quot;. Tell me who you are and what you are here to do, and I will aim the answers at
+        it.
       </p>
       <fieldset className="flex gap-1.5 border-0 p-0">
         <legend className="mb-1 text-muted">I work on</legend>

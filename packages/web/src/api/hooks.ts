@@ -956,3 +956,28 @@ export function useTrace(workspaceId: string | undefined) {
   });
   return Object.assign(mutation, { progress });
 }
+
+// ── Documentación que traen los repos ───────────────────────────────────────
+
+export type DocKindDto = 'decision' | 'conventions' | 'domain' | 'guide' | 'readme' | 'security';
+export interface DocEntryDto {
+  repo: string;
+  path: string;
+  kind: DocKindDto;
+  title: string;
+  summary: string;
+}
+
+export function useDocs(workspaceId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['docs', workspaceId],
+    queryFn: () =>
+      client.get<{
+        source: 'lain' | 'unconfigured' | 'error';
+        docs: DocEntryDto[];
+        error?: string;
+      }>(`/api/workspaces/${workspaceId}/docs`),
+    enabled: workspaceId != null && enabled,
+    staleTime: 10 * 60_000,
+  });
+}

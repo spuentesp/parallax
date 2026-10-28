@@ -166,6 +166,7 @@ const DEFAULT_MAX_RESULT_CHARS = 10_000;
 /** Cuántas veces puede pedirse una misma herramienta en una investigación. */
 export const PER_TOOL_CAP: Partial<Record<DispatcherTool, number>> = {
   search_code: 4,
+  find_docs: 3,
   search_org: 3,
   find_symbol: 4,
   get_code_snippet: 3,
@@ -176,6 +177,11 @@ export const PER_TOOL_CAP: Partial<Record<DispatcherTool, number>> = {
   get_cross_repo_blast_radius: 3,
 };
 const DEFAULT_PER_TOOL_CAP = 6;
+const DOC_STOPWORDS = new Set(
+  'task what which where when does must should would could about this that there their these those with from into have been being between across code repo repos repository repositories documentation document documents docs explain tell show please enforced enforce enforces why how who whom ours your mine'.split(
+    ' ',
+  ),
+);
 const DEFAULT_CONSUMER_ENDPOINTS = 15;
 
 export interface DispatcherBudgetUse {
@@ -489,6 +495,8 @@ export class LainDispatcher {
         return this.lain.listUnresolved({ ...(args as object), snapshot } as never);
       case 'get_coverage':
         return this.lain.getCoverage({ ...(args as object), snapshot } as never);
+      case 'find_docs':
+        return this.findDocs(args as { query: string; repo?: string; limit?: number });
       default: {
         // Herramientas de código: el modelo dice `repo`, LAIN espera `repo_id`.
         // El código no depende del snapshot de contratos.
@@ -499,6 +507,76 @@ export class LainDispatcher {
         });
       }
     }
+  }
+
+  /**
+   * Documentación candidata para una pregunta, SIN gastar presupuesto: el modelo no tiene
+   * que acordarse de buscarla (no lo hacía). Palabras clave de la pregunta → archivos .md
+   * de los repos. Vacío si nada coincide o el motor falla.
+   */
+  async docsFor(question: string): Promise<string> {
+    const words = [
+      ...new Set(
+        (question.toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).filter(
+          (w) => !DOC_STOPWORDS.has(w),
+        ),
+      ),
+    ].slice(0, 4);
+    if (words.length === 0) return '';
+    // Una búsqueda por palabra (el índice casa por nombre) y se ordena por cuántas palabras
+    // —por prefijo, "adjustments" casa "adjust"— aparecen en la ruta del documento.
+    const found = new Map<string, number>();
+    try {
+      const results = await Promise.all(
+        words.map((query) => this.findDocs({ query, limit: 25 }) as Promise<{ text: string }>),
+      );
+      for (const res of results) {
+        for (const line of res.text.split('\n')) {
+          if (!line.startsWith('- ')) continue;
+          const path = line.slice(2).toLowerCase();
+          const score = words.filter((w) => path.includes(w.slice(0, 6))).length;
+          found.set(line, Math.max(found.get(line) ?? 0, score));
+        }
+      }
+    } catch {
+      return '';
+    }
+    const ranked = [...found.entries()].sort((x, y) => y[1] - x[1]);
+    const best = ranked[0]?.[1] ?? 0;
+    // Con una sola palabra en común sólo cuenta si nada lo supera (ruido: "README").
+    return ranked
+      .filter(([, sc]) => sc >= 2 || (sc === best && sc >= 1))
+      .slice(0, 6)
+      .map(([l]) => l)
+      .join('\n');
+  }
+
+  // La documentación de los repos (ADRs, AGENTS.md, README…) ya está en el índice del
+  // motor: se busca con la misma herramienta y se queda sólo con los archivos .md/.mdx,
+  // en cada repo del catálogo si el modelo no nombra uno.
+  private async findDocs(args: { query: string; repo?: string; limit?: number }): Promise<unknown> {
+    if (!this.catalog) await this.loadCatalog();
+    const repos = args.repo ? [args.repo] : [...(this.catalog?.repos ?? [])];
+    const hit = /^\d+\. \*\*[^*]+\*\* file (\S+\.mdx?)\b/;
+    const lines: string[] = [];
+    for (const repo of repos) {
+      const res = (await this.lain.codeTool('search_code', {
+        query: args.query,
+        repo_id: repo,
+        limit: args.limit ?? 25,
+      })) as { text?: string };
+      for (const raw of (res.text ?? '').split('\n')) {
+        const m = hit.exec(raw);
+        if (m) lines.push(`- ${repo}: ${m[1]}`);
+      }
+    }
+    const unique = [...new Set(lines)];
+    return {
+      text:
+        unique.length > 0
+          ? `## find_docs: ${args.query}\n\n${unique.join('\n')}\n\nRead one with get_code_snippet(repo, path). Cite what you read as a location claim.`
+          : `## find_docs: ${args.query}\n\nNo documentation file matched. The repositories may simply not document this: say so, and fall back to the code.`,
+    };
   }
 
   // Alcance: servicios y repos deben pertenecer al catálogo de la vista. El
