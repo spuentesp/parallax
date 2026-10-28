@@ -16,6 +16,8 @@ import type { TopologyEdge, TopologyNode, TopologyViewData } from './topology.js
 // redondea hacia arriba.
 
 import type {
+  CallSite,
+  EndpointLink,
   NodeDetail,
   NodeRelation,
   OrgEdge,
@@ -72,6 +74,28 @@ function edgeProvenance(e: TopologyEdge): {
   };
 }
 
+/** Campos y sitios de llamada que la topología guardó en la arista. */
+function consumeDetail(meta: Record<string, unknown> | undefined): Partial<OrgEdge> {
+  const fields = Array.isArray(meta?.fields)
+    ? (meta.fields as unknown[]).filter((f): f is string => typeof f === 'string')
+    : [];
+  const sites = Array.isArray(meta?.sites)
+    ? (meta.sites as unknown[]).flatMap((x): CallSite[] => {
+        const o = x as { repo?: unknown; path?: unknown; line?: unknown };
+        return typeof o.path === 'string'
+          ? [
+              {
+                path: o.path,
+                ...(typeof o.repo === 'string' ? { repo: o.repo } : {}),
+                ...(typeof o.line === 'number' ? { line: o.line } : {}),
+              },
+            ]
+          : [];
+      })
+    : [];
+  return { ...(fields.length > 0 ? { fields } : {}), ...(sites.length > 0 ? { sites } : {}) };
+}
+
 function numberMeta(meta: Record<string, unknown> | undefined, key: string): number | undefined {
   const v = meta?.[key];
   return typeof v === 'number' ? v : undefined;
@@ -109,6 +133,7 @@ export function toOrgGraph(topology: TopologyViewData): OrgGraph {
       deterministicCount: p.deterministicCount,
       inferredCount: p.inferredCount,
       ...(e.label ? { label: e.label } : {}),
+      ...(e.kind === 'consumes' ? consumeDetail(e.meta) : {}),
     });
   }
   return { nodes, edges };
@@ -437,10 +462,10 @@ export function describeNode(graph: OrgGraph, id: string): NodeDetail | null {
     const endpointInside = subtree.has(e.target);
     if (endpointInside && !consumerInside) {
       const peer = ownerOf(e.source);
-      if (peer) merge(consumers, peer, e);
+      if (peer) merge(consumers, peer, e, byId.get(e.target));
     } else if (consumerInside && !endpointInside) {
       const peer = ownerOf(e.target);
-      if (peer) merge(providers, peer, e);
+      if (peer) merge(providers, peer, e, byId.get(e.target));
     }
   }
 
@@ -453,17 +478,42 @@ export function describeNode(graph: OrgGraph, id: string): NodeDetail | null {
   };
 }
 
-function merge(into: Map<string, NodeRelation>, peer: OrgNode, e: OrgEdge): void {
-  const prev = into.get(peer.id);
-  if (!prev) {
-    into.set(peer.id, { peer, edge: { ...e, source: e.source, target: e.target } });
-    return;
+const MAX_LINKS = 100;
+
+function merge(
+  into: Map<string, NodeRelation>,
+  peer: OrgNode,
+  e: OrgEdge,
+  endpoint: OrgNode | undefined,
+): void {
+  let rel = into.get(peer.id);
+  if (!rel) {
+    rel = { peer, edge: { ...e }, links: [], hiddenLinks: 0 };
+    into.set(peer.id, rel);
+  } else {
+    rel.edge.count += e.count;
+    rel.edge.deterministicCount += e.deterministicCount;
+    rel.edge.inferredCount += e.inferredCount;
+    rel.edge.confidence = Math.max(rel.edge.confidence, e.confidence);
+    if (e.provenance === 'deterministic') rel.edge.provenance = 'deterministic';
   }
-  prev.edge.count += e.count;
-  prev.edge.deterministicCount += e.deterministicCount;
-  prev.edge.inferredCount += e.inferredCount;
-  prev.edge.confidence = Math.max(prev.edge.confidence, e.confidence);
-  if (e.provenance === 'deterministic') prev.edge.provenance = 'deterministic';
+  if (!endpoint) return;
+  const link: EndpointLink = {
+    endpoint,
+    provenance: e.provenance,
+    confidence: e.confidence,
+    count: e.count,
+    fields: e.fields ?? [],
+    sites: e.sites ?? [],
+  };
+  // Los más usados primero; el tope se declara, no se oculta.
+  const at = rel.links.findIndex((l) => l.count < link.count);
+  if (at < 0) rel.links.push(link);
+  else rel.links.splice(at, 0, link);
+  if (rel.links.length > MAX_LINKS) {
+    rel.links.pop();
+    rel.hiddenLinks++;
+  }
 }
 
 /** Búsqueda por etiqueta (subcadena, sin mayúsculas); prefijos primero. */

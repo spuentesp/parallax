@@ -104,6 +104,8 @@ const detail: NodeDetail = {
     {
       peer: pn('svc:web', { label: 'storefront', parent: 'repo:web' }),
       edge: edge({ id: 'c1', count: 7, deterministicCount: 7 }),
+      links: [],
+      hiddenLinks: 0,
     },
     {
       peer: pn('svc:reports', { label: 'reports', parent: 'repo:analytics' }),
@@ -115,6 +117,8 @@ const detail: NodeDetail = {
         deterministicCount: 0,
         inferredCount: 2,
       }),
+      links: [],
+      hiddenLinks: 0,
     },
   ],
   providers: [],

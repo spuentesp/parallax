@@ -28,7 +28,12 @@ const edge = (over: Partial<OrgEdge> = {}): OrgEdge => ({
   inferredCount: 0,
   ...over,
 });
-const rel = (peer: OrgNode, e: Partial<OrgEdge> = {}): NodeRelation => ({ peer, edge: edge(e) });
+const rel = (peer: OrgNode, e: Partial<OrgEdge> = {}): NodeRelation => ({
+  peer,
+  edge: edge(e),
+  links: [],
+  hiddenLinks: 0,
+});
 
 function detail(over: Partial<NodeDetail> = {}): NodeDetail {
   return {
@@ -280,5 +285,75 @@ describe('MapInspector detail', () => {
       { nodeId: 'repo:orders' },
     );
     expect(await screen.findByRole('button', { name: 'View source' })).toBeTruthy();
+  });
+});
+
+describe('MapInspector — which endpoints sit behind a relation', () => {
+  const dash = on('svc:dash', 'service', { label: 'dashboard', parent: 'repo:d' });
+  const op = (id: string, label: string) =>
+    on(id, 'endpoint', { label, parent: 'svc:orders', contract: 'graphql' });
+  const link = (id: string, label: string, over = {}) => ({
+    endpoint: op(id, label),
+    provenance: 'deterministic' as const,
+    confidence: 1,
+    count: 3,
+    fields: ['id', 'lines', 'total', 'email', 'note'],
+    sites: [
+      { repo: 'dashboard', path: 'src/checkout/Lines.tsx', line: 42 },
+      { repo: 'dashboard', path: 'src/checkout/Other.tsx' },
+    ],
+    ...over,
+  });
+  const relWith = (links: ReturnType<typeof link>[], hidden = 0): NodeRelation => ({
+    peer: dash,
+    edge: edge({ count: 4 }),
+    links,
+    hiddenLinks: hidden,
+  });
+
+  it('is collapsed until asked, then names each endpoint with its fields, provenance and caller site', async () => {
+    setup(
+      detail({
+        consumers: [
+          relWith([
+            link('ep:1', 'checkoutLinesUpdate'),
+            link('ep:2', 'checkoutNote', { provenance: 'inferred', count: 1, fields: [] }),
+          ]),
+        ],
+      }),
+    );
+    const view = within(await screen.findByTestId('map-inspector'));
+    expect(view.queryByTestId('endpoint-links')).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Show 2 endpoints' }));
+    const list = within(view.getByTestId('endpoint-links'));
+    expect(list.getByText('checkoutLinesUpdate')).toBeTruthy();
+    expect(list.getByText('uses id, lines, total, email +1')).toBeTruthy();
+    expect(list.getAllByText('dashboard:src/checkout/Lines.tsx:42 +1 more').length).toBe(2);
+    expect(list.getByText('checkoutNote')).toBeTruthy();
+    fireEvent.click(view.getByRole('button', { name: 'Hide 2 endpoints' }));
+    expect(view.queryByTestId('endpoint-links')).toBeNull();
+  });
+
+  it('selecting an endpoint row opens that endpoint', async () => {
+    const { onSelect } = setup(
+      detail({ consumers: [relWith([link('ep:1', 'checkoutLinesUpdate')])] }),
+    );
+    const view = within(await screen.findByTestId('map-inspector'));
+    fireEvent.click(view.getByRole('button', { name: 'Show 1 endpoint' }));
+    fireEvent.click(view.getByText('checkoutLinesUpdate'));
+    expect(onSelect).toHaveBeenLastCalledWith('ep:1');
+  });
+
+  it('declares endpoints the cap left out instead of hiding them', async () => {
+    setup(detail({ consumers: [relWith([link('ep:1', 'a')], 41)] }));
+    const view = within(await screen.findByTestId('map-inspector'));
+    fireEvent.click(view.getByRole('button', { name: 'Show 42 endpoints' }));
+    expect(view.getByText('+41 more endpoints not listed')).toBeTruthy();
+  });
+
+  it('offers nothing to expand when the relation has no endpoint detail', async () => {
+    setup(detail({ consumers: [relWith([])] }));
+    const view = within(await screen.findByTestId('map-inspector'));
+    expect(view.queryByRole('button', { name: /endpoint/ })).toBeNull();
   });
 });

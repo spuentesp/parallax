@@ -35,6 +35,26 @@ export interface OrgEdge {
   deterministicCount: number;
   inferredCount: number;
   label?: string;
+  /** Campos/operaciones concretas que usa el consumidor (sólo aristas consumer → endpoint). */
+  fields?: string[];
+  /** Dónde se llama, en el código del consumidor (recortado). */
+  sites?: CallSite[];
+}
+
+export interface CallSite {
+  repo?: string;
+  path: string;
+  line?: number;
+}
+
+/** Un endpoint concreto detrás de una relación entre servicios. */
+export interface EndpointLink {
+  endpoint: OrgNode;
+  provenance: Provenance;
+  confidence: number;
+  count: number;
+  fields: string[];
+  sites: CallSite[];
 }
 
 export interface OrgGraphFilters {
@@ -81,6 +101,10 @@ export interface MapViewResponse extends Projection {
 export interface NodeRelation {
   edge: OrgEdge;
   peer: OrgNode;
+  /** Qué endpoints concretos forman esta relación (los más usados primero, con tope). */
+  links: EndpointLink[];
+  /** Cuántos endpoints más había que el tope dejó fuera. */
+  hiddenLinks: number;
 }
 
 export interface NodeDetail {

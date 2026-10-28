@@ -281,6 +281,26 @@ describe('describeNode — "quién consume este endpoint"', () => {
     expect(d?.providers.map((p) => p.peer.id)).toEqual([orders]);
   });
 
+  it('a relation names the specific endpoints behind it, most used first, with fields, provenance and caller sites', () => {
+    const rel = describeNode(graph, orders)?.consumers.find((c) => c.peer.id === billing);
+    expect(rel?.links.length).toBeGreaterThan(0);
+    expect(rel?.links.map((l) => l.endpoint.kind)).toEqual(rel?.links.map(() => 'endpoint'));
+    // El desglose suma lo que dice la relación: nada se pierde ni se inventa.
+    expect(rel?.links.reduce((n, l) => n + l.count, 0)).toBe(rel?.edge.count);
+    const counts = rel?.links.map((l) => l.count) ?? [];
+    expect(counts).toEqual([...counts].sort((a, b) => b - a));
+    const first = rel?.links[0];
+    expect(first?.fields).toContain('customer_id');
+    expect(first?.sites[0]).toMatchObject({ repo: 'x', line: 1 });
+    expect(rel?.hiddenLinks).toBe(0);
+  });
+
+  it('the provider side lists the endpoints a consumer depends on', () => {
+    const rel = describeNode(graph, billing)?.providers.find((p) => p.peer.id === orders);
+    expect(rel?.links.every((l) => l.endpoint.parent === orders)).toBe(true);
+    expect(rel?.links.some((l) => l.endpoint.id === getOrder)).toBe(true);
+  });
+
   it('returns null for an unknown node', () => {
     expect(describeNode(graph, 'nope')).toBeNull();
   });

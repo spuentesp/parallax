@@ -3,8 +3,9 @@
 // y de otros repos), cada uno con la procedencia de la relación — continua si
 // el análisis la prueba, discontinua si es una inferencia con su confianza.
 
-import type { NodeDetail, NodeRelation } from '@parallax/shared/org-map';
+import type { EndpointLink, NodeDetail, NodeRelation } from '@parallax/shared/org-map';
 import type * as React from 'react';
+import { useState } from 'react';
 import { ApiError } from '../api/client.js';
 import { useMapNode } from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
@@ -231,6 +232,7 @@ function Relations({
   relations: NodeRelation[];
   onSelect: (id: string) => void;
 }): React.ReactElement {
+  const [open, setOpen] = useState<Set<string>>(new Set());
   const sorted = [...relations].sort(
     (a, b) =>
       Number(b.edge.provenance === 'deterministic') -
@@ -248,7 +250,7 @@ function Relations({
         <p className="text-xs text-muted">{empty}</p>
       ) : (
         <ul className="space-y-1">
-          {sorted.map(({ peer, edge }) => (
+          {sorted.map(({ peer, edge, links, hiddenLinks }) => (
             <li key={peer.id}>
               <button
                 type="button"
@@ -276,8 +278,99 @@ function Relations({
                   </span>
                 </span>
               </button>
+              {links.length > 0 && (
+                <EndpointLinks
+                  links={links}
+                  hidden={hiddenLinks}
+                  open={open.has(peer.id)}
+                  onToggle={() =>
+                    setOpen((prev) => {
+                      const next = new Set(prev);
+                      if (!next.delete(peer.id)) next.add(peer.id);
+                      return next;
+                    })
+                  }
+                  onSelect={onSelect}
+                />
+              )}
             </li>
           ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Los endpoints concretos detrás de una relación entre servicios. */
+function EndpointLinks({
+  links,
+  hidden,
+  open,
+  onToggle,
+  onSelect,
+}: {
+  links: EndpointLink[];
+  hidden: number;
+  open: boolean;
+  onToggle: () => void;
+  onSelect: (id: string) => void;
+}): React.ReactElement {
+  return (
+    <div className="pl-8 pr-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="text-[11px] text-accent hover:underline"
+      >
+        {open ? 'Hide' : 'Show'} {links.length + hidden} endpoint
+        {links.length + hidden === 1 ? '' : 's'}
+      </button>
+      {open && (
+        <ul className="mt-1 space-y-0.5" data-testid="endpoint-links">
+          {links.map((l) => {
+            const site = l.sites[0];
+            return (
+              <li key={l.endpoint.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(l.endpoint.id)}
+                  className="w-full text-left rounded px-1.5 py-1 hover:bg-bg"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <EdgeSwatch provenance={l.provenance} width={16} />
+                    <span
+                      className="min-w-0 flex-1 truncate font-mono text-xs"
+                      title={l.endpoint.label}
+                    >
+                      {l.endpoint.label}
+                    </span>
+                    <span className="text-[11px] tabular-nums text-muted">×{l.count}</span>
+                  </span>
+                  {l.fields.length > 0 && (
+                    <span className="block truncate text-[10px] text-muted">
+                      uses {l.fields.slice(0, 4).join(', ')}
+                      {l.fields.length > 4 ? ` +${l.fields.length - 4}` : ''}
+                    </span>
+                  )}
+                  {site && (
+                    <span
+                      className="block truncate font-mono text-[10px] text-muted"
+                      title={site.path}
+                    >
+                      {site.repo ? `${site.repo}:` : ''}
+                      {site.path}
+                      {site.line ? `:${site.line}` : ''}
+                      {l.sites.length > 1 ? ` +${l.sites.length - 1} more` : ''}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+          {hidden > 0 && (
+            <li className="px-1.5 text-[10px] text-muted">+{hidden} more endpoints not listed</li>
+          )}
         </ul>
       )}
     </div>

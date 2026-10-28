@@ -18,6 +18,9 @@ import type { LainAdapter } from './lain-adapter/types.js';
 // dependen de ello.
 
 export type NodeKind = 'repo' | 'service' | 'endpoint';
+/** Sitios de llamada que se conservan por endpoint consumido. */
+const MAX_SITES = 3;
+
 export type EdgeKind = 'contains' | 'consumes' | 'servedBy';
 
 export interface TopologyNode {
@@ -259,6 +262,7 @@ export async function buildEndpointTopology(
           useCount: number;
           staticUses: number;
           heuristicUses: number;
+          sites: Array<{ repo?: string; path: string; line?: number }>;
         }
       >();
       for (const u of c.uses) {
@@ -277,8 +281,21 @@ export async function buildEndpointTopology(
           useCount: 0,
           staticUses: 0,
           heuristicUses: 0,
+          sites: [] as Array<{ repo?: string; path: string; line?: number }>,
         };
         acc.useCount++;
+        const at = u.caller ?? u.site;
+        if (
+          at?.path &&
+          acc.sites.length < MAX_SITES &&
+          !acc.sites.some((x) => x.path === at.path && x.line === at.line)
+        ) {
+          acc.sites.push({
+            ...(at.repo ? { repo: at.repo } : {}),
+            path: at.path,
+            ...(at.line ? { line: at.line } : {}),
+          });
+        }
         // Procedencia por uso: un vínculo mixto no se etiqueta con el primer
         // uso que apareció; el mapa necesita saber cuánto es duro y cuánto no.
         if (bindingKind === 'heuristic') acc.heuristicUses++;
@@ -323,6 +340,7 @@ export async function buildEndpointTopology(
               useCount: acc.useCount,
               staticUses: acc.staticUses,
               heuristicUses: acc.heuristicUses,
+              sites: acc.sites,
             },
           });
         }
