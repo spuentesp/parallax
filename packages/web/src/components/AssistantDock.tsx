@@ -94,6 +94,7 @@ export function AssistantDock({
               role: 'assistant',
               content: res.answer || 'No answer was produced.',
               claims: res.claims_summary,
+              ...(res.roadmap ? { roadmap: res.roadmap } : {}),
               ...(res.claims ? { verdicts: res.claims } : {}),
               focus: res.map_focus,
               status: res.explanation_status,

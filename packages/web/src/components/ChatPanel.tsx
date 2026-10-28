@@ -6,7 +6,9 @@ import type {
   ConversationSummaryDto,
   MapFocusDto,
   ProgressEventDto,
+  RoadmapDto,
 } from '../api/hooks.js';
+import { RoadmapView } from '../trace/RoadmapView.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -17,6 +19,8 @@ export interface ChatMessage {
   verdicts?: ClaimVerdictDto[];
   /** A dónde llevar al usuario en el mapa; sólo lo que un recibo respalda. */
   focus?: MapFocusDto | null;
+  /** Recorrido de un dato o radio de impacto, dibujado bajo la respuesta. */
+  roadmap?: RoadmapDto;
   /** Estado de la explicación del modelo (p. ej. failed:no_model_configured). */
   status?: string;
   /** Recorrido guiado: cabecera de capítulo, y (si es una tarjeta) cuál. */
@@ -200,6 +204,7 @@ export function ChatPanel({
               ) : (
                 <p className="whitespace-pre-wrap">{m.content}</p>
               )}
+              {m.role === 'assistant' && m.roadmap && <RoadmapView roadmap={m.roadmap} />}
               {m.role === 'assistant' && m.claims && m.claims.total > 0 && (
                 <p className="text-[11px] text-muted" data-testid="claims-summary">
                   {summaryParts(m.claims).map((p, i) => (

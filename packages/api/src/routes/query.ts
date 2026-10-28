@@ -18,7 +18,11 @@ import {
 } from '../conversation/store.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { createWindowLimiter } from '../rate-limit.js';
+import { blastRadius, blastSentence } from '../roadmap/blast.js';
+import { detectRoadmap } from '../roadmap/intent.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
+import { buildSeed } from '../trace/seed.js';
+import { traceEndToEnd } from '../trace/tracer.js';
 
 const QueryRequest = z.object({
   question: z.string().min(1),
@@ -84,6 +88,9 @@ const QueryResponse = z.object({
     .nullable(),
   // La conversación a la que pertenece este turno (null si no se guardó).
   conversation: z.object({ id: z.string(), seq: z.number() }).nullable(),
+  // Cuando la pregunta pedía el recorrido de un dato o el radio de impacto de un cambio, la
+  // respuesta lleva el resultado estructurado (se dibuja en el chat) además de la prosa.
+  roadmap: z.unknown().optional(),
   claims_summary: z.object({
     total: z.number(),
     verified: z.number(),
@@ -130,6 +137,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
   const resolveWorkspaceLain = createWorkspaceLainResolver({
     db: app.db,
     defaultAdapter: app.lain,
+    createClient: (cfg) => app.lainClientFor(cfg),
   });
 
   type Outcome =
@@ -185,7 +193,84 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     // de lecturas pesadas), y se reutiliza unos minutos entre preguntas.
     const topologyP = topologyFor(orgId, () => buildEndpointTopology(lain));
 
+    // "Trace X end to end" / "what breaks if I change X": con un contrato nombrado sin
+    // ambigüedad, la respuesta es el recorrido o el radio de impacto, no una improvisación.
+    const roadmapGraph = await app.orgGraphs.load(orgId, false);
+    const intent = roadmapGraph.ok ? detectRoadmap(question, roadmapGraph.graph) : null;
+    const saveTurn = async (answer: string, status: string, model: string | null) => {
+      try {
+        const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
+        const seq = await conversations.append(conv.id, {
+          question,
+          answer,
+          status,
+          claims: [],
+          focus: null,
+          model,
+        });
+        return { id: conv.id, seq };
+      } catch (e) {
+        if (!(e instanceof ConversationFullError)) req.log.warn({ err: e }, 'turn not saved');
+        return null;
+      }
+    };
+    const roadmapBody = async (
+      answer: string,
+      status: string,
+      roadmap: unknown,
+      modelName: string | null,
+      budget: z.infer<typeof QueryResponse>['budget'],
+    ): Promise<Outcome> => ({
+      status: 200,
+      body: {
+        conversation: await saveTurn(answer, status, modelName),
+        answer,
+        explanation_status: status,
+        topology: await topologyP,
+        evidence: [],
+        citations: { accepted: [], rejected: [] },
+        budget,
+        tool_calls: [],
+        model: modelName,
+        claims: [],
+        claims_summary: NO_CLAIMS,
+        map_focus: null,
+        roadmap,
+      },
+    });
+    if (roadmapGraph.ok && intent?.kind === 'blast') {
+      const blast = blastRadius(roadmapGraph.graph, intent.key, intent.service);
+      if (blast) {
+        return roadmapBody(blastSentence(blast), 'available', { kind: 'blast', blast }, null, null);
+      }
+    }
+
     const model = investigatorModel(app.config);
+    if (roadmapGraph.ok && intent?.kind === 'trace' && model) {
+      const seed = buildSeed(roadmapGraph.graph, intent.key, intent.service);
+      if (seed) {
+        const trace = await traceEndToEnd({
+          seed,
+          lain,
+          model: model.provider,
+          maxTokens: model.settings.maxTokens,
+          modelRole: 'planner',
+          ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
+          ...(onProgress ? { onProgress } : {}),
+        });
+        const answer =
+          trace.status === 'available'
+            ? `${trace.summary}${trace.complete ? '' : ' The trail does not reach where the value ends; the gaps are marked.'}`
+            : `I could not complete the trace of ${intent.key} (${trace.status.replace('failed:', '').replace(/_/g, ' ')}).`;
+        return roadmapBody(
+          answer,
+          trace.status === 'available' ? 'available' : trace.status,
+          { kind: 'trace', trace },
+          'trace',
+          null,
+        );
+      }
+    }
     if (!model) {
       const topology = await topologyP;
       // Fallo visible, no un silencio: la explicación no existe y el motivo

@@ -596,8 +596,31 @@ export interface ClaimVerdictDto {
   engine?: { uses: number; endpoints: string[]; complete: boolean };
 }
 
+export interface BlastConsumerDto {
+  service: string;
+  repo: string | null;
+  uses: number;
+  provenance: 'deterministic' | 'inferred';
+  fields: string[];
+  sites: Array<{ repo?: string; path: string; line?: number }>;
+}
+export interface BlastRadiusDto {
+  key: string;
+  service: string;
+  repo: string | null;
+  direct: BlastConsumerDto[];
+  ripple: Array<{ service: string; repo: string | null; via: string; uses: number }>;
+  totalUses: number;
+  caveats: string[];
+}
+/** El resultado estructurado de una pregunta de recorrido o de impacto. */
+export type RoadmapDto =
+  | { kind: 'trace'; trace: TraceResultDto }
+  | { kind: 'blast'; blast: BlastRadiusDto };
+
 export interface AskResponse {
   answer: string;
+  roadmap?: RoadmapDto;
   claims?: ClaimVerdictDto[];
   explanation_status: string;
   /** La conversación a la que se guardó este turno (null si no se guardó). */
