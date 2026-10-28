@@ -106,4 +106,20 @@ describe('error-handler plugin', () => {
     expect(r.statusCode).toBe(500);
     await app.close();
   });
+
+  it('answers a 500 status with the generic 500 body, not a client error', async () => {
+    const app = await makeApp();
+    const r = await app.inject({ method: 'GET', url: '/status/500' });
+    expect(r.statusCode).toBe(500);
+    expect(r.json()).toMatchObject({ title: 'Internal Server Error', detail: 'unexpected error' });
+    await app.close();
+  });
+
+  it('answers a plain error with the generic 500 body', async () => {
+    const app = await makeApp();
+    const r = await app.inject({ method: 'GET', url: '/boom' });
+    expect(r.statusCode).toBe(500);
+    expect(r.json()).toMatchObject({ title: 'Internal Server Error', detail: 'unexpected error' });
+    await app.close();
+  });
 });
