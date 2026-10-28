@@ -154,6 +154,8 @@ export interface DispatcherConfig {
   view: LainView;
   maxToolCalls?: number;
   maxResultChars?: number;
+  /** Topes por herramienta que sustituyen a PER_TOOL_CAP (p. ej. un trazado cruzado necesita más búsquedas). */
+  caps?: Partial<Record<DispatcherTool, number>>;
 }
 
 const DEFAULT_MAX_TOOL_CALLS = INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls;
@@ -191,6 +193,7 @@ export class LainDispatcher {
   private readonly maxResultChars: number;
   private toolCallsUsed = 0;
   private readonly usedByTool = new Map<string, number>();
+  private readonly caps: Partial<Record<DispatcherTool, number>>;
   private readonly seenCalls = new Set<string>();
   private budgetRefusals = 0;
   private readonly receiptLog: Receipt[] = [];
@@ -213,6 +216,7 @@ export class LainDispatcher {
     this.view = cfg.view;
     this.maxToolCalls = cfg.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
     this.maxResultChars = cfg.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+    this.caps = cfg.caps ?? {};
   }
 
   // Specs que ven el modelo: exactamente el conjunto de lectura, sin snapshot.
@@ -396,7 +400,7 @@ export class LainDispatcher {
         latencyMs: Date.now() - t0,
       };
     }
-    const cap = PER_TOOL_CAP[tool] ?? DEFAULT_PER_TOOL_CAP;
+    const cap = this.caps[tool] ?? PER_TOOL_CAP[tool] ?? DEFAULT_PER_TOOL_CAP;
     if ((this.usedByTool.get(tool) ?? 0) >= cap) {
       return {
         ok: false,

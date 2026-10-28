@@ -454,3 +454,36 @@ describe('MapInspector — which code implements a GraphQL operation', () => {
     );
   });
 });
+
+describe('MapInspector — trace end to end', () => {
+  const ep = on('ep:1', 'endpoint', {
+    label: 'graphql:query:products',
+    parent: 'svc:api',
+    contract: 'graphql',
+  });
+  const d = (node: OrgNode) =>
+    detail({
+      node,
+      path: [
+        on('svc:api', 'service', { label: 'saleor-api' }),
+        on('repo:saleor', 'repo', { label: 'saleor', meta: { lainRepoId: 'saleor' } }),
+      ],
+    });
+
+  it('an endpoint offers the trace, with its contract key and its service', async () => {
+    const onTrace = vi.fn();
+    setup(d(ep), { onTrace });
+    fireEvent.click(await screen.findByRole('button', { name: 'Trace end to end' }));
+    expect(onTrace).toHaveBeenCalledWith('graphql:query:products', 'saleor-api');
+  });
+
+  it('services, repos and anything that is not a contract do not offer it; neither does a view without the handler', async () => {
+    setup(detail({ node: on('svc:orders', 'service', { label: 'orders' }) }), { onTrace: vi.fn() });
+    await screen.findByTestId('map-inspector');
+    expect(screen.queryByRole('button', { name: 'Trace end to end' })).toBeNull();
+    cleanup();
+    setup(d(ep));
+    await screen.findByTestId('map-inspector');
+    expect(screen.queryByRole('button', { name: 'Trace end to end' })).toBeNull();
+  });
+});

@@ -15,6 +15,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
 import { readExpanded, writeExpanded, writeMapSearch } from '../nav/mapState.js';
 import { readStored, writeStored } from '../nav/storage.js';
+import { TracePanel } from '../trace/TracePanel.js';
 import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
@@ -100,6 +101,8 @@ export function MapExplorer({
   const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen());
   const [legendOpen, setLegendOpen] = useState(false);
   const [looseOpen, setLooseOpen] = useState(false);
+  // El contrato cuyo trazado de punta a punta está abierto (un panel ancho sobre el mapa).
+  const [trace, setTrace] = useState<{ key: string; service: string | null } | null>(null);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -342,7 +345,18 @@ export function MapExplorer({
             )}
             <Legend open={legendOpen} onToggle={() => setLegendOpen((o) => !o)} />
 
-            {looseOpen && (
+            {trace && (
+              <div className="absolute right-3 top-3 bottom-3 z-40 flex w-[34rem] max-w-[85%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+                <TracePanel
+                  workspaceId={workspaceId}
+                  contract={trace}
+                  onSelect={(id) => setParam({ sel: id })}
+                  onClose={() => setTrace(null)}
+                />
+              </div>
+            )}
+
+            {looseOpen && !trace && (
               <div className="absolute right-3 top-3 bottom-3 z-30 flex w-[26rem] max-w-[70%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
                 <LooseEndsPanel
                   workspaceId={workspaceId}
@@ -352,7 +366,7 @@ export function MapExplorer({
               </div>
             )}
 
-            {selectedId && !looseOpen && (
+            {selectedId && !looseOpen && !trace && (
               <div className="absolute right-3 top-3 bottom-3 z-20 flex w-[21rem] max-w-[60%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
                 <button
                   type="button"

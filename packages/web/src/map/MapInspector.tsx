@@ -19,6 +19,8 @@ export interface MapInspectorProps {
   onToggle: (id: string) => void;
   focusing: boolean;
   onClearFocus: () => void;
+  /** Abre el trazado de punta a punta de este contrato (sólo endpoints). */
+  onTrace?: ((key: string, service: string | null) => void) | undefined;
 }
 
 const repoName = (id: string | null): string => (id ? id.replace(/^repo:/, '') : '');
@@ -31,6 +33,7 @@ export function MapInspector({
   onToggle,
   focusing,
   onClearFocus,
+  onTrace,
 }: MapInspectorProps): React.ReactElement {
   const q = useMapNode(workspaceId, nodeId);
 
@@ -79,6 +82,7 @@ export function MapInspector({
       onToggle={onToggle}
       focusing={focusing}
       onClearFocus={onClearFocus}
+      onTrace={onTrace}
     />
   );
 }
@@ -91,6 +95,7 @@ function Detail({
   onToggle,
   focusing,
   onClearFocus,
+  onTrace,
 }: Omit<MapInspectorProps, 'nodeId'> & { detail: NodeDetail }): React.ReactElement {
   const { node } = detail;
   const consumerRepos = new Set(detail.consumers.map((c) => c.peer.parent));
@@ -154,6 +159,18 @@ function Detail({
           >
             Focus neighborhood
           </button>
+          {node.kind === 'endpoint' && onTrace && (
+            <button
+              type="button"
+              onClick={() =>
+                onTrace(node.label, detail.path.find((p) => p.kind === 'service')?.label ?? null)
+              }
+              title="Follow the value from its data, through the API and its clients, to where it ends"
+              className="px-2.5 py-1 rounded-full text-xs border border-accent text-accent hover:bg-accent/10"
+            >
+              Trace end to end
+            </button>
+          )}
           {focusing && (
             <button
               type="button"

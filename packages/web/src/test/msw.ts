@@ -46,6 +46,7 @@ export const sampleReport = {
 export const handlers = [
   // Por defecto el servidor de pruebas NO ofrece el flujo: la interfaz cae a /api/query.
   http.post('/api/query/stream', () => new HttpResponse(null, { status: 404 })),
+  http.post('/api/workspaces/:id/trace/stream', () => new HttpResponse(null, { status: 404 })),
   http.get('/api/conversations', () => HttpResponse.json({ conversations: [] })),
   http.get('/api/conversations/:id', () =>
     HttpResponse.json({ code: 'NotFound', detail: 'conversation not found' }, { status: 404 }),

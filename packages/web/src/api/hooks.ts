@@ -859,3 +859,77 @@ export function useBriefing(workspaceId: string | undefined, enabled = true) {
     staleTime: 60_000,
   });
 }
+
+// ── Trazado de punta a punta de un contrato ─────────────────────────────────
+
+export type TraceLane =
+  | 'data'
+  | 'data_access'
+  | 'domain'
+  | 'api_handler'
+  | 'contract'
+  | 'client_call'
+  | 'client_logic'
+  | 'sink';
+
+export interface TraceHopDto {
+  id: string;
+  lane: TraceLane;
+  label: string;
+  repo: string;
+  path: string;
+  line: number;
+  contains: string;
+  status: 'verified' | 'contradicted' | 'unverifiable';
+  reason: string;
+  origin: 'engine' | 'model';
+}
+
+export interface TraceLinkDto {
+  from: string;
+  to: string;
+  relation: string;
+  note?: string;
+  basis: 'engine' | 'asserted' | 'not_found';
+  because: string;
+}
+
+export interface TraceResultDto {
+  seed: { key: string; service: string };
+  summary: string;
+  hops: TraceHopDto[];
+  rejected: TraceHopDto[];
+  links: TraceLinkDto[];
+  gaps: Array<{ after: string; reason: string }>;
+  sink: { hop: string; kind: string; note?: string } | null;
+  complete: boolean;
+  status: string;
+  usage: {
+    modelCalls: number;
+    toolCalls: number;
+    promptTokens: number;
+    completionTokens: number;
+    ms: number;
+  };
+  errors: string[];
+}
+
+export function useTrace(workspaceId: string | undefined) {
+  const [progress, setProgress] = useState<ProgressEventDto[]>([]);
+  const mutation = useMutation({
+    mutationFn: async (vars: { key: string; service?: string | null }) => {
+      setProgress([]);
+      const body = { key: vars.key, ...(vars.service ? { service: vars.service } : {}) };
+      const base = `/api/workspaces/${workspaceId}/trace`;
+      const streamed = await client.postSse<TraceResultDto>(
+        `${base}/stream`,
+        body,
+        (event, data) => {
+          if (event === 'progress') setProgress((p) => [...p, data as ProgressEventDto]);
+        },
+      );
+      return streamed ?? client.post<TraceResultDto>(base, body);
+    },
+  });
+  return Object.assign(mutation, { progress });
+}
