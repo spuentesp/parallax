@@ -1,6 +1,7 @@
 export interface ApiClientConfig {
   readonly baseUrl?: string;
-  readonly token?: string;
+  /** Valor fijo o función: la sesión puede cambiar de token sin recrear el cliente. */
+  readonly token?: string | (() => string | undefined);
 }
 
 export class ApiEndpointNotImplemented extends Error {
@@ -27,7 +28,7 @@ export class ApiError extends Error {
 
 export class ApiClient {
   private readonly baseUrl: string;
-  private readonly token: string | undefined;
+  private readonly token: string | (() => string | undefined) | undefined;
 
   constructor(cfg: ApiClientConfig = {}) {
     this.baseUrl = cfg.baseUrl ?? '';
@@ -36,7 +37,8 @@ export class ApiClient {
 
   private headers(extra: Record<string, string> = {}): Record<string, string> {
     const h: Record<string, string> = { accept: 'application/json', ...extra };
-    if (this.token) h.authorization = `Bearer ${this.token}`;
+    const token = typeof this.token === 'function' ? this.token() : this.token;
+    if (token) h.authorization = `Bearer ${token}`;
     return h;
   }
 

@@ -12,7 +12,7 @@ import type { MapMeta, OrgGraphFilters, Provenance } from '@parallax/shared/org-
 import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useMapSearch, useOrgMap, useRefreshMap } from '../api/hooks.js';
+import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
 import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
@@ -95,6 +95,7 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
     [serverView, code.open, code.state],
   );
   const refresh = useRefreshMap(workspaceId);
+  const readOnly = useWhoami().data?.readOnly === true;
 
   const setParam = useCallback(
     (patch: Record<string, string | null>) =>
@@ -180,6 +181,7 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
         meta={meta}
         totals={view?.totals}
         refreshing={refresh.isPending}
+        readOnly={readOnly}
         onRefresh={() => refresh.mutate(undefined, { onSuccess: code.reset })}
         onFit={() => setFitNonce((n) => n + 1)}
         loading={q.isFetching}
@@ -343,6 +345,7 @@ function Toolbar(props: {
   meta: MapMeta | undefined;
   totals: { nodes: number; edges: number; shownNodes: number; shownEdges: number } | undefined;
   refreshing: boolean;
+  readOnly: boolean;
   onRefresh: () => void;
   onFit: () => void;
   loading: boolean;
@@ -392,7 +395,12 @@ function Toolbar(props: {
           <button
             type="button"
             onClick={props.onRefresh}
-            disabled={props.refreshing}
+            disabled={props.refreshing || props.readOnly}
+            title={
+              props.readOnly
+                ? 'Read-only access cannot rebuild the graph'
+                : 'Rebuild the graph from LAIN'
+            }
             className="px-2.5 py-1 rounded-md border border-border hover:bg-border disabled:opacity-60"
           >
             {props.refreshing ? 'Refreshing…' : 'Refresh'}

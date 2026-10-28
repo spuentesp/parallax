@@ -44,6 +44,9 @@ export const sampleReport = {
 };
 
 export const handlers = [
+  http.get('/api/whoami', () =>
+    HttpResponse.json({ orgId: 'acme', scopes: ['read', 'write'], readOnly: false }),
+  ),
   http.get('/api/orgs', () => HttpResponse.json({ orgs: [{ id: 'acme', name: 'Acme Corp' }] })),
   http.get('/api/assessments', () => HttpResponse.json({ assessments: [] })),
   http.get('/api/assessments/:id', ({ params }) =>

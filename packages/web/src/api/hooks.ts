@@ -12,17 +12,27 @@ import type {
 } from '@parallax/shared/org-map';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClient, ApiEndpointNotImplemented } from './client.js';
+import { currentToken } from './token.js';
 
-// Token source: localStorage (set by user), URL hash (?token=...), or empty.
-function getToken(): string | null {
-  const fromStorage = localStorage.getItem('parallax_token');
-  if (fromStorage) return fromStorage;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('token');
+// El token se lee en cada petición (ver token.ts): entrar, salir o cambiar de
+// sesión no exige recargar la página.
+const client = new ApiClient({ token: currentToken });
+
+/** Quién es el portador del token y si su sesión es de sólo lectura. */
+export interface Whoami {
+  orgId: string;
+  scopes: string[];
+  readOnly: boolean;
 }
-const token = getToken();
-if (token) localStorage.setItem('parallax_token', token);
-const client = new ApiClient(token ? { token } : {});
+
+export function useWhoami(enabled = true) {
+  return useQuery({
+    queryKey: ['whoami'],
+    queryFn: () => client.get<Whoami>('/api/whoami'),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
 
 export function useOrgs() {
   return useQuery({

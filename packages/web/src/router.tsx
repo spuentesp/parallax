@@ -2,6 +2,7 @@ import type * as React from 'react';
 import type { RouteObject } from 'react-router-dom';
 import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { AuthGate } from './components/AuthGate.js';
 import { Assessment } from './routes/Assessment.js';
 import { Assessments } from './routes/Assessments.js';
 import { LegacyAssessmentRedirect } from './routes/LegacyAssessmentRedirect.js';
@@ -22,7 +23,11 @@ export const routes: RouteObject[] = [
   { path: '/', element: <Navigate to="/orgs" replace /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <AuthGate>
+        <AppShell />
+      </AuthGate>
+    ),
     children: [
       { path: 'workspaces', element: <Workspaces /> },
       { path: 'workspaces/:id', element: <WorkspaceDetail /> },

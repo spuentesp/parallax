@@ -1,5 +1,7 @@
 import type * as React from 'react';
 import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
+import { useWhoami } from '../api/hooks.js';
+import { useSignOut } from './AuthGate.js';
 import { OrgSwitcher } from './OrgSwitcher.js';
 import { ThemeToggle } from './Theme.js';
 
@@ -51,6 +53,8 @@ function NavIcon({ name }: { name: (typeof NAV_ITEMS)[number]['icon'] }): React.
 export function AppShell(): React.ReactElement {
   const location = useLocation();
   const { orgId } = useParams();
+  const who = useWhoami();
+  const signOut = useSignOut();
   const targetFor = (base: string): string => {
     if (base === '/orgs' && orgId) return `/orgs/${orgId}`;
     if (base === '/assessments' && orgId) return `/orgs/${orgId}/assessments`;
@@ -108,8 +112,23 @@ export function AppShell(): React.ReactElement {
           })}
         </nav>
 
-        <div className="p-4">
+        <div className="p-4 space-y-2">
+          {who.data?.readOnly && (
+            <p
+              className="rounded-lg border border-border bg-bg px-3 py-1.5 text-[11px] text-muted"
+              data-testid="read-only-badge"
+            >
+              Read-only access: you can explore and ask questions, not change anything.
+            </p>
+          )}
           <ThemeToggle />
+          <button
+            type="button"
+            onClick={signOut}
+            className="w-full rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-bg hover:text-fg transition-colors"
+          >
+            Sign out
+          </button>
         </div>
       </aside>
 
