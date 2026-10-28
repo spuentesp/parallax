@@ -83,3 +83,20 @@ docker compose exec -e SALEOR_LAIN_URL=http://host.docker.internal:9999/mcp para
 - The demo must stay up and free to use **until Dec 15, 2026** (end of judging).
 - Put the read-only link in the testing instructions, not in the repo.
 - `QUERY_RATE_LIMIT_PER_HOUR` caps questions per token so a shared link cannot drain your Token Factory credits.
+
+
+## Check that progress streams live (not all at the end)
+
+The assistant streams what it is doing over server-sent events. A proxy that buffers or
+compresses would deliver every step at the end. Through the real domain:
+
+```bash
+curl -N -sS -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"question":"Who consumes saleor-api?","orgId":"ws_saleor"}' \
+  https://YOUR.DOMAIN/api/query/stream
+```
+
+You should see `event: progress` blocks appear one by one over several seconds, then one
+`event: result`. If everything arrives at once, check that the Caddyfile still has
+`flush_interval -1` and the `@notsse` encode matcher. A question can take up to ~3 minutes:
+no proxy in front may time out before that.
