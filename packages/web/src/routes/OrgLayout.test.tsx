@@ -46,13 +46,16 @@ function renderHub(url = '/orgs/acme') {
 }
 
 describe('OrgLayout hub', () => {
-  it('shows the org, the flow actions and the real map on one screen', async () => {
+  it('shows the org, the contextual action and the real map on one screen', async () => {
     serveMap([svc('orders'), svc('billing')]);
     renderHub();
     expect(screen.getByRole('heading', { name: /acme|demo/i })).toBeTruthy();
     const outline = await screen.findByTestId('map-outline');
     expect(within(outline).getByText('orders')).toBeTruthy();
-    expect(screen.getByRole('link', { name: /configure workspace/i })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /evaluate pr/i })).toBeTruthy();
+    expect(
+      screen.queryByRole('link', { name: /configure workspace|view assessments/i }),
+    ).toBeNull();
   });
 
   it('says the workspace has no LAIN instead of drawing sample data', async () => {

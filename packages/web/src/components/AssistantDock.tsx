@@ -10,6 +10,7 @@ import {
   useConversations,
   useDeleteConversation,
 } from '../api/hooks.js';
+import { readConv, writeConv } from '../nav/mapState.js';
 import { type ChatMessage, ChatPanel, summarizeVerdicts } from './ChatPanel.js';
 
 // El asistente ("Ask the architecture") es UNO para toda la app: se monta en el
@@ -27,13 +28,21 @@ export function AssistantDock({ workspaceId }: { workspaceId: string }): React.R
 
   // La conversación vive en el servidor y en la URL (?conv=): recargar la página
   // o abrir el enlace recupera el hilo.
-  const convId = params.get('conv');
+  // El hilo abierto: la URL (?conv=) manda; si no, el último de este workspace.
+  // Se recuerda aparte porque otras secciones no llevan ?conv= en su URL.
+  const urlConv = params.get('conv');
+  const [convId, setConvId] = useState<string | null>(urlConv ?? readConv(orgId));
+  useEffect(() => {
+    if (urlConv && urlConv !== convId) setConvId(urlConv);
+  }, [urlConv, convId]);
   const conv = useConversation(convId);
   const convs = useConversations(orgId);
   const del = useDeleteConversation();
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
-  const setConv = (id: string | null) =>
+  const setConv = (id: string | null) => {
+    setConvId(id);
+    writeConv(orgId, id);
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -43,6 +52,7 @@ export function AssistantDock({ workspaceId }: { workspaceId: string }): React.R
       },
       { replace: true },
     );
+  };
 
   // Al abrir una conversación guardada se muestran sus turnos (una sola vez por id:
   // lo que se pregunta después se añade en local y el servidor ya lo tiene).

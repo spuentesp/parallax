@@ -1,15 +1,17 @@
 import type * as React from 'react';
 import type { RouteObject } from 'react-router-dom';
-import { createBrowserRouter, Navigate, useLocation, useParams } from 'react-router-dom';
+import { createBrowserRouter, Navigate, useParams } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AuthGate } from './components/AuthGate.js';
 import { Assessment } from './routes/Assessment.js';
 import { Assessments } from './routes/Assessments.js';
+import { Contracts } from './routes/Contracts.js';
 import { LegacyAssessmentRedirect } from './routes/LegacyAssessmentRedirect.js';
 import { OrgLayout } from './routes/OrgLayout.js';
-import { Orgs } from './routes/Orgs.js';
+import { Home, ToWorkspaceList, WorkspaceRedirect } from './routes/Redirects.js';
+import { Repos } from './routes/Repos.js';
 import { Service } from './routes/Service.js';
-import { WorkspaceDetail } from './routes/WorkspaceDetail.js';
+import { WorkspaceLayout } from './routes/WorkspaceLayout.js';
 import { Workspaces } from './routes/Workspaces.js';
 
 // Sub-rutas desconocidas dentro de un org vuelven al hub del org, nunca al
@@ -19,14 +21,9 @@ function OrgCatchAll(): React.ReactElement {
   return <Navigate to={`/orgs/${orgId ?? ''}`} replace />;
 }
 
-// Los redirects a la raíz conservan la query: un enlace `/?token=…` no pierde el acceso.
-function ToOrgs(): React.ReactElement {
-  const { search } = useLocation();
-  return <Navigate to={{ pathname: '/orgs', search }} replace />;
-}
-
+// Un workspace tiene UN árbol de URL: /orgs/:orgId (mapa), /repos, /contracts y
+// /assessments. La lista de workspaces es /orgs. Las rutas viejas redirigen.
 export const routes: RouteObject[] = [
-  { path: '/', element: <ToOrgs /> },
   {
     path: '/',
     element: (
@@ -35,18 +32,27 @@ export const routes: RouteObject[] = [
       </AuthGate>
     ),
     children: [
-      { path: 'workspaces', element: <Workspaces /> },
-      { path: 'workspaces/:id', element: <WorkspaceDetail /> },
-      { path: 'orgs', element: <Orgs /> },
-      { path: 'orgs/:orgId', element: <OrgLayout /> },
-      { path: 'orgs/:orgId/services/:serviceId', element: <Service /> },
-      { path: 'orgs/:orgId/assessments', element: <Assessments /> },
-      { path: 'orgs/:orgId/assessments/:assessmentId', element: <Assessment /> },
-      { path: 'orgs/:orgId/*', element: <OrgCatchAll /> },
-      // Compatibilidad: los deep links viejos siguen vivos.
+      { index: true, element: <Home /> },
+      { path: 'orgs', element: <Workspaces /> },
+      {
+        path: 'orgs/:orgId',
+        element: <WorkspaceLayout />,
+        children: [
+          { index: true, element: <OrgLayout /> },
+          { path: 'repos', element: <Repos /> },
+          { path: 'contracts', element: <Contracts /> },
+          { path: 'services/:serviceId', element: <Service /> },
+          { path: 'assessments', element: <Assessments /> },
+          { path: 'assessments/:assessmentId', element: <Assessment /> },
+          { path: '*', element: <OrgCatchAll /> },
+        ],
+      },
+      // Compatibilidad: los enlaces viejos siguen vivos.
+      { path: 'workspaces', element: <ToWorkspaceList /> },
+      { path: 'workspaces/:id', element: <WorkspaceRedirect /> },
       { path: 'assessments', element: <Navigate to="/orgs" replace /> },
       { path: 'assessments/:assessmentId', element: <LegacyAssessmentRedirect /> },
-      { path: '*', element: <ToOrgs /> },
+      { path: '*', element: <Home /> },
     ],
   },
 ];

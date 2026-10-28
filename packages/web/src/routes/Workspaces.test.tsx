@@ -133,11 +133,11 @@ describe('Workspaces list', () => {
     expect(within(await cardFor('Platform')).getByText('LAIN not configured')).toBeTruthy();
   });
 
-  it('links each card to its topology', async () => {
+  it('links each card to its map', async () => {
     server.use(http.get('/api/workspaces', () => HttpResponse.json({ workspaces: [monorepo] })));
     renderPage();
 
-    expect((await cardFor('Saleor')).getAttribute('href')).toBe('/workspaces/ws_mono');
+    expect((await cardFor('Saleor')).getAttribute('href')).toBe('/orgs/ws_mono');
   });
 
   it('strips only a trailing .git from repo names', async () => {

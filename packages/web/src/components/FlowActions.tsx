@@ -15,22 +15,10 @@ export function FlowActions({
   return (
     <div className="flex flex-wrap gap-2">
       <Link
-        to="/workspaces"
-        className="text-xs px-3 py-1.5 rounded-lg bg-surface border border-border"
-      >
-        Configure workspace
-      </Link>
-      <Link
         to={`/orgs/${orgId}/assessments?repo=${encodeURIComponent(repo)}`}
         className="text-xs px-3 py-1.5 rounded-lg bg-accent text-accent-fg"
       >
         Evaluate PR{repo ? ` · ${repo}` : ''}
-      </Link>
-      <Link
-        to={`/orgs/${orgId}/assessments`}
-        className="text-xs px-3 py-1.5 rounded-lg bg-surface border border-border"
-      >
-        View assessments
       </Link>
     </div>
   );

@@ -77,3 +77,11 @@ import { server } from './msw.js';
 server.listen({ onUnhandledRequest: 'error' });
 beforeEach(() => server.resetHandlers());
 afterAll(() => server.close());
+
+// La memoria de navegación (último workspace, mapa, hilo) no debe pasar de un test a otro.
+import { afterEach } from 'vitest';
+
+afterEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});

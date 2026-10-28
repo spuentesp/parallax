@@ -17,12 +17,8 @@ describe('FlowActions', () => {
     renderIt();
     const evaluate = screen.getByRole('link', { name: 'Evaluate PR' });
     expect(evaluate.getAttribute('href')).toBe('/orgs/acme/assessments?repo=');
-    expect(screen.getByRole('link', { name: 'Configure workspace' }).getAttribute('href')).toBe(
-      '/workspaces',
-    );
-    expect(screen.getByRole('link', { name: 'View assessments' }).getAttribute('href')).toBe(
-      '/orgs/acme/assessments',
-    );
+    // Lo demás (configurar, ver evaluaciones) vive en la barra lateral, no aquí.
+    expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
   it('with a selection, names it and url-encodes it into the form link', () => {

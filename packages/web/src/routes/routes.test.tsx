@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Assessment } from '../routes/Assessment.js';
 import { OrgLayout } from '../routes/OrgLayout.js';
-import { Orgs } from '../routes/Orgs.js';
+import { Workspaces } from '../routes/Workspaces.js';
 import { sampleReport, server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 
@@ -13,15 +13,15 @@ afterEach(() => {
 });
 
 describe('routes render in isolation', () => {
-  it('Orgs shows the heading', () => {
+  it('the workspace list shows its heading', () => {
     renderWithQuery(
       <MemoryRouter initialEntries={['/orgs']}>
         <Routes>
-          <Route path="/orgs" element={<Orgs />} />
+          <Route path="/orgs" element={<Workspaces />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^workspaces$/i })).toBeTruthy();
   });
 
   it('OrgLayout shows the org id in heading', () => {

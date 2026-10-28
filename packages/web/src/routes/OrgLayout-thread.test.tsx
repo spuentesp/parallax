@@ -206,4 +206,39 @@ describe('the assistant thread', () => {
     await waitFor(() => expect(screen.queryByText('answer 1')).toBeNull());
     expect(new URLSearchParams(router.state.location.search).get('conv')).toBeNull();
   });
+
+  it('the assistant is on every section of the workspace, and the thread continues when you change section', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    server.use(
+      http.post('/api/query', async ({ request }) => {
+        bodies.push((await request.json()) as Record<string, unknown>);
+        return HttpResponse.json({
+          answer: `reply ${bodies.length}`,
+          explanation_status: 'available',
+          claims_summary: claims,
+          map_focus: null,
+          conversation: { id: 'conv_7', seq: bodies.length },
+        });
+      }),
+    );
+    const router = mount();
+    open();
+    send('on the map');
+    expect(await screen.findByText('reply 1')).toBeTruthy();
+
+    for (const section of ['repos', 'contracts', 'assessments']) {
+      await router.navigate(`/orgs/acme/${section}`);
+      expect(await screen.findByText('reply 1'), section).toBeTruthy();
+      expect(screen.getByLabelText('Ask about your architecture'), section).toBeTruthy();
+    }
+    // La URL de esta sección ya no lleva ?conv=, pero el hilo sigue siendo el mismo.
+    expect(new URLSearchParams(router.state.location.search).get('conv')).toBeNull();
+    send('on assessments');
+    expect(await screen.findByText('reply 2')).toBeTruthy();
+    expect(bodies[1]).toEqual({
+      question: 'on assessments',
+      orgId: 'acme',
+      conversationId: 'conv_7',
+    });
+  });
 });

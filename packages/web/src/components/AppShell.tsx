@@ -1,14 +1,19 @@
 import type * as React from 'react';
-import { Link, Outlet, useLocation, useParams } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useWhoami } from '../api/hooks.js';
+import { useCurrentOrg } from '../nav/currentOrg.js';
+import { readMapSearch } from '../nav/mapState.js';
 import { useSignOut } from './AuthGate.js';
 import { OrgSwitcher } from './OrgSwitcher.js';
 import { ThemeToggle } from './Theme.js';
 
+// La barra lateral es SIEMPRE la misma: las secciones del workspace actual. Sin
+// workspace (aún no hay ninguno) se muestran igual, deshabilitadas.
 export const NAV_ITEMS = [
-  { to: '/orgs', label: 'Map', icon: 'map' },
-  { to: '/assessments', label: 'Assessments', icon: 'assess' },
-  { to: '/workspaces', label: 'Workspaces', icon: 'workspace' },
+  { key: 'map', label: 'Map', icon: 'map', path: '' },
+  { key: 'repos', label: 'Repositories', icon: 'repos', path: '/repos' },
+  { key: 'contracts', label: 'Contracts', icon: 'contracts', path: '/contracts' },
+  { key: 'assessments', label: 'Assessments', icon: 'assess', path: '/assessments' },
 ] as const;
 
 function NavIcon({ name }: { name: (typeof NAV_ITEMS)[number]['icon'] }): React.ReactElement {
@@ -32,6 +37,20 @@ function NavIcon({ name }: { name: (typeof NAV_ITEMS)[number]['icon'] }): React.
       </svg>
     );
   }
+  if (name === 'repos') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />
+      </svg>
+    );
+  }
+  if (name === 'contracts') {
+    return (
+      <svg {...common} aria-hidden="true">
+        <path d="M6.5 9.5l3-3M5 7.5l-1.2 1.2a2.1 2.1 0 0 0 3 3L8 10.5M11 8.5l1.2-1.2a2.1 2.1 0 0 0-3-3L8 5.5" />
+      </svg>
+    );
+  }
   if (name === 'assess') {
     return (
       <svg {...common} aria-hidden="true">
@@ -52,26 +71,22 @@ function NavIcon({ name }: { name: (typeof NAV_ITEMS)[number]['icon'] }): React.
 
 export function AppShell(): React.ReactElement {
   const location = useLocation();
-  // En /workspaces/:id el workspace es el org: la barra lateral no cambia de forma.
-  const { orgId: orgParam, id: workspaceParam } = useParams();
-  const orgId = orgParam ?? workspaceParam;
+  const { orgId } = useCurrentOrg();
   const who = useWhoami();
   const signOut = useSignOut();
-  const targetFor = (base: string): string => {
-    if (base === '/orgs' && orgId) return `/orgs/${orgId}`;
-    if (base === '/assessments' && orgId) return `/orgs/${orgId}/assessments`;
-    return base;
+  const base = orgId ? `/orgs/${orgId}` : null;
+  // Volver al mapa lo deja como se dejó (filtros, foco, nodos abiertos).
+  const targetFor = (item: (typeof NAV_ITEMS)[number]): string | null => {
+    if (!base) return null;
+    if (item.key !== 'map') return `${base}${item.path}`;
+    const saved = readMapSearch(orgId ?? '');
+    return saved === '' ? base : `${base}?${saved}`;
   };
-  const isActive = (base: string): boolean => {
-    if (base === '/orgs') {
-      // El hub (y su panel) es el mapa; las páginas de assessment no.
-      return (
-        orgId != null &&
-        (location.pathname === `/orgs/${orgId}` ||
-          location.pathname.startsWith(`/orgs/${orgId}/services`))
-      );
-    }
-    return location.pathname.startsWith(targetFor(base));
+  const isActive = (item: (typeof NAV_ITEMS)[number]): boolean => {
+    if (!base) return false;
+    const path = location.pathname;
+    if (item.key === 'map') return path === base || path.startsWith(`${base}/services`);
+    return path === `${base}${item.path}` || path.startsWith(`${base}${item.path}/`);
   };
 
   return (
@@ -94,22 +109,31 @@ export function AppShell(): React.ReactElement {
         </div>
 
         <nav className="flex-1 px-3 space-y-0.5" aria-label="Main">
-          {NAV_ITEMS.filter((item) => item.to !== '/assessments' || orgId != null).map((item) => {
-            const active = isActive(item.to);
-            return (
+          {NAV_ITEMS.map((item) => {
+            const to = targetFor(item);
+            const active = isActive(item);
+            const cls = `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+              active
+                ? 'bg-accent/10 text-accent font-medium'
+                : to
+                  ? 'text-muted hover:bg-bg hover:text-fg'
+                  : 'text-muted/50 cursor-not-allowed'
+            }`;
+            return to ? (
               <Link
-                key={item.to}
-                to={targetFor(item.to)}
+                key={item.key}
+                to={to}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  active
-                    ? 'bg-accent/10 text-accent font-medium'
-                    : 'text-muted hover:bg-bg hover:text-fg'
-                }`}
+                className={cls}
               >
                 <NavIcon name={item.icon} />
                 <span>{item.label}</span>
               </Link>
+            ) : (
+              <span key={item.key} aria-disabled="true" className={cls}>
+                <NavIcon name={item.icon} />
+                <span>{item.label}</span>
+              </span>
             );
           })}
         </nav>

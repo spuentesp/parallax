@@ -1,37 +1,22 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
   type TopologyFilters,
   useEvidence,
   useWorkspace,
   useWorkspaceTopology,
 } from '../api/hooks.js';
-import { AssistantDock } from '../components/AssistantDock.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
-import { RepoManager } from '../components/RepoManager.js';
-import { MapExplorer } from '../map/MapExplorer.js';
 
 const CONTRACT_KINDS = ['http', 'topic', 'graphql', 'table', 'rpc', 'websocket'] as const;
 
-export function WorkspaceDetail(): React.ReactElement {
-  const { id } = useParams<{ id: string }>();
-  // La pestaña vive en la URL: un enlace (o un agente) puede abrir el mapa ya
-  // enfocado en un nodo (?tab=map&focus=…).
-  const [searchParams, setSearchParams] = useSearchParams();
-  const rawTab = searchParams.get('tab');
-  const tab: 'map' | 'repos' | 'contracts' =
-    rawTab === 'repos' || rawTab === 'contracts' ? rawTab : 'map';
-  const setTab = (next: 'map' | 'repos' | 'contracts') =>
-    setSearchParams(
-      (prev) => {
-        const p = new URLSearchParams(prev);
-        p.set('tab', next);
-        return p;
-      },
-      { replace: true },
-    );
+// Contratos del workspace: la lista plana de dependencias con su evidencia
+// (cada call-site abre el código). Lo mismo que el mapa, para quien prefiere
+// filtrar y leer en lista.
+export function Contracts(): React.ReactElement {
+  const { orgId: id } = useParams<{ orgId: string }>();
   const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id, filters);
@@ -40,78 +25,25 @@ export function WorkspaceDetail(): React.ReactElement {
 
   const ws = wsQuery.data?.workspace ?? null;
   const topo = topoQuery.data ?? null;
-
-  if (wsQuery.isLoading) {
-    return <div className="p-6 text-sm text-muted">Loading workspace…</div>;
-  }
-  if (!ws) {
-    return (
-      <div className="p-6">
-        <p className="text-sm text-muted">Workspace not found.</p>
-        <Link to="/workspaces" className="text-sm text-accent">
-          ← Back to workspaces
-        </Link>
-      </div>
-    );
-  }
-
   const stats = topo?.stats;
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <Link to="/workspaces" className="text-xs text-muted hover:text-accent">
-          ← Workspaces
-        </Link>
-        <div className="flex items-start justify-between gap-4 mt-2">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-3">
-              {ws.name}
-              <span className="text-xs px-2 py-0.5 rounded-full bg-bg text-muted font-normal">
-                {ws.repoCount > 1 ? 'Multi-repo' : 'Monorepo'}
-              </span>
-            </h1>
-            {ws.description && <p className="text-sm mt-1 text-muted">{ws.description}</p>}
-          </div>
-          <SourceBadge source={topo?.source ?? 'none'} error={topo?.error} />
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="text-xs font-medium text-muted mb-1">{ws?.name ?? id}</div>
+          <h1 className="text-2xl font-bold">Contracts</h1>
         </div>
+        <SourceBadge source={topo?.source ?? 'none'} error={topo?.error} />
       </div>
-
-      {/* Pestañas: mapa (jerarquía, relaciones y código), repos y contratos */}
-      <div className="flex items-center gap-2" data-testid="workspace-tabs">
-        {(
-          [
-            ['map', 'Map'],
-            ['repos', 'Repositories'],
-            ['contracts', 'Contracts'],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-              tab === key ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-border'
-            }`}
-            data-testid={`tab-${key}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'map' && id && <MapExplorer workspaceId={id} />}
-
-      {tab === 'repos' && <RepoManager workspace={ws} />}
-
-      {tab === 'contracts' && (
+      <>
         <>
           {/* Stats strip */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <Stat label="Services" value={stats?.services ?? 0} />
             <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
             <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
-            <Stat label="Repositories" value={ws.repoCount} />
+            <Stat label="Repositories" value={ws?.repoCount ?? 0} />
             <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
           </div>
 
@@ -150,9 +82,7 @@ export function WorkspaceDetail(): React.ReactElement {
             />
           </div>
         </>
-      )}
-
-      {id ? <AssistantDock workspaceId={id} /> : null}
+      </>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
+import { readExpanded, writeExpanded, writeMapSearch } from '../nav/mapState.js';
 import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
@@ -78,7 +79,10 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
   const focus = params.get('focus');
   const hops = Number(params.get('hops') ?? 1) || 1;
 
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  // Lo abierto se recuerda por workspace: salir a otra sección y volver no lo cierra.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(
+    () => new Set(readExpanded(workspaceId) ?? []),
+  );
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -122,14 +126,15 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
   useEffect(() => {
     if (autoOpened.current || !serverView || q.isPlaceholderData) return;
     autoOpened.current = true;
-    if (focus) return;
+    // Si el usuario ya dejó el mapa de una forma (aunque sea todo cerrado), se respeta.
+    if (focus || readExpanded(workspaceId) !== null) return;
     const roots = serverView.nodes.filter(
       (n) => n.parent === null && n.kind === 'repo' && n.childCount > 0 && !n.expanded,
     );
     if (roots.length > 0 && roots.length <= AUTO_OPEN_MAX_REPOS) {
       setExpanded((prev) => new Set([...prev, ...roots.map((n) => n.id)]));
     }
-  }, [serverView, focus, q.isPlaceholderData]);
+  }, [serverView, focus, workspaceId, q.isPlaceholderData]);
 
   // Lo que el servidor reveló por su cuenta (foco, selección fijada) pasa a ser
   // estado del cliente: así abrir/cerrar actúa sobre lo que realmente se ve.
@@ -141,6 +146,12 @@ export function MapExplorer({ workspaceId }: { workspaceId: string }): React.Rea
     if (revealed.every((id) => expanded.has(id))) return;
     setExpanded((prev) => new Set([...prev, ...revealed]));
   }, [serverView, expanded, q.isPlaceholderData]);
+
+  useEffect(() => {
+    // Sólo se guarda lo que el usuario (o la apertura automática) hizo: no el estado vacío inicial.
+    if (autoOpened.current) writeExpanded(workspaceId, expanded);
+  }, [expanded, workspaceId]);
+  useEffect(() => writeMapSearch(workspaceId, params), [params, workspaceId]);
 
   const byId = useMemo(() => new Map((view?.nodes ?? []).map((n) => [n.id, n])), [view]);
 

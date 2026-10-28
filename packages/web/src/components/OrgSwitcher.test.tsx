@@ -18,9 +18,28 @@ const at = (url: string) =>
   );
 
 describe('OrgSwitcher', () => {
-  it('renders nothing outside an org', () => {
-    const { container } = at('/workspaces');
-    expect(container.textContent).toBe('');
+  it('outside a workspace page it still shows the card: there is no workspace yet, and a way to create one', async () => {
+    at('/orgs');
+    expect(await screen.findByText('No workspace yet')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /create one/i }).getAttribute('href')).toBe('/orgs');
+  });
+
+  it('outside a workspace page it shows the workspace in use', async () => {
+    server.use(
+      http.get('/api/workspaces', () =>
+        HttpResponse.json({
+          workspaces: [
+            { id: 'w1', name: 'First', description: '', repoCount: 1, repos: [], lainUrl: null },
+          ],
+        }),
+      ),
+      http.get('/api/workspaces/:id', () =>
+        HttpResponse.json({ workspace: { id: 'w1', name: 'First', repos: [] } }),
+      ),
+    );
+    at('/orgs');
+    expect(await screen.findByText('First')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /all workspaces/i })).toBeTruthy();
   });
 
   it('prefers the org name, then the workspace name, then the id', async () => {
@@ -49,10 +68,10 @@ describe('OrgSwitcher', () => {
     expect(await screen.findByText('raw-id')).toBeTruthy();
   });
 
-  it('links back to the picker', async () => {
+  it('links back to the list of workspaces', async () => {
     at('/orgs/acme');
-    const link = await screen.findByRole('link', { name: /all organizations/i });
+    const link = await screen.findByRole('link', { name: /all workspaces/i });
     expect(link.getAttribute('href')).toBe('/orgs');
-    expect(screen.getByText('Organization')).toBeTruthy();
+    expect(screen.getByText('Workspace')).toBeTruthy();
   });
 });

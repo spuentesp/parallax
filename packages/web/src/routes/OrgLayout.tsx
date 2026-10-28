@@ -1,7 +1,6 @@
 import type * as React from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../api/hooks.js';
-import { AssistantDock } from '../components/AssistantDock.js';
 import { FlowActions } from '../components/FlowActions.js';
 import { MapExplorer } from '../map/MapExplorer.js';
 import { nodeContext } from '../map/nodeId.js';
@@ -27,7 +26,6 @@ export function OrgLayout(): React.ReactElement {
       <FlowActions orgId={orgId ?? ''} selectedNode={ctx} />
 
       {orgId ? <MapExplorer workspaceId={orgId} /> : null}
-      {orgId ? <AssistantDock workspaceId={orgId} /> : null}
     </div>
   );
 }
