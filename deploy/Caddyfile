@@ -1,0 +1,6 @@
+# Automatic HTTPS for {$DOMAIN}. Tokens travel in the Authorization header, so
+# the demo must not be served over plain HTTP.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy parallax:8080
+}

@@ -47,6 +47,11 @@ Click **Show on map**.
 
 ---
 
+### Real numbers you can quote (measured, Saleor on Lain 0.13.0)
+- 3 repos (API, dashboard, storefront) → 3 services → **661 contracts** (591 GraphQL, 164 topics, 80 HTTP…).
+- **331 service-to-contract dependencies; 657 uses proven (deterministic), 8 inferred.** Built in ~11 s; cold index of the three repos ~2 min.
+- The biggest service has 591 endpoints: Parallax shows the 50 most connected and says "+541 more" instead of drawing a hairball.
+
 ### Keep it honest (do not say these — they are not built yet)
 - Do **not** claim a "what happened this week across all repos" digest, or that it knows which *team* owns a service / which services "belong to sales". Say "checkout" or another name-based domain.
 - If asked in Q&A: PR impact is per-PR today; ownership metadata and digests are the roadmap.
