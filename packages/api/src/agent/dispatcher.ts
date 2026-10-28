@@ -50,6 +50,8 @@ export const ALL_TOOLS = [...DISPATCHER_TOOLS, ...CODE_TOOLS] as const;
 export type DispatcherTool = (typeof ALL_TOOLS)[number];
 
 export type DispatchErrorCode =
+  | 'tool_cap'
+  | 'duplicate_call'
   | 'unknown_tool'
   | 'invalid_schema'
   | 'scope_violation'
@@ -155,7 +157,23 @@ export interface DispatcherConfig {
 }
 
 const DEFAULT_MAX_TOOL_CALLS = INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls;
-const DEFAULT_MAX_RESULT_CHARS = 24_000;
+// Un resultado grande se reenvía al modelo en CADA ronda siguiente: es lo que más
+// gasta (cientos de miles de tokens de entrada en una pregunta). 10 mil caracteres
+// cubren una lectura útil; el corte se declara y ofrece una llamada más estrecha.
+const DEFAULT_MAX_RESULT_CHARS = 10_000;
+/** Cuántas veces puede pedirse una misma herramienta en una investigación. */
+export const PER_TOOL_CAP: Partial<Record<DispatcherTool, number>> = {
+  search_code: 4,
+  search_org: 3,
+  find_symbol: 4,
+  get_code_snippet: 3,
+  read_source: 4,
+  trace_impact: 4,
+  get_call_sites: 3,
+  get_blast_radius: 3,
+  get_cross_repo_blast_radius: 3,
+};
+const DEFAULT_PER_TOOL_CAP = 6;
 const DEFAULT_CONSUMER_ENDPOINTS = 15;
 
 export interface DispatcherBudgetUse {
@@ -172,6 +190,8 @@ export class LainDispatcher {
   private readonly maxToolCalls: number;
   private readonly maxResultChars: number;
   private toolCallsUsed = 0;
+  private readonly usedByTool = new Map<string, number>();
+  private readonly seenCalls = new Set<string>();
   private budgetRefusals = 0;
   private readonly receiptLog: Receipt[] = [];
   // Evidencia entregada por el backend: el único conjunto que el modelo puede
@@ -356,6 +376,32 @@ export class LainDispatcher {
     }
     const args = checked.data;
 
+    // Ni repetir ni martillear: la misma llamada no se vuelve a pagar, y una
+    // herramienta tiene un tope. Sin esto el modelo puede dar vueltas buscando
+    // lo mismo con otras palabras hasta agotar el presupuesto sin responder.
+    const signature = `${tool}:${JSON.stringify(args, Object.keys(args as object).sort())}`;
+    if (this.seenCalls.has(signature)) {
+      return {
+        ok: false,
+        tool,
+        callId,
+        code: 'duplicate_call',
+        message: `you already made this exact ${tool} call; its result is above. Use it, or ask something different.`,
+        latencyMs: Date.now() - t0,
+      };
+    }
+    const cap = PER_TOOL_CAP[tool] ?? DEFAULT_PER_TOOL_CAP;
+    if ((this.usedByTool.get(tool) ?? 0) >= cap) {
+      return {
+        ok: false,
+        tool,
+        callId,
+        code: 'tool_cap',
+        message: `${tool} was already used ${cap} times; further calls to it are refused. Work with what you have, try a different tool, or call submit_answer.`,
+        latencyMs: Date.now() - t0,
+      };
+    }
+
     const scopeError = await this.checkScope(tool, args);
     if (scopeError) {
       return {
@@ -375,6 +421,8 @@ export class LainDispatcher {
       // del motor (p. ej. una clave inventada) no deja evidencia y el modelo
       // no debe pagarlo con su alcance. Las rondas y el tiempo siguen acotando.
       this.toolCallsUsed++;
+      this.usedByTool.set(tool, (this.usedByTool.get(tool) ?? 0) + 1);
+      this.seenCalls.add(signature);
       this.harvest(tool, data);
       const { value, truncated } = this.truncate(data, tool);
       const receipt = this.mintReceipt(tool, args, data, truncated !== null);

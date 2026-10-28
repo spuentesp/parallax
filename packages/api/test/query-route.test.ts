@@ -97,7 +97,12 @@ describe('POST /api/query budget', () => {
   });
 
   it('reports cutShort when the budget refused a read the model asked for', async () => {
-    stubModel([{ content: null, tool: 'list_services' }]);
+    // Tres lecturas DISTINTAS (una repetida se rechaza como duplicada, no como presupuesto).
+    stubModel([
+      { content: null, tool: 'list_services' },
+      { content: null, tool: 'list_contracts' },
+      { content: null, tool: 'list_unresolved' },
+    ]);
     await start(2);
     const r = await ask();
     expect(r.statusCode).toBe(200);

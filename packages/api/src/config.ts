@@ -29,6 +29,9 @@ const AppConfigSchema = z.object({
   // Tokens de respuesta por turno del modelo. 2048 cortaba respuestas con muchas
   // afirmaciones y citas; el valor por defecto es el doble.
   investigatorMaxTokens: z.coerce.number().int().min(256).max(32768).optional(),
+  // Razonamiento interno del modelo en la investigación: on | off | default (el del
+  // servidor). Se mide, no se supone: ver docs/agent-spend.md.
+  investigatorThinking: z.enum(['on', 'off', 'default']).optional(),
   // Tope de preguntas al investigador por token y hora (0 o ausente = sin tope).
   // Para demos públicas: cada pregunta consume créditos de Token Factory.
   queryRateLimitPerHour: z.coerce.number().int().min(0).optional(),
@@ -55,7 +58,7 @@ export const INVESTIGATOR_DEFAULTS = {
   nemotronBaseUrl: 'https://api.tokenfactory.nebius.com/v1',
   nemotronPlannerModel: 'nvidia/nemotron-3-super-120b-a12b',
   nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
-  investigatorMaxToolCalls: 16,
+  investigatorMaxToolCalls: 10,
   investigatorMaxModelMs: 180_000,
   investigatorMaxTokens: 4096,
 } as const;
@@ -69,6 +72,7 @@ export function investigatorSettings(
     | 'investigatorMaxToolCalls'
     | 'investigatorMaxModelMs'
     | 'investigatorMaxTokens'
+    | 'investigatorThinking'
   >,
 ): {
   baseUrl: string;
@@ -77,6 +81,8 @@ export function investigatorSettings(
   maxToolCalls: number;
   maxModelMs: number;
   maxTokens: number;
+  /** undefined = el valor por defecto del servidor. */
+  thinking: boolean | undefined;
 } {
   return {
     baseUrl: cfg.nemotronBaseUrl ?? INVESTIGATOR_DEFAULTS.nemotronBaseUrl,
@@ -85,6 +91,12 @@ export function investigatorSettings(
     maxToolCalls: cfg.investigatorMaxToolCalls ?? INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
     maxModelMs: cfg.investigatorMaxModelMs ?? INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
     maxTokens: cfg.investigatorMaxTokens ?? INVESTIGATOR_DEFAULTS.investigatorMaxTokens,
+    thinking:
+      cfg.investigatorThinking === 'on'
+        ? true
+        : cfg.investigatorThinking === 'off'
+          ? false
+          : undefined,
   };
 }
 
@@ -140,6 +152,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
     investigatorMaxTokens: env.INVESTIGATOR_MAX_TOKENS,
+    investigatorThinking: env.INVESTIGATOR_THINKING,
     queryRateLimitPerHour: env.QUERY_RATE_LIMIT_PER_HOUR,
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,

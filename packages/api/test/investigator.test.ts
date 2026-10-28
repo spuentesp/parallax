@@ -215,11 +215,13 @@ describe('investigate loop', () => {
     resetLainMock();
     // Modelo que sólo pide herramientas: se corta en el presupuesto.
     const model = new ScriptedModel(
-      Array.from({ length: 10 }, (_, i) =>
-        resp({
-          toolCalls: [toolCall(`call_${i}`, 'list_services', {})],
-          finishReason: 'tool_calls',
-        }),
+      // Lecturas distintas: la misma llamada repetida se rechaza como duplicada.
+      ['list_services', 'list_contracts', 'list_unresolved', 'get_coverage', 'list_services'].map(
+        (tool, i) =>
+          resp({
+            toolCalls: [toolCall(`call_${i}`, tool, i === 4 ? { repo: 'billing' } : {})],
+            finishReason: 'tool_calls',
+          }),
       ),
     );
     const result = await investigate({

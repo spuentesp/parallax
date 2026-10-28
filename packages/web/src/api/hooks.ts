@@ -671,3 +671,81 @@ export function useDeleteConversation() {
 }
 
 export { client };
+
+// ── Cabos sueltos: lo que el motor no ató, y qué es cada uno ────────────────
+
+export type LooseCategory =
+  | 'test_or_tooling'
+  | 'external_call'
+  | 'dynamic_target'
+  | 'likely_real_link'
+  | 'not_a_call'
+  | 'unclear';
+
+export interface LooseAssessmentDto {
+  category: LooseCategory;
+  reason: string;
+  evidence: string | null;
+  /** rule = exacto (ruta o motivo del motor); model = lectura de Nemotron, no un hecho del motor. */
+  source: 'rule' | 'model';
+  model?: string | null;
+}
+
+export interface LooseEndDto {
+  key: string;
+  group: string;
+  kind: 'unresolved' | 'inferred';
+  repo: string;
+  path: string;
+  line: number | null;
+  reason: string;
+  detail: {
+    method?: string;
+    template?: string;
+    urlExpr?: string;
+    targetService?: string;
+    endpoint?: string;
+    confidence?: number;
+  };
+  candidates: string[];
+  candidateCount: number;
+  assessment: LooseAssessmentDto | null;
+}
+
+export interface LooseEndsReportDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  generatedAt: number | null;
+  items: LooseEndDto[];
+  summary: { total: number; byCategory: Record<LooseCategory, number>; pendingCases: number };
+  run: {
+    state: 'idle' | 'running' | 'done' | 'failed';
+    done: number;
+    total: number;
+    error?: string | null;
+    usage?: { modelCalls: number; completionTokens: number; ms: number };
+  };
+}
+
+export function useLooseEnds(workspaceId: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: ['loose-ends', workspaceId],
+    queryFn: () => client.get<LooseEndsReportDto>(`/api/workspaces/${workspaceId}/loose-ends`),
+    enabled: workspaceId != null && enabled,
+    staleTime: 30_000,
+    // Mientras el modelo trabaja se vuelve a preguntar; si no, no.
+    refetchInterval: (q) => (q.state.data?.run.state === 'running' ? 2500 : false),
+  });
+}
+
+export function useAssessLooseEnds(workspaceId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      client.post<{ status: 'started' | 'running' }>(
+        `/api/workspaces/${workspaceId}/loose-ends/assess`,
+        {},
+      ),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['loose-ends', workspaceId] }),
+  });
+}

@@ -17,6 +17,7 @@ import { ciRoutes } from './routes/ci.js';
 import { conversationRoutes } from './routes/conversations.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
+import { looseEndsRoutes } from './routes/loose-ends.js';
 import { mapRoutes } from './routes/map.js';
 // MCP + Web
 import { mcpRoutes } from './routes/mcp.js';
@@ -55,6 +56,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(workspaceRoutes);
   await app.register(mapRoutes);
   await app.register(conversationRoutes);
+  await app.register(looseEndsRoutes);
   await app.register(whoamiRoutes);
   await app.register(ciRoutes);
 

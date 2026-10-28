@@ -18,6 +18,7 @@ import { readStored, writeStored } from '../nav/storage.js';
 import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
+import { LooseEndsPanel } from './LooseEndsPanel.js';
 import { MapCanvas } from './MapCanvas.js';
 import { MapInspector } from './MapInspector.js';
 import { MapOutline } from './MapOutline.js';
@@ -98,6 +99,7 @@ export function MapExplorer({
   );
   const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen());
   const [legendOpen, setLegendOpen] = useState(false);
+  const [looseOpen, setLooseOpen] = useState(false);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [fitNonce, setFitNonce] = useState(0);
 
@@ -226,6 +228,8 @@ export function MapExplorer({
         onRefresh={() => refresh.mutate(undefined, { onSuccess: code.reset })}
         onFit={() => setFitNonce((n) => n + 1)}
         loading={q.isFetching}
+        looseOpen={looseOpen}
+        onToggleLoose={() => setLooseOpen((o) => !o)}
         outlineOpen={outlineOpen}
         onToggleOutline={() => {
           setOutlineOpen((o) => {
@@ -338,7 +342,17 @@ export function MapExplorer({
             )}
             <Legend open={legendOpen} onToggle={() => setLegendOpen((o) => !o)} />
 
-            {selectedId && (
+            {looseOpen && (
+              <div className="absolute right-3 top-3 bottom-3 z-30 flex w-[26rem] max-w-[70%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+                <LooseEndsPanel
+                  workspaceId={workspaceId}
+                  onSelect={(id) => setParam({ sel: id })}
+                  onClose={() => setLooseOpen(false)}
+                />
+              </div>
+            )}
+
+            {selectedId && !looseOpen && (
               <div className="absolute right-3 top-3 bottom-3 z-20 flex w-[21rem] max-w-[60%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
                 <button
                   type="button"
@@ -446,6 +460,8 @@ function Toolbar(props: {
   loading: boolean;
   outlineOpen: boolean;
   onToggleOutline: () => void;
+  looseOpen: boolean;
+  onToggleLoose: () => void;
   actions?: React.ReactNode;
 }): React.ReactElement {
   const { filters, setParam, meta, totals } = props;
@@ -472,6 +488,15 @@ function Toolbar(props: {
           className={`${chip(props.outlineOpen)} shrink-0`}
         >
           Structure
+        </button>
+        <button
+          type="button"
+          onClick={props.onToggleLoose}
+          aria-pressed={props.looseOpen}
+          title="Calls the engine could not bind, and what each one is"
+          className={`${chip(props.looseOpen)} shrink-0`}
+        >
+          Loose ends
         </button>
         <SearchBox workspaceId={props.workspaceId} onPick={props.onSelect} />
 

@@ -100,8 +100,8 @@ describe('LainDispatcher', () => {
     };
     const d = createDispatcher({ lain: spy, view: 'live', maxToolCalls: 2 });
     expect((await d.execute(call('t1', 'list_services', {}))).ok).toBe(true);
-    expect((await d.execute(call('t2', 'list_services', {}))).ok).toBe(true);
-    const r3 = await d.execute(call('t3', 'list_services', {}));
+    expect((await d.execute(call('t2', 'list_contracts', {}))).ok).toBe(true);
+    const r3 = await d.execute(call('t3', 'list_unresolved', {}));
     expect(r3.ok).toBe(false);
     if (!r3.ok) expect(r3.code).toBe('budget_exhausted');
     // El catálogo de arranque no gasta presupuesto; sólo las llamadas del modelo.
@@ -111,7 +111,7 @@ describe('LainDispatcher', () => {
       exhausted: true,
       cutShort: true,
     });
-    expect(lainCalls).toBe(3); // 1 catálogo + 2 del modelo
+    expect(lainCalls).toBe(2); // 1 catálogo + 1 list_services del modelo (la otra lectura fue list_contracts)
   });
 
   it('only flags the research as cut short once a read was actually refused', async () => {

@@ -90,12 +90,28 @@ describe('loadConfig', () => {
     });
   });
 
+  it('INVESTIGATOR_THINKING: unset and "default" leave the server default (undefined); on/off are explicit; junk is refused', () => {
+    const tok = JSON.stringify([{ token: 't1', orgId: 'o1', scopes: ['read'] }]);
+    const think = (v?: string) =>
+      investigatorSettings(
+        loadConfig({
+          PARALLAX_TOKENS: tok,
+          ...(v !== undefined ? { INVESTIGATOR_THINKING: v } : {}),
+        }),
+      ).thinking;
+    expect(think()).toBeUndefined();
+    expect(think('default')).toBeUndefined();
+    expect(think('on')).toBe(true);
+    expect(think('off')).toBe(false);
+    expect(() => think('sometimes')).toThrow();
+  });
+
   it('investigatorSettings resolves the §6 budget and §14 model defaults', () => {
     const base = loadConfig({
       PARALLAX_TOKENS: JSON.stringify([{ token: 't1', orgId: 'o1', scopes: ['read'] }]),
     });
     const d = investigatorSettings(base);
-    expect(d.maxToolCalls).toBe(16);
+    expect(d.maxToolCalls).toBe(10);
     expect(d.maxModelMs).toBe(180_000);
     expect(d.baseUrl).toBe('https://api.tokenfactory.nebius.com/v1');
     expect(d.workerModel).toContain('Nemotron');

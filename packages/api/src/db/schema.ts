@@ -1,4 +1,11 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 export const workspace = sqliteTable('workspace', {
   id: text('id').primaryKey(),
@@ -157,4 +164,19 @@ export const turn = sqliteTable(
   (t) => ({
     seqIdx: uniqueIndex('idx_turn_seq').on(t.conversationId, t.seq),
   }),
+);
+
+export const looseEndAssessment = sqliteTable(
+  'loose_end_assessment',
+  {
+    workspaceId: text('workspace_id').notNull(),
+    caseId: text('case_id').notNull(),
+    snippetHash: text('snippet_hash').notNull(),
+    category: text('category').notNull(),
+    reason: text('reason').notNull(),
+    evidence: text('evidence'),
+    model: text('model'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.workspaceId, t.caseId] }) }),
 );

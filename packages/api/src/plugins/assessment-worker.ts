@@ -48,6 +48,7 @@ export default fp(
             view: args.viewId,
             budget: model.budget,
             maxTokens: model.settings.maxTokens,
+            ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
             engineFindings: args.engineFindings,
             // Los hallazgos del motor entran en el contexto y se explican por id.
             pr: {

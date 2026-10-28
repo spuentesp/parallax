@@ -52,6 +52,9 @@ import {
   verifyPrSubmission,
 } from './pr-explain.js';
 
+/** Fracción del presupuesto de lecturas a partir de la cual se pide cerrar. */
+const SOFT_NUDGE_AT = 0.6;
+
 export const PROMPT_VERSION = 'parallax-investigator-v5';
 
 // El investigador depende de esta interfaz mínima, no del cliente concreto:
@@ -64,6 +67,7 @@ export interface ChatCompleter {
       tools?: ToolSpec[];
       toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
       maxTokens?: number;
+      thinking?: boolean;
     },
   ): Promise<NemotronResponse>;
 }
@@ -119,7 +123,14 @@ export interface InvestigationResult {
   answer: string | null;
   citations: { accepted: string[]; rejected: CitationRejection[] };
   conflictingClaims: ClassificationConflict[];
-  budget: InvestigatorBudget & DispatcherBudgetUse & { modelMsUsed: number; rounds: number };
+  budget: InvestigatorBudget &
+    DispatcherBudgetUse & {
+      modelMsUsed: number;
+      rounds: number;
+      /** Tokens de entrada y salida de TODAS las rondas: la entrada es lo que más cuesta. */
+      promptTokens: number;
+      completionTokens: number;
+    };
   toolCallLog: ToolCallRecord[];
   modelLog: ModelCallRecord[];
   effectiveModel: string | null;
@@ -167,6 +178,8 @@ export interface InvestigateOptions {
   engineFindings?: unknown[];
   modelRole?: 'planner' | 'worker';
   maxTokens?: number;
+  /** Razonamiento interno del modelo (ver NemotronProvider.complete); sin indicar, el del servidor. */
+  thinking?: boolean;
   /**
    * Por defecto 'auto'. Forzar una herramienta concreta sirve para verificar
    * el mecanismo de tool calling sin depender de que el modelo decida
@@ -361,6 +374,7 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
   let retried = false;
   let pushedBack = false;
   let submitNudged = false;
+  let softNudged = false;
   let submittedClaims: Claim[] = [];
   let prSubmission: PrSubmitArgs | null = null;
 
@@ -398,13 +412,29 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       break;
     }
 
+    // Convergencia: cuando queda una sola lectura o poco tiempo, el modelo ya no
+    // elige — la siguiente llamada ES la entrega. Así una investigación termina
+    // siempre en una respuesta (aunque diga lo que no pudo comprobar) en vez de
+    // buscar hasta agotar el presupuesto.
+    const used = dispatcher.budgetUse().toolCallsUsed;
+    const mustSubmit =
+      opts.toolChoice === undefined &&
+      used > 0 &&
+      // Las llamadas rechazadas (repetidas, sobre el tope de una herramienta) no gastan
+      // lecturas pero SÍ rondas: contar sólo lecturas dejaría dar vueltas sin fin.
+      (used >= budget.maxToolCalls - 1 ||
+        rounds >= budget.maxToolCalls ||
+        deadline - nowMs() < budget.maxModelMs * 0.3);
     let resp: NemotronResponse;
     try {
       resp = await opts.model.complete(messages, {
         model: modelRole,
         tools,
-        toolChoice: opts.toolChoice ?? 'auto',
+        toolChoice: mustSubmit
+          ? { type: 'function', function: { name: SUBMIT_TOOL } }
+          : (opts.toolChoice ?? 'auto'),
         maxTokens,
+        ...(opts.thinking !== undefined ? { thinking: opts.thinking } : {}),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -602,6 +632,18 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
         errors.push('tool budget exhausted during round');
       }
     }
+    // A partir del 60% del presupuesto se le dice, una vez, que cierre.
+    const usedNow = dispatcher.budgetUse().toolCallsUsed;
+    if (
+      !softNudged &&
+      Math.max(usedNow, rounds + 1) >= Math.ceil(budget.maxToolCalls * SOFT_NUDGE_AT)
+    ) {
+      softNudged = true;
+      messages.push({
+        role: 'user',
+        content: `You have used ${usedNow} of ${budget.maxToolCalls} tool calls. Unless one specific fact is still missing, stop researching and call submit_answer now with what you have, saying plainly what you could not verify.`,
+      });
+    }
     rounds++;
   }
 
@@ -705,6 +747,8 @@ export async function investigate(opts: InvestigateOptions): Promise<Investigati
       cutShort: use.cutShort,
       modelMsUsed,
       rounds,
+      promptTokens: modelLog.reduce((n, m) => n + m.promptTokens, 0),
+      completionTokens: modelLog.reduce((n, m) => n + m.completionTokens, 0),
     },
     toolCallLog,
     modelLog,

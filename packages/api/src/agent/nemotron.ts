@@ -106,6 +106,12 @@ export class NemotronProvider {
       tools?: ToolSpec[];
       toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
       maxTokens?: number;
+      /**
+       * Razonamiento interno del modelo. Apagado, una respuesta de 5 casos pasó de
+       * 3.300 tokens y 13 s a 250 tokens y 2 s con el mismo resultado: el modelo
+       * "pensaba" sin presupuesto. Sin indicar, se respeta el valor por defecto del servidor.
+       */
+      thinking?: boolean;
     } = {},
   ): Promise<NemotronResponse> {
     const model = opts.model === 'planner' ? this.cfg.plannerModel : this.cfg.workerModel;
@@ -114,6 +120,9 @@ export class NemotronProvider {
       messages,
       max_tokens: opts.maxTokens ?? 4096,
     };
+    if (opts.thinking !== undefined) {
+      body.chat_template_kwargs = { enable_thinking: opts.thinking };
+    }
     if (opts.tools?.length) {
       body.tools = opts.tools;
       body.tool_choice = opts.toolChoice ?? 'auto';

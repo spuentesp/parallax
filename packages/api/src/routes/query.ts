@@ -54,6 +54,9 @@ const QueryResponse = z.object({
       modelMsUsed: z.number(),
       exhausted: z.boolean(),
       cutShort: z.boolean(),
+      rounds: z.number().optional(),
+      promptTokens: z.number().optional(),
+      completionTokens: z.number().optional(),
     })
     .nullable(),
   tool_calls: z.array(z.unknown()),
@@ -200,6 +203,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         view: 'live',
         budget: model.budget,
         maxTokens: model.settings.maxTokens,
+        ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
         endpointLabel: model.settings.baseUrl,
       });
 
@@ -263,6 +267,9 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           modelMsUsed: result.budget.modelMsUsed,
           exhausted: result.budget.exhausted,
           cutShort: result.budget.cutShort,
+          rounds: result.budget.rounds,
+          promptTokens: result.budget.promptTokens,
+          completionTokens: result.budget.completionTokens,
         },
         tool_calls: result.toolCallLog,
         model: result.effectiveModel,
