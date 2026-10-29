@@ -1,97 +1,85 @@
-# Deploying the Parallax demo (Nebius VM)
+# Deploying & Updating the Parallax Demo (Nebius Cloud)
 
-Goal: a public, **protected** demo on Nebius AI Cloud showcasing two distinct NVIDIA agent architecture workspaces:
+Goal: A live, public, **token-protected** Parallax demo on Nebius AI Cloud showcasing two distinct NVIDIA agent architecture workspaces:
 - **Cluster A (`ws_cluster_a`)**: OpenShell gRPC proto surface + Python SDK client + NeMo-Fabric / NemoClaw cross-repo consumers.
 - **Cluster B (`ws_cluster_b`)**: NeMo Agent Toolkit HTTP & WebSocket runtime endpoints + Next.js API routes + UI reverse proxy.
 
-Everything runs on one VM:
-- A single Lain server running on the host in federation mode on port 9999.
+Everything runs on one Nebius VM:
+- A single Lain server running on the host in federation mode on port 9999 (compiled from `dev` tip).
 - A single Parallax instance + automatic HTTPS (Caddy) in Docker serving both workspaces in the same UI.
 
-## 0. What you need
-- A VM (Nebius AI Cloud, Ubuntu 22.04+, ~4 vCPU / 8 GB / 50 GB disk) with a public IP and ports 80/443 open.
-- A DNS name pointing at it (Caddy gets Let's Encrypt certificates automatically; e.g. `<IP>.nip.io`).
-- A Nebius Token Factory key (`NEBIUS_TOKEN`).
+---
 
-## 1. Install Docker and Git
+## ⚡ Quick Start: One-Command Automated Deployment & Updates
+
+### 1. Provision the Nebius VM
 ```bash
-curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgrp docker
+./deploy/provision-vm.sh parallax-demo 4vcpu-16gb
 ```
+*(Outputs the assigned `PUBLIC_IP`)*.
 
-## 2. Compile latest Lain dev build & clone NVIDIA repos
+> [!NOTE]
+> If you encounter `PermissionDenied` from the Nebius compute service, ensure your billing/trial is active on https://console.nebius.com.
 
-Lain runs directly on the host VM for optimal indexing performance.
-
-### Step 2.1: Compile the preview `dev` branch tip of Lain
-Compiles the latest commit from `spuentesp/lain` on branch `dev` (includes commit `c567612` with OpenShell gRPC surface and NeMo Agent Toolkit HTTP contract detection):
+### 2. Deploy Parallax & Lain to the VM
+Run from your local workstation:
 ```bash
-git clone https://github.com/spuentesp/parallax.git && cd parallax
-./deploy/build-lain.sh dev ~/lain
+./deploy/deploy-to-vm.sh <PUBLIC_IP>
 ```
+This script handles the entire lifecycle end-to-end:
+1. Validates SSH connectivity to `ubuntu@<PUBLIC_IP>`.
+2. Syncs the Parallax codebase via `rsync`.
+3. Installs Docker & Docker Compose if missing.
+4. Compiles the latest preview tip of `lain` from branch `dev` (`cargo build --release`).
+5. Clones / updates all 6 NVIDIA repositories into `~/nvidia`.
+6. Configures a persistent `systemd` daemon (`lain.service`) on host port 9999.
+7. Generates persistent looking & judge tokens and saves `.env`.
+8. Builds and starts the Docker Compose stack (Parallax + Caddy HTTPS on `<PUBLIC_IP>.nip.io`).
+9. Seeds the SQLite database with `ws_cluster_a` and `ws_cluster_b`.
+10. Runs automated health and token verification tests.
+11. Outputs the live demo URLs!
 
-### Step 2.2: Clone the 6 NVIDIA repositories
+---
+
+## 🔄 Repeat Updates (In-Place / Zero Breakage)
+
+When you make changes to Parallax code or Lain contracts, simply re-run:
 ```bash
-./deploy/clone-nvidia-repos.sh ~/nvidia
+./deploy/deploy-to-vm.sh <PUBLIC_IP>
 ```
+The script is **100% idempotent**:
+- It pulls/syncs your latest changes.
+- It rebuilds the Docker container in-place.
+- It **retains the exact same domain URL, database state, and access tokens**.
+- Any links you already shared with judges or viewers **will continue working without interruption**.
 
-### Step 2.3: Start Lain in federation mode
-Copy `repos.yaml` and `workspaces.yaml` beside the repos, then start the single Lain federation server listening on **localhost:9999**:
+---
+
+## 🔑 Demo Access URLs Structure
+
+Once deployed, the script provides persistent URLs for both clusters:
+
+### Cluster A (OpenShell gRPC + NeMo-Fabric)
+- **👀 Looking Token (Read-only for viewers/video):**
+  `https://<IP>.nip.io/orgs/ws_cluster_a?token=px_look_...`
+- **⚖️ Judges Token (Interactive testing for evaluators):**
+  `https://<IP>.nip.io/orgs/ws_cluster_a?token=px_judge_...`
+
+### Cluster B (NeMo Agent Toolkit HTTP & WebSocket)
+- **👀 Looking Token (Read-only for viewers/video):**
+  `https://<IP>.nip.io/orgs/ws_cluster_b?token=px_look_...`
+- **⚖️ Judges Token (Interactive testing for evaluators):**
+  `https://<IP>.nip.io/orgs/ws_cluster_b?token=px_judge_...`
+
+---
+
+## 🧪 Manual Verification & SSE Streaming Check
+
+Verify that Caddy does not buffer the assistant's Server-Sent Events stream:
 ```bash
-cp deploy/repos.yaml deploy/workspaces.yaml ~/nvidia/
-~/lain/lain server --config ~/nvidia/repos.yaml --transport http --port 9999
-```
-Lain will index the unified federation for both clusters (OpenShell and NeMo Agent Toolkit). Wait until indexing completes.
-
-## 3. Configure Parallax & Generate Tokens
-```bash
-cd ~/parallax/deploy
-cp .env.demo.example .env
-
-# Generate the two demo tokens (looking & judges) for both clusters
-node gen-tokens.mjs https://YOUR.DOMAIN
-```
-This prints:
-1. `PARALLAX_TOKENS='...'` — paste into `deploy/.env`.
-2. **Cluster A Links**:
-   - Looking (read-only): `https://YOUR.DOMAIN/orgs/ws_cluster_a?token=px_look_...`
-   - Judges (testing): `https://YOUR.DOMAIN/orgs/ws_cluster_a?token=px_judge_...`
-3. **Cluster B Links**:
-   - Looking (read-only): `https://YOUR.DOMAIN/orgs/ws_cluster_b?token=px_look_...`
-   - Judges (testing): `https://YOUR.DOMAIN/orgs/ws_cluster_b?token=px_judge_...`
-
-Also fill in `DOMAIN` and `NEBIUS_TOKEN` in `deploy/.env`.
-
-## 4. Build and Start Docker Containers
-```bash
-docker compose up -d --build
-```
-`docker-compose.yml` automatically verifies container health before routing traffic via Caddy.
-
-## 5. Seed the two workspaces
-Seed both `ws_cluster_a` and `ws_cluster_b` in the database:
-```bash
-docker compose exec parallax \
-  pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts
-```
-
-## 6. Verify (automated & manual)
-
-### Automated check:
-```bash
-./verify-deployment.sh
-```
-
-### Manual checks:
-- `https://YOUR.DOMAIN/orgs/ws_cluster_a` without token → access screen prompting for token.
-- **Cluster A Judges link** → opens OpenShell & NeMo-Fabric architecture map. Ask: *"Which services consume the OpenShell gRPC API?"*
-- **Cluster B Judges link** → opens NeMo Agent Toolkit map. Ask: *"Who dials the NAT backend endpoints?"*
-- `curl -s https://YOUR.DOMAIN/api/health` → `"status":"ok"` and `"lainAdapter":"real"`.
-
-## Live progress streaming verification
-Verify SSE streaming isn't buffered through Caddy:
-```bash
-curl -N -sS -H "Authorization: Bearer $JUDGE_TOKEN" -H 'content-type: application/json' \
+curl -N -sS -H "Authorization: Bearer <JUDGE_TOKEN>" \
+  -H 'content-type: application/json' \
   -d '{"question":"Which services call OpenShell?","orgId":"ws_cluster_a"}' \
-  https://YOUR.DOMAIN/api/query/stream
+  https://<IP>.nip.io/api/query/stream
 ```
-You should see `event: progress` blocks stream in live over several seconds, followed by `event: result`.
+You should observe live `event: progress` chunks streamed immediately over several seconds, followed by `event: result`.
