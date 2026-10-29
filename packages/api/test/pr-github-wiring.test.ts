@@ -123,14 +123,12 @@ describe('GitHub reads for PR evaluation use the configured read token and API b
       payload: { name: 'shop' },
     });
     const wsId = ws.json().workspace.id as string;
-    await app.db
-      .insert(schema.repo)
-      .values({
-        id: 'shop',
-        workspaceId: wsId,
-        uri: 'https://github.com/acme/shop.git',
-        createdAt: Date.now(),
-      });
+    await app.db.insert(schema.repo).values({
+      id: 'shop',
+      workspaceId: wsId,
+      uri: 'https://github.com/acme/shop.git',
+      createdAt: Date.now(),
+    });
     const headers = {
       ...AUTH,
       'content-type': 'application/json',
