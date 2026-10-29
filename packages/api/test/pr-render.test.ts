@@ -100,6 +100,18 @@ describe('code impact in the commit status', () => {
 });
 
 describe('code impact in the PR comment', () => {
+  it('shows cross-repository leaves and their traversal limit', () => {
+    const sample = impact();
+    const symbol = sample.symbols[0];
+    if (!symbol) throw new Error('missing fixture');
+    symbol.crossRepo = {
+      repositories: [{ repo: 'storefront', leaves: ['leaf'] }],
+      truncated: true,
+    };
+    const md = codeImpactMarkdown(sample).join('\n');
+    expect(md).toContain('`storefront` (1 leaf path(s)) (truncated)');
+    expect(md).toContain('traversal leaves at depth 4, not a count of all callers');
+  });
   it('lists the symbols riskiest first, with reach and tests, and says what it did not analyze', () => {
     const md = codeImpactMarkdown(impact()).join('\n');
     expect(md).toContain('### Code impact');

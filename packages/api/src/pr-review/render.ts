@@ -56,6 +56,22 @@ export function codeImpactMarkdown(impact: CodeImpact | null | undefined): strin
       );
     }
     lines.push('');
+    for (const s of rows) {
+      if (s.crossRepoNote) lines.push(`- Cross-repo impact for \`${s.name}\`: ${s.crossRepoNote}.`);
+      if (s.crossRepo) {
+        const repos = s.crossRepo.repositories;
+        const summary = repos.length
+          ? repos.map((r) => `\`${r.repo}\` (${String(r.leaves.length)} leaf path(s))`).join(', ')
+          : 'no indexed leaves in other repositories';
+        lines.push(
+          `- Cross-repo impact for \`${s.name}\`: ${summary}${s.crossRepo.truncated ? ' (truncated)' : ''}.`,
+        );
+      }
+    }
+    if (rows.some((s) => s.crossRepo))
+      lines.push(
+        '- Cross-repo results are indexed traversal leaves at depth 4, not a count of all callers.',
+      );
   }
   if (impact.newDefinitions > 0) {
     lines.push(

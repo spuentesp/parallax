@@ -156,3 +156,31 @@ export function parseIndexedCommit(text: string, repoId: string): string | null 
     return null;
   }
 }
+
+/** Validate the federation result and retain only leaves in other repositories. */
+export function parseCrossRepoImpact(
+  text: string,
+  sourceRepo: string,
+): {
+  repositories: Array<{ repo: string; leaves: string[] }>;
+  truncated: boolean;
+} | null {
+  try {
+    const data = JSON.parse(text) as { by_repo?: unknown; truncated?: unknown };
+    if (
+      !data.by_repo ||
+      typeof data.by_repo !== 'object' ||
+      Array.isArray(data.by_repo) ||
+      typeof data.truncated !== 'boolean'
+    )
+      return null;
+    const repositories: Array<{ repo: string; leaves: string[] }> = [];
+    for (const [repo, leaves] of Object.entries(data.by_repo)) {
+      if (!Array.isArray(leaves) || !leaves.every((leaf) => typeof leaf === 'string')) return null;
+      if (repo !== sourceRepo && leaves.length) repositories.push({ repo, leaves });
+    }
+    return { repositories, truncated: data.truncated };
+  } catch {
+    return null;
+  }
+}

@@ -85,6 +85,22 @@ export function CodeImpactSection({ impact }: { impact: CodeImpact }): React.Rea
                           called by {s.dependents.map((d) => d.name).join(', ')}
                         </div>
                       )}
+                      {s.crossRepoNote && (
+                        <div className="text-[11px] text-muted mt-0.5">
+                          Cross-repo: {s.crossRepoNote}
+                        </div>
+                      )}
+                      {s.crossRepo && (
+                        <div className="text-[11px] text-muted mt-0.5">
+                          Cross-repo leaves:{' '}
+                          {s.crossRepo.repositories.length
+                            ? s.crossRepo.repositories
+                                .map((r) => `${r.repo} (${r.leaves.length})`)
+                                .join(', ')
+                            : 'none indexed'}
+                          {s.crossRepo.truncated ? ' (truncated)' : ''} · traversal depth 4
+                        </div>
+                      )}
                     </td>
                     {s.note ? (
                       <td colSpan={3} className="py-2 pr-3 text-xs text-muted italic">

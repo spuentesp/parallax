@@ -25,6 +25,15 @@ export const ImpactedSymbolSchema = z.object({
   /** Ninguna prueba llega al símbolo (null = no se supo). */
   untested: z.boolean().nullable(),
   dependents: z.array(z.object({ name: z.string(), path: z.string() })),
+  /** Federated impact returns leaf paths, not a count of all transitive callers. */
+  crossRepo: z
+    .object({
+      repositories: z.array(z.object({ repo: z.string(), leaves: z.array(z.string()) })),
+      truncated: z.boolean(),
+    })
+    .nullable()
+    .optional(),
+  crossRepoNote: z.string().optional(),
   /** Por qué no hay medida (p. ej. el símbolo no está en el índice). */
   note: z.string().optional(),
 });
