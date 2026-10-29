@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createDispatcher } from '../src/agent/dispatcher.js';
 import { runMigrations } from '../src/db/migrate.js';
 import {
   chunkMarkdown,
@@ -82,6 +83,23 @@ describe('docs index', () => {
     expect(hits[0]?.snippet.length).toBeGreaterThan(0);
     // otro workspace no ve nada
     expect(searchDocs(db, 'other', 'gift card', DOC_STOPWORDS)).toEqual([]);
+  });
+
+  it('hands the model the best sections already read, with path and line to cite', async () => {
+    indexRepo(db, 'ws', 'saleor', readDocs(dir), 'abc123');
+    const dispatcher = createDispatcher({
+      lain: {} as never,
+      view: 'live',
+      docs: (q, o) => searchDocs(db, 'ws', q, DOC_STOPWORDS, o),
+    });
+    const hint = await dispatcher.docsFor(
+      'How do two checkouts avoid a negative gift card balance?',
+    );
+    expect(hint).toContain('- saleor: docs/adr/0004-gift-card-lock.md');
+    expect(hint).toContain('already read from the checkout');
+    expect(hint).toContain('LOCATION claim');
+    expect(hint).toContain('select_for_update inside a transaction');
+    expect(hint).toMatch(/heading at line \d+/);
   });
 
   it('re-indexing replaces what was there', () => {

@@ -523,9 +523,17 @@ export class LainDispatcher {
    */
   async docsFor(question: string): Promise<string> {
     if (this.docs) {
-      return this.docs(question, { limit: 6 })
-        .map((h) => `- ${h.repo}: ${h.path}${h.heading ? ` (section: ${h.heading})` : ''}`)
-        .join('\n');
+      const hits = this.docs(question, { limit: 6 });
+      const files = hits.map(
+        (h) => `- ${h.repo}: ${h.path}${h.heading ? ` (section: ${h.heading})` : ''}`,
+      );
+      // El modelo no siempre abre el documento: se le entrega ya leído el de las dos mejores
+      // coincidencias (del checkout). Se cita con una afirmación de ubicación, que el motor
+      // vuelve a leer; el encabezado NO es un id de evidencia.
+      const excerpts = hits.slice(0, 2).map((h) => `=== ${h.repo}: ${h.path} ===\n${h.text}`);
+      return excerpts.length > 0
+        ? `${files.join('\n')}\n\nThe two best matches, already read from the checkout:\n${excerpts.join('\n\n')}\n\nTo cite one of them, add a LOCATION claim (repo, path, line, contains): line = the "heading at line N" of the section you rely on, contains = a short phrase copied from the first lines right under that heading. Do not cite the excerpt headers as evidence ids.`
+        : '';
     }
     const words = [
       ...new Set(

@@ -24,6 +24,7 @@ const SKIP_FILE = /^(changelog|license|code_of_conduct|history)/i;
 const MAX_FILES = 400;
 const MAX_FILE_BYTES = 300_000;
 const MAX_SECTION_CHARS = 1800;
+const MAX_EXCERPT_CHARS = 2500;
 const CLONE_HOSTS = new Set(['github.com', 'gitlab.com']);
 
 export interface Section {
@@ -46,6 +47,8 @@ export interface DocHit {
   heading: string;
   line: number;
   snippet: string;
+  /** Texto de la sección que casó (recortado): lo que se le da al modelo, ya leído. */
+  text: string;
   kind: DocKind;
   title: string;
 }
@@ -229,6 +232,17 @@ export function ftsQuery(text: string, stop: ReadonlySet<string>): string | null
   return words.length === 0 ? null : words.map((w) => `"${w}"*`).join(' OR ');
 }
 
+/** El documento en orden, cada sección con la línea de su título (para citarla), recortado. */
+function documentText(db: Database.Database, ws: string, repo: string, path: string): string {
+  const rows = db
+    .prepare<unknown[], { heading: string; body: string; line_start: number }>(
+      'SELECT heading, body, line_start FROM doc_section_fts WHERE workspace_id = ? AND repo = ? AND path = ? ORDER BY rowid',
+    )
+    .all(ws, repo, path);
+  const out = rows.map((r) => `## ${r.heading} (heading at line ${r.line_start})\n${r.body}`);
+  return out.join('\n\n').slice(0, MAX_EXCERPT_CHARS);
+}
+
 export function searchDocs(
   db: Database.Database,
   workspaceId: string,
@@ -242,9 +256,16 @@ export function searchDocs(
   const rows = db
     .prepare<
       unknown[],
-      { repo: string; path: string; heading: string; line_start: number; snip: string }
+      {
+        repo: string;
+        path: string;
+        heading: string;
+        line_start: number;
+        snip: string;
+        body: string;
+      }
     >(
-      `SELECT repo, path, heading, line_start,
+      `SELECT repo, path, heading, line_start, body,
               snippet(doc_section_fts, 4, '', '', ' … ', 28) AS snip
          FROM doc_section_fts
         WHERE doc_section_fts MATCH ? AND workspace_id = ? ${opts.repo ? 'AND repo = ?' : ''}
@@ -268,6 +289,7 @@ export function searchDocs(
       heading: r.heading,
       line: r.line_start,
       snippet: r.snip.replace(/\s+/g, ' ').trim(),
+      text: documentText(db, workspaceId, r.repo, r.path),
       kind: m?.kind ?? 'guide',
       title: m?.title ?? r.path,
     });
