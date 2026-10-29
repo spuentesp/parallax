@@ -49,6 +49,9 @@ const AppConfigSchema = z.object({
   githubWriteToken: z.string().min(1).optional(),
   // Secreto HMAC de los webhooks de pull_request. Sin él no se acepta ningún webhook.
   githubWebhookSecret: z.string().min(1).optional(),
+  gitlabReadToken: z.string().min(1).optional(),
+  gitlabApiBase: z.string().url().optional(),
+  gitlabHost: z.string().min(1).optional(),
   // URL pública de Parallax, para enlazar el informe desde el estado y el comentario.
   publicUrl: z.string().url().optional(),
   // Documentación de los repos: carpetas donde buscar un checkout ya existente (<raíz>/<repo>),
@@ -190,6 +193,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     githubApiBase: env.PARALLAX_GITHUB_API_BASE,
     githubWriteToken: env.PARALLAX_GITHUB_WRITE_TOKEN,
     githubWebhookSecret: env.PARALLAX_GITHUB_WEBHOOK_SECRET,
+    gitlabReadToken: env.PARALLAX_GITLAB_READ_TOKEN,
+    gitlabApiBase: env.PARALLAX_GITLAB_API_BASE,
+    gitlabHost: env.PARALLAX_GITLAB_HOST,
     publicUrl: env.PARALLAX_PUBLIC_URL,
     docsRoots: nonEmpty(env.DOCS_ROOTS),
     docsCacheDir: nonEmpty(env.DOCS_CACHE_DIR),

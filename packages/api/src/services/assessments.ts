@@ -13,6 +13,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import type { GitHubReader, PrSummary } from '../github/reader.js';
+import type { GitLabReader } from '../gitlab/reader.js';
 import { LainCallError } from '../lain-adapter/errors.js';
 import type {
   AssessmentRecord,
@@ -68,16 +69,18 @@ export async function resolveAssessmentRequest(
   db: Db,
   body: AssessmentRequestBody,
   analyzerVersion: string,
-  deps: { github?: GitHubReader; pr?: PrManifestRef } = {},
+  deps: { github?: GitHubReader; gitlab?: GitLabReader; pr?: PrManifestRef } = {},
 ): Promise<{ request: ResolvedAssessmentRequest; digest: string; pr?: PrSummary }> {
   if ('prUrl' in body) {
     // Dry run: el adapter sólo lee. Resuelve la URL a SHAs, nunca publica.
-    if (!deps.github) {
+    const isGitLab = deps.gitlab?.canHandle(body.prUrl) ?? false;
+    const reader = isGitLab ? deps.gitlab : deps.github;
+    if (!reader) {
       throw new NotFoundError(
         'PR URL resolution needs the GitHub reader; it is read-only and posts nothing',
       );
     }
-    const pr = await deps.github.fetchPr(body.prUrl);
+    const pr = await reader.fetchPr(body.prUrl);
     // El PR identifica el repo como owner/repo; el manifiesto usa el nombre
     // del workspace. Se resuelve aquí para que no haya dos vocabularios.
     const repoRows = await db
@@ -86,6 +89,7 @@ export async function resolveAssessmentRequest(
       .where(eq(schema.repo.workspaceId, body.orgId));
     const slug = `${pr.ref.owner}/${pr.ref.repo}`.toLowerCase();
     const match = repoRows.find((r) => {
+      if (isGitLab) return deps.gitlab?.matchesRepo(r.uri, pr.ref) ?? false;
       const uri = r.uri.toLowerCase();
       return uri.includes(slug) || repoDisplayName(r).toLowerCase() === pr.ref.repo.toLowerCase();
     });
@@ -108,6 +112,7 @@ export async function resolveAssessmentRequest(
         ...deps,
         // El PR se recuerda en el manifiesto: el worker lee de GitHub sus archivos y diffs.
         pr: {
+          ...(isGitLab ? { provider: 'gitlab' as const } : {}),
           owner: pr.ref.owner,
           repo: pr.ref.repo,
           number: pr.ref.number,
@@ -179,6 +184,7 @@ export async function createAssessment(deps: {
   analyzerVersion: string;
   /** Lector de GitHub, sólo para resolver una URL de PR a SHAs. Nunca escribe. */
   github?: GitHubReader;
+  gitlab?: GitLabReader;
   /** El PR de origen cuando no llega por URL (el webhook): para la revisión de código. */
   pr?: PrManifestRef;
   report?: PrReportIntent;
@@ -191,6 +197,7 @@ export async function createAssessment(deps: {
   const { db, worker, body, analyzerVersion, github } = deps;
   const { request, digest, pr } = await resolveAssessmentRequest(db, body, analyzerVersion, {
     ...(github ? { github } : {}),
+    ...(deps.gitlab ? { gitlab: deps.gitlab } : {}),
     ...(deps.pr ? { pr: deps.pr } : {}),
   });
 

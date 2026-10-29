@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { buildCommentPreview } from '../github/comment-preview.js';
 import { githubReaderFor, PrUrlError, parsePrUrl } from '../github/reader.js';
+import { gitlabReaderFor } from '../gitlab/reader.js';
 import {
   AssessmentRequestBody,
   createAssessment,
@@ -30,6 +31,7 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
           body,
           analyzerVersion: app.lain.analyzerVersion,
           github: githubReaderFor(app.config),
+          gitlab: gitlabReaderFor(app.config),
         });
         // El runner trabaja en segundo plano; el cliente observa el progreso
         // por GET y los eventos. La segunda llamada reutiliza la promesa en
@@ -154,8 +156,10 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
     },
     async (req, reply) => {
       const { url } = req.body as { url: string };
+      const gitlab = gitlabReaderFor(app.config);
+      const isGitLab = gitlab.canHandle(url);
       try {
-        parsePrUrl(url);
+        if (!isGitLab) parsePrUrl(url);
       } catch (e) {
         return reply.code(400).send({
           type: 'about:blank',
@@ -164,7 +168,7 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
           detail: e instanceof Error ? e.message : 'invalid PR url',
         });
       }
-      const reader = githubReaderFor(app.config);
+      const reader = isGitLab ? gitlab : githubReaderFor(app.config);
       try {
         const pr = await reader.fetchPr(url);
         return {
