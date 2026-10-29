@@ -1,6 +1,9 @@
-<p align="center"><img src="design/logo/parallax-logo.svg" alt="Parallax" width="120" /></p>
-
-# Parallax
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/logo/banner-dark.png">
+    <img src="design/logo/banner-light.png" alt="Parallax — architecture command center" width="100%">
+  </picture>
+</p>
 
 > Architectural intelligence center built on [lain](https://github.com/spuentesp/lain).
 > Submitted to the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/) — Coding and Agentic Engineering track.
