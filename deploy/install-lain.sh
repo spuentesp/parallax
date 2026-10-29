@@ -1,14 +1,28 @@
 #!/usr/bin/env bash
-# install-lain.sh — Download and verify the latest (or specified) Lain binary.
+# install-lain.sh — Download release binary OR compile from a branch tip.
 #
 # Usage:
 #   ./deploy/install-lain.sh [TARGET_DIR] [VERSION_TAG]
+#   ./deploy/install-lain.sh --branch dev [TARGET_DIR]
+#   ./deploy/install-lain.sh --dev [TARGET_DIR]
 #
 # Examples:
-#   ./deploy/install-lain.sh ~/lain          # downloads latest release
-#   ./deploy/install-lain.sh ~/lain v0.13.0  # downloads specific version
+#   ./deploy/install-lain.sh ~/lain          # downloads latest GitHub release binary
+#   ./deploy/install-lain.sh --dev ~/lain    # compiles preview dev branch tip from source
+#   ./deploy/install-lain.sh --branch dev    # compiles specified branch tip
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if compile mode is requested
+if [ "${1:-}" = "--dev" ]; then
+  exec "$SCRIPT_DIR/build-lain.sh" "dev" "${2:-$HOME/lain}"
+elif [ "${1:-}" = "--branch" ]; then
+  exec "$SCRIPT_DIR/build-lain.sh" "${2:-dev}" "${3:-$HOME/lain}"
+elif [ "${1:-}" = "--compile" ]; then
+  exec "$SCRIPT_DIR/build-lain.sh" "${2:-dev}" "${3:-$HOME/lain}"
+fi
 
 TARGET_DIR="${1:-$HOME/lain}"
 REQUESTED_TAG="${2:-}"

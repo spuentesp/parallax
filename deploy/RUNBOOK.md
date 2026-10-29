@@ -16,14 +16,23 @@ Everything runs on one VM: Lain (analysis engine) runs on the host, Parallax + H
 curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgrp docker
 ```
 
-## 2. Latest Lain on the host
-Lain binary releases are actively updated. Use the install script to fetch the latest binary:
-```bash
-# Clone the repository if you haven't yet
-git clone https://github.com/spuentesp/parallax.git
-cd parallax
+## 2. Lain on the host (compile preview dev branch or install release)
 
-# Install the latest Lain binary to ~/lain (or pass a specific version e.g. ./deploy/install-lain.sh ~/lain v0.13.0)
+Lain runs directly on the host VM for optimal indexing performance.
+
+### Option A: Compile from the preview `dev` branch tip (Recommended for preview features)
+Compiles the latest commit from `spuentesp/lain` on branch `dev` (automatically handles Rust toolchain and build dependencies):
+```bash
+# Clone Parallax if needed
+git clone https://github.com/spuentesp/parallax.git && cd parallax
+
+# Compile the preview dev branch tip to ~/lain/lain
+./deploy/build-lain.sh dev ~/lain
+```
+
+### Option B: Download the latest prebuilt release binary
+If you prefer to use a tagged GitHub release binary:
+```bash
 ./deploy/install-lain.sh ~/lain
 ```
 
