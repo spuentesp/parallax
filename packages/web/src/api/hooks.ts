@@ -616,7 +616,8 @@ export interface BlastRadiusDto {
 /** El resultado estructurado de una pregunta de recorrido o de impacto. */
 export type RoadmapDto =
   | { kind: 'trace'; trace: TraceResultDto }
-  | { kind: 'blast'; blast: BlastRadiusDto };
+  | { kind: 'blast'; blast: BlastRadiusDto }
+  | { kind: 'assessment'; orgId: string; assessmentId: string };
 
 export interface AskResponse {
   answer: string;

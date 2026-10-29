@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { Link } from 'react-router-dom';
 import type { BlastRadiusDto, RoadmapDto } from '../api/hooks.js';
 import { TraceView } from './TracePanel.js';
 
@@ -75,6 +76,15 @@ export function BlastView({ blast }: { blast: BlastRadiusDto }): React.ReactElem
 }
 
 export function RoadmapView({ roadmap }: { roadmap: RoadmapDto }): React.ReactElement {
+  if (roadmap.kind === 'assessment')
+    return (
+      <Link
+        className="text-accent underline text-xs"
+        to={`/app/orgs/${encodeURIComponent(roadmap.orgId)}/assessments/${encodeURIComponent(roadmap.assessmentId)}`}
+      >
+        Open assessment
+      </Link>
+    );
   return roadmap.kind === 'blast' ? (
     <BlastView blast={roadmap.blast} />
   ) : (
