@@ -17,6 +17,7 @@ import {
   PrUrlError,
   parseGithubRepoUri,
 } from '../github/reader.js';
+import { gitlabReaderFor, parseGitLabRepoUri } from '../gitlab/reader.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import { lainConfigYaml, repoStatuses } from '../repo-status.js';
 import { buildEndpointTopology } from '../topology.js';
@@ -44,6 +45,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
 
     const repos = await app.db.select().from(schema.repo).where(eq(schema.repo.workspaceId, id));
     const reader = githubReaderFor(app.config);
+    const gitlab = gitlabReaderFor(app.config);
     const prs: Array<OpenPrItem & { repo: string }> = [];
     const skipped: Array<{ repo: string; reason: string }> = [];
     const errors: Array<{ repo: string; code: string; message: string }> = [];
@@ -51,17 +53,24 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
 
     for (const r of repos) {
       const gh = parseGithubRepoUri(r.uri);
-      if (!gh) {
+      const gl = parseGitLabRepoUri(r.uri, app.config.gitlabHost);
+      if (!gh && !gl) {
         skipped.push({ repo: r.uri, reason: 'not_github' });
         continue;
       }
       try {
-        const listing = await reader.listOpenPrs(gh.owner, gh.repo);
+        const listing = gh
+          ? await reader.listOpenPrs(gh.owner, gh.repo)
+          : await gitlab.listOpenPrs(gl?.owner ?? '', gl?.repo ?? '');
         prs.push(...listing.items.map((pr) => ({ ...pr, repo: r.uri })));
         if (listing.truncated) truncated.push(r.uri);
       } catch (err) {
-        if (!(err instanceof PrUrlError)) throw err;
-        errors.push({ repo: r.uri, code: err.code, message: err.message });
+        if (!(err instanceof PrUrlError) && !gl) throw err;
+        errors.push({
+          repo: r.uri,
+          code: err instanceof PrUrlError ? err.code : 'http_error',
+          message: err instanceof Error ? err.message : 'GitLab read failed',
+        });
       }
     }
 

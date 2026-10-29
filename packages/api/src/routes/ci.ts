@@ -2,6 +2,8 @@
 // PR de un repo del workspace (si el modo lo permite) se crea una evaluación para
 // (base, head) y, al terminar, se publica el resultado en GitHub: siempre un commit
 // status; un comentario sólo si el workspace lo activó.
+
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { WorkspaceCiSettings } from '@parallax/shared/domain';
 import { eq, isNull } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
@@ -21,6 +23,8 @@ import {
   parsePullRequestEvent,
   verifySignature,
 } from '../github/webhook.js';
+import { gitlabReaderFor, parseGitLabRepoUri } from '../gitlab/reader.js';
+import { GitLabWriter } from '../gitlab/writer.js';
 import {
   createAssessment,
   getAssessmentRecord,
@@ -52,6 +56,8 @@ interface PrDeps {
   worker: AssessmentWorker;
   analyzerVersion: string;
   writer: GitHubWriter | null;
+  gitlabWriter?: GitLabWriter | null;
+  gitlabHost?: string | undefined;
   publicUrl: string | null;
   log: FastifyBaseLogger;
   /** Esperas entre reintentos de publicar a GitHub (los tests las acortan). */
@@ -113,15 +119,21 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
   if (!row || row.reportedAt !== null) return;
   const report = await getAssessmentReport(deps.db, id);
   if (!report) return;
-  if (!deps.writer) {
-    deps.log.warn({ assessment: id }, 'no write token: result not reported to GitHub');
+  const writer = row.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
+  if (!writer) {
+    deps.log.warn(
+      { assessment: id },
+      row.provider === 'gitlab'
+        ? 'no write token: result not reported to GitLab'
+        : 'no write token: result not reported to GitHub',
+    );
     return;
   }
   const reportUrl = deps.publicUrl
     ? `${deps.publicUrl}/app/orgs/${row.workspaceId}/assessments/${id}`
     : null;
   const ci = await readCiSettings(deps.db, row.workspaceId);
-  await deps.writer.setCommitStatus(row.owner, row.repo, row.headSha, {
+  await writer.setCommitStatus(row.owner, row.repo, row.headSha, {
     ...statusForReport(report),
     targetUrl: reportUrl,
     context: row.context,
@@ -131,7 +143,7 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
       .select()
       .from(schema.workspace)
       .where(eq(schema.workspace.id, row.workspaceId));
-    await deps.writer.createIssueComment(
+    await writer.createIssueComment(
       row.owner,
       row.repo,
       row.number,
@@ -167,7 +179,10 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
   const repoRows = await deps.db.select().from(schema.repo);
   const matching: Array<(typeof repoRows)[number]> = [];
   for (const row of repoRows) {
-    const gh = parseGithubRepoUri(row.uri);
+    const gh =
+      pr.provider === 'gitlab'
+        ? parseGitLabRepoUri(row.uri, deps.gitlabHost)
+        : parseGithubRepoUri(row.uri);
     if (!gh || gh.owner.toLowerCase() !== pr.owner.toLowerCase()) continue;
     if (gh.repo.toLowerCase() !== pr.repo.toLowerCase()) continue;
     const ci = await readCiSettings(deps.db, row.workspaceId);
@@ -184,6 +199,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
   }
 
   let created = 0;
+  let failed = false;
   for (const row of matching) {
     try {
       const context =
@@ -206,6 +222,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
         },
         // El PR de origen: el worker lee de GitHub sus archivos y diffs para la revisión de código.
         pr: {
+          ...(pr.provider === 'gitlab' ? { provider: 'gitlab' as const } : {}),
           owner: pr.owner,
           repo: pr.repo,
           number: pr.number,
@@ -213,6 +230,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
           name: repoDisplayName(row),
         },
         report: {
+          provider: pr.provider ?? 'github',
           workspaceId: row.workspaceId,
           owner: pr.owner,
           repo: pr.repo,
@@ -227,8 +245,9 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
       // Existing rows already have a subscriber (or are recovered on startup).
       if (!reportCreated) continue;
       // El PR muestra "analizando" desde ya, no un hueco hasta el resultado.
-      if (deps.writer) {
-        await deps.writer
+      const writer = pr.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
+      if (writer) {
+        await writer
           .setCommitStatus(pr.owner, pr.repo, pr.headSha, {
             ...PENDING_STATUS,
             targetUrl: null,
@@ -244,9 +263,12 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
         deps.log.error({ err, assessment: assessment.id }, 'PR assessment run failed');
       });
     } catch (err) {
+      failed = true;
       deps.log.error({ err, repo: row.uri, pr: pr.number }, 'could not start PR assessment');
     }
   }
+  if (failed && pr.provider === 'gitlab')
+    throw new Error('one or more GitLab assessments could not start');
   return created;
 }
 
@@ -302,7 +324,97 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
           ...(app.config.githubApiBase ? { apiBase: app.config.githubApiBase } : {}),
         })
       : null;
+    const gitlabWriter = app.config.gitlabWriteToken
+      ? new GitLabWriter({
+          token: app.config.gitlabWriteToken,
+          ...(app.config.gitlabApiBase ? { apiBase: app.config.gitlabApiBase } : {}),
+        })
+      : null;
     const publicUrl = app.config.publicUrl ?? null;
+    const inboxRuns = new Map<string, Promise<void>>();
+    const inboxTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const inboxAttempts = new Map<string, number>();
+    let closingInbox = false;
+    const runInbox = (id: string): Promise<void> => {
+      const existing = inboxRuns.get(id);
+      if (existing) return existing;
+      const run = (async () => {
+        const [item] = await app.db
+          .select()
+          .from(schema.gitlabWebhookInbox)
+          .where(eq(schema.gitlabWebhookInbox.id, id));
+        if (!item || item.completedAt !== null) return;
+        try {
+          const mr = await gitlabReaderFor(app.config).fetchPr(item.url);
+          if (
+            mr.headSha.toLowerCase() === item.headSha.toLowerCase() &&
+            mr.state === 'opened' &&
+            !mr.draft
+          ) {
+            await handlePullRequest(
+              {
+                db: app.db,
+                worker: app.assessmentWorker,
+                analyzerVersion: app.lain.analyzerVersion,
+                writer,
+                gitlabWriter,
+                gitlabHost: app.config.gitlabHost,
+                publicUrl,
+                log: app.log,
+              },
+              {
+                provider: 'gitlab',
+                action: 'opened',
+                owner: mr.ref.owner,
+                repo: mr.ref.repo,
+                number: mr.ref.number,
+                htmlUrl: mr.url,
+                baseRef: mr.baseRef,
+                headRef: mr.headRef,
+                baseSha: mr.baseSha,
+                headSha: mr.headSha,
+                isFork: false,
+                isDraft: false,
+                baseChanged: false,
+              },
+            );
+          }
+          await app.db
+            .update(schema.gitlabWebhookInbox)
+            .set({ completedAt: Date.now() })
+            .where(eq(schema.gitlabWebhookInbox.id, id));
+          inboxAttempts.delete(id);
+        } catch (err) {
+          app.log.warn({ err, delivery: id }, 'GitLab webhook processing failed; will retry');
+          if (!closingInbox) {
+            const attempts = inboxAttempts.get(id) ?? 0;
+            inboxAttempts.set(id, attempts + 1);
+            const delay = [2000, 10000, 60000, 300000][Math.min(attempts, 3)] ?? 300000;
+            const timer = setTimeout(() => {
+              inboxTimers.delete(id);
+              void runInbox(id);
+            }, delay);
+            inboxTimers.set(id, timer);
+          }
+        }
+      })().finally(() => {
+        inboxRuns.delete(id);
+      });
+      inboxRuns.set(id, run);
+      return run;
+    };
+    app.addHook('onReady', async () => {
+      const pending = await app.db
+        .select()
+        .from(schema.gitlabWebhookInbox)
+        .where(isNull(schema.gitlabWebhookInbox.completedAt));
+      for (const item of pending) void runInbox(item.id);
+    });
+    app.addHook('onClose', async () => {
+      closingInbox = true;
+      for (const timer of inboxTimers.values()) clearTimeout(timer);
+      await Promise.allSettled([...inboxRuns.values()]);
+    });
 
     // Al arrancar se retoma la publicación de los PR que quedaron a medias (reinicio, GitHub caído).
     app.addHook('onReady', async () => {
@@ -311,6 +423,8 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         worker: app.assessmentWorker,
         analyzerVersion: app.lain.analyzerVersion,
         writer,
+        gitlabWriter,
+        gitlabHost: app.config.gitlabHost,
         publicUrl,
         log: app.log,
       });
@@ -344,6 +458,74 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         pr,
       );
       return reply.code(202).send({ handled, action: pr.action });
+    });
+
+    scope.post('/webhooks/gitlab', async (req, reply) => {
+      const secret = app.config.gitlabWebhookSecret;
+      if (!secret) return reply.code(503).send({ error: 'webhooks are not configured' });
+      const token = req.headers['x-gitlab-token'];
+      const expected = Buffer.from(secret);
+      const received = Buffer.from(typeof token === 'string' ? token : '');
+      if (received.length !== expected.length || !timingSafeEqual(received, expected))
+        return reply.code(401).send({ error: 'invalid webhook token' });
+      const event = req.body as {
+        object_kind?: string;
+        project?: { path_with_namespace?: string };
+        object_attributes?: {
+          action?: string;
+          iid?: number;
+          source_project_id?: number;
+          target_project_id?: number;
+          draft?: boolean;
+          work_in_progress?: boolean;
+          oldrev?: string;
+          last_commit?: { id?: string };
+        };
+        changes?: { draft?: { current?: boolean }; target_branch?: unknown };
+      };
+      if (event.object_kind !== 'merge_request')
+        return reply.code(202).send({ handled: 0, ignored: event.object_kind });
+      const attrs = event.object_attributes;
+      const path = event.project?.path_with_namespace;
+      if (
+        !attrs ||
+        !Number.isSafeInteger(attrs.iid) ||
+        (attrs.iid ?? 0) <= 0 ||
+        typeof path !== 'string' ||
+        !path ||
+        typeof attrs.last_commit?.id !== 'string' ||
+        !/^[a-f\d]{40,64}$/i.test(attrs.last_commit.id) ||
+        !Number.isSafeInteger(attrs.source_project_id) ||
+        !Number.isSafeInteger(attrs.target_project_id) ||
+        (attrs.source_project_id ?? 0) <= 0 ||
+        (attrs.target_project_id ?? 0) <= 0
+      )
+        return reply.code(400).send({ error: 'merge request payload is missing fields' });
+      const updated =
+        attrs.action === 'update' &&
+        (!!attrs.oldrev ||
+          event.changes?.draft?.current === false ||
+          event.changes?.target_branch !== undefined);
+      if (!['open', 'reopen'].includes(attrs.action ?? '') && !updated)
+        return reply.code(202).send({ handled: 0, ignored: attrs.action });
+      if (
+        attrs.draft ||
+        attrs.work_in_progress ||
+        attrs.source_project_id !== attrs.target_project_id
+      )
+        return reply.code(202).send({ handled: 0, ignored: 'draft or fork' });
+      const url = `https://${app.config.gitlabHost ?? 'gitlab.com'}/${path}/-/merge_requests/${attrs.iid}`;
+      const reader = gitlabReaderFor(app.config);
+      if (!reader.canHandle(url))
+        return reply.code(400).send({ error: 'invalid GitLab project path' });
+      const id = createHash('sha256').update(JSON.stringify(event)).digest('hex');
+      const inserted = await app.db
+        .insert(schema.gitlabWebhookInbox)
+        .values({ id, url, headSha: attrs.last_commit.id, createdAt: Date.now() })
+        .onConflictDoNothing()
+        .returning({ id: schema.gitlabWebhookInbox.id });
+      if (inserted.length) void runInbox(id);
+      return reply.code(202).send({ queued: inserted.length > 0, action: attrs.action });
     });
   });
 };

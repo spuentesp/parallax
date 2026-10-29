@@ -29,7 +29,7 @@ export function OpenPrPicker({ orgId }: { orgId: string }): React.ReactElement {
     <section className="rounded-xl p-4 mb-6 bg-surface border border-border">
       <h2 className="font-semibold mb-1">Open pull requests</h2>
       <p className="text-xs text-muted mb-4">
-        PRs abiertos de los repos de GitHub del workspace. Elige uno para evaluarlo.
+        Open pull and merge requests from this workspace. Select one to evaluate it.
       </p>
 
       {isLoading && <p className="text-sm text-muted">Loading pull requests…</p>}
@@ -46,17 +46,21 @@ export function OpenPrPicker({ orgId }: { orgId: string }): React.ReactElement {
       )}
       {data && data.truncated.length > 0 && (
         <p className="text-xs text-muted mb-3">
-          Showing the first 100 open PRs for {data.truncated.join(', ')}; older ones are not listed.
+          Some requests could not be listed for {data.truncated.join(', ')} (page limit or missing
+          commit data).
         </p>
       )}
       {data && data.skipped.length > 0 && (
         <p className="text-xs text-muted mb-3">
-          Not on GitHub, so no PRs to list: {data.skipped.map((s) => s.repo).join(', ')}.
+          Not on GitHub or GitLab, so no requests to list:{' '}
+          {data.skipped.map((s) => s.repo).join(', ')}.
         </p>
       )}
 
       {data && data.prs.length === 0 && !isLoading && (
-        <p className="text-sm text-muted">No open PRs in this workspace&apos;s GitHub repos.</p>
+        <p className="text-sm text-muted">
+          No open requests in this workspace&apos;s GitHub or GitLab repos.
+        </p>
       )}
 
       <ul className="divide-y divide-border">

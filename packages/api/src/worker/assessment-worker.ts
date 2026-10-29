@@ -9,6 +9,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { type LainCoverage, presentCoverage } from '../coverage.js';
 import * as schema from '../db/schema.js';
 import type { GitHubReader } from '../github/reader.js';
+import type { GitLabReader } from '../gitlab/reader.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { reviewCodeImpact } from '../pr-review/code-impact.js';
 
@@ -52,6 +53,7 @@ export interface ResolvedManifest {
 }
 
 export interface PrManifestRef {
+  provider?: 'github' | 'gitlab';
   owner: string;
   repo: string;
   number: number;
@@ -104,6 +106,7 @@ export interface AssessmentWorkerDeps {
   }) => Promise<ExplainOutcome>;
   /** Lector de GitHub (sólo lectura) para los archivos y diffs del PR. Sin él no hay revisión de código. */
   github?: Pick<GitHubReader, 'listFilesAtCommits'>;
+  gitlab?: Pick<GitLabReader, 'listFilesAtCommits'>;
   /** Reloj inyectable (DST): por defecto Date.now. */
   now?: () => number;
   /** Sleep inyectable (DST): por defecto setTimeout real. */
@@ -148,6 +151,7 @@ export class AssessmentWorker {
   private readonly explain: AssessmentWorkerDeps['explain'];
   private readonly now: () => number;
   private readonly github: AssessmentWorkerDeps['github'];
+  private readonly gitlab: AssessmentWorkerDeps['gitlab'];
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly lainByOrg = new Map<string, LainAdapter>();
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
@@ -158,6 +162,7 @@ export class AssessmentWorker {
     this.getLain = deps?.getLain;
     this.explain = deps?.explain;
     this.github = deps?.github;
+    this.gitlab = deps?.gitlab;
     this.now = deps?.now ?? Date.now;
     this.sleep = deps?.sleep ?? sleep;
   }
@@ -601,17 +606,19 @@ export class AssessmentWorker {
     gaps: string[],
   ): Promise<CodeImpact | null> {
     const pr = manifest.pr;
-    if (!pr || !this.github) return null;
+    if (!pr) return null;
     const current = await this.get(id);
     const lain = current ? await this.lainFor(current.orgId) : undefined;
     if (!lain) return null;
     const attempt = await this.beginStep(id, 'code_impact');
     try {
+      const reader = pr.provider === 'gitlab' ? this.gitlab : this.github;
+      if (!reader) throw new Error(`no ${pr.provider ?? 'github'} reader configured`);
       const baseSha = manifest.base.repos[pr.name];
       if (!baseSha) throw new Error(`the manifest has no base commit for ${pr.name}`);
       const headSha = manifest.head.repos[pr.name];
       if (!headSha) throw new Error(`the manifest has no head commit for ${pr.name}`);
-      const { files, truncated } = await this.github.listFilesAtCommits(
+      const { files, truncated } = await reader.listFilesAtCommits(
         { owner: pr.owner, repo: pr.repo, number: pr.number },
         baseSha,
         headSha,

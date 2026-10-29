@@ -56,6 +56,7 @@ export function buildMcpServer(deps?: Partial<AssessmentToolDeps>): McpServer {
           worker: deps.worker,
           lain: deps.lain,
           ...(deps.github ? { github: deps.github } : {}),
+          ...(deps.gitlab ? { gitlab: deps.gitlab } : {}),
         })
       : notImpl('parallax_assess_pr');
   server.tool(

@@ -3,6 +3,7 @@ import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { investigatorModel } from '../agent/model.js';
 import { githubReaderFor } from '../github/reader.js';
+import { gitlabReaderFor } from '../gitlab/reader.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { AssessmentWorker, type AssessmentWorkerDeps } from '../worker/assessment-worker.js';
 
@@ -76,6 +77,7 @@ export default fp(
       getLain,
       // Sólo lectura: los archivos y diffs del PR para la revisión de código.
       github: githubReaderFor(fastify.config),
+      gitlab: gitlabReaderFor(fastify.config),
       ...(explain ? { explain } : {}),
     });
     fastify.decorate('assessmentWorker', worker);

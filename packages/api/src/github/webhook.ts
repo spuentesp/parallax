@@ -17,6 +17,7 @@ export function verifySignature(
 }
 
 export interface PullRequestEvent {
+  readonly provider?: 'github' | 'gitlab';
   readonly action: string;
   readonly owner: string;
   readonly repo: string;

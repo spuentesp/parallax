@@ -71,7 +71,12 @@ export interface DigestInput {
   /** El workspace dueño de la evaluación (ver computeInputDigest). */
   readonly orgId?: string;
   /** PR identity changes the analysis: it supplies the files for code impact. */
-  readonly pr?: { readonly owner: string; readonly repo: string; readonly number: number };
+  readonly pr?: {
+    readonly owner: string;
+    readonly repo: string;
+    readonly number: number;
+    readonly provider?: 'github' | 'gitlab';
+  };
 }
 
 // JSON canónico: claves ordenadas recursivamente, sin dependencia del orden de
@@ -107,6 +112,7 @@ export function computeInputDigest(input: DigestInput): string {
       owner: input.pr.owner.toLowerCase(),
       repo: input.pr.repo.toLowerCase(),
       number: input.pr.number,
+      ...(input.pr.provider === 'gitlab' ? { provider: 'gitlab' } : {}),
     },
   });
   return `sha256_${createHash('sha256').update(canonical).digest('hex')}`;
