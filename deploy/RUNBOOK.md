@@ -1,16 +1,37 @@
-# Deploying & Updating the Parallax Demo (Nebius Cloud)
+# Deploying & Updating the Parallax Demo (Vultr / Nebius Cloud)
 
-Goal: A live, public, **token-protected** Parallax demo on Nebius AI Cloud showcasing two distinct NVIDIA agent architecture workspaces:
+Goal: A live, public, **token-protected** Parallax demo on Cloud Compute (Vultr or Nebius) showcasing two distinct NVIDIA agent architecture workspaces:
 - **Cluster A (`ws_cluster_a`)**: OpenShell gRPC proto surface + Python SDK client + NeMo-Fabric / NemoClaw cross-repo consumers.
 - **Cluster B (`ws_cluster_b`)**: NeMo Agent Toolkit HTTP & WebSocket runtime endpoints + Next.js API routes + UI reverse proxy.
 
-Everything runs on one Nebius VM:
+Everything runs on one VM:
 - A single Lain server running on the host in federation mode on port 9999 (compiled from `dev` tip).
 - A single Parallax instance + automatic HTTPS (Caddy) in Docker serving both workspaces in the same UI.
+- Models (Nemotron) run via **Nebius Token Factory** (`NEBIUS_TOKEN`).
 
 ---
 
-## ⚡ Quick Start: One-Command Automated Deployment & Updates
+## ⚡ Option A: Vultr Cloud Compute (Recommended)
+
+### 1. Configure Vultr API Key
+```bash
+export VULTR_API_KEY="your-vultr-api-key"
+```
+
+### 2. Provision the VM
+```bash
+./deploy/provision-vultr-vm.sh vc2-4c-8gb ewr
+```
+*(4 vCPU / 8 GB RAM / Ubuntu 24.04 in New Jersey; prints the assigned `$PUBLIC_IP`)*.
+
+### 3. Deploy Parallax & Lain
+```bash
+./deploy/deploy-to-vm.sh <PUBLIC_IP> root
+```
+
+---
+
+## ⚡ Option B: Nebius AI Cloud
 
 ### 1. Provision the Nebius VM
 ```bash
@@ -19,12 +40,11 @@ Everything runs on one Nebius VM:
 *(Outputs the assigned `PUBLIC_IP`)*.
 
 > [!NOTE]
-> If you encounter `PermissionDenied` from the Nebius compute service, ensure your billing/trial is active on https://console.nebius.com.
+> If you encounter `PermissionDenied` from the Nebius compute service, ensure billing/credits are active on https://console.nebius.com.
 
-### 2. Deploy Parallax & Lain to the VM
-Run from your local workstation:
+### 2. Deploy Parallax & Lain
 ```bash
-./deploy/deploy-to-vm.sh <PUBLIC_IP>
+./deploy/deploy-to-vm.sh <PUBLIC_IP> ubuntu
 ```
 This script handles the entire lifecycle end-to-end:
 1. Validates SSH connectivity to `ubuntu@<PUBLIC_IP>`.

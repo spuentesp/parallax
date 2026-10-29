@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# deploy-to-vm.sh — Deploy and update Parallax and Lain on a Nebius VM.
+# deploy-to-vm.sh — Deploy and update Parallax and Lain on a Cloud VM (Vultr / Nebius / AWS).
 #
 # This script is 100% IDEMPOTENT:
 # - Run it the first time to perform full VM provisioning, Lain compilation,
@@ -11,8 +11,9 @@
 #   ./deploy/deploy-to-vm.sh [HOST_OR_IP] [SSH_USER] [SSH_KEY]
 #
 # Examples:
-#   ./deploy/deploy-to-vm.sh 185.175.111.42
-#   ./deploy/deploy-to-vm.sh                   # auto-detects parallax-demo VM
+#   ./deploy/deploy-to-vm.sh 185.175.111.42 root
+#   ./deploy/deploy-to-vm.sh 185.175.111.42 ubuntu
+#   ./deploy/deploy-to-vm.sh                   # auto-detects from vultr-cli or nebius
 
 set -euo pipefail
 
@@ -20,13 +21,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 HOST="${1:-}"
-SSH_USER="${2:-ubuntu}"
+SSH_USER="${2:-}"
 SSH_KEY="${3:-}"
 
-# 1. Resolve target host / IP
+# 1. Resolve target host / IP if not provided
 if [ -z "$HOST" ]; then
-  echo "==> No host specified. Checking Nebius CLI for parallax-demo instance..."
-  if command -v nebius >/dev/null 2>&1; then
+  echo "==> No host specified. Checking cloud CLI tools for running demo instances..."
+  if command -v vultr-cli >/dev/null 2>&1; then
+    HOST="$(vultr-cli instance list -o json 2>/dev/null | grep -B 5 -A 10 'parallax-demo' | grep -o '"main_ip": "[0-9.]*"' | head -n1 | cut -d'"' -f4 || echo "")"
+  fi
+  if [ -z "$HOST" ] && command -v nebius >/dev/null 2>&1; then
     HOST="$(nebius compute instance list --format json 2>/dev/null | grep -A 10 'parallax-demo' | grep -o '"address": "[0-9.]*"' | head -n1 | cut -d'"' -f4 || echo "")"
   fi
 fi
@@ -37,8 +41,8 @@ if [ -z "$HOST" ]; then
   exit 1
 fi
 
-# 2. Configure SSH options
-SSH_OPTS=(-o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=15" -o "ServerAliveInterval=30")
+# 2. Configure SSH options & keys
+SSH_OPTS=(-o "StrictHostKeyChecking=accept-new" -o "ConnectTimeout=10" -o "ServerAliveInterval=30")
 if [ -n "$SSH_KEY" ]; then
   SSH_OPTS+=(-i "$SSH_KEY")
 elif [ -f "$HOME/.ssh/id_ed25519" ]; then
@@ -47,14 +51,26 @@ elif [ -f "$HOME/.ssh/id_rsa" ]; then
   SSH_OPTS+=(-i "$HOME/.ssh/id_rsa")
 fi
 
+# 3. Detect SSH user (root on Vultr vs ubuntu on Nebius/AWS)
+if [ -z "$SSH_USER" ]; then
+  echo "==> Detecting SSH user on $HOST..."
+  if ssh "${SSH_OPTS[@]}" "root@$HOST" "echo SSH_TEST" >/dev/null 2>&1; then
+    SSH_USER="root"
+  elif ssh "${SSH_OPTS[@]}" "ubuntu@$HOST" "echo SSH_TEST" >/dev/null 2>&1; then
+    SSH_USER="ubuntu"
+  else
+    SSH_USER="root"
+  fi
+fi
+
 echo "=========================================="
-echo "  Parallax Nebius Cloud Deployment"
+echo "  Parallax Cloud VM Deployment"
 echo "  Target Host: $HOST"
 echo "  SSH User:    $SSH_USER"
 echo "  Domain:      ${HOST}.nip.io"
 echo "=========================================="
 
-# 3. Wait for SSH to become available
+# 4. Wait for SSH to become available
 echo "==> Testing SSH connection to $SSH_USER@$HOST..."
 for i in $(seq 1 30); do
   if ssh "${SSH_OPTS[@]}" "$SSH_USER@$HOST" "echo SSH_OK" >/dev/null 2>&1; then
@@ -69,8 +85,11 @@ for i in $(seq 1 30); do
   fi
 done
 
-# 4. Sync repository files to remote VM via rsync
-echo "==> Syncing Parallax workspace to $SSH_USER@$HOST:~/parallax..."
+# 5. Determine remote home directory
+REMOTE_HOME="$(ssh "${SSH_OPTS[@]}" "$SSH_USER@$HOST" 'echo $HOME')"
+
+# 6. Sync repository files to remote VM via rsync
+echo "==> Syncing Parallax workspace to $SSH_USER@$HOST:$REMOTE_HOME/parallax..."
 rsync -avz --delete \
   -e "ssh ${SSH_OPTS[*]}" \
   --exclude 'node_modules' \
@@ -81,52 +100,58 @@ rsync -avz --delete \
   --exclude '*.sqlite' \
   --exclude '*.sqlite-journal' \
   --exclude 'deploy/.env' \
-  "$REPO_ROOT/" "$SSH_USER@$HOST:~/parallax/"
+  "$REPO_ROOT/" "$SSH_USER@$HOST:$REMOTE_HOME/parallax/"
 
-# 5. Execute remote provisioning & update script on the VM
+# 7. Execute remote provisioning & update script on the VM
 echo "==> Executing setup / update on remote VM..."
 ssh "${SSH_OPTS[@]}" "$SSH_USER@$HOST" bash -s << 'REMOTE_SCRIPT'
 set -euo pipefail
 
+RUN_USER="$(id -un)"
+RUN_HOME="$HOME"
+SUDO="$(if [ "$(id -u)" -eq 0 ]; then echo ""; else echo "sudo"; fi)"
+
 DOMAIN="$(curl -s https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}').nip.io"
-echo "==> Target domain on host: $DOMAIN"
+echo "==> Target domain on host: $DOMAIN (User: $RUN_USER, Home: $RUN_HOME)"
 
 # A. Ensure Docker and Docker Compose plugin are installed
 if ! command -v docker >/dev/null 2>&1; then
   echo "==> Installing Docker on VM..."
-  curl -fsSL https://get.docker.com | sudo sh
-  sudo usermod -aG docker "$USER"
+  curl -fsSL https://get.docker.com | $SUDO sh
+  if [ "$RUN_USER" != "root" ]; then
+    $SUDO usermod -aG docker "$RUN_USER" || true
+  fi
 fi
 
 if ! docker compose version >/dev/null 2>&1; then
   echo "==> Installing docker compose plugin..."
-  sudo apt-get update && sudo apt-get install -y --no-install-recommends docker-compose-plugin
+  $SUDO apt-get update && $SUDO apt-get install -y --no-install-recommends docker-compose-plugin
 fi
 
 # B. Build / Update Lain preview from dev tip
 echo "==> Updating Lain binary from dev tip..."
-bash ~/parallax/deploy/build-lain.sh dev ~/lain
+bash "$RUN_HOME/parallax/deploy/build-lain.sh" dev "$RUN_HOME/lain"
 
 # C. Clone / Update the 6 NVIDIA repositories
 echo "==> Updating NVIDIA stack repositories..."
-bash ~/parallax/deploy/clone-nvidia-repos.sh ~/nvidia
+bash "$RUN_HOME/parallax/deploy/clone-nvidia-repos.sh" "$RUN_HOME/nvidia"
 
 # D. Copy federation configs to ~/nvidia
-cp ~/parallax/deploy/repos.yaml ~/nvidia/repos.yaml
-cp ~/parallax/deploy/workspaces.yaml ~/nvidia/workspaces.yaml
+cp "$RUN_HOME/parallax/deploy/repos.yaml" "$RUN_HOME/nvidia/repos.yaml"
+cp "$RUN_HOME/parallax/deploy/workspaces.yaml" "$RUN_HOME/nvidia/workspaces.yaml"
 
 # E. Ensure systemd service for host Lain is installed and running
 echo "==> Configuring systemd service for Lain..."
-sudo tee /etc/systemd/system/lain.service > /dev/null << 'SERVICE'
+$SUDO tee /etc/systemd/system/lain.service > /dev/null << SERVICE
 [Unit]
 Description=Lain Federation Server for NVIDIA Workspaces
 After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nvidia
-ExecStart=/home/ubuntu/lain/lain server --config /home/ubuntu/nvidia/repos.yaml --transport http --port 9999
+User=${RUN_USER}
+WorkingDirectory=${RUN_HOME}/nvidia
+ExecStart=${RUN_HOME}/lain/lain server --config ${RUN_HOME}/nvidia/repos.yaml --transport http --port 9999
 Restart=always
 RestartSec=3
 LimitNOFILE=65536
@@ -136,9 +161,9 @@ Environment=RUST_LOG=info
 WantedBy=multi-user.target
 SERVICE
 
-sudo systemctl daemon-reload
-sudo systemctl enable lain
-sudo systemctl restart lain
+$SUDO systemctl daemon-reload
+$SUDO systemctl enable lain
+$SUDO systemctl restart lain
 
 echo "==> Waiting for Lain federation server on port 9999..."
 for i in $(seq 1 15); do
@@ -150,15 +175,9 @@ for i in $(seq 1 15); do
 done
 
 # F. Manage deploy/.env (preserving tokens across updates)
-ENV_FILE=~/parallax/deploy/.env
+ENV_FILE="$RUN_HOME/parallax/deploy/.env"
 if [ ! -f "$ENV_FILE" ]; then
   echo "==> First time setup: generating access tokens and writing $ENV_FILE..."
-  
-  # Install node if missing on host (for token generation)
-  if ! command -v node >/dev/null 2>&1; then
-    echo "==> Installing Node.js for CLI tools..."
-    sudo apt-get update && sudo apt-get install -y --no-install-recommends nodejs
-  fi
   
   LOOK_TOKEN="px_look_$(head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)"
   JUDGE_TOKEN="px_judge_$(head -c 16 /dev/urandom | base64 | tr -dc 'a-zA-Z0-9' | head -c 24)"
@@ -184,12 +203,12 @@ fi
 
 # G. Rebuild and launch Parallax container stack
 echo "==> Launching Docker Compose stack (in-place update)..."
-cd ~/parallax/deploy
-sudo docker compose up -d --build --remove-orphans
+cd "$RUN_HOME/parallax/deploy"
+$SUDO docker compose up -d --build --remove-orphans
 
 echo "==> Waiting for Parallax container to be healthy..."
 for i in $(seq 1 30); do
-  STATUS="$(sudo docker compose ps --format json parallax 2>/dev/null | grep -o '"Health": "[^"]*"' | head -n1 | cut -d'"' -f4 || echo "starting")"
+  STATUS="$($SUDO docker compose ps --format json parallax 2>/dev/null | grep -o '"Health": "[^"]*"' | head -n1 | cut -d'"' -f4 || echo "starting")"
   if [ "$STATUS" = "healthy" ]; then
     echo "    Parallax container is healthy!"
     break
@@ -200,7 +219,7 @@ done
 
 # H. Seed workspaces into Parallax
 echo "==> Seeding workspaces ws_cluster_a and ws_cluster_b..."
-sudo docker compose exec -T parallax pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts || true
+$SUDO docker compose exec -T parallax pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts || true
 
 # I. Run deployment verification
 echo "==> Running deployment verification tests..."
@@ -208,24 +227,24 @@ LOOK_TOKEN="$(grep -E '^LOOK_TOKEN=' "$ENV_FILE" | cut -d'=' -f2- || true)"
 JUDGE_TOKEN="$(grep -E '^JUDGE_TOKEN=' "$ENV_FILE" | cut -d'=' -f2- || true)"
 
 if [ -n "$LOOK_TOKEN" ] && [ -n "$JUDGE_TOKEN" ]; then
-  bash ~/parallax/deploy/verify-deployment.sh "https://$DOMAIN" "$LOOK_TOKEN" "$JUDGE_TOKEN" || {
-    echo "Warning: HTTPS verification via public domain may take a few seconds while Caddy obtains TLS certificate."
+  bash "$RUN_HOME/parallax/deploy/verify-deployment.sh" "https://$DOMAIN" "$LOOK_TOKEN" "$JUDGE_TOKEN" || {
+    echo "Warning: HTTPS verification via public domain may take a few moments while Caddy completes the TLS certificate challenge."
     echo "Checking direct container health: OK."
   }
 fi
 
 REMOTE_SCRIPT
 
-# 6. Extract URLs and tokens to print nice summary locally
+# 8. Extract URLs and tokens to print nice summary locally
 echo "==> Retrieving demo URLs from remote host..."
-REMOTE_ENV="$(ssh "${SSH_OPTS[@]}" "$SSH_USER@$HOST" "cat ~/parallax/deploy/.env")"
+REMOTE_ENV="$(ssh "${SSH_OPTS[@]}" "$SSH_USER@$HOST" "cat $REMOTE_HOME/parallax/deploy/.env")"
 LOOK_TOKEN="$(echo "$REMOTE_ENV" | grep -E '^LOOK_TOKEN=' | cut -d'=' -f2- || echo "")"
 JUDGE_TOKEN="$(echo "$REMOTE_ENV" | grep -E '^JUDGE_TOKEN=' | cut -d'=' -f2- || echo "")"
 DOMAIN="$(echo "$REMOTE_ENV" | grep -E '^DOMAIN=' | cut -d'=' -f2- || echo "${HOST}.nip.io")"
 
 echo ""
 echo "================================================================================"
-echo "  🚀 PARALLAX DEMO IS LIVE ON NEBIUS CLOUD"
+echo "  🚀 PARALLAX DEMO IS LIVE"
 echo "================================================================================"
 echo "  Domain: https://${DOMAIN}"
 echo ""
