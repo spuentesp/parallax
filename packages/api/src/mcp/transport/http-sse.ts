@@ -51,12 +51,17 @@ export function buildMcpServer(deps?: Partial<AssessmentToolDeps>): McpServer {
 
   const assessHandler =
     deps?.db && deps.worker && deps.lain
-      ? makeAssessPrHandler({ db: deps.db, worker: deps.worker, lain: deps.lain })
+      ? makeAssessPrHandler({
+          db: deps.db,
+          worker: deps.worker,
+          lain: deps.lain,
+          ...(deps.github ? { github: deps.github } : {}),
+        })
       : notImpl('parallax_assess_pr');
   server.tool(
     'parallax_assess_pr',
     'Trigger a PR impact assessment. Same service as POST /api/assessments: ' +
-      'same input digest, same persisted report. Send repo + resolved base/head SHAs.',
+      'same input digest, same persisted report. Send a PR URL or repo + resolved base/head SHAs.',
     assessPrShape,
     assessHandler,
   );
