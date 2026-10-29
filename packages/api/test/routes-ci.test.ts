@@ -143,13 +143,13 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
   const statusPosts = () => recorded.filter((r) => r.url.includes('/statuses/'));
 
   describe('configuración por workspace', () => {
-    it('defaults to off, with no branch filter and no comments', async () => {
+    it('defaults to reviews off, with comments enabled when reviews are turned on', async () => {
       const r = await app.inject({
         method: 'GET',
         url: `/api/workspaces/${wsId}/ci`,
         headers: AUTH,
       });
-      expect(r.json()).toEqual({ mode: 'off', baseBranch: null, reportComments: false });
+      expect(r.json()).toEqual({ mode: 'off', baseBranch: null, reportComments: true });
     });
 
     it('stores and returns what was set', async () => {
@@ -204,39 +204,22 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
       expect(statusPosts()).toHaveLength(0);
     });
 
-    it('evaluates an opened PR and posts the status to the head SHA', async () => {
+    it('evaluates an opened PR without publishing a commit status', async () => {
       await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: false });
       const r = await deliver(prEvent());
       expect(r.json().handled).toBe(1);
-
-      // Primero "analizando" (el PR no queda mudo), luego el resultado.
-      await until(() => statusPosts().length === 2);
-      expect(statusPosts()[0]?.body).toMatchObject({
-        state: 'pending',
-        context: 'parallax/assessment',
-      });
-      const post = statusPosts()[1];
-      expect(post?.url).toBe(`/repos/acme/shop/statuses/${HEAD}`);
-      expect(post?.auth).toBe('Bearer write-token');
-      expect(post?.body).toMatchObject({ context: 'parallax/assessment' });
-      const sent = post?.body as { target_url?: string } | undefined;
-      expect(sent?.target_url).toContain(`/app/orgs/${wsId}/assessments/`);
+      await app.assessmentWorker.drain();
+      expect(statusPosts()).toHaveLength(0);
+      expect(recorded.filter((entry) => entry.url.includes('/comments'))).toHaveLength(0);
     });
 
-    it('does not post a comment unless the workspace asked for one', async () => {
-      await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: false });
-      await deliver(prEvent());
-      await until(() => statusPosts().length === 2);
-      expect(recorded.filter((r) => r.url.includes('/comments'))).toHaveLength(0);
-    });
-
-    it('posts a comment too when the workspace enabled comments', async () => {
+    it('posts an advisory comment when the workspace enabled comments', async () => {
       await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: true });
       await deliver(prEvent());
       await until(() => recorded.some((r) => r.url === '/repos/acme/shop/issues/4/comments'));
       const comment = recorded.find((r) => r.url === '/repos/acme/shop/issues/4/comments');
       const sent = comment?.body as { body?: string } | undefined;
-      expect(sent?.body).toContain('### Parallax assessment');
+      expect(sent?.body).toContain('### Parallax advisory');
     });
 
     it('ignores PRs from a fork', async () => {
@@ -258,13 +241,14 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
     });
 
     it('does not evaluate or post twice when GitHub redelivers the same event', async () => {
-      await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: false });
+      await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: true });
       await deliver(prEvent());
-      await until(() => statusPosts().length === 2);
+      await until(() => recorded.filter((r) => r.url.includes('/comments')).length === 1);
       const again = await deliver(prEvent());
       expect(again.json().handled).toBe(0);
       await new Promise((res) => setTimeout(res, 150));
-      expect(statusPosts()).toHaveLength(2);
+      expect(recorded.filter((r) => r.url.includes('/comments'))).toHaveLength(1);
+      expect(statusPosts()).toHaveLength(0);
     });
   });
 });

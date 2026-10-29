@@ -136,7 +136,7 @@ describe('code impact in the PR comment', () => {
 
   it('commentBodyFor and the local preview carry the same section', () => {
     const body = commentBodyFor(report(impact()), null, 'shop');
-    expect(body).toContain('### Parallax assessment — shop');
+    expect(body).toContain('### Parallax advisory — shop');
     expect(body).toContain('### Code impact');
     const preview = buildCommentPreview({
       id: 'a_1',

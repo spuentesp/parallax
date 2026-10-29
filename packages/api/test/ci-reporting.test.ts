@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.js';
-import { GitHubWriter, PENDING_STATUS } from '../src/github/status.js';
+import { GitHubWriter } from '../src/github/status.js';
 import { handlePullRequest, resumePrReports } from '../src/routes/ci.js';
 import { buildApp } from '../src/server.js';
 import { createAssessment } from '../src/services/assessments.js';
@@ -341,7 +341,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       method: 'PUT',
       url: `/api/workspaces/${wsId}/ci`,
       headers: AUTH,
-      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
     });
   });
 
@@ -362,11 +362,8 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
   });
 
   const statusPosts = () => recorded.filter((r) => r.url.includes('/statuses/'));
-  /** Los resultados: sin el estado "analizando" con que arranca cada evaluación. */
   const finalPosts = () =>
-    statusPosts().filter(
-      (r) => (r.body as { description?: string }).description !== PENDING_STATUS.description,
-    );
+    recorded.filter((r) => r.url.includes('/issues/') && r.url.endsWith('/comments'));
 
   it('evaluates an acme/shop PR whose owner differs only in case', async () => {
     const { log } = recordingLog();
@@ -425,14 +422,8 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(row).toBeDefined();
     await app.assessmentWorker.transition(row?.id ?? '', 'CANCELLED');
     await until(() => finalPosts().length === 1);
-    const sent = finalPosts()[0]?.body as {
-      state: string;
-      description: string;
-      target_url: string;
-    };
-    expect(sent.target_url).toBe(
-      `https://parallax.example/app/orgs/${wsId}/assessments/${row?.id}`,
-    );
+    const sent = finalPosts()[0]?.body as { body: string };
+    expect(sent.body).toContain(`https://parallax.example/app/orgs/${wsId}/assessments/${row?.id}`);
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
@@ -475,6 +466,24 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
     });
 
+  it('keeps the report in Parallax and makes no GitHub write when comments are disabled', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: AUTH,
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+    });
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, null, worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'CANCELLED');
+    await untilAsync(
+      async () => (await app.db.select().from(schema.prReport))[0]?.reportedAt != null,
+    );
+    expect(recorded.filter((entry) => entry.method === 'POST')).toHaveLength(0);
+  });
+
   it('creates a PR-specific assessment and repairs a missing report on redelivery', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
@@ -514,39 +523,38 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(finalPosts()).toHaveLength(0);
     await app.assessmentWorker.transition(id, 'PARTIAL');
     await until(() => finalPosts().length === 1);
-    expect(finalPosts()[0]?.body).toMatchObject({ state: 'error' });
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Coverage: incomplete',
+    );
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
-  it('reports a failed assessment as error with the exact text', async () => {
+  it('reports a failed assessment in the advisory comment', async () => {
     const { log, lines } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
     const id = await onlyAssessmentId();
     await app.assessmentWorker.transition(id, 'FAILED', { error: 'engine down' });
     await until(() => finalPosts().length === 1);
-    expect(finalPosts()[0]?.body).toMatchObject({
-      state: 'error',
-      description: 'Parallax assessment failed; no result.',
-      context: 'parallax/assessment',
-    });
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Assessment: FAILED',
+    );
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
-  it('reports a cancelled assessment as inconclusive (error), never as success', async () => {
+  it('reports a cancelled assessment in the advisory comment', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
     const id = await onlyAssessmentId();
     await app.assessmentWorker.transition(id, 'CANCELLED');
     await until(() => finalPosts().length === 1);
-    expect(finalPosts()[0]?.body).toMatchObject({
-      state: 'error',
-      description: 'No result conclusive: coverage is incomplete',
-    });
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Assessment: CANCELLED',
+    );
   });
 
-  it('reports a ready assessment that has no coverage record as inconclusive (error)', async () => {
+  it('reports missing coverage in the advisory comment', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
@@ -556,7 +564,9 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     await app.assessmentWorker.transition(id, 'EXPLAINING');
     await app.assessmentWorker.transition(id, 'READY');
     await until(() => finalPosts().length === 1);
-    expect(finalPosts()[0]?.body).toMatchObject({ state: 'error' });
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Coverage: incomplete',
+    );
   });
 
   it('logs a failed run with the assessment id and the error', async () => {
@@ -603,7 +613,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(lines.find((l) => l.level === 'warn')?.obj).toEqual({ assessment: id });
   });
 
-  it('names the assessment in the error when GitHub rejects the status', async () => {
+  it('names the assessment in the error when GitHub rejects the comment', async () => {
     ghStatus = 403;
     const { log, lines } = recordingLog();
     const worker = parkedWorker(async () => undefined);
@@ -616,17 +626,15 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(lines.find((l) => l.level === 'error')?.obj).toMatchObject({ assessment: id });
   });
 
-  it('shows an "analyzing" status as soon as the assessment starts, before any result', async () => {
+  it('does not publish a commit status while analysis is running or after completion', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
-    await until(() => statusPosts().length === 1);
-    expect(statusPosts()[0]?.body).toMatchObject({
-      state: 'pending',
-      description: PENDING_STATUS.description,
-      context: 'parallax/assessment',
-    });
-    expect(finalPosts()).toHaveLength(0);
+    expect(statusPosts()).toHaveLength(0);
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'CANCELLED');
+    await until(() => finalPosts().length === 1);
+    expect(statusPosts()).toHaveLength(0);
   });
 
   it('retries a transient GitHub failure and marks the report as published', async () => {
@@ -706,7 +714,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     ).toBe(1);
   });
 
-  it('two workspaces sharing a repo each get their own evaluation and their own status context', async () => {
+  it('two workspaces sharing a repo each get their own evaluation and their own advisory comments', async () => {
     const second = await app.inject({
       method: 'POST',
       url: '/api/workspaces',
@@ -724,16 +732,21 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       method: 'PUT',
       url: `/api/workspaces/${ws2}/ci`,
       headers: AUTH,
-      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
     });
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     expect(await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor())).toBe(2);
-    await until(() => statusPosts().length === 2);
-    const contexts = statusPosts()
-      .map((p) => (p.body as { context: string }).context)
-      .sort();
-    expect(contexts).toEqual(['parallax/assessment/shop', 'parallax/assessment/storefront-team']);
+    const assessments = await app.db.select().from(schema.assessment);
+    for (const assessment of assessments)
+      await app.assessmentWorker.transition(assessment.id, 'CANCELLED');
+    await until(() => finalPosts().length === 2);
+    const comments = finalPosts().map((post) => (post.body as { body: string }).body);
+    expect(comments.some((body) => body.includes('Parallax advisory — shop'))).toBe(true);
+    expect(comments.some((body) => body.includes('Parallax advisory — storefront-team'))).toBe(
+      true,
+    );
+    expect(statusPosts()).toHaveLength(0);
     const orgs = (await app.db.select().from(schema.assessment)).map((a) => a.orgId).sort();
     expect(orgs).toEqual([wsId, ws2].sort());
   });

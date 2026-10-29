@@ -109,7 +109,7 @@ describe('GitLab integration', () => {
         method: 'PUT',
         url: `/api/workspaces/${orgId}/ci`,
         headers,
-        payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+        payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
       });
       const event = {
         object_kind: 'merge_request',
@@ -198,12 +198,13 @@ describe('GitLab integration', () => {
       app = await buildApp(config);
       await app.ready();
       const deadline = Date.now() + 10000;
-      while (writes.length < 2 && Date.now() < deadline)
+      while (writes.length < 1 && Date.now() < deadline)
         await new Promise((resolve) => setTimeout(resolve, 20));
       await app.assessmentWorker.drain();
-      expect(writes.map((w) => w.body.state)).toEqual(['pending', 'failed']);
+      expect(writes).toHaveLength(1);
+      expect(writes[0]?.body.body).toContain('Parallax advisory');
       expect(
-        writes.every((w) => w.url.includes(`/projects/group%2Fsub%2Fshop/statuses/${head}`)),
+        writes.every((w) => w.url.includes(`/projects/group%2Fsub%2Fshop/merge_requests/4/notes`)),
       ).toBe(true);
       expect(
         requests.filter((r) => r.method === 'GET').every((r) => r.token === 'read-token'),

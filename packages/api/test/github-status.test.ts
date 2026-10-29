@@ -447,7 +447,11 @@ describe('commentBodyFor exact output', () => {
     const body = commentBodyFor({ status: 'PARTIAL', findings: [], coverage: null }, null);
     expect(body).toBe(
       [
-        '### Parallax assessment',
+        '### Parallax advisory',
+        '',
+        'Advisory only; this review does not gate merging.',
+        '',
+        'Assessment: PARTIAL',
         '',
         '- Verified: 0',
         '- Needs investigation: 0',

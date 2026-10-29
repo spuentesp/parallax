@@ -88,7 +88,7 @@ export function buildCommentPreview(
   );
   lines.push('');
   lines.push(
-    '> This is a **preview generated locally**; this request posts nothing to GitHub. Parallax publishes to GitHub only through the CI reporting a workspace turns on (a commit status, and a comment if enabled).',
+    '> This is a **preview generated locally**; this request posts nothing to GitHub or GitLab. Automatic reviews can post an advisory comment when the workspace enables comments.',
   );
   lines.push('');
 
