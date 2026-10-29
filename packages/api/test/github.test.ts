@@ -46,7 +46,7 @@ describe('GitHubReader (sólo lectura)', () => {
     const url = String(input);
     // Dry run: sólo se admite GET. Cualquier escritura falla la prueba.
     expect(init?.method ?? 'GET').toBe('GET');
-    const body = url.endsWith('/files?per_page=100') ? filesJson : prJson;
+    const body = url.includes('/files?') ? filesJson : prJson;
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -62,6 +62,81 @@ describe('GitHubReader (sólo lectura)', () => {
     expect(pr.additions).toBe(13);
     expect(pr.deletions).toBe(1);
     expect(pr.files.map((f) => f.path)).toEqual(['src/a.py', 'src/b.py']);
+  });
+
+  it('reads code files from the requested commit pair even if the PR has moved', async () => {
+    const urls: string[] = [];
+    const reader = new GitHubReader({
+      fetchImpl: (async (input: Parameters<typeof fetch>[0]) => {
+        urls.push(String(input));
+        return new Response(
+          JSON.stringify({ files: [{ ...filesJson[0], patch: '@@ -1 +1 @@\n-a\n+b' }] }),
+        );
+      }) as typeof fetch,
+    });
+    const result = await reader.listFilesAtCommits(
+      { owner: 'saleor', repo: 'saleor', number: 19911 },
+      prJson.base.sha,
+      prJson.head.sha,
+    );
+    expect(urls).toEqual([
+      `https://api.github.com/repos/saleor/saleor/compare/${prJson.base.sha}...${prJson.head.sha}?per_page=100&page=1`,
+    ]);
+    expect(result.files[0]?.patch).toContain('-a');
+    expect(result.truncated).toBe(false);
+  });
+
+  it('reads every page of files, keeps each diff and renamed path, and uses the total GitHub reports', async () => {
+    const mk = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        filename: `src/f${String(i)}.py`,
+        status: i === 0 ? 'renamed' : 'modified',
+        additions: 1,
+        deletions: 0,
+        ...(i === 0 ? { previous_filename: 'src/old0.py' } : {}),
+        patch: `@@ -1,1 +1,2 @@ def f${String(i)}():\n x\n+y`,
+      }));
+    const pages: Record<string, unknown[]> = { '1': mk(100), '2': mk(40) };
+    const reader = new GitHubReader({
+      fetchImpl: (async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(String(input));
+        const body = url.pathname.endsWith('/files')
+          ? (pages[url.searchParams.get('page') ?? '1'] ?? [])
+          : { ...prJson, changed_files: 140 };
+        return new Response(JSON.stringify(body), { status: 200 });
+      }) as typeof fetch,
+    });
+    const pr = await reader.fetchPr('https://github.com/saleor/saleor/pull/19911');
+    expect(pr.files).toHaveLength(140);
+    expect(pr.changedFiles).toBe(140);
+    expect(pr.filesTruncated).toBe(false);
+    expect(pr.files[0]).toMatchObject({ previousPath: 'src/old0.py' });
+    expect(pr.files[1]?.patch).toContain('@@ -1,1 +1,2 @@');
+  });
+
+  it('declares a PR with more files than it read instead of presenting the page as the whole', async () => {
+    const full = Array.from({ length: 100 }, (_, i) => ({
+      filename: `src/f${String(i)}.py`,
+      status: 'modified',
+      additions: 1,
+      deletions: 0,
+    }));
+    let filePages = 0;
+    const reader = new GitHubReader({
+      fetchImpl: (async (input: Parameters<typeof fetch>[0]) => {
+        const url = new URL(String(input));
+        if (!url.pathname.endsWith('/files')) {
+          return new Response(JSON.stringify({ ...prJson, changed_files: 450 }), { status: 200 });
+        }
+        filePages++;
+        return new Response(JSON.stringify(full), { status: 200 });
+      }) as typeof fetch,
+    });
+    const pr = await reader.fetchPr('https://github.com/saleor/saleor/pull/19911');
+    expect(filePages).toBe(3); // el tope de páginas
+    expect(pr.files).toHaveLength(300);
+    expect(pr.changedFiles).toBe(450);
+    expect(pr.filesTruncated).toBe(true);
   });
 
   it('surfaces a missing PR as not_found', async () => {

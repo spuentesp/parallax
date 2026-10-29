@@ -70,6 +70,8 @@ export interface DigestInput {
   readonly policyVersion?: string;
   /** El workspace dueño de la evaluación (ver computeInputDigest). */
   readonly orgId?: string;
+  /** PR identity changes the analysis: it supplies the files for code impact. */
+  readonly pr?: { readonly owner: string; readonly repo: string; readonly number: number };
 }
 
 // JSON canónico: claves ordenadas recursivamente, sin dependencia del orden de
@@ -101,6 +103,11 @@ export function computeInputDigest(input: DigestInput): string {
     // son evaluaciones distintas (su LAIN, su informe, su estado en GitHub). Sin esto, la segunda
     // recibía la evaluación de la primera y nunca se publicaba la suya.
     orgId: input.orgId,
+    pr: input.pr && {
+      owner: input.pr.owner.toLowerCase(),
+      repo: input.pr.repo.toLowerCase(),
+      number: input.pr.number,
+    },
   });
   return `sha256_${createHash('sha256').update(canonical).digest('hex')}`;
 }

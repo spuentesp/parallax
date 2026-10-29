@@ -2,6 +2,7 @@ import type { LainView } from '@parallax/shared/lain';
 import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { investigatorModel } from '../agent/model.js';
+import { githubReaderFor } from '../github/reader.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { AssessmentWorker, type AssessmentWorkerDeps } from '../worker/assessment-worker.js';
 
@@ -73,6 +74,8 @@ export default fp(
 
     const worker = new AssessmentWorker(fastify.db, {
       getLain,
+      // Sólo lectura: los archivos y diffs del PR para la revisión de código.
+      github: githubReaderFor(fastify.config),
       ...(explain ? { explain } : {}),
     });
     fastify.decorate('assessmentWorker', worker);

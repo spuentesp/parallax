@@ -30,6 +30,8 @@ export interface PrSummary {
   readonly additions: number;
   readonly deletions: number;
   readonly files: PrFile[];
+  /** GitHub dice que el PR toca más archivos de los que se leyeron (tope de páginas). */
+  readonly filesTruncated: boolean;
 }
 
 export interface PrFile {
@@ -37,6 +39,10 @@ export interface PrFile {
   readonly status: string;
   readonly additions: number;
   readonly deletions: number;
+  /** Diff unificado del archivo; GitHub lo omite en archivos binarios o muy grandes. */
+  readonly patch?: string;
+  /** Ruta anterior si el archivo se renombró: es la que conoce un índice del código base. */
+  readonly previousPath?: string;
 }
 
 export class PrUrlError extends Error {
@@ -47,6 +53,8 @@ export class PrUrlError extends Error {
     this.code = code;
   }
 }
+
+const MAX_FILE_PAGES = 3;
 
 const PR_URL = /^https?:\/\/(?:www\.)?github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[/?#].*)?$/;
 
@@ -103,9 +111,11 @@ export interface GitHubReadConfig {
 
 interface GhFile {
   filename?: string;
+  previous_filename?: string;
   status?: string;
   additions?: number;
   deletions?: number;
+  patch?: string;
 }
 
 interface GhPr {
@@ -116,9 +126,21 @@ interface GhPr {
   draft?: boolean;
   updated_at?: string;
   merged_at?: string | null;
+  changed_files?: number;
   user?: { login?: string };
   base?: { ref?: string; sha?: string };
   head?: { ref?: string; sha?: string };
+}
+
+function toPrFile(f: GhFile): PrFile {
+  return {
+    path: f.filename ?? '',
+    status: f.status ?? 'modified',
+    additions: f.additions ?? 0,
+    deletions: f.deletions ?? 0,
+    ...(f.patch !== undefined ? { patch: f.patch } : {}),
+    ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
+  };
 }
 
 /**
@@ -168,9 +190,7 @@ export class GitHubReader {
   async fetchPr(url: string): Promise<PrSummary> {
     const ref = parsePrUrl(url);
     const pr = await this.get<GhPr>(`/repos/${ref.owner}/${ref.repo}/pulls/${ref.number}`);
-    const files = await this.get<GhFile[]>(
-      `/repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/files?per_page=100`,
-    );
+    const { files, truncated } = await this.listPrFiles(ref, pr.changed_files);
 
     const baseSha = pr.base?.sha ?? '';
     const headSha = pr.head?.sha ?? '';
@@ -192,16 +212,53 @@ export class GitHubReader {
       baseSha,
       headSha,
       mergedAt: pr.merged_at ?? null,
-      changedFiles: files.length,
-      additions: files.reduce((a, f) => a + (f.additions ?? 0), 0),
-      deletions: files.reduce((a, f) => a + (f.deletions ?? 0), 0),
-      files: files.map((f) => ({
-        path: f.filename ?? '',
-        status: f.status ?? 'modified',
-        additions: f.additions ?? 0,
-        deletions: f.deletions ?? 0,
-      })),
+      // El total de GitHub, no lo que se leyó: un PR de 400 archivos no es un PR de 100.
+      changedFiles: pr.changed_files ?? files.length,
+      additions: files.reduce((a, f) => a + f.additions, 0),
+      deletions: files.reduce((a, f) => a + f.deletions, 0),
+      files,
+      filesTruncated: truncated,
     };
+  }
+
+  /**
+   * Archivos de un PR, con su diff. Pagina hasta MAX_FILE_PAGES (antes sólo se leía la primera
+   * página de 100 y `changedFiles` mentía en los PR grandes); si hay más, lo declara.
+   */
+  async listPrFiles(
+    ref: PrRef,
+    totalHint?: number,
+  ): Promise<{ files: PrFile[]; truncated: boolean }> {
+    const files: PrFile[] = [];
+    let lastPageFull = false;
+    for (let page = 1; page <= MAX_FILE_PAGES; page++) {
+      const batch = await this.get<GhFile[]>(
+        `/repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/files?per_page=100&page=${page}`,
+      );
+      for (const f of batch) {
+        files.push(toPrFile(f));
+      }
+      lastPageFull = batch.length === 100;
+      if (!lastPageFull) break;
+    }
+    const truncated = lastPageFull || (totalHint !== undefined && totalHint > files.length);
+    return { files, truncated };
+  }
+
+  /** GitHub's compare endpoint binds the diff to the assessment's immutable commits. */
+  async listFilesAtCommits(
+    ref: PrRef,
+    base: string,
+    head: string,
+  ): Promise<{ files: PrFile[]; truncated: boolean }> {
+    if (!/^[a-f\d]{7,64}$/i.test(base) || !/^[a-f\d]{7,64}$/i.test(head)) {
+      throw new Error('code impact requires immutable commit SHAs');
+    }
+    const result = await this.get<{ files?: GhFile[] }>(
+      `/repos/${ref.owner}/${ref.repo}/compare/${base}...${head}?per_page=100&page=1`,
+    );
+    if (!Array.isArray(result.files)) throw new Error('GitHub compare returned no file list');
+    return { files: result.files.map(toPrFile), truncated: result.files.length >= 300 };
   }
 
   /**

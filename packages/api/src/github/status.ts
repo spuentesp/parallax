@@ -2,10 +2,15 @@
 // que lee la credencial de escritura (PARALLAX_GITHUB_WRITE_TOKEN). El lector de
 // PRs (reader.ts) sigue siendo sólo GET y nunca la recibe.
 
+import type { CodeImpact } from '@parallax/shared/domain';
+import { codeImpactMarkdown, codeImpactSummary } from '../pr-review/render.js';
+
 export type CommitState = 'success' | 'failure' | 'pending' | 'error';
 
 export interface ReportForStatus {
   readonly status: string;
+  /** Impacto de código del PR: informativo, no cambia el estado (lo decide el contrato). */
+  readonly codeImpact?: CodeImpact | null | undefined;
   readonly findings: ReadonlyArray<{ impact?: { class?: string | undefined } | undefined }>;
   readonly coverage?:
     | { complete?: boolean | undefined; summary?: string | undefined }
@@ -40,6 +45,13 @@ export const PENDING_STATUS: CommitStatusSpec = {
  *             presenta como éxito: INV 3).
  */
 export function statusForReport(report: ReportForStatus): CommitStatusSpec {
+  const spec = contractStatus(report);
+  // El estado lo decide el contrato; el impacto de código se añade a la descripción sin cambiarlo.
+  const code = codeImpactSummary(report.codeImpact);
+  return code ? { ...spec, description: clip(`${spec.description} ${code}`) } : spec;
+}
+
+function contractStatus(report: ReportForStatus): CommitStatusSpec {
   if (report.status === 'FAILED') {
     return { state: 'error', description: clip('Parallax assessment failed; no result.') };
   }
@@ -77,6 +89,8 @@ export function commentBodyFor(
     `Coverage: ${report.coverage?.complete === true ? 'complete' : 'incomplete'}`,
   ];
   if (report.coverage?.summary) lines.push('', report.coverage.summary);
+  const code = codeImpactMarkdown(report.codeImpact);
+  if (code.length > 0) lines.push('', ...code);
   if (reportUrl) lines.push('', `[Full report](${reportUrl})`);
   return lines.join('\n');
 }

@@ -43,6 +43,7 @@ import type {
 // Las del grafo crudo (query_graph y anexas) viven en el paquete `raw`,
 // que hay que load_package antes de usarlas.
 import type { CodeTool } from '../agent/code-tools.js';
+import type { ProductCodeTool } from './product-tools.js';
 
 export interface LainAdapter {
   readonly analyzerVersion: string;
@@ -73,5 +74,8 @@ export interface LainAdapter {
   explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse>;
   getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse>;
   /** Herramienta de código de LAIN de la lista permitida (sólo lectura), markdown plano. */
-  codeTool(tool: CodeTool, args: Record<string, unknown>): Promise<LainTextResponse>;
+  codeTool(
+    tool: CodeTool | ProductCodeTool,
+    args: Record<string, unknown>,
+  ): Promise<LainTextResponse>;
 }

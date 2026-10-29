@@ -6,6 +6,7 @@ import type { AssessmentFinding } from '@parallax/shared/domain';
 import type * as React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useAssessment } from '../api/hooks.js';
+import { CodeImpactSection } from '../components/CodeImpactSection.js';
 import { StatusBadge } from './Assessments.js';
 
 export function Assessment(): React.ReactElement {
@@ -74,6 +75,9 @@ export function Assessment(): React.ReactElement {
           </div>
         )}
       </section>
+
+      {/* El código que toca el PR y a cuánto alcanza: otra medida, junto a los contratos */}
+      {report.codeImpact ? <CodeImpactSection impact={report.codeImpact} /> : null}
 
       {/* Cobertura — INV 3: la omisión es visible y un vacío no autoriza nada */}
       <section>
