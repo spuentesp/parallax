@@ -13,6 +13,7 @@ import * as schema from '../src/db/schema.js';
 import { GitHubWriter, PENDING_STATUS } from '../src/github/status.js';
 import { handlePullRequest, resumePrReports } from '../src/routes/ci.js';
 import { buildApp } from '../src/server.js';
+import { createAssessment } from '../src/services/assessments.js';
 
 const SECRET = 'whsec-test';
 const BASE = 'a'.repeat(40);
@@ -473,6 +474,34 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       token: 'write-token',
       apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
     });
+
+  it('creates a PR-specific assessment and repairs a missing report on redelivery', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    const body = { repo: 'shop', base: BASE, head: HEAD, orgId: wsId };
+    const manual = await createAssessment({
+      db: app.db,
+      worker,
+      body,
+      analyzerVersion: app.lain.analyzerVersion,
+    });
+    const pr = await createAssessment({
+      db: app.db,
+      worker,
+      body,
+      analyzerVersion: app.lain.analyzerVersion,
+      pr: { owner: 'acme', repo: 'shop', number: 4, repoId: 'shop', name: 'shop' },
+    });
+    expect(pr.assessment.id).not.toBe(manual.assessment.id);
+    expect(await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor())).toBe(0);
+    const reports = await app.db.select().from(schema.prReport);
+    expect(reports.map((row) => row.assessmentId)).toEqual([pr.assessment.id]);
+    await app.assessmentWorker.transition(pr.assessment.id, 'CANCELLED');
+    await until(() => finalPosts().length === 1);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    await new Promise((r) => setTimeout(r, 100));
+    expect(finalPosts()).toHaveLength(1);
+  });
 
   it('stays silent through non-terminal states and reports once the assessment is terminal', async () => {
     const { log, lines } = recordingLog();

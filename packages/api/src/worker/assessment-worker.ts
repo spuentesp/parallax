@@ -46,8 +46,7 @@ export interface ResolvedManifest {
   snapshots?: { base: string; head: string };
   /**
    * El PR que originó la evaluación (si lo hubo). Con esto el worker puede leer sus archivos
-   * y diffs de GitHub, también tras un reinicio. NO entra en el digest: los commits ya
-   * determinan el diff.
+   * y diffs de GitHub, también tras un reinicio. Su identidad forma parte del digest.
    */
   pr?: PrManifestRef;
 }
@@ -70,7 +69,10 @@ export interface ResolvedAssessmentRequest {
 export interface CreateResult {
   assessment: AssessmentRecord;
   created: boolean; // false = idempotent hit (P INV 4)
+  reportCreated?: boolean;
 }
+
+export type PrReportIntent = Omit<typeof schema.prReport.$inferInsert, 'assessmentId'>;
 
 export interface AssessmentWorkerDeps {
   /**
@@ -101,7 +103,7 @@ export interface AssessmentWorkerDeps {
     };
   }) => Promise<ExplainOutcome>;
   /** Lector de GitHub (sólo lectura) para los archivos y diffs del PR. Sin él no hay revisión de código. */
-  github?: Pick<GitHubReader, 'listPrFiles'>;
+  github?: Pick<GitHubReader, 'listFilesAtCommits'>;
   /** Reloj inyectable (DST): por defecto Date.now. */
   now?: () => number;
   /** Sleep inyectable (DST): por defecto setTimeout real. */
@@ -172,7 +174,7 @@ export class AssessmentWorker {
 
   // P INV 4: mismo manifiesto resuelto → misma evaluación, nunca un segundo
   // trabajo activo. El digest no contiene nada derivado del modelo (§4).
-  async create(input: ResolvedAssessmentRequest): Promise<CreateResult> {
+  async create(input: ResolvedAssessmentRequest, report?: PrReportIntent): Promise<CreateResult> {
     // La versión del motor entra en el digest (§4), así que hay que resolver el
     // LAIN del workspace antes de calcularlo.
     const adapter = await this.lainFor(input.orgId);
@@ -185,6 +187,7 @@ export class AssessmentWorker {
       analyzerVersion: adapter?.analyzerVersion ?? 'unknown',
       policyVersion: PARALLAX_POLICY_VERSION,
       orgId: input.orgId,
+      ...(input.manifest.pr ? { pr: input.manifest.pr } : {}),
     });
     const existing = await this.db
       .select()
@@ -192,23 +195,38 @@ export class AssessmentWorker {
       .where(eq(schema.assessment.inputDigest, digest))
       .limit(1);
     if (existing[0]) {
-      return { assessment: this.toRecord(existing[0]), created: false };
+      const inserted = report
+        ? this.db
+            .insert(schema.prReport)
+            .values({ ...report, assessmentId: existing[0].id })
+            .onConflictDoNothing()
+            .run().changes > 0
+        : false;
+      return { assessment: this.toRecord(existing[0]), created: false, reportCreated: inserted };
     }
 
     const id = `a_${this.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     try {
-      await this.db.insert(schema.assessment).values({
-        id,
-        orgId: input.orgId,
-        inputDigest: digest,
-        status: 'QUEUED',
-        baseId: null,
-        headId: null,
-        manifestJson: JSON.stringify(input.manifest),
-        engineJson: null,
-        coverageJson: null,
-        createdAt: this.now(),
-        completedAt: null,
+      this.db.transaction((tx) => {
+        tx.insert(schema.assessment)
+          .values({
+            id,
+            orgId: input.orgId,
+            inputDigest: digest,
+            status: 'QUEUED',
+            baseId: null,
+            headId: null,
+            manifestJson: JSON.stringify(input.manifest),
+            engineJson: null,
+            coverageJson: null,
+            createdAt: this.now(),
+            completedAt: null,
+          })
+          .run();
+        if (report)
+          tx.insert(schema.prReport)
+            .values({ ...report, assessmentId: id })
+            .run();
       });
     } catch {
       // Carrera con otra creación del mismo digest: gana la fila existente.
@@ -217,7 +235,16 @@ export class AssessmentWorker {
         .from(schema.assessment)
         .where(eq(schema.assessment.inputDigest, digest))
         .limit(1);
-      if (raced[0]) return { assessment: this.toRecord(raced[0]), created: false };
+      if (raced[0]) {
+        const inserted = report
+          ? this.db
+              .insert(schema.prReport)
+              .values({ ...report, assessmentId: raced[0].id })
+              .onConflictDoNothing()
+              .run().changes > 0
+          : false;
+        return { assessment: this.toRecord(raced[0]), created: false, reportCreated: inserted };
+      }
       throw new Error(`failed to insert assessment for digest ${digest}`);
     }
 
@@ -234,7 +261,7 @@ export class AssessmentWorker {
       payload: { status: 'QUEUED', inputDigest: digest },
       createdAt: this.now(),
     });
-    return { assessment: record, created: true };
+    return { assessment: record, created: true, reportCreated: !!report };
   }
 
   async get(id: string): Promise<AssessmentRecord | null> {
@@ -580,13 +607,15 @@ export class AssessmentWorker {
     if (!lain) return null;
     const attempt = await this.beginStep(id, 'code_impact');
     try {
-      const { files, truncated } = await this.github.listPrFiles({
-        owner: pr.owner,
-        repo: pr.repo,
-        number: pr.number,
-      });
       const baseSha = manifest.base.repos[pr.name];
       if (!baseSha) throw new Error(`the manifest has no base commit for ${pr.name}`);
+      const headSha = manifest.head.repos[pr.name];
+      if (!headSha) throw new Error(`the manifest has no head commit for ${pr.name}`);
+      const { files, truncated } = await this.github.listFilesAtCommits(
+        { owner: pr.owner, repo: pr.repo, number: pr.number },
+        baseSha,
+        headSha,
+      );
       const impact = await reviewCodeImpact({
         lain,
         repoId: pr.repoId,

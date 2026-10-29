@@ -533,8 +533,8 @@ describe('AssessmentWorker — code impact step (PR review)', () => {
     const worker = new AssessmentWorker(db, {
       getLain: async () => lainWithCode(),
       github: {
-        async listPrFiles(ref) {
-          asked.push(ref);
+        async listFilesAtCommits(ref, base, head) {
+          asked.push({ ref, base, head });
           return {
             files: [
               { path: 'src/pay.py', status: 'modified', additions: 1, deletions: 1, patch: PATCH },
@@ -547,7 +547,13 @@ describe('AssessmentWorker — code impact step (PR review)', () => {
     const { assessment } = await worker.create(request(true));
     await worker.run(assessment.id);
 
-    expect(asked).toEqual([{ owner: 'acme', repo: 'orders', number: 7 }]);
+    expect(asked).toEqual([
+      {
+        ref: { owner: 'acme', repo: 'orders', number: 7 },
+        base: SHAS.ordersBase,
+        head: SHAS.ordersS1,
+      },
+    ]);
     const steps = await db
       .select()
       .from(schema.jobStep)
@@ -573,7 +579,7 @@ describe('AssessmentWorker — code impact step (PR review)', () => {
     const worker = new AssessmentWorker(db, {
       getLain: async () => lainWithCode(),
       github: {
-        async listPrFiles() {
+        async listFilesAtCommits() {
           throw new Error('GitHub down');
         },
       },
@@ -598,7 +604,7 @@ describe('AssessmentWorker — code impact step (PR review)', () => {
     const worker = new AssessmentWorker(db, {
       getLain: async () => lainWithCode(),
       github: {
-        async listPrFiles() {
+        async listFilesAtCommits() {
           throw new Error('must not be called');
         },
       },
@@ -614,12 +620,12 @@ describe('AssessmentWorker — code impact step (PR review)', () => {
     expect((await getAssessmentReport(db, assessment.id))?.codeImpact).toBeUndefined();
   });
 
-  it('the PR identity is in the manifest but never in the digest: same commits, same job', async () => {
+  it('distinguishes PR and manual assessments of the same commits', async () => {
     const worker = new AssessmentWorker(db, { getLain: async () => lainWithCode() });
     const a = await worker.create(request(true));
     const b = await worker.create(request(false));
-    expect(b.created).toBe(false);
-    expect(b.assessment.id).toBe(a.assessment.id);
+    expect(b.created).toBe(true);
+    expect(b.assessment.id).not.toBe(a.assessment.id);
   });
 });
 

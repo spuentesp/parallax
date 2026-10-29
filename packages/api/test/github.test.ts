@@ -64,6 +64,28 @@ describe('GitHubReader (sólo lectura)', () => {
     expect(pr.files.map((f) => f.path)).toEqual(['src/a.py', 'src/b.py']);
   });
 
+  it('reads code files from the requested commit pair even if the PR has moved', async () => {
+    const urls: string[] = [];
+    const reader = new GitHubReader({
+      fetchImpl: (async (input: Parameters<typeof fetch>[0]) => {
+        urls.push(String(input));
+        return new Response(
+          JSON.stringify({ files: [{ ...filesJson[0], patch: '@@ -1 +1 @@\n-a\n+b' }] }),
+        );
+      }) as typeof fetch,
+    });
+    const result = await reader.listFilesAtCommits(
+      { owner: 'saleor', repo: 'saleor', number: 19911 },
+      prJson.base.sha,
+      prJson.head.sha,
+    );
+    expect(urls).toEqual([
+      `https://api.github.com/repos/saleor/saleor/compare/${prJson.base.sha}...${prJson.head.sha}?per_page=100&page=1`,
+    ]);
+    expect(result.files[0]?.patch).toContain('-a');
+    expect(result.truncated).toBe(false);
+  });
+
   it('reads every page of files, keeps each diff and renamed path, and uses the total GitHub reports', async () => {
     const mk = (n: number) =>
       Array.from({ length: n }, (_, i) => ({

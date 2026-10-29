@@ -186,7 +186,15 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
   let created = 0;
   for (const row of matching) {
     try {
-      const { assessment, created: fresh } = await createAssessment({
+      const context =
+        workspaceIds.length > 1
+          ? `${STATUS_CONTEXT}/${names.get(row.workspaceId) ?? row.workspaceId}`
+          : STATUS_CONTEXT;
+      const {
+        assessment,
+        created: fresh,
+        reportCreated,
+      } = await createAssessment({
         db: deps.db,
         worker: deps.worker,
         analyzerVersion: deps.analyzerVersion,
@@ -204,18 +212,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
           repoId: deriveLainRepoId(row),
           name: repoDisplayName(row),
         },
-      });
-      // Una entrega repetida devuelve la misma evaluación: no se vuelve a publicar.
-      if (!fresh) continue;
-      created += 1;
-      const context =
-        workspaceIds.length > 1
-          ? `${STATUS_CONTEXT}/${names.get(row.workspaceId) ?? row.workspaceId}`
-          : STATUS_CONTEXT;
-      await deps.db
-        .insert(schema.prReport)
-        .values({
-          assessmentId: assessment.id,
+        report: {
           workspaceId: row.workspaceId,
           owner: pr.owner,
           repo: pr.repo,
@@ -223,8 +220,12 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
           headSha: pr.headSha,
           context,
           createdAt: Date.now(),
-        })
-        .onConflictDoNothing();
+        },
+      });
+      if (fresh) created += 1;
+      // A duplicate delivery repairs a report missing after an interrupted creation.
+      // Existing rows already have a subscriber (or are recovered on startup).
+      if (!reportCreated) continue;
       // El PR muestra "analizando" desde ya, no un hueco hasta el resultado.
       if (deps.writer) {
         await deps.writer

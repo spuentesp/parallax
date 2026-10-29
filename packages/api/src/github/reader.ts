@@ -132,6 +132,17 @@ interface GhPr {
   head?: { ref?: string; sha?: string };
 }
 
+function toPrFile(f: GhFile): PrFile {
+  return {
+    path: f.filename ?? '',
+    status: f.status ?? 'modified',
+    additions: f.additions ?? 0,
+    deletions: f.deletions ?? 0,
+    ...(f.patch !== undefined ? { patch: f.patch } : {}),
+    ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
+  };
+}
+
 /**
  * Lector de PRs. Todas las operaciones son GET: no hay forma de escribir a
  * GitHub desde esta clase.
@@ -225,20 +236,29 @@ export class GitHubReader {
         `/repos/${ref.owner}/${ref.repo}/pulls/${ref.number}/files?per_page=100&page=${page}`,
       );
       for (const f of batch) {
-        files.push({
-          path: f.filename ?? '',
-          status: f.status ?? 'modified',
-          additions: f.additions ?? 0,
-          deletions: f.deletions ?? 0,
-          ...(f.patch !== undefined ? { patch: f.patch } : {}),
-          ...(f.previous_filename ? { previousPath: f.previous_filename } : {}),
-        });
+        files.push(toPrFile(f));
       }
       lastPageFull = batch.length === 100;
       if (!lastPageFull) break;
     }
     const truncated = lastPageFull || (totalHint !== undefined && totalHint > files.length);
     return { files, truncated };
+  }
+
+  /** GitHub's compare endpoint binds the diff to the assessment's immutable commits. */
+  async listFilesAtCommits(
+    ref: PrRef,
+    base: string,
+    head: string,
+  ): Promise<{ files: PrFile[]; truncated: boolean }> {
+    if (!/^[a-f\d]{7,64}$/i.test(base) || !/^[a-f\d]{7,64}$/i.test(head)) {
+      throw new Error('code impact requires immutable commit SHAs');
+    }
+    const result = await this.get<{ files?: GhFile[] }>(
+      `/repos/${ref.owner}/${ref.repo}/compare/${base}...${head}?per_page=100&page=1`,
+    );
+    if (!Array.isArray(result.files)) throw new Error('GitHub compare returned no file list');
+    return { files: result.files.map(toPrFile), truncated: result.files.length >= 300 };
   }
 
   /**

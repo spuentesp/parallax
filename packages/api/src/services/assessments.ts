@@ -18,6 +18,7 @@ import type {
   AssessmentRecord,
   AssessmentWorker,
   PrManifestRef,
+  PrReportIntent,
   ResolvedAssessmentRequest,
 } from '../worker/assessment-worker.js';
 import { computeInputDigest } from '../worker/state.js';
@@ -166,6 +167,7 @@ export async function resolveAssessmentRequest(
     configHash: body.configHash ?? null,
     analyzerVersion,
     orgId: body.orgId,
+    ...(deps.pr ? { pr: deps.pr } : {}),
   });
   return { request: { orgId: body.orgId, manifest }, digest };
 }
@@ -179,7 +181,13 @@ export async function createAssessment(deps: {
   github?: GitHubReader;
   /** El PR de origen cuando no llega por URL (el webhook): para la revisión de código. */
   pr?: PrManifestRef;
-}): Promise<{ assessment: AssessmentRecord; created: boolean; pr?: PrSummary }> {
+  report?: PrReportIntent;
+}): Promise<{
+  assessment: AssessmentRecord;
+  created: boolean;
+  reportCreated?: boolean;
+  pr?: PrSummary;
+}> {
   const { db, worker, body, analyzerVersion, github } = deps;
   const { request, digest, pr } = await resolveAssessmentRequest(db, body, analyzerVersion, {
     ...(github ? { github } : {}),
@@ -199,7 +207,7 @@ export async function createAssessment(deps: {
     }
   }
 
-  const result = await worker.create(request);
+  const result = await worker.create(request, deps.report);
   if (body.idempotencyKey && result.created) {
     await worker.recordIdempotencyKey(result.assessment.id, body.idempotencyKey, digest);
   }
