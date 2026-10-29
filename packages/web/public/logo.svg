@@ -1,0 +1,36 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- The Architectural Block -->
+  <g id="stack">
+    <!-- Bottom Slab -->
+    <path d="M 10 55 L 50 75 L 50 83 L 10 63 Z" fill="#222222" />
+    <path d="M 50 75 L 90 55 L 90 63 L 50 83 Z" fill="#111111" />
+    <path d="M 50 35 L 90 55 L 50 75 L 10 55 Z" fill="#1a1a1a" />
+    <!-- Top Slab -->
+    <path d="M 10 40 L 50 60 L 50 68 L 10 48 Z" fill="#1a1a1a" />
+    <path d="M 50 60 L 90 40 L 90 48 L 50 68 Z" fill="#0d0d0d" />
+    <path d="M 50 20 L 90 40 L 50 60 L 10 40 Z" fill="#333333" />
+  </g>
+
+  <!-- The Isometric 'P' Graph -->
+  <g id="p-graph">
+    <!-- Baseline Connections (Grey Dotted) -->
+    <path d="M 30 63 L 50 73 L 70 63" fill="none" stroke="#525252" stroke-width="2.5" stroke-dasharray="4 2" stroke-linejoin="round" />
+    
+    <!-- Left Stem (Green Dotted) -->
+    <path d="M 30 30 L 30 63" fill="none" stroke="#76b900" stroke-width="2.5" stroke-dasharray="4 2" />
+
+    <!-- Top Closed Loop (Small Isometric Diamond) -->
+    <path d="M 50 20 L 70 30 L 50 40 L 30 30 Z" fill="none" stroke="#76b900" stroke-width="2.5" stroke-linejoin="round" />
+    
+    <!-- Unimpacted Base Nodes -->
+    <circle cx="50" cy="73" r="3.5" fill="#525252" />
+    <circle cx="70" cy="63" r="3.5" fill="#525252" />
+    
+    <!-- Impacted/Active Nodes -->
+    <circle cx="30" cy="63" r="3.5" fill="#76b900" />
+    <circle cx="30" cy="30" r="3.5" fill="#76b900" />
+    <circle cx="50" cy="40" r="3.5" fill="#76b900" />
+    <circle cx="70" cy="30" r="3.5" fill="#76b900" />
+    <circle cx="50" cy="20" r="3.5" fill="#76b900" />
+  </g>
+</svg>

@@ -4,6 +4,7 @@ import { useWhoami } from '../api/hooks.js';
 import { useCurrentOrg } from '../nav/currentOrg.js';
 import { readMapSearch } from '../nav/mapState.js';
 import { useSignOut } from './AuthGate.js';
+import { LogoMark } from './Logo.js';
 import { OrgSwitcher } from './OrgSwitcher.js';
 import { ThemeToggle } from './Theme.js';
 
@@ -95,13 +96,8 @@ export function AppShell(): React.ReactElement {
         className="w-[4.75rem] shrink-0 flex flex-col items-stretch bg-surface border-r border-border"
         aria-label="Navigation"
       >
-        <div
-          className="mx-auto mt-3 w-8 h-8 rounded-lg grid place-items-center bg-accent text-accent-fg font-bold"
-          title="Parallax — architecture command center"
-          role="img"
-          aria-label="Parallax"
-        >
-          P
+        <div className="mx-auto mt-3" title="Parallax — architecture command center">
+          <LogoMark size={36} />
         </div>
 
         <div className="px-1.5 mt-3">

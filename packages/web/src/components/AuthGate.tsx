@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { ApiError } from '../api/client.js';
 import { useWhoami } from '../api/hooks.js';
 import { clearToken, currentToken, saveToken } from '../api/token.js';
+import { LogoMark } from './Logo.js';
 
 // Puerta de acceso: la SPA sólo se muestra con un token válido. Sin token (o con
 // uno rechazado) pide uno; con un enlace `?token=` entra directo. No hay
@@ -89,9 +90,7 @@ export function TokenScreen({
         }}
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg grid place-items-center bg-accent text-accent-fg font-bold">
-            P
-          </div>
+          <LogoMark size={40} decorative />
           <div className="leading-tight">
             <div className="font-semibold text-sm">Parallax</div>
             <div className="text-xs text-muted">Architecture command center</div>

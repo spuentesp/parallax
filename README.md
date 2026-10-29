@@ -1,3 +1,5 @@
+<p align="center"><img src="design/logo/parallax-logo.svg" alt="Parallax" width="120" /></p>
+
 # Parallax
 
 > Architectural intelligence center built on [lain](https://github.com/spuentesp/lain).

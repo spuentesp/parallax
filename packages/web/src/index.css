@@ -6,13 +6,18 @@
  * `dark:` variant.
  */
 @theme {
+  /* Marca (design/logo): negros de las losas del logo y su verde #76b900. En claro el acento
+     es el mismo verde oscurecido (#4d7c0f, 5:1 sobre blanco) para que el texto se lea. */
   --color-bg: #fafafa;
   --color-surface: #ffffff;
   --color-fg: #171717;
   --color-muted: #737373;
   --color-border: #e5e5e5;
-  --color-accent: #2563eb;
+  --color-accent: #4d7c0f;
   --color-accent-fg: #ffffff;
+  --logo-slab-a: #1a1a1a;
+  --logo-slab-b: #0d0d0d;
+  --logo-slab-top: #333333;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
@@ -30,13 +35,17 @@
 }
 
 .dark {
-  --color-bg: #0a0a0a;
-  --color-surface: #171717;
+  --color-bg: #0d0d0d;
+  --color-surface: #161616;
   --color-fg: #fafafa;
   --color-muted: #a3a3a3;
-  --color-border: #262626;
-  --color-accent: #3b82f6;
-  --color-accent-fg: #ffffff;
+  --color-border: #2a2a2a;
+  /* El verde del logo; sobre él, texto casi negro (9:1), no blanco (2:1). */
+  --color-accent: #76b900;
+  --color-accent-fg: #0d0d0d;
+  --logo-slab-a: #2e2e2e;
+  --logo-slab-b: #1f1f1f;
+  --logo-slab-top: #454545;
   --color-repo: #a78bfa;
   --color-service: #60a5fa;
   --color-group: #22d3ee;
