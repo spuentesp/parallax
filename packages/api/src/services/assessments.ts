@@ -7,15 +7,17 @@ import type {
   AssessmentReport,
   PresentedCoverage,
 } from '@parallax/shared/domain';
-import { AssessmentRequestBody } from '@parallax/shared/domain';
+import { AssessmentRequestBody, CodeImpactSchema } from '@parallax/shared/domain';
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import type { GitHubReader, PrSummary } from '../github/reader.js';
 import { LainCallError } from '../lain-adapter/errors.js';
 import type {
   AssessmentRecord,
   AssessmentWorker,
+  PrManifestRef,
   ResolvedAssessmentRequest,
 } from '../worker/assessment-worker.js';
 import { computeInputDigest } from '../worker/state.js';
@@ -65,7 +67,7 @@ export async function resolveAssessmentRequest(
   db: Db,
   body: AssessmentRequestBody,
   analyzerVersion: string,
-  deps: { github?: GitHubReader } = {},
+  deps: { github?: GitHubReader; pr?: PrManifestRef } = {},
 ): Promise<{ request: ResolvedAssessmentRequest; digest: string; pr?: PrSummary }> {
   if ('prUrl' in body) {
     // Dry run: el adapter sólo lee. Resuelve la URL a SHAs, nunca publica.
@@ -101,7 +103,17 @@ export async function resolveAssessmentRequest(
         ...(body.idempotencyKey !== undefined ? { idempotencyKey: body.idempotencyKey } : {}),
       },
       analyzerVersion,
-      deps,
+      {
+        ...deps,
+        // El PR se recuerda en el manifiesto: el worker lee de GitHub sus archivos y diffs.
+        pr: {
+          owner: pr.ref.owner,
+          repo: pr.ref.repo,
+          number: pr.ref.number,
+          repoId: deriveLainRepoId(match),
+          name: repoDisplayName(match),
+        },
+      },
     ).then((r) => ({ ...r, pr }));
   }
 
@@ -147,6 +159,7 @@ export async function resolveAssessmentRequest(
     configured: [...configured].sort(),
     excluded,
     configHash: body.configHash ?? null,
+    ...(deps.pr ? { pr: deps.pr } : {}),
   };
   const digest = computeInputDigest({
     manifest: { base: baseRepos, head: headRepos },
@@ -164,10 +177,13 @@ export async function createAssessment(deps: {
   analyzerVersion: string;
   /** Lector de GitHub, sólo para resolver una URL de PR a SHAs. Nunca escribe. */
   github?: GitHubReader;
+  /** El PR de origen cuando no llega por URL (el webhook): para la revisión de código. */
+  pr?: PrManifestRef;
 }): Promise<{ assessment: AssessmentRecord; created: boolean; pr?: PrSummary }> {
   const { db, worker, body, analyzerVersion, github } = deps;
   const { request, digest, pr } = await resolveAssessmentRequest(db, body, analyzerVersion, {
     ...(github ? { github } : {}),
+    ...(deps.pr ? { pr: deps.pr } : {}),
   });
 
   if (body.idempotencyKey) {
@@ -317,6 +333,12 @@ export async function getAssessmentReport(db: Db, id: string): Promise<Assessmen
 
   // El borde del motor: los cambios llegan como JSON y se tipan contra el
   // contrato compartido (AssessmentFinding) aquí, y en ningún otro lado.
+  // El impacto de código viaja dentro del JSON del motor; aquí se valida contra el contrato.
+  const parsedImpact = CodeImpactSchema.safeParse(
+    (engine as { codeImpact?: unknown } | null)?.codeImpact,
+  );
+  const codeImpact = parsedImpact.success ? parsedImpact.data : null;
+
   const findings: AssessmentFinding[] =
     engine && typeof engine === 'object' && Array.isArray(engine.diff?.changes)
       ? (engine.diff.changes as AssessmentFinding[])
@@ -332,6 +354,7 @@ export async function getAssessmentReport(db: Db, id: string): Promise<Assessmen
     manifest,
     findings,
     engine,
+    ...(codeImpact ? { codeImpact } : {}),
     coverage,
     evidence: evidenceRows.map((e) => ({
       id: e.id,

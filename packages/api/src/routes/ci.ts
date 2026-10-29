@@ -5,6 +5,7 @@
 import { WorkspaceCiSettings } from '@parallax/shared/domain';
 import { eq, isNull } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
+import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import { parseGithubRepoUri } from '../github/reader.js';
 import {
@@ -194,6 +195,14 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
           base: pr.baseSha,
           head: pr.headSha,
           orgId: row.workspaceId,
+        },
+        // El PR de origen: el worker lee de GitHub sus archivos y diffs para la revisión de código.
+        pr: {
+          owner: pr.owner,
+          repo: pr.repo,
+          number: pr.number,
+          repoId: deriveLainRepoId(row),
+          name: repoDisplayName(row),
         },
       });
       // Una entrega repetida devuelve la misma evaluación: no se vuelve a publicar.

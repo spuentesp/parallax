@@ -121,7 +121,9 @@ describe('a restart resumes interrupted PR evaluations and their GitHub reports'
         baseChanged: false,
       },
     );
-    expect(posts.map((p) => p.body.description)).toEqual([PENDING_STATUS.description]);
+    expect(
+      posts.filter((p) => p.url.includes('/statuses/')).map((p) => p.body.description),
+    ).toEqual([PENDING_STATUS.description]);
     const [interrupted] = await app1.db.select().from(schema.assessment);
     expect(interrupted?.status).toBe('QUEUED');
     await app1.close();
@@ -132,7 +134,10 @@ describe('a restart resumes interrupted PR evaluations and their GitHub reports'
     apps.push(app2);
     await app2.ready();
     const deadline = Date.now() + 15_000;
-    const finalPosts = () => posts.filter((p) => p.body.description !== PENDING_STATUS.description);
+    const finalPosts = () =>
+      posts.filter(
+        (p) => p.url.includes('/statuses/') && p.body.description !== PENDING_STATUS.description,
+      );
     while (finalPosts().length === 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 50));
     }

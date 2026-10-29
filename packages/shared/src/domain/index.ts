@@ -1,6 +1,7 @@
 export * from './api-model.js';
 export * from './architecture-proposal.js';
 export * from './assessment.js';
+export * from './code-impact.js';
 export * from './coverage.js';
 export * from './evidence-ref.js';
 export * from './finding.js';

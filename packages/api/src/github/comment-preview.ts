@@ -5,6 +5,7 @@
 // (§2), y dice de forma explícita que es una vista previa para que nadie lo
 // confunda con un comentario ya publicado.
 
+import { codeImpactMarkdown } from '../pr-review/render.js';
 import type { AssessmentApiModel } from '../services/assessments.js';
 
 // El informe persiste los cambios del motor tal cual; aquí sólo se leen para
@@ -114,6 +115,9 @@ export function buildCommentPreview(
     }
     lines.push('');
   }
+
+  // El código que toca el PR y a cuánto alcanza (informativo: no cambia las clases del motor).
+  lines.push(...codeImpactMarkdown(report.codeImpact));
 
   // Cobertura: la omisión es visible y un vacío no autoriza a concluir (INV 3).
   lines.push(`### Coverage`);

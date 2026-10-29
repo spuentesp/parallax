@@ -46,6 +46,7 @@ import {
 } from '@parallax/shared/test/lain-fixtures';
 import type { CodeTool } from '../agent/code-tools.js';
 import { LainCallError } from './errors.js';
+import type { ProductCodeTool } from './product-tools.js';
 import { getLainMockCalls, recordMockCall, resetLainMock } from './record.js';
 import type { LainAdapter } from './types.js';
 
@@ -328,7 +329,10 @@ export function createLainMock(): LainAdapter {
       };
     },
 
-    async codeTool(tool: CodeTool, args: Record<string, unknown>): Promise<LainTextResponse> {
+    async codeTool(
+      tool: CodeTool | ProductCodeTool,
+      args: Record<string, unknown>,
+    ): Promise<LainTextResponse> {
       recordMockCall({ tool, args });
       return { text: `## ${tool}\n\n(mock) ${JSON.stringify(args)}` };
     },

@@ -1,4 +1,5 @@
 import type { CodeTool } from '../agent/code-tools.js';
+import type { ProductCodeTool } from './product-tools.js';
 
 export interface MockCall {
   readonly tool:
@@ -21,7 +22,8 @@ export interface MockCall {
     | 'get_code_snippet'
     | 'explain_symbol'
     | 'get_call_sites'
-    | CodeTool;
+    | CodeTool
+    | ProductCodeTool;
   readonly args: unknown;
   readonly snapshot?: string;
   readonly at: number;

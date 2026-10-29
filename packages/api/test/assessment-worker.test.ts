@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import * as schema from '../src/db/schema.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
+import { getAssessmentReport } from '../src/services/assessments.js';
 import {
   AssessmentWorker,
   describeError,
@@ -471,6 +472,154 @@ describe('AssessmentWorker analyze step — which view each finding is traced in
       'trace_impact failed for orders http:POST /orders/bulk: LainUnavailable: endpoint is not present in the selected view',
     );
     expect(rec?.status).toBe('PARTIAL');
+  });
+});
+
+describe('AssessmentWorker — code impact step (PR review)', () => {
+  let dir: string;
+  let db: ReturnType<typeof makeDb>;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-codeimpact-'));
+    db = makeDb(dir);
+    await db
+      .insert(schema.workspace)
+      .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const PR = { owner: 'acme', repo: 'orders', number: 7, repoId: 'orders', name: 'orders' };
+  const PATCH = '@@ -9,2 +9,2 @@\n def charge():\n-    return 1\n+    return 2';
+  const symbolsOf = JSON.stringify([
+    {
+      global_id: 'orders:Function:src/pay.py:charge:7',
+      kind: 'Function',
+      name: 'charge',
+      path: 'src/pay.py',
+      repo_id: 'orders',
+    },
+  ]);
+
+  /** El motor: contratos del mock, y las cuatro respuestas de código de una revisión. */
+  const lainWithCode = () => {
+    const mock = createLainMock();
+    return {
+      ...mock,
+      async codeTool(tool: string) {
+        const text =
+          tool === 'get_capabilities'
+            ? JSON.stringify({
+                repositories: [{ id: 'orders', last_indexed_commit: SHAS.ordersBase }],
+              })
+            : tool === 'search_org'
+              ? symbolsOf
+              : tool === 'find_symbol'
+                ? '1. `11111111-2222-3333-4444-555555555555` function src/pay.py:8 anchor=0.5'
+                : '## assess_change: charge\n\n## Direct dependents\n\n- **checkout** (src/checkout.py) calls it at line 4\n\n## Test coverage\n\nNo test calls this symbol, directly or through its callers.\n\n## Risk summary\n\nDirect: 1; transitive: 3; verdict: **medium**.';
+        return { text };
+      },
+    } as unknown as ReturnType<typeof createLainMock>;
+  };
+
+  const request = (withPr: boolean): ResolvedAssessmentRequest => {
+    const r = resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1);
+    return withPr ? { ...r, manifest: { ...r.manifest, pr: PR } } : r;
+  };
+
+  it('reads the PR files, reviews the code, records the step and puts the result in the report', async () => {
+    const asked: unknown[] = [];
+    const worker = new AssessmentWorker(db, {
+      getLain: async () => lainWithCode(),
+      github: {
+        async listPrFiles(ref) {
+          asked.push(ref);
+          return {
+            files: [
+              { path: 'src/pay.py', status: 'modified', additions: 1, deletions: 1, patch: PATCH },
+            ],
+            truncated: false,
+          };
+        },
+      },
+    });
+    const { assessment } = await worker.create(request(true));
+    await worker.run(assessment.id);
+
+    expect(asked).toEqual([{ owner: 'acme', repo: 'orders', number: 7 }]);
+    const steps = await db
+      .select()
+      .from(schema.jobStep)
+      .where(eq(schema.jobStep.assessmentId, assessment.id));
+    expect(steps.find((x) => x.step === 'code_impact')?.state).toBe('done');
+
+    const report = await getAssessmentReport(db, assessment.id);
+    expect(report?.codeImpact?.symbols).toHaveLength(1);
+    expect(report?.codeImpact?.symbols[0]).toMatchObject({
+      name: 'charge',
+      path: 'src/pay.py',
+      direct: 1,
+      transitive: 3,
+      risk: 'medium',
+      untested: true,
+    });
+    // Los contratos siguen siendo lo suyo: la revisión de código no los toca.
+    expect(report?.findings.length).toBeGreaterThan(0);
+    expect(report?.codeImpact?.index.matchesBase).toBe(true);
+  });
+
+  it('a failing GitHub read is a declared gap and the contract report still completes', async () => {
+    const worker = new AssessmentWorker(db, {
+      getLain: async () => lainWithCode(),
+      github: {
+        async listPrFiles() {
+          throw new Error('GitHub down');
+        },
+      },
+    });
+    const { assessment } = await worker.create(request(true));
+    const done = await worker.run(assessment.id);
+
+    expect(done.status).toBe('PARTIAL');
+    const cov = JSON.parse(done.coverageJson ?? '{}') as { missing?: string[] };
+    expect(cov.missing).toContain('code impact failed: GitHub down');
+    const engine = JSON.parse(done.engineJson ?? '{}') as { diff?: unknown; codeImpact?: unknown };
+    expect(engine.diff).toBeDefined();
+    expect(engine.codeImpact).toBeNull();
+    const steps = await db
+      .select()
+      .from(schema.jobStep)
+      .where(eq(schema.jobStep.assessmentId, assessment.id));
+    expect(steps.find((x) => x.step === 'code_impact')?.state).toBe('failed');
+  });
+
+  it('an evaluation that did not come from a PR has no code review and no step', async () => {
+    const worker = new AssessmentWorker(db, {
+      getLain: async () => lainWithCode(),
+      github: {
+        async listPrFiles() {
+          throw new Error('must not be called');
+        },
+      },
+    });
+    const { assessment } = await worker.create(request(false));
+    const done = await worker.run(assessment.id);
+    expect(done.status).not.toBe('FAILED');
+    const steps = await db
+      .select()
+      .from(schema.jobStep)
+      .where(eq(schema.jobStep.assessmentId, assessment.id));
+    expect(steps.map((x) => x.step)).not.toContain('code_impact');
+    expect((await getAssessmentReport(db, assessment.id))?.codeImpact).toBeUndefined();
+  });
+
+  it('the PR identity is in the manifest but never in the digest: same commits, same job', async () => {
+    const worker = new AssessmentWorker(db, { getLain: async () => lainWithCode() });
+    const a = await worker.create(request(true));
+    const b = await worker.create(request(false));
+    expect(b.created).toBe(false);
+    expect(b.assessment.id).toBe(a.assessment.id);
   });
 });
 
