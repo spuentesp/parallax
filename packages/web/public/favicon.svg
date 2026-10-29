@@ -1,0 +1,19 @@
+<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <rect width="100" height="100" rx="22" fill="#0d0d0d"/>
+  <g transform="translate(50 50) scale(1.12) translate(-50 -47)">
+    <!-- lighter slabs: the tile is as dark as the original slabs -->
+    <path d="M 10 55 L 50 75 L 50 83 L 10 63 Z" fill="#2e2e2e"/>
+    <path d="M 50 75 L 90 55 L 90 63 L 50 83 Z" fill="#1f1f1f"/>
+    <path d="M 50 35 L 90 55 L 50 75 L 10 55 Z" fill="#383838"/>
+    <path d="M 10 40 L 50 60 L 50 68 L 10 48 Z" fill="#383838"/>
+    <path d="M 50 60 L 90 40 L 90 48 L 50 68 Z" fill="#262626"/>
+    <path d="M 50 20 L 90 40 L 50 60 L 10 40 Z" fill="#454545"/>
+    <path d="M 30 63 L 50 73 L 70 63" fill="none" stroke="#6b6b6b" stroke-width="2.5" stroke-dasharray="4 2" stroke-linejoin="round"/>
+    <path d="M 30 30 L 30 63" fill="none" stroke="#76b900" stroke-width="2.5" stroke-dasharray="4 2"/>
+    <path d="M 50 20 L 70 30 L 50 40 L 30 30 Z" fill="none" stroke="#76b900" stroke-width="2.5" stroke-linejoin="round"/>
+    <circle cx="50" cy="73" r="3.5" fill="#6b6b6b"/><circle cx="70" cy="63" r="3.5" fill="#6b6b6b"/>
+    <circle cx="30" cy="63" r="3.5" fill="#76b900"/><circle cx="30" cy="30" r="3.5" fill="#76b900"/>
+    <circle cx="50" cy="40" r="3.5" fill="#76b900"/><circle cx="70" cy="30" r="3.5" fill="#76b900"/>
+    <circle cx="50" cy="20" r="3.5" fill="#76b900"/>
+  </g>
+</svg>

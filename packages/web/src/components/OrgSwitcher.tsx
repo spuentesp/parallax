@@ -1,26 +1,34 @@
 import type * as React from 'react';
-import { Link, useMatch } from 'react-router-dom';
-import { useOrgs } from '../api/hooks.js';
+import { Link } from 'react-router-dom';
+import { useOrgs, useWorkspace } from '../api/hooks.js';
+import { useCurrentOrg } from '../nav/currentOrg.js';
 
 type OrgSummary = { id: string; name?: string };
 
-export function OrgSwitcher(): React.ReactElement | null {
-  const nested = useMatch('/orgs/:orgId/*');
-  const exact = useMatch('/orgs/:orgId');
-  const match = nested ?? exact;
-  const orgId = match?.params.orgId;
+// El workspace actual, siempre visible y en el mismo lugar: una pastilla con su
+// inicial y nombre, que lleva a la lista. Compacta: el espacio es del mapa.
+export function OrgSwitcher(): React.ReactElement {
+  const { orgId, loading } = useCurrentOrg();
   const { data } = useOrgs();
+  // El org es su workspace: si /api/orgs no lo conoce, el nombre sale de ahí.
+  const ws = useWorkspace(orgId ?? undefined);
   const orgs = (data?.orgs ?? []) as OrgSummary[];
   const current = orgs.find((o) => o.id === orgId);
-  if (!orgId) return null;
+  const name = orgId
+    ? (current?.name ?? ws.data?.workspace?.name ?? orgId)
+    : loading
+      ? 'Loading…'
+      : 'No workspace yet';
 
   return (
-    <div className="px-3 py-2 mb-2 rounded-lg" style={{ background: 'var(--color-bg, #0a0a0a)' }}>
-      <div className="text-xs text-muted">Organization</div>
-      <div className="text-sm font-medium truncate">{current?.name ?? orgId}</div>
-      <Link to="/orgs" className="text-xs text-accent" aria-label="Todas las organizaciones">
-        Todas las organizaciones →
-      </Link>
-    </div>
+    <Link
+      to="/orgs"
+      title={orgId ? `${name} — all workspaces` : 'Create a workspace'}
+      aria-label={orgId ? `All workspaces (current: ${name})` : 'Create a workspace'}
+      className="block rounded-lg border border-border bg-bg px-1 py-1.5 text-center hover:border-accent transition-colors"
+    >
+      <span className="block text-[9px] uppercase tracking-wide text-muted">Workspace</span>
+      <span className="block truncate text-[11px] font-medium">{name}</span>
+    </Link>
   );
 }

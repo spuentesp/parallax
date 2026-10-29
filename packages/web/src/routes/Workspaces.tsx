@@ -49,7 +49,7 @@ export function Workspaces(): React.ReactElement {
 function WorkspaceCard({ workspace: w }: { workspace: Workspace }): React.ReactElement {
   return (
     <Link
-      to={`/workspaces/${w.id}`}
+      to={`/orgs/${w.id}`}
       className="block rounded-xl p-4 bg-surface border border-border hover:border-accent transition-colors"
     >
       <div className="flex items-start justify-between gap-4">
@@ -81,7 +81,7 @@ function WorkspaceCard({ workspace: w }: { workspace: Workspace }): React.ReactE
         </div>
         <div className="text-right text-xs text-muted whitespace-nowrap">
           <div>{w.lainUrl ? 'LAIN connected' : 'LAIN not configured'}</div>
-          <div className="mt-1 text-accent">View topology →</div>
+          <div className="mt-1 text-accent">Open map →</div>
         </div>
       </div>
     </Link>

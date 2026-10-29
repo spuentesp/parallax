@@ -4,6 +4,7 @@ import {
   buildEndpointTopology,
   contractKind,
   endpointNodeId,
+  groupNodeId,
   resolveServiceForPath,
   serviceNodeId,
 } from '../src/topology.js';
@@ -132,9 +133,25 @@ describe('buildEndpointTopology', () => {
     const byId = new Map(t.nodes.map((n) => [n.id, n]));
     expect(byId.get(serviceNodeId('shipping'))?.parent).toBe('repo:platform');
     expect(byId.get(serviceNodeId('orders'))?.parent).toBe('repo:orders');
-    expect(byId.get(endpointNodeId('http:GET /api/orders/{}', 'orders'))?.parent).toBe(
-      serviceNodeId('orders'),
-    );
+    // endpoint → grupo de su tipo → servicio → repo
+    const ep = byId.get(endpointNodeId('http:GET /api/orders/{}', 'orders'));
+    expect(ep?.parent).toBe(groupNodeId('orders', 'http'));
+    expect(byId.get(groupNodeId('orders', 'http'))).toMatchObject({
+      kind: 'group',
+      label: 'HTTP routes',
+      parent: serviceNodeId('orders'),
+    });
+  });
+
+  it('counts the contracts in each group, so the map can say it without opening it', async () => {
+    const t = await buildEndpointTopology(fake);
+    const groups = t.nodes.filter((n) => n.kind === 'group');
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) {
+      const children = t.nodes.filter((n) => n.parent === g.id).length;
+      expect(g.meta?.contracts).toBe(children);
+      expect(children).toBeGreaterThan(0);
+    }
   });
 
   it('filters by binding and confidence', async () => {
@@ -143,5 +160,86 @@ describe('buildEndpointTopology', () => {
 
     const tooStrict = await buildEndpointTopology(fake, { minConfidence: 0.5 });
     expect(tooStrict.edges.filter((e) => e.kind === 'consumes')).toHaveLength(1);
+  });
+});
+
+describe('buildEndpointTopology — dueño de un endpoint', () => {
+  // Dos servicios exponen la misma clave: el primero que la declara es el dueño.
+  const KEY = 'http:GET /shared';
+  const base = {
+    analyzerVersion: 'test',
+    apiVersion: '1' as const,
+    listServices: async () => ({
+      items: ['a', 'b'].map((service) => ({
+        service,
+        repo: service,
+        endpoints: 1,
+        consumer_services: 0,
+        unresolved_inbound: 0,
+        paths: [],
+      })),
+      scope: { configured_only: true, reviewed: [], unreviewed: [] },
+    }),
+    listContracts: async () => ({
+      items: [{ endpoint: { key: KEY, service: 'a' } }, { endpoint: { key: KEY, service: 'b' } }],
+      cursor: null,
+    }),
+    getService: async (req: { service: string }) =>
+      req.service === 'a'
+        ? { service: 'a', endpoints: [], consumers: [] }
+        : {
+            service: 'b',
+            endpoints: [],
+            consumers: [
+              {
+                service: 'c',
+                repo: 'c',
+                uses: [
+                  {
+                    endpoint: { key: KEY, service: 'b' },
+                    binding: { kind: 'static', confidence: 1, source: 'TreeSitter' },
+                    fields: [],
+                    match: 'exact',
+                    caller: { repo: 'c', path: 'x.py', line: 1, id: 'k' },
+                  },
+                ],
+              },
+            ],
+          },
+  } as unknown as LainAdapter;
+
+  it('closes the chain on the first service that declared the key', async () => {
+    const t = await buildEndpointTopology(base);
+    const consumes = t.edges.find((e) => e.kind === 'consumes');
+    expect(consumes?.target).toBe(endpointNodeId(KEY, 'a'));
+    expect(t.edges.find((e) => e.kind === 'servedBy')?.target).toBe(serviceNodeId('a'));
+  });
+
+  it('adds an endpoint the inventory does not know under the service the consumer named', async () => {
+    const lonely = {
+      ...base,
+      listContracts: async () => ({ items: [], cursor: null }),
+    } as unknown as LainAdapter;
+    const t = await buildEndpointTopology(lonely);
+    expect(t.nodes.find((x) => x.id === endpointNodeId(KEY, 'b'))?.parent).toBe(
+      groupNodeId('b', 'http'),
+    );
+    expect(t.edges.find((e) => e.kind === 'consumes')?.target).toBe(endpointNodeId(KEY, 'b'));
+    expect(t.stats.byKind.http).toBe(1);
+  });
+
+  it('a consumer naming another owner for a key keeps the first declared owner for the chain', async () => {
+    const declaredByA = {
+      ...base,
+      listContracts: async () => ({
+        items: [{ endpoint: { key: KEY, service: 'a' } }],
+        cursor: null,
+      }),
+    } as unknown as LainAdapter;
+    const t = await buildEndpointTopology(declaredByA);
+    // Se da de alta el endpoint que el consumidor nombró (dueño b), pero la arista
+    // se cierra sobre el dueño que declaró la clave primero (a).
+    expect(t.nodes.some((x) => x.id === endpointNodeId(KEY, 'b'))).toBe(true);
+    expect(t.edges.find((e) => e.kind === 'consumes')?.target).toBe(endpointNodeId(KEY, 'a'));
   });
 });

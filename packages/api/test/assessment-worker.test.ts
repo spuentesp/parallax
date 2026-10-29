@@ -10,6 +10,7 @@ import * as schema from '../src/db/schema.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import {
   AssessmentWorker,
+  describeError,
   type ResolvedAssessmentRequest,
 } from '../src/worker/assessment-worker.js';
 import { canTransition, computeInputDigest, PARALLAX_POLICY_VERSION } from '../src/worker/state.js';
@@ -345,5 +346,109 @@ describe('AssessmentWorker', () => {
     expect(computeInputDigest({ ...input, analyzerVersion: '0.9.2' })).not.toBe(d1);
     expect(computeInputDigest({ ...input, policyVersion: '2' })).not.toBe(d1);
     expect(PARALLAX_POLICY_VERSION).toBe('1');
+  });
+});
+
+describe('AssessmentWorker analyze step — which view each finding is traced in', () => {
+  let dir: string;
+  let db: ReturnType<typeof makeDb>;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-worker-trace-'));
+    db = makeDb(dir);
+    await db
+      .insert(schema.workspace)
+      .values({ id: 'org_demo', name: 'Demo', description: null, createdAt: Date.now() });
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const change = (kind: string, service: string, key: string, extra: object = {}) => ({
+    kind,
+    endpoint: { service, key },
+    impact: { class: 'NeedsInvestigation', reasons: ['x'] },
+    ...extra,
+  });
+
+  it('traces a removed endpoint in the BASE view, an added one in head, and skips consumer-side changes', async () => {
+    const seen: Array<{ key: string; snapshot: string }> = [];
+    const mock = createLainMock();
+    const lain = {
+      ...mock,
+      async diffContracts(req: Parameters<typeof mock.diffContracts>[0]) {
+        const d = await mock.diffContracts(req);
+        return {
+          ...d,
+          changes: [
+            change('ConsumerEndpointUnmatched', 'billing', 'http:GET /orders/{}', {
+              side: 'consumer',
+            }),
+            change('EndpointRemoved', 'orders', 'http:GET /orders/{}'),
+            change('EndpointAdded', 'orders', 'http:POST /orders/bulk'),
+          ],
+        };
+      },
+      async traceImpact(req: Parameters<typeof mock.traceImpact>[0]) {
+        const from = req.from as { endpoint: { key: string } };
+        seen.push({ key: from.endpoint.key, snapshot: req.snapshot });
+        return mock.traceImpact(req);
+      },
+    } as unknown as typeof mock;
+    const worker = new AssessmentWorker(db, { getLain: async () => lain });
+    const { assessment } = await worker.create(
+      resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
+    );
+    await worker.run(assessment.id);
+    const rec = await worker.get(assessment.id);
+
+    expect(rec?.baseId).toBeTruthy();
+    expect(rec?.headId).toBeTruthy();
+    expect(rec?.baseId).not.toBe(rec?.headId);
+    expect(seen).toEqual([
+      { key: 'http:GET /orders/{}', snapshot: rec?.baseId },
+      { key: 'http:POST /orders/bulk', snapshot: rec?.headId },
+    ]);
+    const cov = JSON.parse(rec?.coverageJson ?? '{}') as { missing?: string[] };
+    // Ningún hueco de cobertura por trazar en la vista equivocada.
+    expect((cov.missing ?? []).filter((m) => m.startsWith('trace_impact'))).toEqual([]);
+  });
+
+  it('records an engine failure in the coverage with its code and message, not [object Object]', async () => {
+    const mock = createLainMock();
+    const lain = {
+      ...mock,
+      async diffContracts(req: Parameters<typeof mock.diffContracts>[0]) {
+        const d = await mock.diffContracts(req);
+        return { ...d, changes: [change('EndpointAdded', 'orders', 'http:POST /orders/bulk')] };
+      },
+      async traceImpact() {
+        // El adaptador lanza objetos planos {code, message}, no instancias de Error.
+        throw { code: 'LainUnavailable', message: 'endpoint is not present in the selected view' };
+      },
+    } as unknown as typeof mock;
+    const worker = new AssessmentWorker(db, { getLain: async () => lain });
+    const { assessment } = await worker.create(
+      resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
+    );
+    await worker.run(assessment.id);
+    const rec = await worker.get(assessment.id);
+    const cov = JSON.parse(rec?.coverageJson ?? '{}') as { missing?: string[] };
+    const gap = (cov.missing ?? []).find((m) => m.startsWith('trace_impact failed'));
+    expect(gap).toBe(
+      'trace_impact failed for orders http:POST /orders/bulk: LainUnavailable: endpoint is not present in the selected view',
+    );
+    expect(rec?.status).toBe('PARTIAL');
+  });
+});
+
+describe('describeError', () => {
+  it('reads Error instances, engine error objects, and anything else', () => {
+    expect(describeError(new Error('boom'))).toBe('boom');
+    expect(describeError({ code: 'X', message: 'm' })).toBe('X: m');
+    expect(describeError({ message: 'only message' })).toBe('only message');
+    expect(describeError({ a: 1 })).toBe('{"a":1}');
+    expect(describeError('plain')).toBe('plain');
+    expect(describeError(undefined)).toBe('undefined');
   });
 });

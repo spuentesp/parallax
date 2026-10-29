@@ -14,6 +14,8 @@ export type WorkspaceLainResolver = (orgId: string) => Promise<LainAdapter | und
 export function createWorkspaceLainResolver(deps: {
   db: BetterSQLite3Database<typeof schema>;
   defaultAdapter: LainAdapter;
+  /** Cómo se crea el cliente (por defecto el real); permite inyectar el borde en tests. */
+  createClient?: typeof createLainClient;
 }): WorkspaceLainResolver {
   const cache = new Map<string, LainAdapter>();
   return async (orgId: string): Promise<LainAdapter | undefined> => {
@@ -30,7 +32,11 @@ export function createWorkspaceLainResolver(deps: {
       // (mock en desarrollo, real si LAIN_ADAPTER=real).
       return deps.defaultAdapter;
     }
-    const adapter = await createLainClient({ lainUrl, apiVersion: '1', timeoutMs: 30_000 });
+    const adapter = await (deps.createClient ?? createLainClient)({
+      lainUrl,
+      apiVersion: '1',
+      timeoutMs: 30_000,
+    });
     cache.set(orgId, adapter);
     return adapter;
   };

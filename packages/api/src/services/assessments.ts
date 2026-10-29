@@ -266,6 +266,33 @@ export async function getAssessmentRecord(db: Db, id: string): Promise<Assessmen
 
 // El informe completo y persistido: identidad, hallazgos del motor, cobertura
 // presentada y evidencia. Es lo único que HTTP y MCP sirven (P09).
+// El payload persistido de la explicación -> lo que se sirve. Sólo el texto y los
+// hallazgos sin explicar; el resto (log de herramientas, presupuesto) es auditoría.
+function explanationText(payload: string | null): {
+  narrative?: string | null;
+  unaddressed?: string[];
+} {
+  if (!payload) return {};
+  try {
+    const p = JSON.parse(payload) as {
+      narrative?: unknown;
+      pr?: { unaddressed?: unknown } | null;
+    };
+    return {
+      narrative: typeof p.narrative === 'string' ? p.narrative : null,
+      ...(Array.isArray(p.pr?.unaddressed)
+        ? {
+            unaddressed: (p.pr.unaddressed as unknown[]).filter(
+              (x): x is string => typeof x === 'string',
+            ),
+          }
+        : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function getAssessmentReport(db: Db, id: string): Promise<AssessmentApiModel | null> {
   const rec = await getAssessmentRecord(db, id);
   if (!rec) return null;
@@ -319,6 +346,7 @@ export async function getAssessmentReport(db: Db, id: string): Promise<Assessmen
           status: latestExplanation.status,
           revision: latestExplanation.revision,
           model: latestExplanation.model,
+          ...explanationText(latestExplanation.payload),
         }
       : { status: 'pending', revision: null, model: null },
     createdAt: rec.createdAt,

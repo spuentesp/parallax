@@ -3,6 +3,8 @@ import type * as React from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAssessmentList } from '../api/hooks.js';
 import { AssessmentForm } from '../components/AssessmentForm.js';
+import { CiSettingsPanel } from '../components/CiSettingsPanel.js';
+import { OpenPrPicker } from '../components/OpenPrPicker.js';
 
 export function Assessments(): React.ReactElement {
   const { orgId } = useParams();
@@ -23,6 +25,9 @@ export function Assessments(): React.ReactElement {
           web y por MCP.
         </p>
       </div>
+
+      {orgId && <OpenPrPicker orgId={orgId} />}
+      {orgId && <CiSettingsPanel orgId={orgId} />}
 
       <AssessmentForm
         key={preselectedRepo ?? ''}

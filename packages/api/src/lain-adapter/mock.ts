@@ -44,6 +44,7 @@ import {
   s2AddCurrency,
   services,
 } from '@parallax/shared/test/lain-fixtures';
+import type { CodeTool } from '../agent/code-tools.js';
 import { LainCallError } from './errors.js';
 import { getLainMockCalls, recordMockCall, resetLainMock } from './record.js';
 import type { LainAdapter } from './types.js';
@@ -325,6 +326,11 @@ export function createLainMock(): LainAdapter {
           '```',
         ].join('\n'),
       };
+    },
+
+    async codeTool(tool: CodeTool, args: Record<string, unknown>): Promise<LainTextResponse> {
+      recordMockCall({ tool, args });
+      return { text: `## ${tool}\n\n(mock) ${JSON.stringify(args)}` };
     },
 
     async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {

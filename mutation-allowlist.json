@@ -62,6 +62,104 @@
       "mutator": "MethodExpression",
       "description": "r.uri",
       "reason": "Equivalente a nivel de sistema: el trim del filtro del componente es redundante porque useCreateWorkspace ya descarta uris en blanco antes del POST."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/status.ts",
+      "mutator": "StringLiteral",
+      "description": "\"Stryker was here!\"",
+      "reason": "Equivalente: el fallback de `impact?.class ?? ''` sólo se compara con 'Verified' y 'NeedsInvestigation', así que cualquier cadena que no sea esas dos produce el mismo resultado. Ningún cálculo de estado lee ese valor."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "StringLiteral",
+      "description": "\"\"",
+      "reason": "Equivalente: `startsWith('')` siempre es verdadero, pero el resultado no cambia. Una cabecera sin el prefijo `sha256=` nunca puede igualar el digest esperado, que empieza por ese prefijo, así que la comparación en tiempo constante la rechaza igual."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "StringLiteral",
+      "description": "\"Stryker was here!\"",
+      "reason": "Equivalente: `p.repository?.full_name ?? ''` sin repositorio produce owner o repo vacíos y `parsePullRequestEvent` devuelve null en ambos casos antes de usar `fullName`."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.head.repo",
+      "reason": "Equivalente: `pr.head` ya se comprobó (`headSha` vacío devuelve null) antes de llegar a esta línea, así que el `?.` nunca se evalúa sobre undefined."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.base.ref",
+      "reason": "Equivalente: `pr.base` ya se comprobó (`baseSha` vacío devuelve null) antes de llegar a esta línea."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/github/webhook.ts",
+      "mutator": "OptionalChaining",
+      "description": "pr.head.ref",
+      "reason": "Equivalente: `pr.head` ya se comprobó (`headSha` vacío devuelve null) antes de llegar a esta línea."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "ConditionalExpression",
+      "description": "false",
+      "reason": "Guarda de carrera: `finish` sólo se llama dos veces si la lectura inicial del registro y la suscripción ven el mismo estado terminal. El primer paso del run espera el snapshot (≥100 ms), así que en producción el estado terminal no puede escribirse entre la suscripción y esa lectura. Los tests con el run detenido no alcanzan esa ventana; la guarda se conserva como defensa."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "BooleanLiteral",
+      "description": "false",
+      "reason": "Guarda de carrera: `finish` sólo se llama dos veces si la lectura inicial del registro y la suscripción ven el mismo estado terminal. El primer paso del run espera el snapshot (≥100 ms), así que en producción el estado terminal no puede escribirse entre la suscripción y esa lectura. Los tests con el run detenido no alcanzan esa ventana; la guarda se conserva como defensa."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "CallExpression",
+      "description": ";",
+      "reason": "Guarda de carrera: `finish` sólo se llama dos veces si la lectura inicial del registro y la suscripción ven el mismo estado terminal. El primer paso del run espera el snapshot (≥100 ms), así que en producción el estado terminal no puede escribirse entre la suscripción y esa lectura. Los tests con el run detenido no alcanzan esa ventana; la guarda se conserva como defensa. La llamada `unsubscribe()` sólo libera el listener de un estado que ya no emite eventos."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "BlockStatement",
+      "description": "{}",
+      "reason": "Guarda de carrera: `finish` sólo se llama dos veces si la lectura inicial del registro y la suscripción ven el mismo estado terminal. El primer paso del run espera el snapshot (≥100 ms), así que en producción el estado terminal no puede escribirse entre la suscripción y esa lectura. Los tests con el run detenido no alcanzan esa ventana; la guarda se conserva como defensa. El cuerpo de la lectura inicial es la misma guarda que se describe arriba."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "ConditionalExpression",
+      "description": "true",
+      "reason": "Equivalente: `TERMINAL.has(String(payload.to))` es falso para los eventos que no son transición, porque no traen `to`. El filtro sólo deja pasar estados terminales."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/routes/ci.ts",
+      "mutator": "ConditionalExpression",
+      "description": "true",
+      "reason": "Equivalente: Node une las cabeceras repetidas que no son especiales con ', ', así que `x-hub-signature-256` llega siempre como string y la rama `typeof sig === 'string'` sólo cambia el resultado para arrays, que no ocurren."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/db/schema.ts",
+      "mutator": "ArrowFunction",
+      "description": "() => undefined",
+      "reason": "Equivalente en runtime: la clave foránea de workspace_ci la crea `drizzle/0002_workspace_ci.sql`, que es lo que ejecuta la base. La referencia de Drizzle sólo describe el esquema para tipos y drizzle-kit; `foreign key` queda cubierta por el test de tabla workspace_ci."
+    },
+    {
+      "package": "@parallax/api",
+      "file": "src/db/schema.ts",
+      "mutator": "StringLiteral",
+      "description": "\"\"",
+      "reason": "Equivalente en runtime: el valor por defecto de `mode` lo fija `DEFAULT 'off'` en `drizzle/0002_workspace_ci.sql`. El default de Drizzle sólo describe el esquema; el test de defaults de workspace_ci lo fija desde la base."
     }
   ]
 }

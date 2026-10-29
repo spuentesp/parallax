@@ -1,4 +1,11 @@
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 export const workspace = sqliteTable('workspace', {
   id: text('id').primaryKey(),
@@ -112,3 +119,68 @@ export const publication = sqliteTable('publication', {
   remoteId: text('remote_id'),
   updatedAt: integer('updated_at').notNull(),
 });
+
+export const workspaceCi = sqliteTable('workspace_ci', {
+  workspaceId: text('workspace_id')
+    .primaryKey()
+    .references(() => workspace.id),
+  mode: text('mode').notNull().default('off'),
+  baseBranch: text('base_branch'),
+  reportComments: integer('report_comments', { mode: 'boolean' }).notNull().default(false),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const conversation = sqliteTable(
+  'conversation',
+  {
+    id: text('id').primaryKey(),
+    owner: text('owner').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    title: text('title').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    ownerIdx: index('idx_conversation_owner').on(t.owner, t.workspaceId, t.updatedAt),
+  }),
+);
+
+export const turn = sqliteTable(
+  'turn',
+  {
+    id: text('id').primaryKey(),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => conversation.id, { onDelete: 'cascade' }),
+    seq: integer('seq').notNull(),
+    question: text('question').notNull(),
+    answer: text('answer').notNull(),
+    status: text('status').notNull(),
+    claimsJson: text('claims_json').notNull(),
+    focusJson: text('focus_json'),
+    /** Lo que se dibujó bajo la respuesta (roadmap, radio de impacto). */
+    artifactJson: text('artifact_json'),
+    /** Traza de la investigación (ver agent/trace-log.ts). */
+    traceJson: text('trace_json'),
+    model: text('model'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    seqIdx: uniqueIndex('idx_turn_seq').on(t.conversationId, t.seq),
+  }),
+);
+
+export const looseEndAssessment = sqliteTable(
+  'loose_end_assessment',
+  {
+    workspaceId: text('workspace_id').notNull(),
+    caseId: text('case_id').notNull(),
+    snippetHash: text('snippet_hash').notNull(),
+    category: text('category').notNull(),
+    reason: text('reason').notNull(),
+    evidence: text('evidence'),
+    model: text('model'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.workspaceId, t.caseId] }) }),
+);

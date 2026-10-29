@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Tipografía autoalojada (sin peticiones a terceros): Space Grotesk para la interfaz,
+   JetBrains Mono para código, ids y rutas. */
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
 
 /*
  * Design tokens. Values flip with the `.dark` class on <html> (see Theme.tsx),
@@ -6,30 +10,70 @@
  * `dark:` variant.
  */
 @theme {
+  --font-sans: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Marca (design/logo): negros de las losas del logo y su verde #76b900. En claro el acento
+     es el mismo verde oscurecido (#4d7c0f, 5:1 sobre blanco) para que el texto se lea. */
   --color-bg: #fafafa;
   --color-surface: #ffffff;
   --color-fg: #171717;
   --color-muted: #737373;
   --color-border: #e5e5e5;
-  --color-accent: #2563eb;
+  --color-accent: #4d7c0f;
   --color-accent-fg: #ffffff;
+  --logo-slab-a: #1a1a1a;
+  --logo-slab-b: #0d0d0d;
+  --logo-slab-top: #333333;
   --color-success: #16a34a;
   --color-warning: #d97706;
   --color-error: #dc2626;
+  /* Mapa: un color por tipo de nodo y uno por procedencia de la relación. */
+  --color-repo: #7c3aed;
+  --color-service: #2563eb;
+  --color-group: #0891b2;
+  --color-endpoint: #d97706;
+  --color-deterministic: #0f766e;
+  --color-inferred: #e11d48;
+  /* Grafo de código: la puerta, los contenedores (archivo/módulo) y los símbolos. */
+  --color-code: #64748b;
+  --color-file: #65a30d;
+  --color-symbol: #c026d3;
 }
 
 .dark {
-  --color-bg: #0a0a0a;
-  --color-surface: #171717;
+  --color-bg: #0d0d0d;
+  --color-surface: #161616;
   --color-fg: #fafafa;
   --color-muted: #a3a3a3;
-  --color-border: #262626;
-  --color-accent: #3b82f6;
-  --color-accent-fg: #ffffff;
+  --color-border: #2a2a2a;
+  /* El verde del logo, algo más apagado para la interfaz (#76b900 gritaba en botones grandes);
+     sobre él, texto casi negro (5,8:1), no blanco. La marca conserva #76b900 exacto. */
+  --color-accent: #6a9a1f;
+  --color-accent-fg: #0d0d0d;
+  --logo-slab-a: #2e2e2e;
+  --logo-slab-b: #1f1f1f;
+  --logo-slab-top: #454545;
+  --color-repo: #a78bfa;
+  --color-service: #60a5fa;
+  --color-group: #22d3ee;
+  --color-endpoint: #fbbf24;
+  --color-deterministic: #2dd4bf;
+  --color-inferred: #fb7185;
+  --color-code: #94a3b8;
+  --color-file: #a3e635;
+  --color-symbol: #e879f9;
 }
 
 body {
   background: var(--color-bg);
   color: var(--color-fg);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "ss02";
+}
+
+/* Títulos con más carácter: algo más apretados, como el logo. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
 }

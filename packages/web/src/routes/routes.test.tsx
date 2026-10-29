@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Assessment } from '../routes/Assessment.js';
 import { OrgLayout } from '../routes/OrgLayout.js';
-import { Orgs } from '../routes/Orgs.js';
+import { Workspaces } from '../routes/Workspaces.js';
 import { sampleReport, server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 
@@ -13,18 +13,18 @@ afterEach(() => {
 });
 
 describe('routes render in isolation', () => {
-  it('Orgs shows the heading', () => {
+  it('the workspace list shows its heading', () => {
     renderWithQuery(
       <MemoryRouter initialEntries={['/orgs']}>
         <Routes>
-          <Route path="/orgs" element={<Orgs />} />
+          <Route path="/orgs" element={<Workspaces />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /^workspaces$/i })).toBeTruthy();
   });
 
-  it('OrgLayout shows the org id in heading', () => {
+  it('OrgLayout renders the map for the org', async () => {
     renderWithQuery(
       <MemoryRouter initialEntries={['/orgs/acme']}>
         <Routes>
@@ -34,7 +34,7 @@ describe('routes render in isolation', () => {
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByRole('heading', { name: /acme/i })).toBeTruthy();
+    expect(await screen.findByTestId('map-explorer')).toBeTruthy();
   });
 
   it('Assessment shows the not-found state when the report is missing', async () => {
@@ -73,6 +73,36 @@ describe('routes render in isolation', () => {
     expect(screen.getByText(/no autoriza a concluir/i)).toBeTruthy();
     // INV 2: la explicación no toca los findings del analizador.
     expect(screen.getByText(/no puede promover NeedsInvestigation a Verified/i)).toBeTruthy();
+  });
+
+  it('Assessment shows the model explanation text next to its status, and what was left unexplained', async () => {
+    server.use(
+      http.get('/api/assessments/a_1', () =>
+        HttpResponse.json({
+          assessment: {
+            ...sampleReport,
+            explanation: {
+              status: 'failed:findings_unaddressed',
+              revision: 0,
+              model: 'nemotron',
+              narrative:
+                'Two changes.\n- F1 EndpointRemoved [engine: Verified]\n  F2 NOT EXPLAINED',
+              unaddressed: ['F2'],
+            },
+          },
+        }),
+      ),
+    );
+    renderWithQuery(
+      <MemoryRouter initialEntries={['/assessments/a_1']}>
+        <Routes>
+          <Route path="/assessments/:assessmentId" element={<Assessment />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('failed:findings_unaddressed')).toBeTruthy();
+    expect(screen.getByText(/F1 EndpointRemoved \[engine: Verified\]/)).toBeTruthy();
+    expect(screen.getByText(/F2 NOT EXPLAINED/)).toBeTruthy();
   });
 
   it('the report crossing the wire satisfies the shared contract', () => {

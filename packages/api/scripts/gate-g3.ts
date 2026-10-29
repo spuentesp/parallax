@@ -10,11 +10,13 @@
 // Requiere un LAIN con perfil contracts sobre test-repos/contracts-fixture.
 //   LAIN_URL=http://localhost:9997/mcp pnpm --filter @parallax/api exec tsx scripts/gate-g3.ts
 //
-// Si NEBIUS_TOKEN está presente (entorno o .env) se hace además una llamada
+// Si NEBIUS_TOKEN está presente (entorno o .env, vía `--env-file-if-exists` del
+// runner) se hace además una llamada
 // REAL al modelo; sin ella el gate lo declara y cubre los criterios no-modelo.
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { investigatorSettings, modelEnv } from '../src/config.js';
 import { buildApp } from '../src/server.js';
 import { join } from 'node:path';
 import { createLainClient } from '../src/lain-adapter/client.js';
@@ -43,25 +45,6 @@ function check(label: string, ok: boolean, detail = ''): void {
   } else {
     failures++;
     console.log(`  ✗ ${label}${detail ? ` — ${detail}` : ''}`);
-  }
-}
-
-// Carga .env del repo sin dependencias: el gate necesita NEBIUS_TOKEN si
-// existe, pero debe funcionar también sin él (P08).
-function loadDotEnv(): void {
-  for (const candidate of [join(process.cwd(), '../../.env'), join(process.cwd(), '.env')]) {
-    try {
-      const text = readFileSync(candidate, 'utf8');
-      for (const line of text.split('\n')) {
-        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-        if (m && m[1] && m[2] !== undefined && process.env[m[1]] === undefined) {
-          process.env[m[1]] = m[2].trim();
-        }
-      }
-      return;
-    } catch {
-      // siguiente candidato
-    }
   }
 }
 
@@ -362,7 +345,11 @@ async function g3NoModel(lain: LainAdapter): Promise<void> {
 }
 
 // ── G3.6 modelo real: tool calling end-to-end (si hay token) ─────────────
-async function g3RealModel(lain: LainAdapter, token: string | undefined): Promise<boolean> {
+async function g3RealModel(
+  lain: LainAdapter,
+  token: string | undefined,
+  settings: ReturnType<typeof investigatorSettings>,
+): Promise<boolean> {
   console.log('\n=== G3.6 modelo real contra Token Factory ===');
   if (!token) {
     console.log('  ⚠ NEBIUS_TOKEN no presente: no se hizo llamada real al modelo.');
@@ -371,10 +358,10 @@ async function g3RealModel(lain: LainAdapter, token: string | undefined): Promis
     return false;
   }
   const nemotron = new NemotronProvider({
-    baseUrl: 'https://api.tokenfactory.nebius.com/v1',
+    baseUrl: settings.baseUrl,
     apiKey: token,
-    plannerModel: process.env.NEMOTRON_PLANNER_MODEL ?? 'nvidia/nemotron-3-super-120b-a12b',
-    workerModel: process.env.NEMOTRON_WORKER_MODEL ?? 'nvidia/Nemotron-3_5-Lightning',
+    plannerModel: settings.plannerModel,
+    workerModel: settings.workerModel,
     timeoutMs: 60_000,
   });
 
@@ -528,8 +515,10 @@ async function g3BffScripted(lain: LainAdapter): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  loadDotEnv();
-  const token = process.env.NEBIUS_TOKEN ?? process.env.NEMOTRON_TOKEN;
+  // El .env lo carga el runner (`tsx --env-file-if-exists`); el modelo se lee por
+  // la misma vía que la API, sin nombres ni defaults propios.
+  const modelCfg = modelEnv(process.env);
+  const token = modelCfg.nebiusToken;
   console.log(`G3 gate contra ${LAIN_URL}`);
   const lain = await createLainClient({ lainUrl: LAIN_URL, apiVersion: '1', timeoutMs: 60_000 });
   console.log(`handshake OK (analyzerVersion=${lain.analyzerVersion})`);
@@ -539,7 +528,7 @@ async function main(): Promise<void> {
   await g3Inv2(lain);
   await g3Budget(lain);
   await g3NoModel(lain);
-  const realModelMade = await g3RealModel(lain, token);
+  const realModelMade = await g3RealModel(lain, token, investigatorSettings(modelCfg));
   await g3BffScripted(lain);
 
   console.log('\n=== G3 RESULT ===');

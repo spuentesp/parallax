@@ -13,23 +13,53 @@ const AppConfigSchema = z.object({
   lainUrl: z.string().url().optional(),
   mcpTransport: z.enum(['stdio', 'http-sse']).default('stdio'),
   authTokens: z.array(AuthToken).min(1),
-  nemotronToken: z.string().optional(),
+  // Credencial de Nebius Token Factory (NEBIUS_TOKEN): es del proveedor, no del
+  // modelo, que es configurable.
+  nebiusToken: z.string().optional(),
   // Endpoint y modelos del investigador (§14): configurables porque el modelo
   // efectivo es una condición experimental, no una constante del código. Los
   // defaults viven en investigatorSettings() para no romper AppConfig en tests.
   nemotronBaseUrl: z.string().url().optional(),
   nemotronPlannerModel: z.string().min(1).optional(),
   nemotronWorkerModel: z.string().min(1).optional(),
-  // Presupuesto de investigación (§6): ocho llamadas y 120 s de modelo por
-  // consulta, medidos y reportados en la demo.
+  // Presupuesto de investigación (§6): 16 llamadas (eran 8) y 120 s de modelo
+  // por consulta, medidos y reportados en la demo.
   investigatorMaxToolCalls: z.coerce.number().int().min(1).max(50).optional(),
   investigatorMaxModelMs: z.coerce.number().int().min(1000).optional(),
+  // Tokens de respuesta por turno del modelo. 2048 cortaba respuestas con muchas
+  // afirmaciones y citas; el valor por defecto es el doble.
+  investigatorMaxTokens: z.coerce.number().int().min(256).max(32768).optional(),
+  // Razonamiento interno del modelo en la investigación: on | off | default (el del
+  // servidor). Se mide, no se supone: ver docs/agent-spend.md.
+  investigatorThinking: z.enum(['on', 'off', 'default']).optional(),
+  // El relevo: el modelo fuerte planifica y redacta, el rápido lee. Apagado
+  // con 'off' (mediado en docs/agent-spend.md: gana en calidad, cuesta tokens).
+  investigatorHandoff: z.enum(['on', 'off']).optional(),
+  // Tope de preguntas al investigador por token y hora (0 o ausente = sin tope).
+  // Para demos públicas: cada pregunta consume créditos de Token Factory.
+  queryRateLimitPerHour: z.coerce.number().int().min(0).optional(),
   webBundlePath: z.string().default('./packages/web/dist'),
   // Lectura de PRs de GitHub (selector y auto CI). Sólo GET: el token de escritura
   // (estado y comentarios) es otra credencial, que nunca usa el lector.
   githubReadToken: z.string().min(1).optional(),
   // Base de la API de GitHub: configurable para que los tests apunten a un stand-in local.
   githubApiBase: z.string().url().optional(),
+  // Escritura a GitHub (commit status y comentarios): credencial aparte, sólo
+  // `Commit statuses: write` y `Issues: write`. La lee únicamente GitHubWriter.
+  githubWriteToken: z.string().min(1).optional(),
+  // Secreto HMAC de los webhooks de pull_request. Sin él no se acepta ningún webhook.
+  githubWebhookSecret: z.string().min(1).optional(),
+  // URL pública de Parallax, para enlazar el informe desde el estado y el comentario.
+  publicUrl: z.string().url().optional(),
+  // Documentación de los repos: carpetas donde buscar un checkout ya existente (<raíz>/<repo>),
+  // separadas por ':', y dónde clonar (superficial) los que no estén.
+  docsRoots: z.string().optional(),
+  docsCacheDir: z.string().optional(),
+  // Búsqueda web (Tavily) para preguntas técnicas. Sin clave, la herramienta
+  // `web_search` no existe para el modelo: no hay un sustituto que devuelva nada.
+  tavilyApiKey: z.string().min(1).optional(),
+  // Base de Tavily: configurable para que los tests apunten a un stand-in local.
+  tavilyBaseUrl: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -40,16 +70,34 @@ export const INVESTIGATOR_DEFAULTS = {
   nemotronBaseUrl: 'https://api.tokenfactory.nebius.com/v1',
   nemotronPlannerModel: 'nvidia/nemotron-3-super-120b-a12b',
   nemotronWorkerModel: 'nvidia/Nemotron-3_5-Lightning',
-  investigatorMaxToolCalls: 8,
-  investigatorMaxModelMs: 120_000,
+  investigatorMaxToolCalls: 10,
+  investigatorMaxModelMs: 180_000,
+  investigatorMaxTokens: 4096,
 } as const;
 
-export function investigatorSettings(cfg: AppConfig): {
+export function investigatorSettings(
+  cfg: Pick<
+    AppConfig,
+    | 'nemotronBaseUrl'
+    | 'nemotronPlannerModel'
+    | 'nemotronWorkerModel'
+    | 'investigatorMaxToolCalls'
+    | 'investigatorMaxModelMs'
+    | 'investigatorMaxTokens'
+    | 'investigatorThinking'
+    | 'investigatorHandoff'
+  >,
+): {
   baseUrl: string;
   plannerModel: string;
   workerModel: string;
   maxToolCalls: number;
   maxModelMs: number;
+  maxTokens: number;
+  /** undefined = el valor por defecto del servidor. */
+  thinking: boolean | undefined;
+  /** El relevo (planificador + trabajador): apagado salvo que se mida. */
+  handoff: boolean;
 } {
   return {
     baseUrl: cfg.nemotronBaseUrl ?? INVESTIGATOR_DEFAULTS.nemotronBaseUrl,
@@ -57,6 +105,56 @@ export function investigatorSettings(cfg: AppConfig): {
     workerModel: cfg.nemotronWorkerModel ?? INVESTIGATOR_DEFAULTS.nemotronWorkerModel,
     maxToolCalls: cfg.investigatorMaxToolCalls ?? INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls,
     maxModelMs: cfg.investigatorMaxModelMs ?? INVESTIGATOR_DEFAULTS.investigatorMaxModelMs,
+    maxTokens: cfg.investigatorMaxTokens ?? INVESTIGATOR_DEFAULTS.investigatorMaxTokens,
+    thinking:
+      cfg.investigatorThinking === 'on'
+        ? true
+        : cfg.investigatorThinking === 'off'
+          ? false
+          : undefined,
+    // El relevo va por defecto: lo medido en Saleor (docs/agent-spend.md) dio
+    // 10/12 en lugar de 6/12 y ninguna afirmación contradicha. Se apaga con
+    // INVESTIGATOR_HANDOFF=off.
+    handoff: cfg.investigatorHandoff !== 'off',
+  };
+}
+
+// Un valor vacío en el .env (`NEBIUS_TOKEN=`) es "sin configurar", no un token.
+function nonEmpty(value: string | undefined): string | undefined {
+  return value === undefined || value.trim() === '' ? undefined : value;
+}
+
+/**
+ * ÚNICO lugar que lee las variables del modelo (credencial, endpoint, modelos).
+ * `loadConfig` y los gates pasan por aquí; ninguno lee `process.env` por su
+ * cuenta ni con otro nombre.
+ */
+export function modelEnv(
+  env: NodeJS.ProcessEnv,
+): Pick<
+  AppConfig,
+  'nebiusToken' | 'nemotronBaseUrl' | 'nemotronPlannerModel' | 'nemotronWorkerModel'
+> {
+  // NEMOTRON_TOKEN fue el nombre anterior. Aceptarlo en silencio mantendría dos
+  // fuentes de verdad; ignorarlo en silencio apagaría el modelo sin decir por qué.
+  if (nonEmpty(env.NEMOTRON_TOKEN) !== undefined) {
+    throw new Error('NEMOTRON_TOKEN was renamed to NEBIUS_TOKEN: set NEBIUS_TOKEN and remove it');
+  }
+  return {
+    nebiusToken: nonEmpty(env.NEBIUS_TOKEN),
+    nemotronBaseUrl: env.NEMOTRON_BASE_URL,
+    nemotronPlannerModel: env.NEMOTRON_PLANNER_MODEL,
+    nemotronWorkerModel: env.NEMOTRON_WORKER_MODEL,
+  };
+}
+
+/** ÚNICO lugar que lee las variables de la búsqueda web. */
+export function webSearchEnv(
+  env: NodeJS.ProcessEnv,
+): Pick<AppConfig, 'tavilyApiKey' | 'tavilyBaseUrl'> {
+  return {
+    tavilyApiKey: nonEmpty(env.TAVILY_TOKEN),
+    tavilyBaseUrl: nonEmpty(env.TAVILY_BASE_URL),
   };
 }
 
@@ -79,15 +177,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     lainUrl: env.LAIN_URL,
     mcpTransport: env.PARALLAX_MCP_TRANSPORT,
     authTokens,
-    nemotronToken: env.NEMOTRON_TOKEN ?? env.NEBIUS_TOKEN,
-    nemotronBaseUrl: env.NEMOTRON_BASE_URL,
-    nemotronPlannerModel: env.NEMOTRON_PLANNER_MODEL,
-    nemotronWorkerModel: env.NEMOTRON_WORKER_MODEL,
+    ...modelEnv(env),
+    ...webSearchEnv(env),
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
+    investigatorMaxTokens: env.INVESTIGATOR_MAX_TOKENS,
+    investigatorThinking: env.INVESTIGATOR_THINKING,
+    investigatorHandoff: env.INVESTIGATOR_HANDOFF,
+    queryRateLimitPerHour: env.QUERY_RATE_LIMIT_PER_HOUR,
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
     githubApiBase: env.PARALLAX_GITHUB_API_BASE,
+    githubWriteToken: env.PARALLAX_GITHUB_WRITE_TOKEN,
+    githubWebhookSecret: env.PARALLAX_GITHUB_WEBHOOK_SECRET,
+    publicUrl: env.PARALLAX_PUBLIC_URL,
+    docsRoots: nonEmpty(env.DOCS_ROOTS),
+    docsCacheDir: nonEmpty(env.DOCS_CACHE_DIR),
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

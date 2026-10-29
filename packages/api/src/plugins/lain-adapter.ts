@@ -1,6 +1,14 @@
 import fp from 'fastify-plugin';
-import { createLainClient } from '../lain-adapter/client.js';
+import { createLainClient, getLainClient, type LainClientConfig } from '../lain-adapter/client.js';
 import { createLainMock } from '../lain-adapter/mock.js';
+import type { LainAdapter } from '../lain-adapter/types.js';
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    /** Cliente LAIN de un workspace (pool real); los tests inyectan el motor aquí. */
+    lainClientFor: (config: LainClientConfig) => Promise<LainAdapter>;
+  }
+}
 
 export default fp(
   async (fastify) => {
@@ -15,6 +23,7 @@ export default fp(
       adapter = createLainMock();
     }
     fastify.decorate('lain', adapter);
+    fastify.decorate('lainClientFor', getLainClient);
   },
   { name: 'lain-adapter' },
 );
