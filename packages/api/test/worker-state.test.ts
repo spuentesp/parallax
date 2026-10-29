@@ -129,6 +129,14 @@ describe('computeInputDigest', () => {
     expect(computeInputDigest(base)).toBe(computeInputDigest({ ...base, configHash: null }));
   });
 
+  it('is per workspace: the same repos at the same commits in two workspaces are two jobs', () => {
+    expect(computeInputDigest({ ...base, orgId: 'ws_a' })).not.toBe(
+      computeInputDigest({ ...base, orgId: 'ws_b' }),
+    );
+    // Sin orgId se conserva la identidad de siempre (las filas ya guardadas no cambian).
+    expect(computeInputDigest(base)).toBe(computeInputDigest({ ...base }));
+  });
+
   it('is insensitive to manifest key order', () => {
     const reordered = {
       ...base,

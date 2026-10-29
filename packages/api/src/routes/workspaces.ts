@@ -11,7 +11,12 @@ import {
   resolveSymbolSnippet,
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
-import { GitHubReader, type OpenPrItem, PrUrlError, parseGithubRepoUri } from '../github/reader.js';
+import {
+  githubReaderFor,
+  type OpenPrItem,
+  PrUrlError,
+  parseGithubRepoUri,
+} from '../github/reader.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import { lainConfigYaml, repoStatuses } from '../repo-status.js';
 import { buildEndpointTopology } from '../topology.js';
@@ -38,10 +43,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     if (!ws) return reply.code(404).send({ error: 'workspace not found' });
 
     const repos = await app.db.select().from(schema.repo).where(eq(schema.repo.workspaceId, id));
-    const reader = new GitHubReader({
-      ...(app.config.githubApiBase ? { apiBase: app.config.githubApiBase } : {}),
-      ...(app.config.githubReadToken ? { token: app.config.githubReadToken } : {}),
-    });
+    const reader = githubReaderFor(app.config);
     const prs: Array<OpenPrItem & { repo: string }> = [];
     const skipped: Array<{ repo: string; reason: string }> = [];
     const errors: Array<{ repo: string; code: string; message: string }> = [];

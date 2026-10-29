@@ -68,6 +68,8 @@ export interface DigestInput {
   readonly configHash?: string | null;
   readonly analyzerVersion: string;
   readonly policyVersion?: string;
+  /** El workspace dueño de la evaluación (ver computeInputDigest). */
+  readonly orgId?: string;
 }
 
 // JSON canónico: claves ordenadas recursivamente, sin dependencia del orden de
@@ -95,6 +97,10 @@ export function computeInputDigest(input: DigestInput): string {
     configHash: input.configHash ?? null,
     analyzerVersion: input.analyzerVersion,
     policyVersion: input.policyVersion ?? PARALLAX_POLICY_VERSION,
+    // El workspace entra en la identidad: dos workspaces con el mismo repo en los mismos commits
+    // son evaluaciones distintas (su LAIN, su informe, su estado en GitHub). Sin esto, la segunda
+    // recibía la evaluación de la primera y nunca se publicaba la suya.
+    orgId: input.orgId,
   });
   return `sha256_${createHash('sha256').update(canonical).digest('hex')}`;
 }

@@ -127,7 +127,7 @@ describe('buildCommentPreview', () => {
     expect(preview.dryRun).toBe(true);
     expect(preview.markdown).toContain('DRY RUN');
     expect(preview.markdown).toMatch(/preview generated locally/i);
-    expect(preview.markdown).toMatch(/never posts to GitHub/i);
+    expect(preview.markdown).toMatch(/posts nothing to GitHub/i);
   });
 
   it('keeps the evaluated SHAs and the assessment id (§2)', () => {

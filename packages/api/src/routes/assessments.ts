@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { buildCommentPreview } from '../github/comment-preview.js';
-import { GitHubReader, PrUrlError, parsePrUrl } from '../github/reader.js';
+import { githubReaderFor, PrUrlError, parsePrUrl } from '../github/reader.js';
 import {
   AssessmentRequestBody,
   createAssessment,
@@ -29,7 +29,7 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
           worker: app.assessmentWorker,
           body,
           analyzerVersion: app.lain.analyzerVersion,
-          github: new GitHubReader(),
+          github: githubReaderFor(app.config),
         });
         // El runner trabaja en segundo plano; el cliente observa el progreso
         // por GET y los eventos. La segunda llamada reutiliza la promesa en
@@ -164,13 +164,13 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
           detail: e instanceof Error ? e.message : 'invalid PR url',
         });
       }
-      const reader = new GitHubReader();
+      const reader = githubReaderFor(app.config);
       try {
         const pr = await reader.fetchPr(url);
         return {
           pr,
           dryRun: true,
-          note: 'Read-only. Parallax never posts comments or opens PRs; the comment is a local preview.',
+          note: 'Read-only: resolving a PR posts nothing to GitHub. Results are published only by the CI reporting a workspace turns on (commit status, optional comment).',
         };
       } catch (e) {
         const code = e instanceof PrUrlError ? e.code : 'http_error';

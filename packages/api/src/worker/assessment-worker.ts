@@ -26,9 +26,12 @@ type Db = BetterSQLite3Database<typeof schema>;
 
 const SNAPSHOT_WAIT_MS = 60_000;
 const SNAPSHOT_POLL_MS = 200;
-// Trazamos impacto sólo para los hallazgos principales: el resto queda como
-// hallazgo del motor sin traza, visible en el informe.
-const MAX_TRACE_TARGETS = 3;
+// Trazamos impacto sólo para los primeros cambios de contrato: el resto queda como hallazgo del
+// motor sin traza, y ESO SE DECLARA como hueco de cobertura (antes se cortaba en silencio y un
+// PR con diez cambios salía "cobertura completa" con tres trazas).
+const MAX_TRACE_TARGETS = 8;
+// Proveedores de los que se recogen anclas de evidencia.
+const MAX_EVIDENCE_SERVICES = 3;
 const MAX_EVIDENCE_ROWS = 12;
 
 export interface ResolvedManifest {
@@ -159,6 +162,7 @@ export class AssessmentWorker {
       configHash: input.manifest.configHash,
       analyzerVersion: adapter?.analyzerVersion ?? 'unknown',
       policyVersion: PARALLAX_POLICY_VERSION,
+      orgId: input.orgId,
     });
     const existing = await this.db
       .select()
@@ -459,12 +463,16 @@ export class AssessmentWorker {
       const changes = diff.changes as Array<Record<string, unknown>>;
       // Un cambio del lado consumidor ya trae sus caminos en el diff, y su
       // endpoint no es de ese servicio: no se traza aparte.
-      const traceTargets = changes
-        .filter((c) => {
-          const endpoint = c.endpoint as { key?: string; service?: string } | undefined;
-          return endpoint?.key != null && endpoint.service != null && c.side !== 'consumer';
-        })
-        .slice(0, MAX_TRACE_TARGETS);
+      const traceable = changes.filter((c) => {
+        const endpoint = c.endpoint as { key?: string; service?: string } | undefined;
+        return endpoint?.key != null && endpoint.service != null && c.side !== 'consumer';
+      });
+      const traceTargets = traceable.slice(0, MAX_TRACE_TARGETS);
+      if (traceable.length > traceTargets.length) {
+        gaps.push(
+          `trace_impact skipped for ${traceable.length - traceTargets.length} of ${traceable.length} changed contracts (limit ${MAX_TRACE_TARGETS}): their impact is not traced`,
+        );
+      }
 
       const traces: Array<{ from: unknown; result: unknown }> = [];
       for (const change of traceTargets) {
@@ -630,7 +638,7 @@ export class AssessmentWorker {
           })
           .filter((s): s is string => s != null),
       ),
-    ].slice(0, MAX_TRACE_TARGETS);
+    ].slice(0, MAX_EVIDENCE_SERVICES);
 
     let inserted = 0;
     for (const service of services) {

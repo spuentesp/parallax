@@ -87,7 +87,7 @@ export function buildCommentPreview(
   );
   lines.push('');
   lines.push(
-    '> This is a **preview generated locally**. Parallax never posts to GitHub automatically; publishing is an explicit operator action.',
+    '> This is a **preview generated locally**; this request posts nothing to GitHub. Parallax publishes to GitHub only through the CI reporting a workspace turns on (a commit status, and a comment if enabled).',
   );
   lines.push('');
 

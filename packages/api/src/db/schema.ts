@@ -130,6 +130,19 @@ export const workspaceCi = sqliteTable('workspace_ci', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const prReport = sqliteTable('pr_report', {
+  assessmentId: text('assessment_id').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  owner: text('owner').notNull(),
+  repo: text('repo').notNull(),
+  number: integer('number').notNull(),
+  headSha: text('head_sha').notNull(),
+  context: text('context').notNull(),
+  createdAt: integer('created_at').notNull(),
+  /** Cuándo se publicó el resultado final; null = pendiente (lo retoma el arranque). */
+  reportedAt: integer('reported_at'),
+});
+
 export const conversation = sqliteTable(
   'conversation',
   {

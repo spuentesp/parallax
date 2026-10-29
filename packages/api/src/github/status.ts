@@ -25,10 +25,19 @@ function clip(text: string): string {
   return text.length <= MAX_DESCRIPTION ? text : `${text.slice(0, MAX_DESCRIPTION - 1)}…`;
 }
 
+/** El estado con que arranca el análisis: sin él, el PR no mostraba nada hasta el resultado. */
+export const PENDING_STATUS: CommitStatusSpec = {
+  state: 'pending',
+  description: 'Parallax is analyzing this pull request…',
+};
+
 /**
- * Estado del commit según el peor hallazgo. Un hallazgo `Verified` falla el check;
- * `NeedsInvestigation` lo deja pendiente; sólo `NoKnownImpact` con cobertura completa
- * es `success`. La cobertura incompleta nunca se presenta como éxito (INV 3).
+ * Estado FINAL del commit. `pending` significa "todavía corriendo" y GitHub lo muestra como
+ * "esperando" para siempre si nadie lo cambia, así que un resultado terminal nunca lo usa:
+ *   failure — hay un impacto verificado.
+ *   error   — no concluyente: hay hallazgos que investigar o la cobertura es incompleta.
+ *   success — sólo `NoKnownImpact` con cobertura completa (la cobertura incompleta nunca se
+ *             presenta como éxito: INV 3).
  */
 export function statusForReport(report: ReportForStatus): CommitStatusSpec {
   if (report.status === 'FAILED') {
@@ -41,21 +50,25 @@ export function statusForReport(report: ReportForStatus): CommitStatusSpec {
     return { state: 'failure', description: clip(`${verified} verified impact(s) found.`) };
   }
   if (needs > 0) {
-    return { state: 'pending', description: clip(`${needs} finding(s) need investigation.`) };
+    return { state: 'error', description: clip(`${needs} finding(s) need investigation.`) };
   }
   const complete = report.coverage?.complete === true;
   if (report.status === 'PARTIAL' || !complete) {
     const reason = report.coverage?.summary ?? 'coverage is incomplete';
-    return { state: 'pending', description: clip(`No result conclusive: ${reason}`) };
+    return { state: 'error', description: clip(`No result conclusive: ${reason}`) };
   }
   return { state: 'success', description: clip('No known impact; coverage complete.') };
 }
 
 /** Comentario en markdown para el PR (sólo si el workspace lo activó). */
-export function commentBodyFor(report: ReportForStatus, reportUrl: string | null): string {
+export function commentBodyFor(
+  report: ReportForStatus,
+  reportUrl: string | null,
+  workspaceName?: string,
+): string {
   const count = (c: string) => report.findings.filter((f) => f.impact?.class === c).length;
   const lines = [
-    '### Parallax assessment',
+    workspaceName ? `### Parallax assessment — ${workspaceName}` : '### Parallax assessment',
     '',
     `- Verified: ${count('Verified')}`,
     `- Needs investigation: ${count('NeedsInvestigation')}`,
@@ -95,11 +108,11 @@ export class GitHubWriter {
     owner: string,
     repo: string,
     sha: string,
-    spec: CommitStatusSpec & { targetUrl: string | null },
+    spec: CommitStatusSpec & { targetUrl: string | null; context?: string },
   ): Promise<void> {
     await this.post(`/repos/${owner}/${repo}/statuses/${sha}`, {
       state: spec.state,
-      context: STATUS_CONTEXT,
+      context: spec.context ?? STATUS_CONTEXT,
       description: spec.description,
       ...(spec.targetUrl ? { target_url: spec.targetUrl } : {}),
     });

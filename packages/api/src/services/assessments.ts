@@ -152,6 +152,7 @@ export async function resolveAssessmentRequest(
     manifest: { base: baseRepos, head: headRepos },
     configHash: body.configHash ?? null,
     analyzerVersion,
+    orgId: body.orgId,
   });
   return { request: { orgId: body.orgId, manifest }, digest };
 }

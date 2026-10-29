@@ -150,7 +150,10 @@ describe('the assistant shows what the investigator is doing, live', () => {
     await waitFor(() =>
       expect(steps.textContent).toMatch(/search_code · checkout shipping · in saleor/),
     );
-    expect(steps.textContent).toMatch(/get_service · saleor-api \(refused: duplicate call\)/);
+    // Los pasos llegan por un flujo: el segundo puede tardar un instante tras el primero.
+    await waitFor(() =>
+      expect(steps.textContent).toMatch(/get_service · saleor-api \(refused: duplicate call\)/),
+    );
     await waitFor(() =>
       expect(screen.getByTestId('progress-count').textContent).toBe('1 of 10 reads'),
     );

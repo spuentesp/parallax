@@ -414,6 +414,38 @@ describe('AssessmentWorker analyze step — which view each finding is traced in
     expect((cov.missing ?? []).filter((m) => m.startsWith('trace_impact'))).toEqual([]);
   });
 
+  it('declares the contracts it did not trace instead of cutting the list silently', async () => {
+    const traced: string[] = [];
+    const mock = createLainMock();
+    const many = Array.from({ length: 11 }, (_, i) =>
+      change('EndpointAdded', 'orders', `http:POST /orders/bulk${String(i)}`),
+    );
+    const lain = {
+      ...mock,
+      async diffContracts(req: Parameters<typeof mock.diffContracts>[0]) {
+        const d = await mock.diffContracts(req);
+        return { ...d, changes: many };
+      },
+      async traceImpact(req: Parameters<typeof mock.traceImpact>[0]) {
+        traced.push((req.from as { endpoint: { key: string } }).endpoint.key);
+        return mock.traceImpact(req);
+      },
+    } as unknown as typeof mock;
+    const worker = new AssessmentWorker(db, { getLain: async () => lain });
+    const { assessment } = await worker.create(
+      resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1),
+    );
+    await worker.run(assessment.id);
+    const rec = await worker.get(assessment.id);
+    const cov = JSON.parse(rec?.coverageJson ?? '{}') as { missing?: string[]; complete?: boolean };
+    expect(traced).toHaveLength(8);
+    expect((cov.missing ?? []).find((m) => m.startsWith('trace_impact skipped'))).toBe(
+      'trace_impact skipped for 3 of 11 changed contracts (limit 8): their impact is not traced',
+    );
+    // Con trazas sin hacer, el informe no puede presentarse como completo.
+    expect(rec?.status).toBe('PARTIAL');
+  });
+
   it('records an engine failure in the coverage with its code and message, not [object Object]', async () => {
     const mock = createLainMock();
     const lain = {
