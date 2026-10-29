@@ -1,60 +1,68 @@
 # 3-minute pitch video — script
 
-Target: **2:45–2:55**. Record the screen at 1080p, voice-over after (re-recordable). No music, or music you have the licence for. No third-party logos on screen other than the product itself (Saleor is open source; it is fine to show its name).
-
-**Before recording:** warm the map cache (open the map once), pre-run the two questions below so Nemotron answers fast, check `NEBIUS_TOKEN` works on the demo host, close notifications, light **or** dark theme — pick one and stay on it.
-
----
-
-### 0:00–0:20 — The problem (talk to camera or title card)
-> "I just joined a company. I'm assigned to checkout. I don't know the stack, I don't know which repos matter, I don't know what depends on what. Normally I'd spend two weeks asking people. Architects have the same problem at a bigger scale: a service mesh nobody fully understands. Knowledge silos. Parallax is built to destroy them."
-
-*(Screen: the Parallax map, zoomed out, repos only.)*
-
-### 0:20–1:10 — New engineer: ask
-> "I ask Parallax what I'm walking into."
-
-Type: **"Which services consume the checkout API, and from which repos?"**
-> "Nemotron, running on Nebius Token Factory, investigates using the code analysis engine's tools. It answers — and look at this: every relationship it claimed was checked by the engine. Verified. Contradicted. Unverifiable. The model doesn't decide what's true; the engine does."
-
-Click **Show on map**.
-> "And it takes me to exactly the part of the architecture that backs the answer."
-
-### 1:10–1:55 — Architect: explore
-> "Now I'm the architect. I want the whole picture."
-
-*(Zoom out → open a repo → open a service → endpoint → Code → a file → a function.)*
-> "Repos, services, endpoints, then the code itself — functions inside files inside the repo. All loaded on demand, so it scales."
-
-*(Toggle **inferred** only, then **deterministic**.)*
-> "Solid lines are proven by static analysis. Dashed lines are inferred, fainter the less sure the engine is. Parallax never promotes a guess to a fact."
-
-*(Select an endpoint; inspector shows Consumed by.)*
-> "Click any endpoint: who consumes it, across repos, and how sure we are."
-
-### 1:55–2:25 — Change impact
-*(Assessments → a PR report.)*
-> "Before a change ships: what does this pull request break in other repos? The engine decides the facts — which consumers, how severe — and Nemotron explains them, by finding, so nothing is invented."
-
-### 2:25–2:50 — How it's built (quick, for the judges)
-*(Show a short architecture diagram or the investigator's tool-call trace.)*
-> "Nemotron 3 Super plans, Nemotron 3.5 Lightning does the fast work, both through Nebius Token Factory, in a tool-calling loop with a hard budget. Every explanation is stored with the model, prompt and tool calls, so it's auditable. The app runs on Nebius."
-
-### 2:50–3:00 — Close
-> "Knowledge locked in people's heads, made navigable and verifiable. That's Parallax: if it's in your org's code, it can guide you."
-
-*(End card: repo URL + demo URL.)*
+Target: **2:32** of narration + ~10s outro = **~2:42** total runtime.
+Format: 1080p (1920x1080), dual-voice AI narration synced to Playwright browser automation.
 
 ---
 
-### Real numbers you can quote (measured, Saleor on Lain 0.13.0)
-- 3 repos (API, dashboard, storefront) → 3 services → **661 contracts** (591 GraphQL, 164 topics, 80 HTTP…).
-- **331 service-to-contract dependencies; 657 uses proven (deterministic), 8 inferred.** Built in ~11 s; cold index of the three repos ~2 min.
-- The biggest service has 591 endpoints: Parallax shows the 50 most connected and says "+541 more" instead of drawing a hairball.
+### Cast & Character Structure
+- **Junior Engineer (Brian — `en-US-BrianNeural`):** Speaks only at the beginning (Scene 1 hook and Scene 2 question). Sets up the relatable dev friction without dragging.
+- **Lead Architect (Ava — `en-US-AvaNeural`):** Primary guide and technical narrator from Scene 2 onward. Confident, conversational, and authoritative across the entire product demo and closing punchline.
 
-### Keep it honest (do not say these — they are not built yet)
-- Do **not** claim a "what happened this week across all repos" digest, or that it knows which *team* owns a service / which services "belong to sales". Say "checkout" or another name-based domain.
-- If asked in Q&A: PR impact is per-PR today; ownership metadata and digests are the roadmap.
+---
 
-### Shot list checklist
-- [ ] Map zoomed out (repos) · [ ] ask + verdicts + Show on map · [ ] drill repo→function · [ ] inferred vs deterministic filter · [ ] inspector "Consumed by" · [ ] PR assessment · [ ] architecture/trace slide · [ ] end card with URLs
+### Master Audio Timeline (`docs/hackathon/video/audio-timeline.json`)
+
+#### Scene 1: The Problem (0:00 – 0:20)
+- `0:00 - 0:07` **Junior (Brian):**
+  > "I just joined a team and got assigned to checkout. I don't know the stack, which repos matter, or what depends on what."
+- `0:07 - 0:19` **Architect (Ava):**
+  > "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented service mesh. Parallax turns that tribal knowledge into an explorable reality."
+*(Visual: Zoomed-out map showing top-level repos; gentle camera pan across service clusters)*
+
+#### Scene 2: The Question & The Engine (0:20 – 1:00)
+- `0:20 - 0:27` **Junior (Brian):**
+  > "So I ask Parallax: Which services consume the checkout API, and from which repos?"
+  *(Visual: Types question into the investigator search box, presses enter)*
+- `0:27 - 0:37` *(UI Pause: Nemotron streams investigation tool calls)*
+- `0:37 - 0:53` **Architect (Ava):**
+  > "Watch Nemotron investigate using the code analysis engine's tools. Look at the result: every relationship it claims was checked by the engine. Verified. Contradicted. Unverifiable. The model doesn't decide what's true; the engine does."
+  *(Visual: Highlight engine verification verdict badges)*
+- `0:55 - 1:00` **Architect (Ava):**
+  > "Click Show on map, and it takes us directly to the architecture backing the answer."
+  *(Visual: Clicks 'Show on map' -> camera glides to checkout subgraph)*
+
+#### Scene 3: The Architecture Canvas (1:03 – 1:40)
+- `1:03 - 1:15` **Architect (Ava):**
+  > "Now I want the whole picture. Repos, services, endpoints, down to the actual functions. Everything is loaded on demand, so even massive monorepos scale smoothly."
+  *(Visual: Drills down repo -> service -> endpoint -> file -> function)*
+- `1:19 - 1:30` **Architect (Ava):**
+  > "Solid lines are proven by static analysis. Dashed lines are inferred, fainter the less sure the engine is. Parallax never promotes a guess to a fact."
+  *(Visual: Toggles filter between deterministic proven edges and heuristic inferred edges)*
+- `1:33 - 1:39` **Architect (Ava):**
+  > "Click any endpoint to see who consumes it across repos, and how confident we are."
+  *(Visual: Clicks an endpoint node; inspector drawer slides out showing consumers)*
+
+#### Scene 4: Blast Radius & PR Safety (1:43 – 2:02)
+- `1:43 - 1:57` **Architect (Ava):**
+  > "Before code ships: what does this pull request break downstream? The engine determines the blast radius and severity, while Nemotron explains the impact finding by finding—no invented regressions, zero hallucinations."
+  *(Visual: Navigates to PR assessment report, reviews downstream impact breakdown)*
+
+#### Scene 5: Under the Hood (2:02 – 2:22)
+- `2:02 - 2:18` **Architect (Ava):**
+  > "Under the hood: Nemotron Super plans the investigation and Lightning handles fast tool execution through Nebius Token Factory. Every tool call and prompt version is saved to the audit log. The entire platform runs on Nebius."
+  *(Visual: Investigator audit drawer / tool trace showing Nemotron planning + execution tokens)*
+
+#### Scene 6: Close (2:22 – 2:32)
+- `2:22 - 2:29` **Architect (Ava):**
+  > "Knowledge locked in people's heads, made navigable and verifiable. That's Parallax: if it's in your org's code, it can guide you."
+*(Visual: End card with GitHub Repo URL and live demo URL)*
+
+---
+
+### File Locations
+- **Master Audio:** [`docs/hackathon/video/audio/master_voiceover.mp3`](file:///home/sebastian/repos/work/parallax/docs/hackathon/video/audio/master_voiceover.mp3)
+- **Timeline Cues:** [`docs/hackathon/video/audio-timeline.json`](file:///home/sebastian/repos/work/parallax/docs/hackathon/video/audio-timeline.json)
+- **Audio Generator:** [`docs/hackathon/video/scripts/generate-voiceover.py`](file:///home/sebastian/repos/work/parallax/docs/hackathon/video/scripts/generate-voiceover.py)
+- **Video Builder:** [`docs/hackathon/video/scripts/build-video.sh`](file:///home/sebastian/repos/work/parallax/docs/hackathon/video/scripts/build-video.sh)
+- **Playwright Recorder:** [`docs/hackathon/video/scripts/record-pitch.ts`](file:///home/sebastian/repos/work/parallax/docs/hackathon/video/scripts/record-pitch.ts)
