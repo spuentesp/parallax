@@ -1,0 +1,74 @@
+data_dir: /home/ubuntu/nvidia/.lain/federation
+max_concurrent_indexers: 4
+repos:
+  # Cluster A (OpenShell RPC Stack)
+  - id: OpenShell
+    packages: ["@nvidia/openshell-sdk", "openshell"]
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/OpenShell
+  - id: NeMo-Fabric
+    packages: ["nemo-fabric"]
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/NeMo-Fabric
+  - id: NemoClaw
+    packages: ["nemoclaw"]
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/NemoClaw
+
+  # Cluster B (NeMo Agent Toolkit HTTP Stack)
+  - id: NeMo-Agent-Toolkit
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/NeMo-Agent-Toolkit
+  - id: NeMo-Agent-Toolkit-UI
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/NeMo-Agent-Toolkit-UI
+  - id: NeMo-Agent-Toolkit-Examples
+    source:
+      type: workspace_dir
+      path: /home/ubuntu/nvidia/NeMo-Agent-Toolkit-Examples
+
+services:
+  # Cluster A services
+  - name: openshell-gateway
+    repo: OpenShell
+    paths: [proto, crates]
+    hosts: [localhost, 127.0.0.1]
+    env: [OPENSHELL_GATEWAY]
+  - name: openshell-sdk
+    repo: OpenShell
+    paths: [python, sdk]
+  - name: nemo-fabric
+    repo: NeMo-Fabric
+  - name: nemoclaw
+    repo: NemoClaw
+
+  # Cluster B services
+  - name: nat
+    repo: NeMo-Agent-Toolkit
+    hosts: [localhost, 127.0.0.1]
+    env: [NAT_BACKEND_URL, NAT_SERVER_URL, NAT_URL, NEXT_PUBLIC_NAT_URL]
+  - name: nat-ui
+    repo: NeMo-Agent-Toolkit-UI
+  - name: nat-examples
+    repo: NeMo-Agent-Toolkit-Examples
+
+provides:
+  - service: nat
+    key: "http:POST /chat/stream"
+    source: "nat config.yaml (general.endpoint.path)"
+  - service: nat
+    key: "http:POST /chat"
+    source: "nat config.yaml"
+  - service: nat
+    key: "ws:/websocket"
+    source: "nat config.yaml (general.endpoint.websocket_path)"
+
+host_aliases:
+  - host: UPSTREAM_HTTP_ORIGIN
+    service: nat
+    source: "nat-ui proxy/server.js (NAT_BACKEND_URL)"

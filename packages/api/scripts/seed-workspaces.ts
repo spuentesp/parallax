@@ -25,9 +25,10 @@ interface SeedWorkspace {
   repos: SeedRepo[];
 }
 
-const CLUSTER_A_LAIN = process.env.CLUSTER_A_LAIN_URL ?? process.env.LAIN_URL ?? 'http://host.docker.internal:9991/mcp';
-const CLUSTER_B_LAIN = process.env.CLUSTER_B_LAIN_URL ?? process.env.LAIN_URL ?? 'http://host.docker.internal:9992/mcp';
-const SALEOR_LAIN = process.env.SALEOR_LAIN_URL ?? 'http://localhost:9999/mcp';
+const LAIN_URL = process.env.LAIN_URL ?? 'http://host.docker.internal:9999/mcp';
+const CLUSTER_A_LAIN = process.env.CLUSTER_A_LAIN_URL ?? LAIN_URL;
+const CLUSTER_B_LAIN = process.env.CLUSTER_B_LAIN_URL ?? LAIN_URL;
+const SALEOR_LAIN = process.env.SALEOR_LAIN_URL ?? LAIN_URL;
 const BOUTIQUE_LAIN = process.env.BOUTIQUE_LAIN_URL ?? 'http://localhost:9998/mcp';
 const FIXTURE_LAIN = process.env.FIXTURE_LAIN_URL ?? 'http://localhost:9997/mcp';
 

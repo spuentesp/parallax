@@ -5,8 +5,8 @@ Goal: a public, **protected** demo on Nebius AI Cloud showcasing two distinct NV
 - **Cluster B (`ws_cluster_b`)**: NeMo Agent Toolkit HTTP & WebSocket runtime endpoints + Next.js API routes + UI reverse proxy.
 
 Everything runs on one VM:
-- Two Lain instances on the host (Cluster A on port 9991, Cluster B on port 9992).
-- Parallax + automatic HTTPS (Caddy) in Docker.
+- A single Lain server running on the host in federation mode on port 9999.
+- A single Parallax instance + automatic HTTPS (Caddy) in Docker serving both workspaces in the same UI.
 
 ## 0. What you need
 - A VM (Nebius AI Cloud, Ubuntu 22.04+, ~4 vCPU / 8 GB / 50 GB disk) with a public IP and ports 80/443 open.
@@ -34,12 +34,13 @@ git clone https://github.com/spuentesp/parallax.git && cd parallax
 ./deploy/clone-nvidia-repos.sh ~/nvidia
 ```
 
-### Step 2.3: Start both Lain clusters
-Starts Cluster A on port `9991` and Cluster B on port `9992`:
+### Step 2.3: Start Lain in federation mode
+Copy `repos.yaml` and `workspaces.yaml` beside the repos, then start the single Lain federation server listening on **localhost:9999**:
 ```bash
-./deploy/start-lain-clusters.sh ~/lain/lain
+cp deploy/repos.yaml deploy/workspaces.yaml ~/nvidia/
+~/lain/lain server --config ~/nvidia/repos.yaml --transport http --port 9999
 ```
-Wait for both clusters to finish their initial indexing passes (check logs at `/tmp/lain-cluster-a.log` and `/tmp/lain-cluster-b.log`).
+Lain will index the unified federation for both clusters (OpenShell and NeMo Agent Toolkit). Wait until indexing completes.
 
 ## 3. Configure Parallax & Generate Tokens
 ```bash

@@ -1,0 +1,15 @@
+# Declared workspaces for Lain federation
+workspaces:
+  - name: cluster-a
+    description: "Cluster A: OpenShell gRPC proto surface joined with Python SDK and NeMo-Fabric / NemoClaw"
+    members:
+      - OpenShell
+      - NeMo-Fabric
+      - NemoClaw
+
+  - name: cluster-b
+    description: "Cluster B: NeMo Agent Toolkit HTTP & WebSocket runtime endpoints and UI reverse proxy"
+    members:
+      - NeMo-Agent-Toolkit
+      - NeMo-Agent-Toolkit-UI
+      - NeMo-Agent-Toolkit-Examples
