@@ -175,8 +175,12 @@ export function buildStyle(): StylesheetJson {
         'curve-style': 'bezier',
         width: 'data(width)',
         opacity: 'data(opacity)' as unknown as number,
+        // Líneas finas y limpias: punta pequeña, extremos redondos y un respiro respecto al nodo.
         'target-arrow-shape': 'triangle',
-        'arrow-scale': 0.9,
+        'arrow-scale': 0.65,
+        'line-cap': 'round',
+        'source-distance-from-node': 2,
+        'target-distance-from-node': 4,
         // El rótulo (×N) sólo aparece al mirar la arista: en conjunto es ruido.
         label: '',
         'font-size': 9,
@@ -199,7 +203,7 @@ export function buildStyle(): StylesheetJson {
         'line-color': inf,
         'target-arrow-color': inf,
         'line-style': 'dashed',
-        'line-dash-pattern': [6, 4],
+        'line-dash-pattern': [5, 4],
       },
     },
     { selector: '.dim', style: { opacity: 0.12 } },

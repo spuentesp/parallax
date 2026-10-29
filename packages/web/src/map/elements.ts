@@ -55,7 +55,8 @@ function trimContract(label: string): string {
 }
 
 export function edgeWidth(count: number): number {
-  return Math.min(1.5 + Math.log2(Math.max(1, count)) * 0.8, 5);
+  // Finas: la información está en el color y el trazo, no en el grosor (1 a 2,6 px).
+  return Math.min(1 + Math.log2(Math.max(1, count)) * 0.35, 2.6);
 }
 
 /** Con más aristas que esto, las que no son "fuertes" se atenúan hasta que se miran. */

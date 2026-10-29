@@ -46,7 +46,7 @@ describe('edge styling encodes provenance, not decoration', () => {
 
   it('width grows with rolled-up relations but is capped', () => {
     expect(edgeWidth(1)).toBeLessThan(edgeWidth(8));
-    expect(edgeWidth(1_000_000)).toBeLessThanOrEqual(7);
+    expect(edgeWidth(1_000_000)).toBeLessThanOrEqual(2.6);
   });
 
   it('labels aggregates with the count and flags mixed provenance', () => {

@@ -85,12 +85,12 @@ describe('nodeLabel — every state', () => {
 });
 
 describe('edge encodings — exact values', () => {
-  it('width: 1.5 for one relation, +0.8 per doubling, capped at 5', () => {
-    expect(edgeWidth(1)).toBeCloseTo(1.5);
-    expect(edgeWidth(0)).toBeCloseTo(1.5);
-    expect(edgeWidth(2)).toBeCloseTo(2.3);
-    expect(edgeWidth(8)).toBeCloseTo(3.9);
-    expect(edgeWidth(1024)).toBe(5);
+  it('width: 1 for one relation, +0.35 per doubling, capped at 2.6', () => {
+    expect(edgeWidth(1)).toBeCloseTo(1);
+    expect(edgeWidth(0)).toBeCloseTo(1);
+    expect(edgeWidth(2)).toBeCloseTo(1.35);
+    expect(edgeWidth(8)).toBeCloseTo(2.05);
+    expect(edgeWidth(1024)).toBe(2.6);
   });
 
   it('opacity: deterministic 0.9; inferred 0.35 + 0.55·confidence, clamped to [0,1]', () => {
