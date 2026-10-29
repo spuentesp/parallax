@@ -388,6 +388,102 @@ export async function resolvePathSnippet(
   }
 }
 
+export interface SymbolContextResult {
+  symbol: string;
+  repo: string;
+  path: string | null;
+  type: string | null;
+  calls: string[];
+  calledBy: string[];
+  anchorScore?: number | undefined;
+  rawText?: string | undefined;
+  error?: string | undefined;
+}
+
+export interface CallChainResult {
+  from: string;
+  to: string;
+  repo: string;
+  chain: string[];
+  rawText?: string | undefined;
+  error?: string | undefined;
+}
+
+export async function resolveSymbolContext(
+  adapter: LainAdapter,
+  repo: string,
+  symbol: string,
+): Promise<SymbolContextResult> {
+  try {
+    const res = await adapter.codeTool('get_context', { symbol, repo_id: repo, depth: 1 });
+    const text = res.text;
+    const pathMatch = /\*\*Path:\*\*\s*(.+)/.exec(text);
+    const typeMatch = /Explanation for '[^']+'\s*\(([^)]+)\)/.exec(text);
+    const callsMatch = /-\s+\*\*Calls:\*\*\s*(.+)/.exec(text);
+    const calledByMatch = /-\s+\*\*Called by:\*\*\s*(.+)/.exec(text);
+    const scoreMatch = /-\s+\*\*Anchor Score:\*\*\s*([\d.]+)/.exec(text);
+
+    const parseList = (m: RegExpExecArray | null): string[] => {
+      if (!m || !m[1]) return [];
+      return m[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter((s) => s && !s.startsWith('('));
+    };
+
+    return {
+      symbol,
+      repo,
+      path: pathMatch?.[1]?.trim() ?? null,
+      type: typeMatch?.[1]?.trim() ?? null,
+      calls: parseList(callsMatch),
+      calledBy: parseList(calledByMatch),
+      anchorScore: scoreMatch?.[1] ? Number(scoreMatch[1]) : undefined,
+      rawText: text,
+    };
+  } catch (e) {
+    return {
+      symbol,
+      repo,
+      path: null,
+      type: null,
+      calls: [],
+      calledBy: [],
+      error: e instanceof Error ? e.message : 'get_context failed',
+    };
+  }
+}
+
+export async function resolveCallChain(
+  adapter: LainAdapter,
+  repo: string,
+  from: string,
+  to: string,
+): Promise<CallChainResult> {
+  try {
+    const res = await adapter.codeTool('get_call_chain', { from, to, repo_id: repo });
+    const text = res.text;
+    const arrowLine = text
+      .split('\n')
+      .find((line) => (line.includes('→') || line.includes('->')) && !line.startsWith('##'));
+    const chain = arrowLine
+      ? arrowLine
+          .split(/→|->/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [from, to];
+    return { from, to, repo, chain, rawText: text };
+  } catch (e) {
+    return {
+      from,
+      to,
+      repo,
+      chain: [],
+      error: e instanceof Error ? e.message : 'get_call_chain failed',
+    };
+  }
+}
+
 /**
  * repo_id de LAIN para un repo del workspace: el basename del checkout local
  * (./test-repos/contracts-fixture/orders → orders), o del URI sin .git.

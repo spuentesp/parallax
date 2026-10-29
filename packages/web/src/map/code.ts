@@ -111,18 +111,24 @@ function codeNode(
   };
 }
 
+const MAX_COMM_PER_GROUP = 12;
+
 /**
  * Proyección del servidor + capa de código. `open` son los nodos de código que
- * el usuario abrió; `state` lo ya pedido a LAIN. Un repo abierto cuyo
- * `lainRepoId` es null (su nombre no coincide con ningún repo del workspace)
- * NO recibe "Code": no se navega código de un repo que no se pudo identificar.
+ * el usuario abrió; `state` lo ya pedido a LAIN. `activeRelations` son los nodos
+ * cuyas relaciones de comunicación se proyectan bajo demanda en el lienzo.
+ * Un repo abierto cuyo `lainRepoId` es null (su nombre no coincide con ningún
+ * repo del workspace) NO recibe "Code": no se navega código de un repo que no se
+ * pudo identificar.
  */
 export function mergeCode(
   view: MapViewResponse,
   open: ReadonlySet<string>,
   state: CodeState,
+  activeRelations?: ReadonlySet<string>,
 ): MapViewResponse {
   const extra: ProjectedNode[] = [];
+  const extraEdges: import('@parallax/shared/org-map').OrgEdge[] = [];
   const seen = new Set(view.nodes.map((n) => n.id));
   const add = (n: ProjectedNode) => {
     if (seen.has(n.id)) return;
@@ -130,22 +136,36 @@ export function mergeCode(
     extra.push(n);
   };
 
-  const grow = (parent: ProjectedNode, repo: string) => {
-    if (!parent.expanded) return;
-    const entry = state[parent.id];
-    if (entry?.state !== 'ready') return;
-    for (const child of entry.children) {
-      const node = codeNode(repo, parent.id, child, open, state);
-      add(node);
-      grow(node, repo);
+  const grow = (root: ProjectedNode, repo: string) => {
+    const queue = [root];
+    const visited = new Set<string>([root.id]);
+    const MAX_GROW_DEPTH = 32;
+    let depth = 0;
+    while (queue.length > 0 && depth < MAX_GROW_DEPTH) {
+      depth++;
+      const parent = queue.shift()!;
+      if (!parent.expanded) continue;
+      const entry = state[parent.id];
+      if (entry?.state !== 'ready') continue;
+      for (const child of entry.children) {
+        const node = codeNode(repo, parent.id, child, open, state);
+        add(node);
+        if (!visited.has(node.id)) {
+          visited.add(node.id);
+          queue.push(node);
+        }
+      }
     }
   };
+
+  const repoRoots = new Map<string, string>();
 
   for (const n of view.nodes) {
     if (n.kind !== 'repo' || !n.expanded) continue;
     const repo = n.meta.lainRepoId;
     if (typeof repo !== 'string') continue;
     const rootId = codeRootId(repo);
+    repoRoots.set(repo, rootId);
     const entry = state[rootId];
     const root: ProjectedNode = {
       id: rootId,
@@ -167,7 +187,49 @@ export function mergeCode(
     grow(root, repo);
   }
 
-  if (extra.length === 0) return view;
+  // Relaciones de código proyectadas bajo demanda para los nodos activados
+  if (activeRelations && activeRelations.size > 0) {
+    for (const activeId of activeRelations) {
+      const parsed = parseCodeId(activeId);
+      const entry = state[activeId];
+      if (!parsed || parsed.kind !== 'node' || entry?.state !== 'ready') continue;
+      const rootId = repoRoots.get(parsed.repo) ?? codeRootId(parsed.repo);
+      for (const comm of entry.communications) {
+        const edgeKind = comm.edge.toLowerCase() as import('@parallax/shared/org-map').OrgEdgeKind;
+        for (const peer of comm.nodes.slice(0, MAX_COMM_PER_GROUP)) {
+          const peerId = codeNodeId(parsed.repo, peer.type, peer.name);
+          if (!seen.has(peerId)) {
+            // Asegura que el nodo par exista en el lienzo dentro del contenedor Code
+            add({
+              id: peerId,
+              label: peer.name,
+              kind: isContainerType(peer.type) ? 'file' : 'symbol',
+              parent: rootId,
+              contract: peer.type,
+              meta: { repo: parsed.repo, type: peer.type, name: peer.name },
+              childCount: 0,
+              expanded: false,
+              lazy: isOpenableType(peer.type),
+            });
+          }
+          extraEdges.push({
+            id: `${edgeKind}:${activeId}->${peerId}`,
+            source: activeId,
+            target: peerId,
+            kind: edgeKind,
+            provenance: 'deterministic',
+            confidence: 1,
+            count: 1,
+            deterministicCount: 1,
+            inferredCount: 0,
+            label: comm.edge,
+          });
+        }
+      }
+    }
+  }
+
+  if (extra.length === 0 && extraEdges.length === 0) return view;
   // El repo que ya tenía servicios hijos sigue contándolos; "Code" se suma.
   const bump = new Map<string, number>();
   for (const n of extra) if (n.kind === 'code') bump.set(n.parent as string, 1);
@@ -177,5 +239,6 @@ export function mergeCode(
       ...view.nodes.map((n) => (bump.has(n.id) ? { ...n, childCount: n.childCount + 1 } : n)),
       ...extra,
     ],
+    edges: [...view.edges, ...extraEdges],
   };
 }

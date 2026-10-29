@@ -126,6 +126,57 @@ export function buildMcpServer(api: ApiClient): McpServer {
     },
   );
 
+  server.tool(
+    'parallax_step_call_stack',
+    'Traverse the call stack on demand for a function or class. Returns definition file:line, outgoing calls (what it calls), and incoming callers (who calls it).',
+    {
+      workspaceId: z.string().min(1),
+      repo: z.string().min(1),
+      symbol: z.string().min(1),
+    },
+    async (args) => {
+      try {
+        const qs = new URLSearchParams({ repo: args.repo, symbol: args.symbol });
+        const data = await api.get(`/api/workspaces/${args.workspaceId}/graph/symbol-context?${qs}`);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'parallax_get_call_chain',
+    'Find the call path between two symbols within a repo (from -> to).',
+    {
+      workspaceId: z.string().min(1),
+      repo: z.string().min(1),
+      from: z.string().min(1),
+      to: z.string().min(1),
+    },
+    async (args) => {
+      try {
+        const qs = new URLSearchParams({ repo: args.repo, from: args.from, to: args.to });
+        const data = await api.get(`/api/workspaces/${args.workspaceId}/graph/call-chain?${qs}`);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
   return server;
 }
 

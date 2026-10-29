@@ -246,6 +246,15 @@ export function filterOrgGraph(graph: OrgGraph, f: OrgGraphFilters): OrgGraph {
       inRelation.add(e.source);
       inRelation.add(e.target);
     }
+    if (f.includeStandalone) {
+      for (const n of graph.nodes) {
+        if (n.kind === 'endpoint') {
+          if (f.contract === undefined || n.contract === f.contract) {
+            inRelation.add(n.id);
+          }
+        }
+      }
+    }
     keep = keep ? new Set([...keep].filter((id) => inRelation.has(id))) : inRelation;
   }
 

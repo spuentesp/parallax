@@ -14,6 +14,7 @@ const Filters = z.object({
   provenance: z.enum(['deterministic', 'inferred']).optional(),
   minConfidence: z.number().min(0).max(1).optional(),
   service: z.string().min(1).optional(),
+  includeStandalone: z.boolean().optional(),
 });
 
 const ViewBody = z.object({
