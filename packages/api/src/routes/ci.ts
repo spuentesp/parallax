@@ -10,13 +10,7 @@ import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
 import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import { parseGithubRepoUri } from '../github/reader.js';
-import {
-  commentBodyFor,
-  GitHubWriter,
-  PENDING_STATUS,
-  STATUS_CONTEXT,
-  statusForReport,
-} from '../github/status.js';
+import { commentBodyFor, GitHubWriter, STATUS_CONTEXT } from '../github/status.js';
 import {
   isEvaluated,
   type PullRequestEvent,
@@ -36,7 +30,7 @@ import type { AssessmentWorker } from '../worker/assessment-worker.js';
 type Db = Parameters<typeof createAssessment>[0]['db'];
 
 const TERMINAL = new Set(['READY', 'PARTIAL', 'FAILED', 'CANCELLED']);
-const DEFAULT_CI: WorkspaceCiSettings = { mode: 'off', baseBranch: null, reportComments: false };
+const DEFAULT_CI: WorkspaceCiSettings = { mode: 'off', baseBranch: null, reportComments: true };
 
 export async function readCiSettings(db: Db, workspaceId: string): Promise<WorkspaceCiSettings> {
   const [row] = await db
@@ -119,8 +113,9 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
   if (!row || row.reportedAt !== null) return;
   const report = await getAssessmentReport(deps.db, id);
   if (!report) return;
+  const ci = await readCiSettings(deps.db, row.workspaceId);
   const writer = row.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
-  if (!writer) {
+  if (ci.reportComments && !writer) {
     deps.log.warn(
       { assessment: id },
       row.provider === 'gitlab'
@@ -132,13 +127,7 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
   const reportUrl = deps.publicUrl
     ? `${deps.publicUrl}/app/orgs/${row.workspaceId}/assessments/${id}`
     : null;
-  const ci = await readCiSettings(deps.db, row.workspaceId);
-  await writer.setCommitStatus(row.owner, row.repo, row.headSha, {
-    ...statusForReport(report),
-    targetUrl: reportUrl,
-    context: row.context,
-  });
-  if (ci.reportComments) {
+  if (ci.reportComments && writer) {
     const [ws] = await deps.db
       .select()
       .from(schema.workspace)
@@ -244,19 +233,6 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
       // A duplicate delivery repairs a report missing after an interrupted creation.
       // Existing rows already have a subscriber (or are recovered on startup).
       if (!reportCreated) continue;
-      // El PR muestra "analizando" desde ya, no un hueco hasta el resultado.
-      const writer = pr.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
-      if (writer) {
-        await writer
-          .setCommitStatus(pr.owner, pr.repo, pr.headSha, {
-            ...PENDING_STATUS,
-            targetUrl: null,
-            context,
-          })
-          .catch((err: unknown) =>
-            deps.log.warn({ err, assessment: assessment.id }, 'could not post the pending status'),
-          );
-      }
       // Primero la suscripción, luego el run: así no se pierde ninguna transición.
       reportWhenDone(deps, assessment.id);
       void deps.worker.run(assessment.id).catch((err: unknown) => {

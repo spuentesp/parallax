@@ -44,8 +44,7 @@ const AppConfigSchema = z.object({
   githubReadToken: z.string().min(1).optional(),
   // Base de la API de GitHub: configurable para que los tests apunten a un stand-in local.
   githubApiBase: z.string().url().optional(),
-  // Escritura a GitHub (commit status y comentarios): credencial aparte, sólo
-  // `Commit statuses: write` y `Issues: write`. La lee únicamente GitHubWriter.
+  // Escritura a GitHub: credencial separada para comentarios de asesoría.
   githubWriteToken: z.string().min(1).optional(),
   // Secreto HMAC de los webhooks de pull_request. Sin él no se acepta ningún webhook.
   githubWebhookSecret: z.string().min(1).optional(),

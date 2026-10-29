@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import type { FastifyBaseLogger } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.js';
-import { GitHubWriter, PENDING_STATUS } from '../src/github/status.js';
+import { GitHubWriter } from '../src/github/status.js';
 import { handlePullRequest } from '../src/routes/ci.js';
 import { buildApp } from '../src/server.js';
 
@@ -82,7 +82,7 @@ describe('a restart resumes interrupted PR evaluations and their GitHub reports'
       method: 'PUT',
       url: `/api/workspaces/${wsId}/ci`,
       headers: AUTH,
-      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
     });
     const parked = new Proxy(app1.assessmentWorker, {
       get(target, prop) {
@@ -121,9 +121,7 @@ describe('a restart resumes interrupted PR evaluations and their GitHub reports'
         baseChanged: false,
       },
     );
-    expect(
-      posts.filter((p) => p.url.includes('/statuses/')).map((p) => p.body.description),
-    ).toEqual([PENDING_STATUS.description]);
+    expect(posts.filter((p) => p.url.includes('/statuses/'))).toHaveLength(0);
     const [interrupted] = await app1.db.select().from(schema.assessment);
     expect(interrupted?.status).toBe('QUEUED');
     await app1.close();
@@ -134,16 +132,12 @@ describe('a restart resumes interrupted PR evaluations and their GitHub reports'
     apps.push(app2);
     await app2.ready();
     const deadline = Date.now() + 15_000;
-    const finalPosts = () =>
-      posts.filter(
-        (p) => p.url.includes('/statuses/') && p.body.description !== PENDING_STATUS.description,
-      );
+    const finalPosts = () => posts.filter((p) => p.url.includes('/issues/4/comments'));
     while (finalPosts().length === 0 && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 50));
     }
     expect(finalPosts()).toHaveLength(1);
-    expect(finalPosts()[0]?.url).toContain(`/statuses/${'b'.repeat(40)}`);
-    expect(['success', 'failure', 'error']).toContain(finalPosts()[0]?.body.state);
+    expect(posts.filter((p) => p.url.includes('/statuses/'))).toHaveLength(0);
     const [after] = await app2.db.select().from(schema.assessment);
     expect(['READY', 'PARTIAL', 'FAILED']).toContain(after?.status);
     const [report] = await app2.db.select().from(schema.prReport);

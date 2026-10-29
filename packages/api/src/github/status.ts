@@ -80,7 +80,11 @@ export function commentBodyFor(
 ): string {
   const count = (c: string) => report.findings.filter((f) => f.impact?.class === c).length;
   const lines = [
-    workspaceName ? `### Parallax assessment — ${workspaceName}` : '### Parallax assessment',
+    workspaceName ? `### Parallax advisory — ${workspaceName}` : '### Parallax advisory',
+    '',
+    'Advisory only; this review does not gate merging.',
+    '',
+    `Assessment: ${report.status}`,
     '',
     `- Verified: ${count('Verified')}`,
     `- Needs investigation: ${count('NeedsInvestigation')}`,

@@ -5,17 +5,17 @@ import { useCiSettings, useSaveCiSettings, type WorkspaceCiSettings } from '../a
 
 /**
  * CI automática del workspace: evaluar cada PR que se abre o actualiza en sus repos
- * de GitHub, y reportar el resultado (commit status; comentario si se activa).
+ * de GitHub y GitLab, con un comentario de asesoría si se activa.
  */
 export function CiSettingsPanel({ orgId }: { orgId: string }): React.ReactElement {
   const { data, isLoading, error } = useCiSettings(orgId);
 
   return (
     <section className="rounded-xl p-4 mb-6 bg-surface border border-border">
-      <h2 className="font-semibold mb-1">Auto CI</h2>
+      <h2 className="font-semibold mb-1">Automatic reviews</h2>
       <p className="text-xs text-muted mb-4">
-        Evaluate new or updated requests in the workspace&apos;s GitHub and GitLab repositories and
-        publish the result.
+        Evaluate new or updated requests in the workspace&apos;s GitHub and GitLab repositories.
+        Results are advisory and never set a commit status.
       </p>
       {isLoading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-error">{String(error)}</p>}
@@ -86,7 +86,7 @@ function CiForm({
           checked={reportComments}
           onChange={(e) => setReportComments(e.target.checked)}
         />
-        Also comment the result on the PR
+        Post an advisory comment on the request
       </label>
 
       <div className="flex items-center gap-3">

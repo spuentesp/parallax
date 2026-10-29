@@ -33,7 +33,7 @@ describe('Assessments CI and PR panels', () => {
     );
     renderAt('/orgs/ws1/assessments', '/orgs/:orgId/assessments');
     expect(await screen.findByRole('heading', { name: 'Open pull requests' })).toBeTruthy();
-    expect(await screen.findByRole('heading', { name: 'Auto CI' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Automatic reviews' })).toBeTruthy();
   });
 
   it('shows neither panel when the route has no workspace', async () => {
@@ -41,6 +41,6 @@ describe('Assessments CI and PR panels', () => {
     renderAt('/assessments', '/assessments');
     expect(await screen.findByRole('heading', { name: 'Assessments' })).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Open pull requests' })).toBeNull();
-    expect(screen.queryByRole('heading', { name: 'Auto CI' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Automatic reviews' })).toBeNull();
   });
 });
