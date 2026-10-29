@@ -1,15 +1,20 @@
 import type Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { WEB_REPO } from '../agent/web-search.js';
 import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import {
   type DocHit,
+  type DocSectionHit,
+  findDocSections,
   indexRepo,
+  indexWebPages,
   listIndexed,
   readDocs,
   resolveCheckout,
   searchDocs,
+  type WebDoc,
 } from './index.js';
 
 export const DOC_STOPWORDS: ReadonlySet<string> = new Set(
@@ -30,6 +35,13 @@ export interface DocsService {
   /** Indexa los repos del workspace que aún no lo estén (o todos con force). */
   ensure(workspaceId: string, force?: boolean): Promise<IndexReport[]>;
   search(workspaceId: string, query: string, opts?: { repo?: string; limit?: number }): DocHit[];
+  /**
+   * Las secciones de un archivo por su título: lo que hay, lo que casa con el
+   * título pedido y si el archivo está siquiera en el índice.
+   */
+  section(workspaceId: string, repo: string, path: string, heading: string): DocSectionHit;
+  /** Guarda las páginas de una búsqueda web en el índice (repo `web`) para poder citarlas. */
+  ingestWeb(workspaceId: string, pages: readonly WebDoc[]): void;
   list(workspaceId: string): ReturnType<typeof listIndexed>;
   /** Hay algo indexado para este workspace. */
   has(workspaceId: string): boolean;
@@ -88,6 +100,11 @@ export function createDocsService(deps: {
     },
     search: (workspaceId, query, opts) =>
       searchDocs(deps.sqlite, workspaceId, query, DOC_STOPWORDS, opts),
+    section: (workspaceId, repo, path, heading) =>
+      findDocSections(deps.sqlite, workspaceId, repo, path, heading),
+    ingestWeb: (workspaceId, pages) => {
+      indexWebPages(deps.sqlite, workspaceId, WEB_REPO, pages);
+    },
     list: (workspaceId) => listIndexed(deps.sqlite, workspaceId),
     has: (workspaceId) =>
       deps.sqlite

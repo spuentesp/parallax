@@ -686,6 +686,8 @@ export interface TurnDto {
   status: string;
   claims: ClaimVerdictDto[];
   focus: MapFocusDto | null;
+  /** Lo que se dibujó bajo la respuesta (roadmap, radio de impacto). */
+  roadmap?: RoadmapDto;
   model: string | null;
   createdAt: number;
 }

@@ -4,15 +4,23 @@
 //
 //   LAIN_URL=http://localhost:9999/mcp \
 //     pnpm --filter @parallax/api exec tsx --env-file-if-exists=../../.env \
-//     scripts/eval-saleor.ts [--runs N] <worker-model> [<worker-model> ...]
+//     scripts/eval-saleor.ts [--runs N] [--mode worker|super|relay] [--no-playbooks] <worker-model> [<worker-model> ...]
 //
-// Mide, por corrida: estado, recorte por presupuesto, llamadas, tiempo, claves
-// de operación inventadas (no existen en el catálogo del proveedor) y los
-// criterios del caso. No usa un modelo como juez: todo son comprobaciones sobre
-// el motor y sobre el texto.
+// --no-playbooks apaga los ejemplos de trabajo por tipo de pregunta (la línea base del A/B).
+//
+// --mode reparte el trabajo entre los dos modelos:
+//   worker — el trabajador lo hace todo (lo de hoy)
+//   super  — el planificador lo hace todo (la línea base que ya se sabía que pasa)
+//   relay  — el relevo: el planificador planifica y redacta, el trabajador lee
+//
+// Mide, por corrida: estado, recorte por presupuesto, llamadas (de herramienta y
+// de modelo), tokens de entrada, tiempo, claves de operación inventadas (no
+// existen en el catálogo del proveedor) y los criterios del caso. No usa un
+// modelo como juez: todo son comprobaciones sobre el motor y sobre el texto.
 
 import type { ClaimResult } from '../src/agent/claims.js';
 import { investigate } from '../src/agent/investigator.js';
+import type { QuestionType } from '../src/agent/playbooks.js';
 import { investigatorModel } from '../src/agent/model.js';
 import { fetchAllContracts } from '../src/advisor/correlate.js';
 import { loadConfig } from '../src/config.js';
@@ -24,6 +32,8 @@ const OP_KEY = /graphql:(?:query|mutation|subscription):[A-Za-z0-9_]+/g;
 
 interface EvalCase {
   id: string;
+  /** Tipo de pregunta: el resumen se reparte por tipo para ver qué ayuda a qué. */
+  type: QuestionType;
   question: string;
   /** Todas deben cumplirse. */
   require: Array<{ label: string; test: (answer: string, claims: ClaimResult[]) => boolean }>;
@@ -86,12 +96,14 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
   const cases: EvalCase[] = [
     {
       id: 'consumers',
+      type: 'relation',
       question: `Which services consume ${PROVIDER}?`,
       require: consumers.map((s) => ({ label: `names ${s}`, test: has(s) })),
       forbid: [],
     },
     {
       id: 'storefront-product',
+      type: 'relation',
       question: `Does the storefront consume the product query from ${PROVIDER}? Answer yes or no and cite the evidence.`,
       require: [
         { label: 'engine: storefront uses graphql:query:product', test: () => storefrontOps.has('graphql:query:product') },
@@ -105,6 +117,7 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
     },
     {
       id: 'dashboard-attributes',
+      type: 'locate',
       question: 'Which GraphQL operations related to attributes does the dashboard use against the Saleor API?',
       require: [
         {
@@ -116,6 +129,7 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
     },
     {
       id: 'no-reverse-dependency',
+      type: 'relation',
       question: `Does ${PROVIDER} consume saleor-dashboard or saleor-storefront?`,
       require: ['saleor-dashboard', 'saleor-storefront'].map((consumer) => ({
         label: `verdict for ${consumer} is no (engine-verified claim, else text)`,
@@ -130,10 +144,17 @@ async function buildCases(lain: LainAdapter): Promise<{ cases: EvalCase[]; provi
 
 interface RunResult {
   caseId: string;
+  type: QuestionType;
   model: string;
+  /** Cómo se repartió el trabajo: todo el trabajador, todo el planificador, o el relevo. */
+  mode: EvalMode;
   status: string;
   cutShort: boolean;
   calls: number;
+  /** Llamadas al modelo (el relevo hace dos más: el plan y la escritura). */
+  modelCalls: number;
+  promptTokens: number;
+  completionTokens: number;
   ms: number;
   invented: string[];
   claims: { verified: number; contradicted: number; unverifiable: number; total: number };
@@ -142,14 +163,31 @@ interface RunResult {
   pass: boolean;
 }
 
+/**
+ * Cómo se reparte el trabajo entre los dos modelos:
+ *   worker  — el trabajador lo hace todo (lo de hoy)
+ *   super   — el planificador lo hace todo (la línea base que ya se sabía que pasa)
+ *   relay   — el relevo: el planificador planifica y redacta, el trabajador lee
+ */
+type EvalMode = 'worker' | 'super' | 'relay';
+
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
   let runs = 1;
+  let mode: EvalMode = 'worker';
+  let playbooks = true;
   const models: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i] as string;
     if (a === '--runs') runs = Number(args[++i]);
-    else models.push(a);
+    else if (a === '--no-playbooks') playbooks = false;
+    else if (a === '--mode') {
+      const m = args[++i];
+      if (m !== 'worker' && m !== 'super' && m !== 'relay') {
+        throw new Error(`--mode must be worker, super or relay (got ${m})`);
+      }
+      mode = m;
+    } else models.push(a);
   }
   if (models.length === 0) throw new Error('pass at least one worker model id');
 
@@ -163,7 +201,15 @@ async function main(): Promise<void> {
 
   const results: RunResult[] = [];
   for (const workerModel of models) {
-    const model = investigatorModel(loadConfig({ ...process.env, NEMOTRON_WORKER_MODEL: workerModel }));
+    // En modo "super" el modelo fuerte hace el bucle entero; en "relay" hace el
+    // plan y la escritura, y el trabajador lee.
+    const effectiveWorker =
+      mode === 'super'
+        ? (process.env.NEMOTRON_PLANNER_MODEL ?? 'nvidia/nemotron-3-super-120b-a12b')
+        : workerModel;
+    const model = investigatorModel(
+      loadConfig({ ...process.env, NEMOTRON_WORKER_MODEL: effectiveWorker }),
+    );
     if (!model) throw new Error('NEBIUS_TOKEN is not set');
     for (const c of cases) {
       for (let r = 0; r < runs; r++) {
@@ -174,6 +220,8 @@ async function main(): Promise<void> {
           model: model.provider,
           view: 'live',
           budget: model.budget,
+          ...(mode === 'relay' ? { handoff: true } : {}),
+          ...(playbooks ? {} : { playbooks: false }),
         });
         // El modelo escribe guiones no separables (U+2011) y similares: se normalizan
         // para medir el contenido, no la tipografía.
@@ -188,10 +236,15 @@ async function main(): Promise<void> {
           hitForbid.length === 0;
         results.push({
           caseId: c.id,
+          type: c.type,
           model: workerModel,
+          mode,
           status: res.explanationStatus,
           cutShort: res.budget.cutShort,
           calls: res.budget.toolCallsUsed,
+          modelCalls: res.modelLog.length,
+          promptTokens: res.budget.promptTokens,
+          completionTokens: res.budget.completionTokens,
           ms: Date.now() - t0,
           invented,
           claims: {
@@ -206,7 +259,7 @@ async function main(): Promise<void> {
         });
         const last = results[results.length - 1] as RunResult;
         console.log(
-          `${last.pass ? 'PASS' : 'FAIL'} ${workerModel.split('/').pop()} ${c.id} [${last.status}] calls=${last.calls}${last.cutShort ? ' CUT' : ''} ${(last.ms / 1000).toFixed(0)}s` +
+          `${last.pass ? 'PASS' : 'FAIL'} ${mode}:${effectiveWorker.split('/').pop()} ${c.id} [${last.status}] calls=${last.calls} model=${last.modelCalls} in=${last.promptTokens}${last.cutShort ? ' CUT' : ''} ${(last.ms / 1000).toFixed(0)}s` +
             (last.claims.total ? ` claims=${last.claims.verified}ok/${last.claims.contradicted}contradicted/${last.claims.unverifiable}unverifiable` : ' claims=none(prose)') +
             (last.invented.length ? ` invented=${last.invented.slice(0, 3).join(',')}` : '') +
             (last.failedRequire.length ? ` missing=[${last.failedRequire.join('; ')}]` : '') +
@@ -219,13 +272,33 @@ async function main(): Promise<void> {
   console.log('\n=== summary ===');
   for (const m of models) {
     const rs = results.filter((r) => r.model === m);
+    const effectiveName =
+      mode === 'super'
+        ? (process.env.NEMOTRON_PLANNER_MODEL ?? 'nvidia/nemotron-3-super-120b-a12b')
+        : m;
     const passed = rs.filter((r) => r.pass).length;
     const cut = rs.filter((r) => r.cutShort).length;
     const invented = rs.filter((r) => r.invented.length > 0).length;
     const avgCalls = rs.reduce((n, r) => n + r.calls, 0) / rs.length;
     const structured = rs.filter((r) => r.claims.total > 0).length;
     const contradicted = rs.reduce((n, r) => n + r.claims.contradicted, 0);
-    console.log(`${m}: ${passed}/${rs.length} pass, ${cut} cut short, ${invented} with invented operations, avg ${avgCalls.toFixed(1)} calls, ${structured} structured answers, ${contradicted} contradicted claims`);
+    const verified = rs.reduce((n, r) => n + r.claims.verified, 0);
+    const avgModelCalls = rs.reduce((n, r) => n + r.modelCalls, 0) / rs.length;
+    const avgIn = rs.reduce((n, r) => n + r.promptTokens, 0) / rs.length;
+    const avgMs = rs.reduce((n, r) => n + r.ms, 0) / rs.length;
+    console.log(
+      `${mode}:${effectiveName.split('/').pop()}: ${passed}/${rs.length} pass, ${cut} cut short, ${invented} with invented operations, ` +
+        `avg ${avgCalls.toFixed(1)} tool calls, ${avgModelCalls.toFixed(1)} model calls, ${(avgIn / 1000).toFixed(0)}k in, ` +
+        `${(avgMs / 1000).toFixed(0)}s, ${structured} structured answers, ${verified} verified / ${contradicted} contradicted claims`,
+    );
+  }
+  console.log(`\nby question type (playbooks ${playbooks ? 'on' : 'off'}):`);
+  for (const type of [...new Set(results.map((r) => r.type))]) {
+    const rs = results.filter((r) => r.type === type);
+    const avgIn = rs.reduce((n, r) => n + r.promptTokens, 0) / rs.length;
+    console.log(
+      `  ${type}: ${rs.filter((r) => r.pass).length}/${rs.length} pass, avg ${(avgIn / 1000).toFixed(0)}k in`,
+    );
   }
   if (results.some((r) => !r.pass)) process.exitCode = 1;
 }

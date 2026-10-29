@@ -158,6 +158,10 @@ export const turn = sqliteTable(
     status: text('status').notNull(),
     claimsJson: text('claims_json').notNull(),
     focusJson: text('focus_json'),
+    /** Lo que se dibujó bajo la respuesta (roadmap, radio de impacto). */
+    artifactJson: text('artifact_json'),
+    /** Traza de la investigación (ver agent/trace-log.ts). */
+    traceJson: text('trace_json'),
     model: text('model'),
     createdAt: integer('created_at').notNull(),
   },

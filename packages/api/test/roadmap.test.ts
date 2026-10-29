@@ -107,7 +107,12 @@ describe('detectRoadmap', () => {
       'Follow the data of graphql:query:products from the database to the UI',
       'Give me the roadmap of products',
     ]) {
-      expect(detectRoadmap(q, g), q).toEqual({ kind: 'trace', key: P, service: 'api' });
+      expect(detectRoadmap(q, g), q).toEqual({
+        kind: 'trace',
+        key: P,
+        service: 'api',
+        candidates: [{ key: P, service: 'api' }],
+      });
     }
   });
 
@@ -118,7 +123,12 @@ describe('detectRoadmap', () => {
       'what would break if I rename products',
       'Who is affected by graphql:query:products?',
     ]) {
-      expect(detectRoadmap(q, g), q).toEqual({ kind: 'blast', key: P, service: 'api' });
+      expect(detectRoadmap(q, g), q).toEqual({
+        kind: 'blast',
+        key: P,
+        service: 'api',
+        candidates: [{ key: P, service: 'api' }],
+      });
     }
   });
 
@@ -131,7 +141,7 @@ describe('detectRoadmap', () => {
     expect(detectRoadmap('trace reproductions end to end', g)).toBeNull();
   });
 
-  it('is silent when the name fits more than one contract (never guesses which)', async () => {
+  it('when the name fits more than one contract it hands the candidates over, never guesses which', async () => {
     const extra = await graph();
     extra.nodes.push({
       id: 'ep:x',
@@ -140,7 +150,9 @@ describe('detectRoadmap', () => {
       parent: extra.nodes.find((n) => n.id === 'ep:x')?.parent ?? null,
       meta: {},
     });
-    expect(detectRoadmap('trace products end to end', extra)).toBeNull();
+    const ambiguous = detectRoadmap('trace products end to end', extra);
+    expect(ambiguous?.key).toBeNull();
+    expect(ambiguous?.candidates.map((c) => c.key).sort()).toEqual([P, O].sort());
     // pero la clave completa desambigua
     expect(detectRoadmap(`trace ${O} end to end`, extra)?.key).toBe(O);
   });
@@ -234,6 +246,26 @@ describe('POST /api/query — roadmap questions', () => {
     expect(body.roadmap.blast.direct).toHaveLength(2);
     // y queda en la conversación
     expect(body.conversation).not.toBeNull();
+  });
+
+  it('the roadmap is stored with the turn: a restored conversation redraws it', async () => {
+    const ws = await start(false);
+    const res = await ask(ws, 'What is the blast radius of changing the products query?');
+    const body = res.json() as { conversation: { id: string } | null };
+    expect(body.conversation).not.toBeNull();
+
+    const conv = await app.inject({
+      method: 'GET',
+      url: `/api/conversations/${body.conversation?.id}`,
+      headers: H,
+    });
+    expect(conv.statusCode).toBe(200);
+    const turns = (
+      conv.json() as { turns: Array<{ roadmap?: { kind: string; blast: { key: string } } }> }
+    ).turns;
+    expect(turns).toHaveLength(1);
+    expect(turns[0]?.roadmap?.kind).toBe('blast');
+    expect(turns[0]?.roadmap?.blast.key).toBe(P);
   });
 
   it('a trace question runs the tracer and returns the structured trace', async () => {

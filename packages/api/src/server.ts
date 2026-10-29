@@ -23,6 +23,7 @@ import { looseEndsRoutes } from './routes/loose-ends.js';
 import { mapRoutes } from './routes/map.js';
 // MCP + Web
 import { mcpRoutes } from './routes/mcp.js';
+import { officialDocsRoutes } from './routes/official-docs.js';
 import { orgsRoutes } from './routes/orgs.js';
 import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
@@ -62,6 +63,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(looseEndsRoutes);
   await app.register(implementationRoutes);
   await app.register(docsRoutes);
+  await app.register(officialDocsRoutes);
   await app.register(traceRoutes);
   await app.register(whoamiRoutes);
   await app.register(ciRoutes);

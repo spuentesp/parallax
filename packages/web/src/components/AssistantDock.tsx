@@ -299,6 +299,8 @@ export function turnsToMessages(turns: readonly TurnDto[]): ChatMessage[] {
       claims: summarizeVerdicts(t.claims),
       verdicts: t.claims,
       focus: t.focus,
+      // El recorrido se vuelve a dibujar al recargar la conversación.
+      ...(t.roadmap ? { roadmap: t.roadmap } : {}),
       status: t.status,
     },
   ]);

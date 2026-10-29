@@ -94,3 +94,79 @@ What the real runs found, in order:
 5. **Chapter 3 asked for the impossible** ("trace ONE request" for a feature that does not exist yet). It now traces the closest existing request in at most five hops and stops at the first hop it cannot find.
 
 The remaining wait is the model reading code (34–54 s per chapter) plus the engine; the UI shows what is happening and for how long.
+
+
+## The relay (2026-10-29): planner → worker → planner
+
+The failures the tour measured were of **writing**, not of searching: a location
+claim with the wrong line, an evidence id the backend never delivered. The whole
+loop ran on the fast model (Lightning), which reads cheaply but writes badly.
+The relay splits it:
+
+- **plan** — the strong model (Super) reads the question, the workspace map and
+  the doc hints, and says what to read and in what order. One call, thinking off.
+- **work** — the fast model runs the loop as before and delivers a **draft**.
+- **write** — the strong model sees the plan, the tool results and the draft, and
+  writes the final answer and its claims. The engine verifies those claims; the
+  draft's are not verified (the writer rewrites them).
+
+### Measured on Saleor, 4 cases × 3 runs, judged against the engine
+
+`scripts/eval-saleor.ts --runs 3 --mode worker|super|relay`. No model as a judge:
+every criterion is a check against the engine and the text.
+
+| Mode | Pass | Tool calls | Model calls | Input | Time | Verified claims | Contradicted | Invented ops |
+|---|---|---|---|---|---|---|---|---|
+| `worker` (Lightning does everything) | 5/12 | 5.7 | 8.0 | 115k | 28 s | 8 | 1 | 1 |
+| `super` (Super does everything — the deployed config) | 6/12 | 2.8 | 4.4 | 47k | 24 s | 4 | 0 | 0 |
+| `relay` (first run) | 9/12 | 6.2 | 10.4 | 178k | 49 s | 18 | 0 | 0 |
+| **`relay` (after the cut fix below)** | **10/12** | 6.8 | 11.7 | 188k | 58 s | **28** | **0** | **0** |
+
+Per case (relay, 3 runs each): `consumers` 3/3 · `storefront-product` 3/3 ·
+`no-reverse-dependency` 3/3 · `dashboard-attributes` 1/3.
+
+**The decision rule was fixed before the runs:** the relay ships only if it beats
+the worker on verified claims and does not lose on contradicted ones; on a tie it
+stays off, because it costs two extra model calls. It beats it on both (28
+verified vs 8, 0 contradicted vs 1) and nearly doubles the pass rate against the
+deployed configuration, so **the relay is on by default**
+(`INVESTIGATOR_HANDOFF=off` goes back to one model doing everything).
+
+**What it costs:** 188k input tokens and 58 s per question, against 47k and 24 s
+for the deployed configuration. The tokens are the price of the writer seeing
+the tool results; the time is the two extra model calls. If the budget ever
+matters more than the quality, turn it off and the numbers above are what you
+get back.
+
+### What the measurement found (and fixed)
+
+1. **The writer was being cut off.** The writer writes the answer *and* its
+   claims; with the worker's 4,096-token ceiling the JSON of the tool call was
+   cut mid-way, the answer was discarded, and the worker's prose stood — with no
+   claims, so the whole answer failed as `failed:citations_missing`. The writer
+   now gets twice the tokens, and a reply cut short is retried with more room
+   and a shorter answer. `dashboard-attributes` went from 0/3 to 1/3 and, more
+   importantly, from "no claims at all" to answers the engine can check.
+2. **The fast model answers in prose.** `worker` produced 6 structured answers
+   out of 12; `relay` produced 12 out of 12. The claims are the checkable part,
+   and the writer is the one that produces them.
+3. **The relay does not invent operations.** `worker` invented
+   `graphql:query:attributeDetails` and `graphql:query:attributeList` in one
+   run; the relay never did, because the writer only names what the tool
+   results contain.
+
+### Which model is which
+
+The measurement used **Lightning as the worker** (it only reads) and **Super as
+the planner and the writer** (it decides and it writes). With the relay on, a
+worker set to Super means the strong model does everything three times over:
+much more expensive, and not the configuration that was measured. The pairing
+to deploy is:
+
+```
+NEMOTRON_PLANNER_MODEL=nvidia/nemotron-3-super-120b-a12b
+NEMOTRON_WORKER_MODEL=nvidia/Nemotron-3_5-Lightning
+```
+
+Turning the relay off (`INVESTIGATOR_HANDOFF=off`) goes back to one model doing
+everything, and then the worker model is the one that answers.

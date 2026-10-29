@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { investigate, type ProgressEvent, serializeExplanation } from '../agent/investigator.js';
 import { type MapFocus, mapFocusFromClaims } from '../agent/map-focus.js';
 import { investigatorModel } from '../agent/model.js';
+import { traceOf } from '../agent/trace-log.js';
+import { createTavilySearch, officialDomainsFor } from '../agent/web-search.js';
 import { buildHistory } from '../conversation/history.js';
 import {
   ConversationFullError,
@@ -197,7 +199,12 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     // ambigüedad, la respuesta es el recorrido o el radio de impacto, no una improvisación.
     const roadmapGraph = await app.orgGraphs.load(orgId, false);
     const intent = roadmapGraph.ok ? detectRoadmap(question, roadmapGraph.graph) : null;
-    const saveTurn = async (answer: string, status: string, model: string | null) => {
+    const saveTurn = async (
+      answer: string,
+      status: string,
+      model: string | null,
+      artifact?: unknown,
+    ) => {
       try {
         const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
         const seq = await conversations.append(conv.id, {
@@ -206,6 +213,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           status,
           claims: [],
           focus: null,
+          ...(artifact === undefined ? {} : { artifact }),
           model,
         });
         return { id: conv.id, seq };
@@ -223,7 +231,9 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     ): Promise<Outcome> => ({
       status: 200,
       body: {
-        conversation: await saveTurn(answer, status, modelName),
+        // El recorrido se guarda con el turno: al recargar la conversación se
+        // vuelve a dibujar lo mismo que se vio.
+        conversation: await saveTurn(answer, status, modelName, roadmap),
         answer,
         explanation_status: status,
         topology: await topologyP,
@@ -238,7 +248,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         roadmap,
       },
     });
-    if (roadmapGraph.ok && intent?.kind === 'blast') {
+    if (roadmapGraph.ok && intent?.kind === 'blast' && intent.key) {
       const blast = blastRadius(roadmapGraph.graph, intent.key, intent.service);
       if (blast) {
         return roadmapBody(blastSentence(blast), 'available', { kind: 'blast', blast }, null, null);
@@ -246,7 +256,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const model = investigatorModel(app.config);
-    if (roadmapGraph.ok && intent?.kind === 'trace' && model) {
+    if (roadmapGraph.ok && intent?.kind === 'trace' && intent.key && model) {
       const seed = buildSeed(roadmapGraph.graph, intent.key, intent.service);
       if (seed) {
         const trace = await traceEndToEnd({
@@ -295,6 +305,14 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       };
     }
 
+    const officialDocs = app.officialDocs.forWorkspace(orgId);
+    const webSearch = app.config.tavilyApiKey
+      ? createTavilySearch({
+          apiKey: app.config.tavilyApiKey,
+          officialDocs,
+          ...(app.config.tavilyBaseUrl ? { baseUrl: app.config.tavilyBaseUrl } : {}),
+        })
+      : null;
     if (!app.docs.has(orgId)) void app.docs.ensure(orgId).catch(() => undefined);
     const result = await investigate({
       nudgeSubmit: true,
@@ -304,15 +322,43 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       model: model.provider,
       view: 'live',
       budget: model.budget,
+      // El nombre de la pregunta casó con varios contratos: no se elige uno en
+      // silencio, se le pasan al investigador para que lo diga.
+      ...(intent && intent.candidates.length > 1 ? { contractCandidates: intent.candidates } : {}),
       // La documentación sale del índice local si el workspace lo tiene; si no, se indexa en
       // segundo plano para la siguiente pregunta (y el motor responde mientras tanto).
+      // Búsqueda web: sólo con clave. Lo que ve el modelo se indexa (repo "web") para
+      // que una cita se compruebe con el mismo verificador que la documentación.
+      ...(webSearch
+        ? {
+            web: {
+              search: webSearch,
+              domainsFor: (q: string) => officialDomainsFor(q, officialDocs),
+              ingest: (pages: Array<{ url: string; title: string; content: string }>) =>
+                app.docs.ingestWeb(orgId, pages),
+            },
+            ...(app.docs.has(orgId)
+              ? {}
+              : {
+                  docsSection: (repo: string, path: string, section: string) =>
+                    app.docs.section(orgId, repo, path, section),
+                }),
+          }
+        : {}),
       ...(app.docs.has(orgId)
         ? {
             docs: (q: string, o?: { repo?: string; limit?: number }) =>
               app.docs.search(orgId, q, o),
+            // Sin índice no hay contra qué comprobar una cita: mejor "unverifiable"
+            // que "contradicted" sobre un archivo que el motor nunca vio.
+            docsSection: (repo: string, path: string, section: string) =>
+              app.docs.section(orgId, repo, path, section),
           }
         : {}),
       maxTokens: model.settings.maxTokens,
+      // El relevo (el modelo fuerte planifica y redacta): apagado salvo que se
+      // mida que conviene (ver docs/agent-spend.md).
+      ...(model.settings.handoff ? { handoff: true } : {}),
       ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
       endpointLabel: model.settings.baseUrl,
       ...(onProgress ? { onProgress } : {}),
@@ -358,6 +404,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         status: result.explanationStatus,
         claims: result.claims,
         focus,
+        trace: traceOf(result),
         model: result.effectiveModel,
       });
       saved = { id: conv.id, seq };

@@ -90,6 +90,8 @@ describe('POST /api/query/stream', () => {
       webBundlePath: dir,
       nebiusToken: 'test-token',
       investigatorMaxToolCalls: 8,
+      // Estas pruebas fijan la coreografía del investigador, no el relevo.
+      investigatorHandoff: 'off',
       ...(rate !== undefined ? { queryRateLimitPerHour: rate } : {}),
     });
   }

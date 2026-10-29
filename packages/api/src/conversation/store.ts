@@ -39,6 +39,8 @@ export interface StoredTurnRow extends StoredTurn {
   /** Veredictos completos del motor (con su razón), tal como se mostraron. */
   claimResults: ClaimResult[];
   focus: unknown | null;
+  /** Lo que se dibujó bajo la respuesta (roadmap, radio de impacto): se vuelve a dibujar. */
+  artifact: unknown | null;
   model: string | null;
   createdAt: number;
 }
@@ -49,6 +51,10 @@ export interface NewTurn {
   status: string;
   claims: readonly ClaimResult[];
   focus: unknown | null;
+  /** Lo que se dibujó bajo la respuesta (roadmap, radio de impacto). */
+  artifact?: unknown | null;
+  /** Traza de la investigación (agent/trace-log.ts); ausente en turnos que no investigaron. */
+  trace?: unknown | null;
   model: string | null;
 }
 
@@ -127,6 +133,7 @@ export function createConversationStore(db: BetterSQLite3Database<typeof schema>
           claims: claimResults,
           claimResults,
           focus: r.focusJson ? (JSON.parse(r.focusJson) as unknown) : null,
+          artifact: r.artifactJson ? (JSON.parse(r.artifactJson) as unknown) : null,
           model: r.model,
           createdAt: r.createdAt,
         };
@@ -189,6 +196,12 @@ export function createConversationStore(db: BetterSQLite3Database<typeof schema>
             status: turn.status,
             claimsJson: JSON.stringify(turn.claims),
             focusJson: turn.focus === null ? null : JSON.stringify(turn.focus),
+            artifactJson:
+              turn.artifact === null || turn.artifact === undefined
+                ? null
+                : JSON.stringify(turn.artifact),
+            traceJson:
+              turn.trace === null || turn.trace === undefined ? null : JSON.stringify(turn.trace),
             model: turn.model,
             createdAt: now,
           })

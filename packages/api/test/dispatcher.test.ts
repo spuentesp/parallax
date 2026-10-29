@@ -16,7 +16,10 @@ describe('LainDispatcher', () => {
   it('exposes only read tools and never a snapshot parameter', () => {
     const d = createDispatcher({ lain: createLainMock(), view: 'live' });
     const specs = d.toolSpecs();
-    expect(specs.map((s) => s.function.name).sort()).toEqual([...ALL_TOOLS].sort());
+    // web_search sólo existe cuando se configura la búsqueda web (Tavily).
+    expect(specs.map((s) => s.function.name).sort()).toEqual(
+      ALL_TOOLS.filter((t) => t !== 'web_search').sort(),
+    );
     // P07: no se amplían permisos — ninguna tool de escritura/publicación.
     const names = specs.map((s) => s.function.name);
     expect(names).not.toContain('publish');
@@ -56,7 +59,9 @@ describe('LainDispatcher', () => {
       expect(r.message).toContain('list_services');
     }
     // Las specs ofrecidas no cambian tras el rechazo.
-    expect(d.toolSpecs().map((s) => s.function.name)).toEqual([...ALL_TOOLS]);
+    expect(d.toolSpecs().map((s) => s.function.name)).toEqual(
+      ALL_TOOLS.filter((t) => t !== 'web_search'),
+    );
   });
 
   it('rejects invalid schema before touching LAIN', async () => {
@@ -167,6 +172,51 @@ describe('LainDispatcher', () => {
       expect(r.truncated?.hint).toContain('narrower');
       // El corte se declara; no se presenta el resultado como completo.
       expect((r.data as { cut_declared?: unknown }).cut_declared ?? r.truncated).toBeTruthy();
+    }
+  });
+
+  it('a text result is cut by lines and says which lines are left', async () => {
+    const base = createLainMock();
+    const body = Array.from(
+      { length: 400 },
+      (_, i) => `   ${100 + i}: line ${i} ${'x'.repeat(40)}`,
+    );
+    const withText: LainAdapter = {
+      ...base,
+      async codeTool() {
+        return { text: `File: x\nShowing lines 100-499\n\n${body.join('\n')}` };
+      },
+    };
+    const d = createDispatcher({ lain: withText, view: 'live', maxResultChars: 2000 });
+    const r = await d.execute(call('t1', 'get_code_snippet', { repo: 'orders', path: 'a.py' }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // El resultado conserva su forma: el modelo lee texto, no un JSON roto.
+    const data = r.data as { text: string };
+    expect(typeof data.text).toBe('string');
+    expect(data.text).toContain('line 0');
+    // Y el pie dice el rango que se ve y el que queda.
+    expect(data.text).toMatch(/\[truncated: showing lines 100-\d+ of 499\./);
+    expect(data.text).toMatch(/lines \d+-499 were not shown/);
+    expect(data.text).toMatch(/read_source\(repo, path, start, end\)/);
+    // Los números del corte son exactos, no una estimación.
+    expect(r.truncated?.lines?.kept).toBeGreaterThan(0);
+    expect(r.truncated?.lines?.total).toBe(403);
+    expect(r.truncated?.lines?.shownFrom).toBe(100);
+    expect(r.truncated?.lines?.remainingTo).toBe(499);
+  });
+
+  it('the duplicate refusal names the receipt of the first call', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live', maxToolCalls: 5 });
+    const first = await d.execute(call('a', 'search_code', { query: 'checkout' }));
+    const again = await d.execute(call('b', 'search_code', { query: 'checkout' }));
+    expect(first.ok).toBe(true);
+    expect(again).toMatchObject({ ok: false, code: 'duplicate_call' });
+    if (first.ok && !again.ok) {
+      // El recibo de la primera es el que se puede citar: el modelo no tiene
+      // que volver a pagar la lectura.
+      expect(again.message).toContain(first.receipt);
+      expect(d.hasReceipt(first.receipt)).toBe(true);
     }
   });
 

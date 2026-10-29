@@ -124,6 +124,46 @@ describe('the assistant thread', () => {
     expect(screen.getByLabelText('Ask about your architecture')).toBeTruthy();
   });
 
+  it('a restored turn that carries a roadmap draws it again', async () => {
+    server.use(
+      http.get('/api/conversations/:id', () =>
+        HttpResponse.json({
+          conversation: summary('conv_10', 'x', 1),
+          turns: [
+            turn(1, {
+              roadmap: {
+                kind: 'blast',
+                blast: {
+                  key: 'graphql:query:products',
+                  service: 'api',
+                  repo: 'api',
+                  direct: [
+                    {
+                      service: 'web',
+                      repo: 'web',
+                      uses: 2,
+                      fields: ['products'],
+                      sites: [],
+                      provenance: 'deterministic',
+                    },
+                  ],
+                  ripple: [],
+                  totalUses: 2,
+                  caveats: [],
+                },
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+    mount('/orgs/acme?conv=conv_10');
+    expect(await screen.findByText('answer 1')).toBeTruthy();
+    // El recorrido vuelve a dibujarse: es lo que se guardó con el turno.
+    expect(await screen.findByTestId('blast-view')).toBeTruthy();
+    expect(screen.getByTestId('blast-web')).toBeTruthy();
+  });
+
   it('a conversation that is gone says so, and the next question starts a new one', async () => {
     const bodies: Array<Record<string, unknown>> = [];
     server.use(

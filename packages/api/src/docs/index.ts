@@ -224,10 +224,67 @@ export function indexRepo(
   return files.length;
 }
 
+/** Una página web que el modelo vio: se indexa tal cual, con la URL como ruta. */
+export interface WebDoc {
+  url: string;
+  title: string;
+  content: string;
+}
+
+/**
+ * Guarda las páginas que devolvió una búsqueda web en el MISMO índice que la documentación
+ * de los repos (repo `web`, ruta = URL, una sección con el título como encabezado), para que
+ * una cita se compruebe con el mismo verificador. Sólo toca las filas de esa URL: no borra
+ * lo demás.
+ */
+export function indexWebPages(
+  db: Database.Database,
+  workspaceId: string,
+  repo: string,
+  pages: readonly WebDoc[],
+): number {
+  const delFile = db.prepare(
+    'DELETE FROM doc_file WHERE workspace_id = ? AND repo = ? AND path = ?',
+  );
+  const delFts = db.prepare(
+    'DELETE FROM doc_section_fts WHERE workspace_id = ? AND repo = ? AND path = ?',
+  );
+  const insFile = db.prepare(
+    'INSERT INTO doc_file (workspace_id, repo, path, kind, title, summary, sha, indexed_at) VALUES (?, ?, ?, ?, ?, ?, NULL, ?)',
+  );
+  const insSec = db.prepare(
+    'INSERT INTO doc_section_fts (workspace_id, repo, path, heading, body, line_start) VALUES (?, ?, ?, ?, ?, 1)',
+  );
+  db.transaction(() => {
+    for (const p of pages) {
+      delFile.run(workspaceId, repo, p.url);
+      delFts.run(workspaceId, repo, p.url);
+      insFile.run(
+        workspaceId,
+        repo,
+        p.url,
+        'guide',
+        p.title,
+        firstParagraph(p.content),
+        Date.now(),
+      );
+      insSec.run(workspaceId, repo, p.url, p.title, p.content);
+    }
+  })();
+  return pages.length;
+}
+
 /** Palabras de la pregunta → consulta FTS5 (OR de prefijos); sin palabras útiles, null. */
 export function ftsQuery(text: string, stop: ReadonlySet<string>): string | null {
+  // Los identificadores del código no son el vocabulario de la documentación: se parten en
+  // palabras (giftCardBalance → gift card balance, select_for_update → select for update).
+  const spoken = text
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
   const words = [
-    ...new Set((text.toLowerCase().match(/[a-z][a-z0-9_]{2,}/g) ?? []).filter((w) => !stop.has(w))),
+    ...new Set(
+      (spoken.toLowerCase().match(/[a-z][a-z0-9]{2,}/g) ?? []).filter((w) => !stop.has(w)),
+    ),
   ].slice(0, 8);
   return words.length === 0 ? null : words.map((w) => `"${w}"*`).join(' OR ');
 }
@@ -296,6 +353,57 @@ export function searchDocs(
     if (hits.length >= (opts.limit ?? 6)) break;
   }
   return hits;
+}
+
+/** Una sección del índice, con el texto tal cual está en el checkout. */
+export interface DocSection {
+  heading: string;
+  body: string;
+  lineStart: number;
+}
+
+/**
+ * Lo que hay de un archivo en el índice: si el archivo existe, qué secciones
+ * tiene y cuáles casan con el título pedido. Sirve para distinguir "este
+ * archivo no está" de "esta sección no está" — dos veredictos distintos.
+ */
+export interface DocSectionHit {
+  /** El archivo está en el índice (aunque la sección pedida no exista). */
+  fileFound: boolean;
+  /** Las secciones cuyo título coincide con el pedido. */
+  sections: DocSection[];
+  /** Todos los títulos del archivo, para decir qué hay. */
+  headings: string[];
+}
+
+/**
+ * Las secciones de un archivo por su título. El título se compara sin espacios
+ * sobrantes y sin distinguir mayúsculas: el modelo lo copia de la pista y a
+ * veces le cambia el caso, pero no debe eso volverse un veredicto en contra.
+ */
+export function findDocSections(
+  db: Database.Database,
+  workspaceId: string,
+  repo: string,
+  path: string,
+  heading: string,
+): DocSectionHit {
+  const file = db
+    .prepare('SELECT 1 FROM doc_file WHERE workspace_id = ? AND repo = ? AND path = ? LIMIT 1')
+    .get(workspaceId, repo, path);
+  const rows = db
+    .prepare<unknown[], { heading: string; body: string; line_start: number }>(
+      'SELECT heading, body, line_start FROM doc_section_fts WHERE workspace_id = ? AND repo = ? AND path = ? ORDER BY rowid',
+    )
+    .all(workspaceId, repo, path);
+  const wanted = heading.trim().toLowerCase();
+  return {
+    fileFound: file !== undefined,
+    headings: rows.map((r) => r.heading),
+    sections: rows
+      .filter((r) => r.heading.trim().toLowerCase() === wanted)
+      .map((r) => ({ heading: r.heading, body: r.body, lineStart: r.line_start })),
+  };
 }
 
 export function listIndexed(

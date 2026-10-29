@@ -85,7 +85,7 @@ describe('docs index', () => {
     expect(searchDocs(db, 'other', 'gift card', DOC_STOPWORDS)).toEqual([]);
   });
 
-  it('hands the model the best sections already read, with path and line to cite', async () => {
+  it('hands the model the best sections already read, with the section to cite', async () => {
     indexRepo(db, 'ws', 'saleor', readDocs(dir), 'abc123');
     const dispatcher = createDispatcher({
       lain: {} as never,
@@ -97,7 +97,7 @@ describe('docs index', () => {
     );
     expect(hint).toContain('- saleor: docs/adr/0004-gift-card-lock.md');
     expect(hint).toContain('already read from the checkout');
-    expect(hint).toContain('LOCATION claim');
+    expect(hint).toContain('DOC QUOTE claim');
     expect(hint).toContain('select_for_update inside a transaction');
     expect(hint).toMatch(/heading at line \d+/);
   });

@@ -58,6 +58,8 @@ describe('POST /api/query budget', () => {
       webBundlePath: dir,
       nebiusToken: 'test-token',
       investigatorMaxToolCalls,
+      // Estas pruebas fijan la coreografía del investigador, no el relevo.
+      investigatorHandoff: 'off',
       ...(queryRateLimitPerHour !== undefined ? { queryRateLimitPerHour } : {}),
     });
   }
@@ -209,5 +211,72 @@ describe('POST /api/query budget', () => {
     stubModel([{ content: 'done, no citations' }]);
     await start(8);
     for (let i = 0; i < 4; i++) expect((await ask()).statusCode).toBe(200);
+  });
+});
+
+describe('POST /api/query con el relevo', () => {
+  let dir: string;
+  let app: Awaited<ReturnType<typeof buildApp>>;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'parallax-relay-'));
+  });
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    await app.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('la respuesta que se guarda es la del planificador, no el borrador del trabajador', async () => {
+    // El planificador planifica, el trabajador lee y entrega un borrador, y el
+    // planificador escribe la respuesta final.
+    stubModel([
+      {
+        content: null,
+        tool: 'submit_plan',
+        args: { goal: 'find who consumes orders', steps: [{ tool: 'list_services' }] },
+      },
+      { content: null, tool: 'list_services' },
+      { content: null, tool: 'submit_answer', args: { answer: 'worker draft', claims: [] } },
+      {
+        content: null,
+        tool: 'submit_answer',
+        args: {
+          answer: 'the planner wrote this',
+          claims: [
+            { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+          ],
+        },
+      },
+    ]);
+    app = await buildApp({
+      port: 0,
+      databasePath: join(dir, 'p.db'),
+      lainAdapter: 'mock',
+      mcpTransport: 'http-sse',
+      authTokens: [{ token: 'rw', orgId: 'org_demo', scopes: ['read', 'write'] }],
+      webBundlePath: dir,
+      nebiusToken: 'test-token',
+      // El relevo va por defecto; aquí se deja explícito.
+      investigatorHandoff: 'on',
+    });
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/query',
+      headers: { authorization: 'Bearer rw' },
+      payload: { question: 'Who consumes orders?', orgId: 'org_demo' },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().answer).toBe('the planner wrote this');
+    // Y lo que se guarda en el turno es esa misma respuesta.
+    const conv = r.json().conversation as { id: string };
+    const got = (
+      await app.inject({
+        method: 'GET',
+        url: `/api/conversations/${conv.id}`,
+        headers: { authorization: 'Bearer rw' },
+      })
+    ).json();
+    expect(got.turns[0].answer).toBe('the planner wrote this');
   });
 });

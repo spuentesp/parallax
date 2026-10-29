@@ -76,6 +76,8 @@ describe('conversation memory', () => {
       ],
       webBundlePath: dir,
       ...(nebiusToken ? { nebiusToken } : {}),
+      // Estas pruebas fijan la coreografía del investigador, no el relevo.
+      investigatorHandoff: 'off',
     });
   }
   const ask = (headers: typeof A, payload: object) =>

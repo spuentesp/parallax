@@ -40,6 +40,8 @@ export const conversationRoutes: FastifyPluginAsync = async (app) => {
           status: t.status,
           claims: t.claimResults,
           focus: t.focus,
+          // Lo que se dibujó bajo la respuesta (roadmap, radio de impacto).
+          roadmap: t.artifact,
           model: t.model,
           createdAt: t.createdAt,
         })),

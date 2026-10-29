@@ -54,6 +54,16 @@ export function factsLedger(turns: readonly StoredTurn[]): string[] {
         );
         continue;
       }
+      if (c.claim.kind === 'doc_quote') {
+        // Una cita comprobada contra la sección indexada: cuenta como hecho.
+        if (c.verdict !== 'verified' && c.verdict !== 'contradicted') continue;
+        const d = c.claim;
+        latest.set(
+          `doc:${d.repo}:${d.path}:${d.section}:${d.quote}`,
+          `${d.repo}:${d.path} "${d.section}" "${clip(d.quote, 60)}": engine ${c.verdict}`,
+        );
+        continue;
+      }
       if (c.claim.kind !== 'relation') continue;
       if (
         c.verdict !== 'verified' &&

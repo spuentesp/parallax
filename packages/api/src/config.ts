@@ -32,6 +32,9 @@ const AppConfigSchema = z.object({
   // Razonamiento interno del modelo en la investigación: on | off | default (el del
   // servidor). Se mide, no se supone: ver docs/agent-spend.md.
   investigatorThinking: z.enum(['on', 'off', 'default']).optional(),
+  // El relevo: el modelo fuerte planifica y redacta, el rápido lee. Apagado
+  // con 'off' (mediado en docs/agent-spend.md: gana en calidad, cuesta tokens).
+  investigatorHandoff: z.enum(['on', 'off']).optional(),
   // Tope de preguntas al investigador por token y hora (0 o ausente = sin tope).
   // Para demos públicas: cada pregunta consume créditos de Token Factory.
   queryRateLimitPerHour: z.coerce.number().int().min(0).optional(),
@@ -52,6 +55,11 @@ const AppConfigSchema = z.object({
   // separadas por ':', y dónde clonar (superficial) los que no estén.
   docsRoots: z.string().optional(),
   docsCacheDir: z.string().optional(),
+  // Búsqueda web (Tavily) para preguntas técnicas. Sin clave, la herramienta
+  // `web_search` no existe para el modelo: no hay un sustituto que devuelva nada.
+  tavilyApiKey: z.string().min(1).optional(),
+  // Base de Tavily: configurable para que los tests apunten a un stand-in local.
+  tavilyBaseUrl: z.string().url().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -77,6 +85,7 @@ export function investigatorSettings(
     | 'investigatorMaxModelMs'
     | 'investigatorMaxTokens'
     | 'investigatorThinking'
+    | 'investigatorHandoff'
   >,
 ): {
   baseUrl: string;
@@ -87,6 +96,8 @@ export function investigatorSettings(
   maxTokens: number;
   /** undefined = el valor por defecto del servidor. */
   thinking: boolean | undefined;
+  /** El relevo (planificador + trabajador): apagado salvo que se mida. */
+  handoff: boolean;
 } {
   return {
     baseUrl: cfg.nemotronBaseUrl ?? INVESTIGATOR_DEFAULTS.nemotronBaseUrl,
@@ -101,6 +112,10 @@ export function investigatorSettings(
         : cfg.investigatorThinking === 'off'
           ? false
           : undefined,
+    // El relevo va por defecto: lo medido en Saleor (docs/agent-spend.md) dio
+    // 10/12 en lugar de 6/12 y ninguna afirmación contradicha. Se apaga con
+    // INVESTIGATOR_HANDOFF=off.
+    handoff: cfg.investigatorHandoff !== 'off',
   };
 }
 
@@ -133,6 +148,16 @@ export function modelEnv(
   };
 }
 
+/** ÚNICO lugar que lee las variables de la búsqueda web. */
+export function webSearchEnv(
+  env: NodeJS.ProcessEnv,
+): Pick<AppConfig, 'tavilyApiKey' | 'tavilyBaseUrl'> {
+  return {
+    tavilyApiKey: nonEmpty(env.TAVILY_TOKEN),
+    tavilyBaseUrl: nonEmpty(env.TAVILY_BASE_URL),
+  };
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const tokensRaw = env.PARALLAX_TOKENS;
   if (!tokensRaw) {
@@ -153,10 +178,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mcpTransport: env.PARALLAX_MCP_TRANSPORT,
     authTokens,
     ...modelEnv(env),
+    ...webSearchEnv(env),
     investigatorMaxToolCalls: env.INVESTIGATOR_MAX_TOOL_CALLS,
     investigatorMaxModelMs: env.INVESTIGATOR_MAX_MODEL_MS,
     investigatorMaxTokens: env.INVESTIGATOR_MAX_TOKENS,
     investigatorThinking: env.INVESTIGATOR_THINKING,
+    investigatorHandoff: env.INVESTIGATOR_HANDOFF,
     queryRateLimitPerHour: env.QUERY_RATE_LIMIT_PER_HOUR,
     webBundlePath: env.WEB_BUNDLE_PATH,
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,

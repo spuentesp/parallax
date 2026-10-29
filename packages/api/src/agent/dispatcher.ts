@@ -27,10 +27,11 @@ import {
 } from '@parallax/shared/lain';
 import { z } from 'zod';
 import { INVESTIGATOR_DEFAULTS } from '../config.js';
-import type { DocHit } from '../docs/index.js';
+import type { DocHit, WebDoc } from '../docs/index.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { CODE_TOOL_ARGS, CODE_TOOL_DESCRIPTIONS, CODE_TOOLS, type CodeTool } from './code-tools.js';
 import type { ToolCall, ToolSpec } from './nemotron.js';
+import { scrubQuery, type WebPage, type WebSearch } from './web-search.js';
 
 export const DISPATCHER_TOOLS = [
   'list_services',
@@ -43,6 +44,7 @@ export const DISPATCHER_TOOLS = [
   'read_source',
   'list_unresolved',
   'get_coverage',
+  'web_search',
 ] as const;
 
 // Contratos + código: lo que el investigador puede pedir a LAIN (sólo lectura).
@@ -80,6 +82,15 @@ const ModelArgsSchemas = {
   read_source: ReadSourceArgs.omit({ snapshot: true }),
   list_unresolved: ListUnresolvedArgs.omit({ snapshot: true }),
   get_coverage: GetCoverageArgs.omit({ snapshot: true }),
+  web_search: z
+    .object({
+      /** El tema técnico, con nombres públicos de librerías; nunca nombres internos del workspace. */
+      query: z.string().min(3).max(300),
+      /** Buscar en toda la web en vez de preferir la documentación oficial. */
+      any_source: z.boolean().optional(),
+      limit: z.number().int().min(1).max(8).optional(),
+    })
+    .strict(),
   ...CODE_TOOL_ARGS,
 } as const;
 
@@ -103,6 +114,8 @@ const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
     'Unresolved inbound calls in the view — what the engine could NOT bind. Paginated; unknowns live here.',
   get_coverage:
     'What the view reviewed and what it could not: coverage.complete and scope (reviewed/unreviewed).',
+  web_search:
+    "Search the WEB (official documentation first) for a general or technical question about a public library, framework, protocol or standard: what it is, how it works, what its docs recommend. Not for this workspace's own code or services (use the code tools and find_docs): internal names are stripped from the query before it leaves. Read-only; 2 calls per question at most.",
   ...CODE_TOOL_DESCRIPTIONS,
 };
 
@@ -112,6 +125,20 @@ export interface DispatchTruncation {
   omittedChars: number;
   nextCursor?: string;
   hint: string;
+  /** Qué parte del texto quedó fuera, en líneas. */
+  lines?: {
+    /** Líneas que se enseñan. */
+    kept: number;
+    /** Líneas que tenía el texto. */
+    total: number;
+    /** Primera línea mostrada (si el texto numera sus líneas). */
+    shownFrom?: number;
+    /** Última línea mostrada. */
+    shownTo?: number;
+    /** Lo que quedó fuera, si se puede numerar. */
+    remainingFrom?: number;
+    remainingTo?: number;
+  };
 }
 
 /**
@@ -159,6 +186,16 @@ export interface DispatcherConfig {
   caps?: Partial<Record<DispatcherTool, number>>;
   /** Índice local de la documentación: si está, `find_docs` y las pistas salen de él y no del motor. */
   docs?: DocSearch;
+  /**
+   * Búsqueda web: sin ella `web_search` no se ofrece ni se acepta. `ingest` guarda lo que el
+   * modelo va a ver en el índice de documentación, para que una cita se compruebe contra ello.
+   */
+  web?: {
+    search: WebSearch;
+    ingest: (pages: WebDoc[]) => void;
+    /** Dominios oficiales de las librerías que nombra la consulta (la lista del workspace). */
+    domainsFor: (query: string) => string[];
+  };
 }
 
 export type DocSearch = (query: string, opts?: { repo?: string; limit?: number }) => DocHit[];
@@ -172,6 +209,7 @@ const DEFAULT_MAX_RESULT_CHARS = 10_000;
 export const PER_TOOL_CAP: Partial<Record<DispatcherTool, number>> = {
   search_code: 4,
   find_docs: 3,
+  web_search: 2,
   search_org: 3,
   find_symbol: 4,
   get_code_snippet: 3,
@@ -206,7 +244,8 @@ export class LainDispatcher {
   private readonly usedByTool = new Map<string, number>();
   private readonly caps: Partial<Record<DispatcherTool, number>>;
   private readonly docs: DocSearch | null;
-  private readonly seenCalls = new Set<string>();
+  private readonly web: DispatcherConfig['web'] | null;
+  private readonly seenCalls = new Map<string, string>();
   private budgetRefusals = 0;
   private readonly receiptLog: Receipt[] = [];
   // Evidencia entregada por el backend: el único conjunto que el modelo puede
@@ -230,12 +269,13 @@ export class LainDispatcher {
     this.maxResultChars = cfg.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
     this.caps = cfg.caps ?? {};
     this.docs = cfg.docs ?? null;
+    this.web = cfg.web ?? null;
   }
 
   // Specs que ven el modelo: exactamente el conjunto de lectura, sin snapshot.
   // Esta lista es la prueba de que no se amplían permisos (P07).
   toolSpecs(): ToolSpec[] {
-    return ALL_TOOLS.map((name) => ({
+    return ALL_TOOLS.filter((name) => name !== 'web_search' || this.web).map((name) => ({
       type: 'function',
       function: {
         name,
@@ -252,6 +292,11 @@ export class LainDispatcher {
       exhausted: this.toolCallsUsed >= this.maxToolCalls,
       cutShort: this.budgetRefusals > 0,
     };
+  }
+
+  /** ¿Se llamó a esta herramienta en esta investigación? */
+  toolUsed(name: string): boolean {
+    return (this.usedByTool.get(name) ?? 0) > 0;
   }
 
   // Estado del catálogo de servicios de la vista. Un catálogo vacío o ilegible
@@ -356,13 +401,15 @@ export class LainDispatcher {
       };
     }
 
-    if (!isDispatcherTool(tool)) {
+    if (!isDispatcherTool(tool) || (tool === 'web_search' && !this.web)) {
       return {
         ok: false,
         tool,
         callId,
         code: 'unknown_tool',
-        message: `unknown tool "${tool}". Allowed tools: ${ALL_TOOLS.join(', ')}. Permissions are not widened on request.`,
+        message: `unknown tool "${tool}". Allowed tools: ${this.toolSpecs()
+          .map((t) => t.function.name)
+          .join(', ')}. Permissions are not widened on request.`,
         latencyMs: Date.now() - t0,
       };
     }
@@ -403,13 +450,14 @@ export class LainDispatcher {
     // herramienta tiene un tope. Sin esto el modelo puede dar vueltas buscando
     // lo mismo con otras palabras hasta agotar el presupuesto sin responder.
     const signature = `${tool}:${JSON.stringify(args, Object.keys(args as object).sort())}`;
-    if (this.seenCalls.has(signature)) {
+    const priorReceipt = this.seenCalls.get(signature);
+    if (priorReceipt !== undefined) {
       return {
         ok: false,
         tool,
         callId,
         code: 'duplicate_call',
-        message: `you already made this exact ${tool} call; its result is above. Use it, or ask something different.`,
+        message: `you already made this exact ${tool} call (receipt ${priorReceipt}); its result is above. Use it, or ask something different.`,
         latencyMs: Date.now() - t0,
       };
     }
@@ -445,10 +493,12 @@ export class LainDispatcher {
       // no debe pagarlo con su alcance. Las rondas y el tiempo siguen acotando.
       this.toolCallsUsed++;
       this.usedByTool.set(tool, (this.usedByTool.get(tool) ?? 0) + 1);
-      this.seenCalls.add(signature);
       this.harvest(tool, data);
       const { value, truncated } = this.truncate(data, tool);
       const receipt = this.mintReceipt(tool, args, data, truncated !== null);
+      // La llamada repetida se rechaza CON EL RECIBO de la primera: el modelo
+      // puede citarla en vez de volver a pagarla.
+      this.seenCalls.set(signature, receipt.id);
       return {
         ok: true,
         tool,
@@ -465,7 +515,7 @@ export class LainDispatcher {
         tool,
         callId,
         code: 'engine_error',
-        message: `LAIN ${tool} failed: ${message}`,
+        message: `${tool === 'web_search' ? 'web search' : 'LAIN'} ${tool} failed: ${message}`,
         latencyMs: Date.now() - t0,
       };
     }
@@ -504,6 +554,8 @@ export class LainDispatcher {
         return this.lain.getCoverage({ ...(args as object), snapshot } as never);
       case 'find_docs':
         return this.findDocs(args as { query: string; repo?: string; limit?: number });
+      case 'web_search':
+        return this.webSearch(args as { query: string; any_source?: boolean; limit?: number });
       default: {
         // Herramientas de código: el modelo dice `repo`, LAIN espera `repo_id`.
         // El código no depende del snapshot de contratos.
@@ -532,7 +584,7 @@ export class LainDispatcher {
       // vuelve a leer; el encabezado NO es un id de evidencia.
       const excerpts = hits.slice(0, 2).map((h) => `=== ${h.repo}: ${h.path} ===\n${h.text}`);
       return excerpts.length > 0
-        ? `${files.join('\n')}\n\nThe two best matches, already read from the checkout:\n${excerpts.join('\n\n')}\n\nTo cite one of them, add a LOCATION claim (repo, path, line, contains): line = the "heading at line N" of the section you rely on, contains = a short phrase copied from the first lines right under that heading. Do not cite the excerpt headers as evidence ids.`
+        ? `${files.join('\n')}\n\nThe two best matches, already read from the checkout:\n${excerpts.join('\n\n')}\n\nTo cite one of them, add a DOC QUOTE claim (repo, path, section, quote): section = the section heading shown above for that file, quote = a short phrase copied literally from the lines right under that heading. The engine checks the phrase against the indexed section of the checkout. Do not cite the excerpt headers as evidence ids.`
         : '';
     }
     const words = [
@@ -571,6 +623,57 @@ export class LainDispatcher {
       .join('\n');
   }
 
+  /**
+   * Búsqueda web: la consulta se limpia de nombres internos (servicios y repos del catálogo,
+   * rutas, ids) antes de salir; la documentación oficial va primero; y lo que el modelo va a
+   * ver se indexa para que pueda citarse con una afirmación `doc_quote` (repo "web").
+   */
+  private async webSearch(args: {
+    query: string;
+    any_source?: boolean;
+    limit?: number;
+  }): Promise<unknown> {
+    const web = this.web;
+    if (!web) throw new Error('web search is not configured');
+    if (!this.catalog) await this.loadCatalog();
+    const query = scrubQuery(args.query, [
+      ...(this.catalog?.services ?? []),
+      ...(this.catalog?.repos ?? []),
+    ]);
+    if (query === null) {
+      return {
+        text: `## web_search
+
+Nothing left to search once workspace-internal names were removed from the query. Ask about the public library, framework or standard itself (for example "Django select_for_update"), and use the code tools for this workspace's own code.`,
+      };
+    }
+    const matched = args.any_source ? [] : web.domainsFor(query);
+    const pages = await web.search(query, {
+      ...(matched.length > 0 ? { domains: matched, mode: 'restrict' as const } : {}),
+      ...(args.limit ? { limit: args.limit } : {}),
+    });
+    // Si el filtro oficial no devolvió nada, se amplía UNA vez a toda la web.
+    const found: WebPage[] =
+      pages.length === 0 && matched.length > 0
+        ? await web.search(query, args.limit ? { limit: args.limit } : {})
+        : pages;
+    if (found.length === 0) {
+      return {
+        text: `## web_search: ${query}
+
+No web result. Say that the web had nothing, and answer from the repositories.`,
+      };
+    }
+    web.ingest(found.map((p) => ({ url: p.url, title: p.title, content: p.content })));
+    const lines = found.map(
+      (p) =>
+        `- [${p.official ? 'official' : 'third-party'}] ${p.title} — ${p.url}${p.publishedDate ? ` (${p.publishedDate})` : ''}\n    ${p.content.replace(/\s+/g, ' ')}`,
+    );
+    return {
+      text: `## web_search: ${query}\n\n${lines.join('\n')}\n\nThis is what the web says, not what the repositories do: say "per <source>" for it, and "observed" only for what the engine or the code showed. When they disagree, say so. To cite a result, add a DOC QUOTE claim with repo "web", path = the result's URL, section = the result's title exactly as shown, quote = a phrase copied literally from its text above. Prefer [official] results; never cite a URL that is not listed here.`,
+    };
+  }
+
   // La documentación de los repos (ADRs, AGENTS.md, README…) ya está en el índice del
   // motor: se busca con la misma herramienta y se queda sólo con los archivos .md/.mdx,
   // en cada repo del catálogo si el modelo no nombra uno.
@@ -590,7 +693,7 @@ export class LainDispatcher {
                 )
                 .join(
                   '\n',
-                )}\n\nRead the best one with get_code_snippet(repo, path). Cite what you read as a location claim.`
+                )}\n\nRead the best one with get_code_snippet(repo, path). Cite what you read as a location claim (repo, path, line, contains).`
             : `## find_docs: ${args.query}\n\nNo documentation section matched. The repositories may simply not document this: say so, and fall back to the code.`,
       };
     }
@@ -613,7 +716,7 @@ export class LainDispatcher {
     return {
       text:
         unique.length > 0
-          ? `## find_docs: ${args.query}\n\n${unique.join('\n')}\n\nRead one with get_code_snippet(repo, path). Cite what you read as a location claim.`
+          ? `## find_docs: ${args.query}\n\n${unique.join('\n')}\n\nRead one with get_code_snippet(repo, path). Cite what you read as a location claim (repo, path, line, contains).`
           : `## find_docs: ${args.query}\n\nNo documentation file matched. The repositories may simply not document this: say so, and fall back to the code.`,
     };
   }
@@ -728,6 +831,11 @@ export class LainDispatcher {
       json = String(data);
     }
     if (json.length <= this.maxResultChars) return { value: data, truncated: null };
+    // Un resultado con TEXTO (una lectura de código, la lista de docs) se
+    // recorta por líneas y conserva su forma: el modelo lee el texto y un pie
+    // que dice qué líneas quedaron fuera.
+    const text = (data as { text?: unknown } | null)?.text;
+    if (typeof text === 'string') return this.truncateText(data, text, tool, json.length);
     const nextCursor =
       data && typeof data === 'object' && typeof (data as { cursor?: unknown }).cursor === 'string'
         ? (data as { cursor: string }).cursor
@@ -747,6 +855,82 @@ export class LainDispatcher {
       preview = kept;
     }
     return { value: { truncated_preview: preview, cut }, truncated: cut };
+  }
+
+  /** El número de línea que el propio texto lleva delante ("   437: …"). */
+  private static lineNumber(line: string): number | undefined {
+    const m = /^\s*(\d+):/.exec(line);
+    return m ? Number(m[1]) : undefined;
+  }
+
+  /**
+   * Recorta un texto por líneas y deja un pie con el rango que se ve y el que
+   * queda. El texto de las lecturas numera sus líneas, así que el rango es
+   * exacto; si no las numera, se dice cuántas líneas faltan.
+   */
+  private truncateText(
+    data: unknown,
+    text: string,
+    tool: DispatcherTool,
+    originalChars: number,
+  ): { value: unknown; truncated: DispatchTruncation } {
+    const lines = text.split('\n');
+    const numberOf = (l: string): number | undefined => LainDispatcher.lineNumber(l);
+    const allNumbers = lines.map(numberOf).filter((n): n is number => n !== undefined);
+    const lastOfAll = allNumbers.at(-1);
+
+    // Lo que no es texto (el resto del JSON) también cuenta para el presupuesto.
+    const overhead = Math.max(0, originalChars - text.length);
+    const footerRoom = 240;
+    const budget = Math.max(0, this.maxResultChars - overhead - footerRoom);
+    let used = 0;
+    let kept = 0;
+    for (const l of lines) {
+      const cost = l.length + 1;
+      if (used + cost > budget) break;
+      used += cost;
+      kept++;
+    }
+    // Siempre al menos una línea: un resultado vacío no dice nada.
+    if (kept === 0) kept = 1;
+    if (kept > lines.length) kept = lines.length;
+
+    const keptLines = lines.slice(0, kept);
+    const keptText = keptLines.join('\n');
+    const keptNumbers = keptLines.map(numberOf).filter((n): n is number => n !== undefined);
+    const shownFrom = keptNumbers[0];
+    const shownTo = keptNumbers.at(-1);
+    const total = lines.length;
+
+    const range =
+      shownFrom !== undefined && shownTo !== undefined
+        ? `lines ${shownFrom}-${shownTo}${lastOfAll !== undefined ? ` of ${lastOfAll}` : ''}`
+        : `the first ${kept} of ${total} lines`;
+    const remaining =
+      shownTo !== undefined && lastOfAll !== undefined && lastOfAll > shownTo
+        ? `lines ${shownTo + 1}-${lastOfAll} were not shown`
+        : kept < total
+          ? `${total - kept} more lines were not shown`
+          : '';
+    const footer = `[truncated: showing ${range}. ${remaining}. Ask for the rest with a narrower read: read_source(repo, path, start, end) or get_code_snippet with a smaller context_lines.]`;
+
+    const value = { ...(data as object), text: `${keptText}\n\n${footer}` };
+    const cut: DispatchTruncation = {
+      originalChars,
+      keptChars: keptText.length,
+      omittedChars: Math.max(0, originalChars - keptText.length),
+      hint: `result of ${tool} was reduced to fit the context; the cut is declared here. For details call a narrower tool (get_contract, resolve_evidence, read_source with a smaller range) or paginate. Unknowns in the omitted section are NOT resolved — do not guess them.`,
+      lines: {
+        kept,
+        total,
+        ...(shownFrom !== undefined ? { shownFrom } : {}),
+        ...(shownTo !== undefined ? { shownTo } : {}),
+        ...(shownTo !== undefined && lastOfAll !== undefined && lastOfAll > shownTo
+          ? { remainingFrom: shownTo + 1, remainingTo: lastOfAll }
+          : {}),
+      },
+    };
+    return { value, truncated: cut };
   }
 }
 

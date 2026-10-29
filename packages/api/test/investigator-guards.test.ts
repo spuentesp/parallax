@@ -356,3 +356,124 @@ describe('find_docs — the repositories document themselves', () => {
     expect(await boom.docsFor('Explain the checkout totals')).toBe('');
   });
 });
+
+describe('investigate — saying there is no documentation needs a search', () => {
+  // Un modelo guionizado: lee, entrega, y entrega otra vez.
+  class Script implements ChatCompleter {
+    readonly seen: ChatMessage[][] = [];
+    constructor(private readonly script: NemotronResponse[]) {}
+    async complete(messages: ChatMessage[]): Promise<NemotronResponse> {
+      this.seen.push(structuredClone(messages));
+      const next = this.script.shift();
+      if (!next) throw new Error('script exhausted');
+      return next;
+    }
+  }
+
+  const pushbackOf = (seen: ChatMessage[][]): string =>
+    (seen.at(-1) ?? [])
+      .filter((m) => m.role === 'tool')
+      .map((m) => m.content ?? '')
+      .join('\n');
+
+  it('an answer that says nothing is documented is sent back once when no search was made', async () => {
+    const model = new Script([
+      resp([call('a', 'list_services', {})]),
+      resp([call('b', 'submit_answer', { answer: 'No ADR was found for this.', claims: [] })]),
+      resp([
+        call('c', 'submit_answer', {
+          answer: 'I found no ADR after searching the docs.',
+          claims: [],
+        }),
+      ]),
+    ]);
+    const result = await investigate({
+      question: 'Why is the checkout done this way?',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      // Sin índice de documentación: la pista de docs es vacía.
+      docs: () => [],
+      budget: { maxToolCalls: 8, maxModelMs: 60_000 },
+    });
+    const pushback = pushbackOf(model.seen);
+    expect(pushback).toMatch(/absence_unsupported/);
+    expect(pushback).toMatch(/find_docs was never called/);
+    expect(result.answer).toBe('I found no ADR after searching the docs.');
+  });
+
+  it('after a find_docs call the same answer is accepted: the absence is supported', async () => {
+    const model = new Script([
+      resp([call('a', 'list_services', {})]),
+      resp([call('b', 'find_docs', { query: 'checkout' })]),
+      resp([call('c', 'submit_answer', { answer: 'No ADR was found for this.', claims: [] })]),
+    ]);
+    const result = await investigate({
+      question: 'Why is the checkout done this way?',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      docs: () => [],
+      budget: { maxToolCalls: 8, maxModelMs: 60_000 },
+    });
+    expect(pushbackOf(model.seen)).not.toMatch(/absence_unsupported/);
+    // No se le pidió una segunda entrega.
+    expect(model.seen).toHaveLength(3);
+    expect(result.answer).toBe('No ADR was found for this.');
+  });
+
+  it('an answer that does not claim an absence is never sent back for one', async () => {
+    const model = new Script([
+      resp([call('a', 'list_services', {})]),
+      resp([
+        call('b', 'submit_answer', {
+          answer: 'The checkout is implemented in saleor/checkout/utils.py.',
+          claims: [],
+        }),
+      ]),
+    ]);
+    await investigate({
+      question: 'Why is the checkout done this way?',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      docs: () => [],
+      budget: { maxToolCalls: 8, maxModelMs: 60_000 },
+    });
+    expect(pushbackOf(model.seen)).not.toMatch(/absence_unsupported/);
+    expect(model.seen).toHaveLength(2);
+  });
+
+  it('a documentation hint that IS there means the answer is not about an absence', async () => {
+    const model = new Script([
+      resp([call('a', 'list_services', {})]),
+      resp([
+        call('b', 'submit_answer', {
+          answer: 'No ADR covers this; the code does it.',
+          claims: [],
+        }),
+      ]),
+    ]);
+    await investigate({
+      question: 'Why is the checkout done this way?',
+      lain: createLainMock(),
+      model,
+      view: 'live',
+      // La pista trae un archivo: la ausencia ya está en contexto.
+      docs: () => [
+        {
+          repo: 'saleor',
+          path: 'docs/adr/0004.md',
+          heading: 'Decision',
+          line: 3,
+          snippet: 'the balance is adjusted with a lock',
+          text: '## Decision (heading at line 3)\nthe balance is adjusted with a lock',
+          kind: 'decision',
+          title: '0004',
+        },
+      ],
+      budget: { maxToolCalls: 8, maxModelMs: 60_000 },
+    });
+    expect(pushbackOf(model.seen)).not.toMatch(/absence_unsupported/);
+  });
+});

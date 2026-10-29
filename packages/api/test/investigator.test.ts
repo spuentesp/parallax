@@ -137,7 +137,7 @@ describe('investigate loop', () => {
     expect(result.explanationStatus).toBe('available');
     expect(result.citations.accepted).toEqual([EVID]);
     expect(result.effectiveModel).toBe('fake/nemotron');
-    expect(result.promptVersion).toBe('parallax-investigator-v8');
+    expect(result.promptVersion).toBe('parallax-investigator-v10');
     // LAIN fue llamado con la vista fijada (live por defecto).
     expect(getLainMockCalls().some((c) => c.tool === 'get_service' && c.snapshot === 'live')).toBe(
       true,
@@ -385,7 +385,7 @@ describe('INV 2 — engine fields stay engine fields', () => {
     expect(payload.engine_finding_classes.every((f) => f.class === 'NeedsInvestigation')).toBe(
       true,
     );
-    expect(payload.prompt_version).toBe('parallax-investigator-v8');
+    expect(payload.prompt_version).toBe('parallax-investigator-v10');
     expect(payload.tool_calls).toHaveLength(1);
   });
 });
@@ -517,12 +517,46 @@ describe('submit_answer and engine-verified claims', () => {
     expect(result.toolCallLog.some((t) => t.tool === 'submit_answer' && t.ok)).toBe(true);
   });
 
+  it('sends a contradicted claim back once and accepts the answer when the model fixes it', async () => {
+    resetLainMock();
+    const prose = `orders consumes billing [ev:${EVID}]`;
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+      submit('s2', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    // El modelo recibe el motivo de la contradicción y puede corregirla.
+    expect(JSON.stringify(model.calls[2]?.messages)).toContain('claims_contradicted');
+    expect(result.explanationStatus).toBe('available');
+    expect(result.answer).toBe(prose);
+    expect(result.claims[0]?.verdict).toBe('verified');
+    // Un solo rebote: no se le pide una tercera entrega.
+    expect(model.calls).toHaveLength(3);
+  });
+
   it('points at a contradicted claim without failing or editing the answer', async () => {
     resetLainMock();
     const prose = `orders consumes billing [ev:${EVID}]`;
     const model = new ScriptedModel([
       readOrders(),
       submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+      submit('s2', {
         answer: prose,
         claims: [
           { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
@@ -566,7 +600,7 @@ describe('submit_answer and engine-verified claims', () => {
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
   });
 
-  it('does not let a contradicted claim stand in for support', async () => {
+  it('does not let a contradicted claim stand in for support, not even after the bounce', async () => {
     resetLainMock();
     const model = new ScriptedModel([
       readOrders(),
@@ -576,10 +610,18 @@ describe('submit_answer and engine-verified claims', () => {
           { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
         ],
       }),
+      submit('s2', {
+        answer: 'orders consumes billing',
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
     ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
     expect(result.claimsSummary.contradicted).toBe(1);
+    // El rebote happened una vez: la segunda entrega se acepta tal cual.
+    expect(model.calls).toHaveLength(3);
   });
 
   it('returns a schema error to the model and lets it resubmit', async () => {
@@ -877,5 +919,51 @@ describe('answer length budget', () => {
     const { model, seen } = capture();
     await investigate({ question: 'q', lain: lainWithAnchors(), model, maxTokens: 8192 });
     expect(seen[0]).toBe(8192);
+  });
+});
+
+describe('ambiguous contract names', () => {
+  it('the candidates are handed to the model: it does not pick one silently', async () => {
+    resetLainMock();
+    const seen: ChatMessage[][] = [];
+    const model: ChatCompleter = {
+      async complete(m) {
+        seen.push(structuredClone(m));
+        return resp({ content: 'done' });
+      },
+    };
+    await investigate({
+      question: 'trace products end to end',
+      lain: lainWithAnchors(),
+      model,
+      contractCandidates: [
+        { key: 'graphql:query:products', service: 'api' },
+        { key: 'graphql:mutation:products', service: 'api' },
+      ],
+    });
+    const first = seen[0]?.find((m) => m.role === 'user')?.content ?? '';
+    expect(first).toMatch(/matches more than one contract/);
+    expect(first).toContain('graphql:query:products (service api)');
+    expect(first).toContain('graphql:mutation:products (service api)');
+    expect(first).toMatch(/do not pick one silently/);
+  });
+
+  it('with a single candidate nothing is said about ambiguity', async () => {
+    resetLainMock();
+    const seen: ChatMessage[][] = [];
+    const model: ChatCompleter = {
+      async complete(m) {
+        seen.push(structuredClone(m));
+        return resp({ content: 'done' });
+      },
+    };
+    await investigate({
+      question: 'trace products end to end',
+      lain: lainWithAnchors(),
+      model,
+      contractCandidates: [{ key: 'graphql:query:products', service: 'api' }],
+    });
+    const first = seen[0]?.find((m) => m.role === 'user')?.content ?? '';
+    expect(first).not.toMatch(/matches more than one contract/);
   });
 });

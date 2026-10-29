@@ -7,10 +7,24 @@ import { ancestorsOf } from '../org-graph.js';
 // actúa cuando la pregunta nombra UN contrato sin ambigüedad; si no, sigue el camino normal.
 
 export type RoadmapKind = 'trace' | 'blast';
-export interface RoadmapIntent {
-  kind: RoadmapKind;
+
+/** Un contrato que el nombre de la pregunta puede querer decir. */
+export interface RoadmapCandidate {
   key: string;
   service: string;
+}
+
+export interface RoadmapIntent {
+  kind: RoadmapKind;
+  /** El contrato sin ambigüedad; null cuando el nombre casó con varios. */
+  key: string | null;
+  service: string;
+  /**
+   * Todos los contratos que casaron, con más usos primero. Cuando hay más de
+   * uno, la pregunta es ambigua: no se elige en silencio, se le pasan al
+   * investigador para que lo diga.
+   */
+  candidates: RoadmapCandidate[];
 }
 
 const TRACE =
@@ -52,10 +66,19 @@ export function detectRoadmap(question: string, graph: OrgGraph): RoadmapIntent 
   // Una clave completa nombrada en la pregunta gana a un nombre suelto.
   const full = hits.filter((h) => h.how === 'full');
   const pool = full.length > 0 ? full : hits;
-  const keys = new Set(pool.map((h) => h.n.label));
   // Varias claves distintas con el mismo nombre (query y mutation, p. ej.): ambiguo.
-  if (keys.size !== 1) return null;
-  const best = [...pool].sort((a, b) => (uses.get(b.n.id) ?? 0) - (uses.get(a.n.id) ?? 0))[0];
-  if (!best) return null;
-  return { kind, key: best.n.label, service: owner(best.n.id)?.label ?? '' };
+  // Los candidatos NO se descartan: se le pasan al investigador.
+  const byKey = new Map<string, { node: (typeof pool)[number]['n']; uses: number }>();
+  for (const h of pool) {
+    const seen = byKey.get(h.n.label);
+    const u = uses.get(h.n.id) ?? 0;
+    if (!seen || u > seen.uses) byKey.set(h.n.label, { node: h.n, uses: u });
+  }
+  const ranked = [...byKey.entries()]
+    .sort((a, b) => b[1].uses - a[1].uses || a[0].localeCompare(b[0]))
+    .map(([key, v]) => ({ key, service: owner(v.node.id)?.label ?? '' }));
+  if (ranked.length === 0) return null;
+  if (ranked.length > 1) return { kind, key: null, service: '', candidates: ranked };
+  const only = ranked[0] as { key: string; service: string };
+  return { kind, key: only.key, service: only.service, candidates: [only] };
 }
