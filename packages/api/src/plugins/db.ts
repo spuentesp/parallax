@@ -5,10 +5,12 @@ import { type BetterSQLite3Database, drizzle } from 'drizzle-orm/better-sqlite3'
 import fp from 'fastify-plugin';
 import { runMigrations } from '../db/migrate.js';
 import * as schema from '../db/schema.js';
+import { createDocsService, type DocsService } from '../docs/service.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: BetterSQLite3Database<typeof schema>;
+    docs: DocsService;
   }
 }
 
@@ -24,6 +26,15 @@ export default fp(
 
     const db = drizzle(sqlite, { schema });
     fastify.decorate('db', db);
+    fastify.decorate(
+      'docs',
+      createDocsService({
+        sqlite,
+        db,
+        roots: (fastify.config.docsRoots ?? '').split(':').filter(Boolean),
+        cacheDir: fastify.config.docsCacheDir ?? resolve(dirname(dbPath), 'docs-clones'),
+      }),
+    );
     fastify.addHook('onClose', async () => sqlite.close());
   },
   { name: 'db' },

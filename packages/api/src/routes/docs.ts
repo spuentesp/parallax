@@ -13,6 +13,12 @@ import { isLainCallError } from '../lain-adapter/errors.js';
 const TTL_MS = 30 * 60_000;
 
 export const docsRoutes: FastifyPluginAsync = async (app) => {
+  // Re-lee los checkouts y reconstruye el índice (tras un pull).
+  app.post(
+    '/api/workspaces/:id/docs/reindex',
+    { config: { scopes: ['write'] }, schema: { params: z.object({ id: z.string().min(1) }) } },
+    async (req) => ({ repos: await app.docs.ensure((req.params as { id: string }).id, true) }),
+  );
   const cache = new Map<string, { at: number; value: DocEntry[] }>();
   app.get(
     '/api/workspaces/:id/docs',
@@ -25,6 +31,9 @@ export const docsRoutes: FastifyPluginAsync = async (app) => {
         .where(eq(schema.workspace.id, id))
         .limit(1);
       if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      // Primero el índice local (checkout del repo): no depende del motor ni de su latencia.
+      await app.docs.ensure(id).catch(() => undefined);
+      if (app.docs.has(id)) return { source: 'index' as const, docs: app.docs.list(id) };
       if (!ws[0].lainUrl) return { source: 'unconfigured' as const, docs: [] };
       const hit = cache.get(id);
       if (hit && Date.now() - hit.at < TTL_MS) return { source: 'lain' as const, docs: hit.value };

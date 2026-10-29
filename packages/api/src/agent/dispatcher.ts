@@ -27,6 +27,7 @@ import {
 } from '@parallax/shared/lain';
 import { z } from 'zod';
 import { INVESTIGATOR_DEFAULTS } from '../config.js';
+import type { DocHit } from '../docs/index.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { CODE_TOOL_ARGS, CODE_TOOL_DESCRIPTIONS, CODE_TOOLS, type CodeTool } from './code-tools.js';
 import type { ToolCall, ToolSpec } from './nemotron.js';
@@ -156,7 +157,11 @@ export interface DispatcherConfig {
   maxResultChars?: number;
   /** Topes por herramienta que sustituyen a PER_TOOL_CAP (p. ej. un trazado cruzado necesita más búsquedas). */
   caps?: Partial<Record<DispatcherTool, number>>;
+  /** Índice local de la documentación: si está, `find_docs` y las pistas salen de él y no del motor. */
+  docs?: DocSearch;
 }
+
+export type DocSearch = (query: string, opts?: { repo?: string; limit?: number }) => DocHit[];
 
 const DEFAULT_MAX_TOOL_CALLS = INVESTIGATOR_DEFAULTS.investigatorMaxToolCalls;
 // Un resultado grande se reenvía al modelo en CADA ronda siguiente: es lo que más
@@ -200,6 +205,7 @@ export class LainDispatcher {
   private toolCallsUsed = 0;
   private readonly usedByTool = new Map<string, number>();
   private readonly caps: Partial<Record<DispatcherTool, number>>;
+  private readonly docs: DocSearch | null;
   private readonly seenCalls = new Set<string>();
   private budgetRefusals = 0;
   private readonly receiptLog: Receipt[] = [];
@@ -223,6 +229,7 @@ export class LainDispatcher {
     this.maxToolCalls = cfg.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
     this.maxResultChars = cfg.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
     this.caps = cfg.caps ?? {};
+    this.docs = cfg.docs ?? null;
   }
 
   // Specs que ven el modelo: exactamente el conjunto de lectura, sin snapshot.
@@ -515,6 +522,11 @@ export class LainDispatcher {
    * de los repos. Vacío si nada coincide o el motor falla.
    */
   async docsFor(question: string): Promise<string> {
+    if (this.docs) {
+      return this.docs(question, { limit: 6 })
+        .map((h) => `- ${h.repo}: ${h.path}${h.heading ? ` (section: ${h.heading})` : ''}`)
+        .join('\n');
+    }
     const words = [
       ...new Set(
         (question.toLowerCase().match(/[a-z][a-z0-9_-]{3,}/g) ?? []).filter(
@@ -555,6 +567,25 @@ export class LainDispatcher {
   // motor: se busca con la misma herramienta y se queda sólo con los archivos .md/.mdx,
   // en cada repo del catálogo si el modelo no nombra uno.
   private async findDocs(args: { query: string; repo?: string; limit?: number }): Promise<unknown> {
+    if (this.docs) {
+      const hits = this.docs(args.query, {
+        ...(args.repo ? { repo: args.repo } : {}),
+        limit: Math.min(args.limit ?? 8, 8),
+      });
+      return {
+        text:
+          hits.length > 0
+            ? `## find_docs: ${args.query}\n\n${hits
+                .map(
+                  (h) =>
+                    `- ${h.repo}: ${h.path} [${h.kind}] "${h.title}"${h.heading ? ` > ${h.heading}` : ''} (line ${h.line})\n    ${h.snippet}`,
+                )
+                .join(
+                  '\n',
+                )}\n\nRead the best one with get_code_snippet(repo, path). Cite what you read as a location claim.`
+            : `## find_docs: ${args.query}\n\nNo documentation section matched. The repositories may simply not document this: say so, and fall back to the code.`,
+      };
+    }
     if (!this.catalog) await this.loadCatalog();
     const repos = args.repo ? [args.repo] : [...(this.catalog?.repos ?? [])];
     const hit = /^\d+\. \*\*[^*]+\*\* file (\S+\.mdx?)\b/;

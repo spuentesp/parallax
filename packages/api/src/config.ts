@@ -48,6 +48,10 @@ const AppConfigSchema = z.object({
   githubWebhookSecret: z.string().min(1).optional(),
   // URL pública de Parallax, para enlazar el informe desde el estado y el comentario.
   publicUrl: z.string().url().optional(),
+  // Documentación de los repos: carpetas donde buscar un checkout ya existente (<raíz>/<repo>),
+  // separadas por ':', y dónde clonar (superficial) los que no estén.
+  docsRoots: z.string().optional(),
+  docsCacheDir: z.string().optional(),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -160,6 +164,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     githubWriteToken: env.PARALLAX_GITHUB_WRITE_TOKEN,
     githubWebhookSecret: env.PARALLAX_GITHUB_WEBHOOK_SECRET,
     publicUrl: env.PARALLAX_PUBLIC_URL,
+    docsRoots: nonEmpty(env.DOCS_ROOTS),
+    docsCacheDir: nonEmpty(env.DOCS_CACHE_DIR),
   });
   if (!parsed.success) {
     const issues = parsed.error.issues

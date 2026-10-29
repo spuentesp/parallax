@@ -295,6 +295,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       };
     }
 
+    if (!app.docs.has(orgId)) void app.docs.ensure(orgId).catch(() => undefined);
     const result = await investigate({
       nudgeSubmit: true,
       ...(history ? { history } : {}),
@@ -303,6 +304,14 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       model: model.provider,
       view: 'live',
       budget: model.budget,
+      // La documentación sale del índice local si el workspace lo tiene; si no, se indexa en
+      // segundo plano para la siguiente pregunta (y el motor responde mientras tanto).
+      ...(app.docs.has(orgId)
+        ? {
+            docs: (q: string, o?: { repo?: string; limit?: number }) =>
+              app.docs.search(orgId, q, o),
+          }
+        : {}),
       maxTokens: model.settings.maxTokens,
       ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
       endpointLabel: model.settings.baseUrl,

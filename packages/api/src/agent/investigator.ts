@@ -31,6 +31,7 @@ import {
 import {
   createDispatcher,
   type DispatcherBudgetUse,
+  type DocSearch,
   type LainDispatcher,
   type Receipt,
 } from './dispatcher.js';
@@ -226,6 +227,8 @@ export interface InvestigateOptions {
   /** Hallazgos del motor (INV 2): contexto y detección de promociones. */
   engineFindings?: unknown[];
   modelRole?: 'planner' | 'worker';
+  /** Búsqueda en el índice local de documentación del workspace. */
+  docs?: DocSearch;
   maxTokens?: number;
   /** Se llama con cada paso (ronda del modelo, lectura al motor, verificación): progreso en vivo. */
   onProgress?: (e: ProgressEvent) => void;
@@ -379,6 +382,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
     lain: opts.lain,
     view,
     maxToolCalls: budget.maxToolCalls,
+    ...(opts.docs ? { docs: opts.docs } : {}),
     ...(opts.maxResultChars !== undefined ? { maxResultChars: opts.maxResultChars } : {}),
   });
   const prFindings = opts.pr ? buildFindings(opts.pr.changes) : null;
