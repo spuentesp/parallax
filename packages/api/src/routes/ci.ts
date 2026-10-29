@@ -3,13 +3,19 @@
 // (base, head) y, al terminar, se publica el resultado en GitHub: siempre un commit
 // status; un comentario sólo si el workspace lo activó.
 import { WorkspaceCiSettings } from '@parallax/shared/domain';
-import { eq } from 'drizzle-orm';
+import { eq, isNull } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
 import * as schema from '../db/schema.js';
 import { parseGithubRepoUri } from '../github/reader.js';
-import { commentBodyFor, GitHubWriter, statusForReport } from '../github/status.js';
 import {
-  EVALUATED_ACTIONS,
+  commentBodyFor,
+  GitHubWriter,
+  PENDING_STATUS,
+  STATUS_CONTEXT,
+  statusForReport,
+} from '../github/status.js';
+import {
+  isEvaluated,
   type PullRequestEvent,
   parsePullRequestEvent,
   verifySignature,
@@ -47,44 +53,24 @@ interface PrDeps {
   writer: GitHubWriter | null;
   publicUrl: string | null;
   log: FastifyBaseLogger;
+  /** Esperas entre reintentos de publicar a GitHub (los tests las acortan). */
+  retryDelaysMs?: readonly number[];
 }
+
+const DEFAULT_RETRY_DELAYS_MS = [2_000, 10_000, 60_000] as const;
 
 /**
  * Publica el resultado de una evaluación en GitHub cuando llega a un estado terminal.
- * Si ya estaba terminal al suscribirse, publica enseguida: no hay carrera con el worker.
+ * Qué falta por publicar vive en `pr_report` (no en memoria): un reinicio lo retoma y un
+ * fallo de GitHub se reintenta. Si ya estaba terminal al suscribirse, publica enseguida.
  */
-function reportWhenDone(deps: PrDeps, pr: PullRequestEvent, workspaceId: string, id: string) {
+export function reportWhenDone(deps: PrDeps, id: string): void {
   let done = false;
   const finish = async () => {
     if (done) return;
     done = true;
     unsubscribe();
-    try {
-      const report = await getAssessmentReport(deps.db, id);
-      if (!report) return;
-      const reportUrl = deps.publicUrl
-        ? `${deps.publicUrl}/app/orgs/${workspaceId}/assessments/${id}`
-        : null;
-      const ci = await readCiSettings(deps.db, workspaceId);
-      if (!deps.writer) {
-        deps.log.warn({ assessment: id }, 'no write token: result not reported to GitHub');
-        return;
-      }
-      await deps.writer.setCommitStatus(pr.owner, pr.repo, pr.headSha, {
-        ...statusForReport(report),
-        targetUrl: reportUrl,
-      });
-      if (ci.reportComments) {
-        await deps.writer.createIssueComment(
-          pr.owner,
-          pr.repo,
-          pr.number,
-          commentBodyFor(report, reportUrl),
-        );
-      }
-    } catch (err) {
-      deps.log.error({ err, assessment: id }, 'failed to report assessment to GitHub');
-    }
+    await publishWithRetry(deps, id);
   };
   const unsubscribe = deps.worker.subscribe(id, (e) => {
     if (e.type === 'transition' && TERMINAL.has(String((e.payload as { to?: string }).to))) {
@@ -97,23 +83,107 @@ function reportWhenDone(deps: PrDeps, pr: PullRequestEvent, workspaceId: string,
   })();
 }
 
+async function publishWithRetry(deps: PrDeps, id: string): Promise<void> {
+  const delays = deps.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await publishResult(deps, id);
+      return;
+    } catch (err) {
+      if (attempt >= delays.length) {
+        deps.log.error(
+          { err, assessment: id },
+          'failed to report assessment to GitHub; it stays pending and is retried at next start',
+        );
+        return;
+      }
+      deps.log.warn({ err, assessment: id, attempt }, 'GitHub report failed; will retry');
+      await new Promise((r) => setTimeout(r, delays[attempt]));
+    }
+  }
+}
+
+/** Lanza si GitHub falla: así `publishWithRetry` reintenta y la fila sigue pendiente. */
+async function publishResult(deps: PrDeps, id: string): Promise<void> {
+  const [row] = await deps.db
+    .select()
+    .from(schema.prReport)
+    .where(eq(schema.prReport.assessmentId, id));
+  if (!row || row.reportedAt !== null) return;
+  const report = await getAssessmentReport(deps.db, id);
+  if (!report) return;
+  if (!deps.writer) {
+    deps.log.warn({ assessment: id }, 'no write token: result not reported to GitHub');
+    return;
+  }
+  const reportUrl = deps.publicUrl
+    ? `${deps.publicUrl}/app/orgs/${row.workspaceId}/assessments/${id}`
+    : null;
+  const ci = await readCiSettings(deps.db, row.workspaceId);
+  await deps.writer.setCommitStatus(row.owner, row.repo, row.headSha, {
+    ...statusForReport(report),
+    targetUrl: reportUrl,
+    context: row.context,
+  });
+  if (ci.reportComments) {
+    const [ws] = await deps.db
+      .select()
+      .from(schema.workspace)
+      .where(eq(schema.workspace.id, row.workspaceId));
+    await deps.writer.createIssueComment(
+      row.owner,
+      row.repo,
+      row.number,
+      commentBodyFor(report, reportUrl, ws?.name),
+    );
+  }
+  // Sólo tras publicar: si algo falló antes, la fila queda pendiente.
+  await deps.db
+    .update(schema.prReport)
+    .set({ reportedAt: Date.now() })
+    .where(eq(schema.prReport.assessmentId, id));
+}
+
+/**
+ * Al arrancar: retoma lo que quedó a medias. Las evaluaciones no terminales las reanuda el
+ * worker (INV 5); aquí se vuelve a enganchar la publicación de cada PR que aún no se publicó.
+ */
+export async function resumePrReports(deps: PrDeps): Promise<number> {
+  const pending = await deps.db
+    .select()
+    .from(schema.prReport)
+    .where(isNull(schema.prReport.reportedAt));
+  for (const row of pending) reportWhenDone(deps, row.assessmentId);
+  return pending.length;
+}
+
 /**
  * Procesa un evento de PR: crea una evaluación por cada repo del workspace que
  * coincida, según el modo CI y el filtro de rama. Devuelve cuántas se crearon.
  */
 export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Promise<number> {
-  if (!EVALUATED_ACTIONS.has(pr.action) || pr.isFork) return 0;
+  if (!isEvaluated(pr)) return 0;
   const repoRows = await deps.db.select().from(schema.repo);
-  let created = 0;
+  const matching: Array<(typeof repoRows)[number]> = [];
   for (const row of repoRows) {
     const gh = parseGithubRepoUri(row.uri);
     if (!gh || gh.owner.toLowerCase() !== pr.owner.toLowerCase()) continue;
     if (gh.repo.toLowerCase() !== pr.repo.toLowerCase()) continue;
-
     const ci = await readCiSettings(deps.db, row.workspaceId);
     if (ci.mode !== 'on-open-and-update') continue;
     if (ci.baseBranch !== null && ci.baseBranch !== pr.baseRef) continue;
+    matching.push(row);
+  }
+  // Varios workspaces con el mismo repo pisarían el mismo contexto de estado en el mismo
+  // commit (gana el último): cada uno publica en el suyo.
+  const workspaceIds = [...new Set(matching.map((r) => r.workspaceId))];
+  const names = new Map<string, string>();
+  if (workspaceIds.length > 1) {
+    for (const w of await deps.db.select().from(schema.workspace)) names.set(w.id, w.name);
+  }
 
+  let created = 0;
+  for (const row of matching) {
     try {
       const { assessment, created: fresh } = await createAssessment({
         db: deps.db,
@@ -129,8 +199,37 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
       // Una entrega repetida devuelve la misma evaluación: no se vuelve a publicar.
       if (!fresh) continue;
       created += 1;
+      const context =
+        workspaceIds.length > 1
+          ? `${STATUS_CONTEXT}/${names.get(row.workspaceId) ?? row.workspaceId}`
+          : STATUS_CONTEXT;
+      await deps.db
+        .insert(schema.prReport)
+        .values({
+          assessmentId: assessment.id,
+          workspaceId: row.workspaceId,
+          owner: pr.owner,
+          repo: pr.repo,
+          number: pr.number,
+          headSha: pr.headSha,
+          context,
+          createdAt: Date.now(),
+        })
+        .onConflictDoNothing();
+      // El PR muestra "analizando" desde ya, no un hueco hasta el resultado.
+      if (deps.writer) {
+        await deps.writer
+          .setCommitStatus(pr.owner, pr.repo, pr.headSha, {
+            ...PENDING_STATUS,
+            targetUrl: null,
+            context,
+          })
+          .catch((err: unknown) =>
+            deps.log.warn({ err, assessment: assessment.id }, 'could not post the pending status'),
+          );
+      }
       // Primero la suscripción, luego el run: así no se pierde ninguna transición.
-      reportWhenDone(deps, pr, row.workspaceId, assessment.id);
+      reportWhenDone(deps, assessment.id);
       void deps.worker.run(assessment.id).catch((err: unknown) => {
         deps.log.error({ err, assessment: assessment.id }, 'PR assessment run failed');
       });
@@ -194,6 +293,19 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         })
       : null;
     const publicUrl = app.config.publicUrl ?? null;
+
+    // Al arrancar se retoma la publicación de los PR que quedaron a medias (reinicio, GitHub caído).
+    app.addHook('onReady', async () => {
+      const resumed = await resumePrReports({
+        db: app.db,
+        worker: app.assessmentWorker,
+        analyzerVersion: app.lain.analyzerVersion,
+        writer,
+        publicUrl,
+        log: app.log,
+      });
+      if (resumed > 0) app.log.info({ resumed }, 'resumed pending GitHub reports');
+    });
 
     scope.post('/webhooks/github', async (req, reply) => {
       const secret = app.config.githubWebhookSecret;

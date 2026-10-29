@@ -209,8 +209,13 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
       const r = await deliver(prEvent());
       expect(r.json().handled).toBe(1);
 
-      await until(() => statusPosts().length === 1);
-      const post = statusPosts()[0];
+      // Primero "analizando" (el PR no queda mudo), luego el resultado.
+      await until(() => statusPosts().length === 2);
+      expect(statusPosts()[0]?.body).toMatchObject({
+        state: 'pending',
+        context: 'parallax/assessment',
+      });
+      const post = statusPosts()[1];
       expect(post?.url).toBe(`/repos/acme/shop/statuses/${HEAD}`);
       expect(post?.auth).toBe('Bearer write-token');
       expect(post?.body).toMatchObject({ context: 'parallax/assessment' });
@@ -221,7 +226,7 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
     it('does not post a comment unless the workspace asked for one', async () => {
       await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: false });
       await deliver(prEvent());
-      await until(() => statusPosts().length === 1);
+      await until(() => statusPosts().length === 2);
       expect(recorded.filter((r) => r.url.includes('/comments'))).toHaveLength(0);
     });
 
@@ -255,11 +260,11 @@ describe('CI automática y webhook de pull_request', { timeout: 30_000 }, () => 
     it('does not evaluate or post twice when GitHub redelivers the same event', async () => {
       await setCi({ mode: 'on-open-and-update', baseBranch: null, reportComments: false });
       await deliver(prEvent());
-      await until(() => statusPosts().length === 1);
+      await until(() => statusPosts().length === 2);
       const again = await deliver(prEvent());
       expect(again.json().handled).toBe(0);
       await new Promise((res) => setTimeout(res, 150));
-      expect(statusPosts()).toHaveLength(1);
+      expect(statusPosts()).toHaveLength(2);
     });
   });
 });

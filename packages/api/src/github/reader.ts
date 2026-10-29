@@ -239,3 +239,18 @@ export class GitHubReader {
     return { items, truncated };
   }
 }
+
+/**
+ * EL lector de PRs de la aplicación: toda ruta que lea de GitHub lo crea aquí, con la misma
+ * base de API y el mismo token de lectura. Antes el selector usaba el token y la evaluación
+ * no, así que un PR privado aparecía en el selector y fallaba con 404 al evaluarlo.
+ */
+export function githubReaderFor(cfg: {
+  githubApiBase?: string | undefined;
+  githubReadToken?: string | undefined;
+}): GitHubReader {
+  return new GitHubReader({
+    ...(cfg.githubApiBase ? { apiBase: cfg.githubApiBase } : {}),
+    ...(cfg.githubReadToken ? { token: cfg.githubReadToken } : {}),
+  });
+}

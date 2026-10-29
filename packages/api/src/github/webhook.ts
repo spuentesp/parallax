@@ -28,10 +28,15 @@ export interface PullRequestEvent {
   readonly headSha: string;
   /** True si el head vive en un fork: su código no lo ha revisado la organización. */
   readonly isFork: boolean;
+  /** Borrador: no se evalúa hasta que se marca listo (cuesta tokens de modelo). */
+  readonly isDraft: boolean;
+  /** `edited` que cambió la rama base: cambia contra qué se compara el PR. */
+  readonly baseChanged: boolean;
 }
 
 interface RawPr {
   number?: number;
+  draft?: boolean;
   html_url?: string;
   base?: { ref?: string; sha?: string; repo?: { full_name?: string } | null };
   head?: { ref?: string; sha?: string; repo?: { full_name?: string } | null };
@@ -43,6 +48,7 @@ export function parsePullRequestEvent(payload: unknown): PullRequestEvent | null
     action?: string;
     repository?: { full_name?: string };
     pull_request?: RawPr;
+    changes?: { base?: unknown };
   };
   const fullName = p.repository?.full_name ?? '';
   const [owner, repo] = fullName.split('/');
@@ -64,6 +70,8 @@ export function parsePullRequestEvent(payload: unknown): PullRequestEvent | null
     headSha,
     // Un head sin repo (repo eliminado) también cuenta como fork: no hay forma de verificarlo.
     isFork: headRepo !== fullName,
+    isDraft: pr.draft === true,
+    baseChanged: p.changes?.base !== undefined,
   };
 }
 
@@ -72,4 +80,14 @@ export const EVALUATED_ACTIONS: ReadonlySet<string> = new Set([
   'opened',
   'synchronize',
   'reopened',
+  // Un borrador no se evalúa; al marcarlo listo, sí.
+  'ready_for_review',
 ]);
+
+/** ¿Este evento merece una evaluación? `edited` sólo si cambió la rama base. */
+export function isEvaluated(
+  pr: Pick<PullRequestEvent, 'action' | 'isDraft' | 'baseChanged' | 'isFork'>,
+): boolean {
+  if (pr.isFork || pr.isDraft) return false;
+  return EVALUATED_ACTIONS.has(pr.action) || (pr.action === 'edited' && pr.baseChanged);
+}

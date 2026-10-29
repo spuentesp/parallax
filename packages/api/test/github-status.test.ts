@@ -22,11 +22,11 @@ describe('statusForReport (tabla del diseño)', () => {
       'failure',
     ],
     [
-      'NeedsInvestigation leaves the check pending',
+      'NeedsInvestigation is inconclusive (error), never an endless pending',
       [finding('NeedsInvestigation')],
       complete,
       'READY',
-      'pending',
+      'error',
     ],
     [
       'no findings and complete coverage succeeds',
@@ -41,14 +41,14 @@ describe('statusForReport (tabla del diseño)', () => {
       [],
       { complete: false, summary: 'reports not reviewed' },
       'PARTIAL',
-      'pending',
+      'error',
     ],
     [
       'incomplete coverage is never success even when READY',
       [finding('NoKnownImpact')],
       { complete: false },
       'READY',
-      'pending',
+      'error',
     ],
     ['a failed assessment is an error', [], null, 'FAILED', 'error'],
   ])('%s', (_name, findings, coverage, status, state) => {
@@ -280,7 +280,12 @@ describe('parsePullRequestEvent edge cases', () => {
   });
 
   it('exposes exactly the evaluated actions', () => {
-    expect([...EVALUATED_ACTIONS].sort()).toEqual(['opened', 'reopened', 'synchronize']);
+    expect([...EVALUATED_ACTIONS].sort()).toEqual([
+      'opened',
+      'ready_for_review',
+      'reopened',
+      'synchronize',
+    ]);
   });
 });
 
@@ -349,7 +354,7 @@ describe('statusForReport exact descriptions', () => {
         findings: [finding('NeedsInvestigation'), finding('NeedsInvestigation')],
         coverage: complete,
       }),
-    ).toEqual({ state: 'pending', description: '2 finding(s) need investigation.' });
+    ).toEqual({ state: 'error', description: '2 finding(s) need investigation.' });
   });
 
   it('keeps a PARTIAL assessment pending even when its coverage claims complete', () => {
@@ -359,7 +364,7 @@ describe('statusForReport exact descriptions', () => {
         findings: [finding('NoKnownImpact')],
         coverage: { complete: true, summary: 'all reviewed' },
       }),
-    ).toEqual({ state: 'pending', description: 'No result conclusive: all reviewed' });
+    ).toEqual({ state: 'error', description: 'No result conclusive: all reviewed' });
   });
 
   it('reports an empty coverage summary as an empty reason', () => {
@@ -369,12 +374,12 @@ describe('statusForReport exact descriptions', () => {
         findings: [],
         coverage: { complete: false, summary: '' },
       }),
-    ).toEqual({ state: 'pending', description: 'No result conclusive: ' });
+    ).toEqual({ state: 'error', description: 'No result conclusive: ' });
   });
 
   it('falls back to the generic reason when coverage is missing', () => {
     expect(statusForReport({ status: 'READY', findings: [], coverage: null })).toEqual({
-      state: 'pending',
+      state: 'error',
       description: 'No result conclusive: coverage is incomplete',
     });
   });
@@ -388,7 +393,7 @@ describe('statusForReport exact descriptions', () => {
 
   it('treats a missing coverage object as incomplete, not as an error', () => {
     expect(statusForReport({ status: 'READY', findings: [] })).toEqual({
-      state: 'pending',
+      state: 'error',
       description: 'No result conclusive: coverage is incomplete',
     });
   });
