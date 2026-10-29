@@ -1,28 +1,35 @@
 #!/usr/bin/env node
-// Genera los tokens de la demo: uno de administración (lectura+escritura) y uno
-// de revisión (sólo lectura) para los jueces, y el enlace que los firma dentro.
+// Generates demo access tokens:
+// 1. "Looking" token: read-only access (for viewers to explore architecture, traces, and code without modifying state)
+// 2. "Judges" token: interactive testing access (for judges to test AI queries, PR evaluations, and simulations)
 //
-//   node deploy/gen-tokens.mjs https://parallax.example.com [workspaceId]
-//
-// Imprime la línea PARALLAX_TOKENS para deploy/.env y el enlace de los jueces.
+// Usage:
+//   node deploy/gen-tokens.mjs https://YOUR.DOMAIN [workspaceId]
 import { randomBytes } from 'node:crypto';
 
 const base = (process.argv[2] ?? 'https://<demo-host>').replace(/\/+$/, '');
 const workspace = process.argv[3] ?? 'ws_saleor';
-const make = () => `px_${randomBytes(24).toString('base64url')}`;
+const make = (prefix) => `px_${prefix}_${randomBytes(18).toString('base64url')}`;
 
-const admin = make();
-const judge = make();
+const look = make('look');
+const judge = make('judge');
+const admin = make('admin');
+
 const tokens = [
-  { token: admin, orgId: 'demo', scopes: ['read', 'write'] },
-  { token: judge, orgId: 'demo', scopes: ['read'] },
+  { token: look, orgId: 'demo', scopes: ['read'] },
+  { token: judge, orgId: 'demo', scopes: ['read', 'write'] },
+  { token: admin, orgId: 'demo', scopes: ['read', 'write', 'publish'] },
 ];
 
-console.log('# deploy/.env');
+console.log('# Paste into deploy/.env:');
 console.log(`PARALLAX_TOKENS='${JSON.stringify(tokens)}'`);
 console.log('');
-console.log('# Admin (you): paste on the access screen, or');
-console.log(`${base}/orgs/${workspace}?token=${admin}`);
+console.log('--- DIRECT ACCESS LINKS ---');
+console.log('# 1. Just for Looking (Read-only viewer access):');
+console.log(`${base}/orgs/${workspace}?token=${look}`);
 console.log('');
-console.log('# Judges (read-only) — put THIS link in the Devpost testing instructions:');
+console.log('# 2. For Judges to Test (Full evaluation & query testing):');
 console.log(`${base}/orgs/${workspace}?token=${judge}`);
+console.log('');
+console.log('# 3. Maintainer / Admin (Private):');
+console.log(`${base}/orgs/${workspace}?token=${admin}`);

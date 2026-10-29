@@ -2,7 +2,9 @@
 # Lain runs on the host (or another VM) and is reached via LAIN_URL.
 services:
   parallax:
-    build: ..
+    build:
+      context: ..
+      dockerfile: Dockerfile
     env_file: .env
     environment:
       LAIN_ADAPTER: real
@@ -11,11 +13,19 @@ services:
       - parallax-data:/data
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
 
   caddy:
     image: caddy:2
-    depends_on: [parallax]
+    depends_on:
+      parallax:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"
