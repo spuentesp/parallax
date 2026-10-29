@@ -18,10 +18,12 @@ import {
   MAX_TURNS_PER_CONVERSATION,
   ownerOf,
 } from '../conversation/store.js';
+import { githubReaderFor } from '../github/reader.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { createWindowLimiter } from '../rate-limit.js';
 import { blastRadius, blastSentence } from '../roadmap/blast.js';
 import { detectRoadmap } from '../roadmap/intent.js';
+import { createAssessment } from '../services/assessments.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
 import { buildSeed } from '../trace/seed.js';
 import { traceEndToEnd } from '../trace/tracer.js';
@@ -185,6 +187,83 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           detail: `this conversation reached ${MAX_TURNS_PER_CONVERSATION} turns: start a new one`,
         },
       };
+    }
+    // Only an explicit command with one PR URL starts work; ordinary discussion remains read-only.
+    const reviewCommand =
+      /^(?:(?:please|can you|could you)\s+)?(?:review|assess|evaluate|analy[sz]e)\b/i.test(
+        question.trim(),
+      );
+    const urls =
+      question.match(
+        /https?:\/\/(?:www\.)?github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+(?:[/?#][^\s]*)?/gi,
+      ) ?? [];
+    if (reviewCommand && urls.length === 1) {
+      if (!req.authToken?.scopes.includes('write'))
+        return {
+          status: 403,
+          body: { code: 'Forbidden', detail: 'write scope required to start an assessment' },
+        };
+      try {
+        const { assessment, created } = await createAssessment({
+          db: app.db,
+          worker: app.assessmentWorker,
+          body: { orgId, prUrl: urls[0] as string },
+          analyzerVersion: app.lain.analyzerVersion,
+          github: githubReaderFor(app.config),
+        });
+        void app.assessmentWorker
+          .run(assessment.id)
+          .catch((err: unknown) =>
+            req.log.error({ err, assessmentId: assessment.id }, 'assessment run failed'),
+          );
+        const answer = created
+          ? 'Assessment started. Open the report to follow its progress.'
+          : 'This PR assessment already exists. Open the report to see its status.';
+        const artifact = { kind: 'assessment', orgId, assessmentId: assessment.id };
+        let conversation: { id: string; seq: number } | null = null;
+        try {
+          const conv = prior?.conversation ?? (await conversations.start(owner, orgId, question));
+          const seq = await conversations.append(conv.id, {
+            question,
+            answer,
+            status: 'available',
+            claims: [],
+            focus: null,
+            artifact,
+            model: null,
+          });
+          conversation = { id: conv.id, seq };
+        } catch (err) {
+          req.log.warn({ err }, 'assessment started but chat turn was not saved');
+        }
+        return {
+          status: 200,
+          body: {
+            conversation,
+            answer,
+            explanation_status: 'available',
+            topology: EMPTY_TOPOLOGY,
+            evidence: [],
+            citations: { accepted: [], rejected: [] },
+            budget: null,
+            tool_calls: [],
+            model: null,
+            claims: [],
+            claims_summary: NO_CLAIMS,
+            map_focus: null,
+            roadmap: artifact,
+          },
+        };
+      } catch (error) {
+        req.log.warn({ err: error }, 'could not start PR assessment from chat');
+        return {
+          status: 400,
+          body: {
+            code: 'AssessmentError',
+            detail: error instanceof Error ? error.message : 'could not start assessment',
+          },
+        };
+      }
     }
     const history = prior ? buildHistory(prior.turns) : undefined;
     const lain = (await resolveWorkspaceLain(orgId)) ?? app.lain;

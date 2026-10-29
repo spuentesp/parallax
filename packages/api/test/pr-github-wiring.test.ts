@@ -63,7 +63,10 @@ describe('GitHub reads for PR evaluation use the configured read token and API b
       databasePath: join(dir, 'p.db'),
       lainAdapter: 'mock',
       mcpTransport: 'http-sse',
-      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      authTokens: [
+        { token: 't', orgId: 'o', scopes: ['read', 'write'] },
+        { token: 'read', orgId: 'o', scopes: ['read'] },
+      ],
       webBundlePath: join(dir, 'web'),
       githubApiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
       githubReadToken: 'read-token',
@@ -170,6 +173,50 @@ describe('GitHub reads for PR evaluation use the configured read token and API b
     const payload = JSON.parse(envelope.result.content[0].text);
     expect(payload.assessment.manifestJson).toContain('"number":4');
     expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((s) => s.auth === 'Bearer read-token')).toBe(true);
+    await app.assessmentWorker.drain();
+  });
+  it('starts a PR assessment from chat and preserves its report link in the conversation', async () => {
+    const ws = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: AUTH,
+      payload: { name: 'shop' },
+    });
+    const wsId = ws.json().workspace.id as string;
+    await app.db.insert(schema.repo).values({
+      id: 'shop',
+      workspaceId: wsId,
+      uri: 'https://github.com/acme/shop.git',
+      createdAt: Date.now(),
+    });
+    const payload = { orgId: wsId, question: 'Please review https://github.com/acme/shop/pull/4' };
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/api/query',
+      headers: { authorization: 'Bearer read' },
+      payload,
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(seen).toHaveLength(0);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/query',
+      headers: AUTH,
+      payload,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.roadmap).toMatchObject({ kind: 'assessment', orgId: wsId });
+    const saved = await app.inject({
+      method: 'GET',
+      url: `/api/conversations/${body.conversation.id}`,
+      headers: AUTH,
+    });
+    expect(saved.json().turns[0].roadmap).toEqual(body.roadmap);
+    const again = await app.inject({ method: 'POST', url: '/api/query', headers: AUTH, payload });
+    expect(again.json().roadmap.assessmentId).toBe(body.roadmap.assessmentId);
+    expect(again.json().answer).toContain('already exists');
     expect(seen.every((s) => s.auth === 'Bearer read-token')).toBe(true);
     await app.assessmentWorker.drain();
   });
