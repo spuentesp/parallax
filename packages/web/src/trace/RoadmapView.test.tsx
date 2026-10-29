@@ -6,9 +6,20 @@ import type { BlastRadiusDto } from '../api/hooks.js';
 import { AssistantDock } from '../components/AssistantDock.js';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
-import { BlastView } from './RoadmapView.js';
+import { BlastView, RoadmapView } from './RoadmapView.js';
 
 afterEach(cleanup);
+
+it('links an assessment from chat to its report', () => {
+  renderWithQuery(
+    <MemoryRouter>
+      <RoadmapView roadmap={{ kind: 'assessment', orgId: 'ws1', assessmentId: 'a1' }} />
+    </MemoryRouter>,
+  );
+  expect(screen.getByRole('link', { name: 'Open assessment' }).getAttribute('href')).toBe(
+    '/app/orgs/ws1/assessments/a1',
+  );
+});
 
 const blast: BlastRadiusDto = {
   key: 'graphql:query:products',
