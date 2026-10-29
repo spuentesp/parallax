@@ -1,5 +1,5 @@
-data_dir: /home/ubuntu/nvidia/.lain/federation
-max_concurrent_indexers: 4
+data_dir: /home/ubuntu/nvidia/.lain/federation-cluster-b
+max_concurrent_indexers: 3
 repos:
   - id: nat
     source:
@@ -13,21 +13,6 @@ repos:
     source:
       type: workspace_dir
       path: /home/ubuntu/nvidia/NeMo-Agent-Toolkit-Examples
-  - id: openshell
-    packages: ["@nvidia/openshell-sdk", "openshell"]
-    source:
-      type: workspace_dir
-      path: /home/ubuntu/nvidia/OpenShell
-  - id: nemo-fabric
-    packages: ["nemo-fabric"]
-    source:
-      type: workspace_dir
-      path: /home/ubuntu/nvidia/NeMo-Fabric
-  - id: nemoclaw
-    packages: ["nemoclaw"]
-    source:
-      type: workspace_dir
-      path: /home/ubuntu/nvidia/NemoClaw
 
 services:
   - name: nat
@@ -38,18 +23,6 @@ services:
     repo: nat-ui
   - name: nat-examples
     repo: nat-examples
-  - name: openshell-gateway
-    repo: openshell
-    paths: [proto, crates]
-    hosts: [localhost, 127.0.0.1]
-    env: [OPENSHELL_GATEWAY]
-  - name: openshell-sdk
-    repo: openshell
-    paths: [python, sdk]
-  - name: nemo-fabric
-    repo: nemo-fabric
-  - name: nemoclaw
-    repo: nemoclaw
 
 provides:
   - service: nat

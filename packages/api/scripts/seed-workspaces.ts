@@ -25,18 +25,46 @@ interface SeedWorkspace {
   repos: SeedRepo[];
 }
 
-const NVIDIA_LAIN = process.env.NVIDIA_LAIN_URL ?? process.env.LAIN_URL ?? 'http://localhost:9999/mcp';
+const CLUSTER_A_LAIN = process.env.CLUSTER_A_LAIN_URL ?? process.env.LAIN_URL ?? 'http://host.docker.internal:9991/mcp';
+const CLUSTER_B_LAIN = process.env.CLUSTER_B_LAIN_URL ?? process.env.LAIN_URL ?? 'http://host.docker.internal:9992/mcp';
 const SALEOR_LAIN = process.env.SALEOR_LAIN_URL ?? 'http://localhost:9999/mcp';
 const BOUTIQUE_LAIN = process.env.BOUTIQUE_LAIN_URL ?? 'http://localhost:9998/mcp';
 const FIXTURE_LAIN = process.env.FIXTURE_LAIN_URL ?? 'http://localhost:9997/mcp';
 
 const WORKSPACES: SeedWorkspace[] = [
   {
-    id: 'ws_nvidia',
-    name: 'NVIDIA AI & OpenShell Stack',
+    id: 'ws_cluster_a',
+    name: 'Cluster A: OpenShell RPC Stack',
     description:
-      'NVIDIA Agent Ecosystem: NeMo Agent Toolkit, OpenShell, NeMo-Fabric, and NemoClaw. gRPC & HTTP contracts.',
-    lainUrl: NVIDIA_LAIN,
+      'OpenShell gRPC proto surface joined with Python SDK and NeMo-Fabric / NemoClaw cross-repo consumers.',
+    lainUrl: CLUSTER_A_LAIN,
+    repos: [
+      {
+        id: 'repo_openshell',
+        uri: 'https://github.com/NVIDIA/OpenShell.git',
+        sha: 'cc9995438f3fa509bb5400d32ec4b2bdc38cbc1d',
+        local: './test-repos/nvidia/OpenShell',
+      },
+      {
+        id: 'repo_nemo_fabric',
+        uri: 'https://github.com/NVIDIA/NeMo-Fabric.git',
+        sha: '4fdf65a4b4c96024327501ae28243f2d206e7ec7',
+        local: './test-repos/nvidia/NeMo-Fabric',
+      },
+      {
+        id: 'repo_nemoclaw',
+        uri: 'https://github.com/NVIDIA/NemoClaw.git',
+        sha: 'de00977585d04f3bac7b090a0870b0d2dca4972d',
+        local: './test-repos/nvidia/NemoClaw',
+      },
+    ],
+  },
+  {
+    id: 'ws_cluster_b',
+    name: 'Cluster B: NeMo Agent Toolkit HTTP Stack',
+    description:
+      'NeMo Agent Toolkit HTTP & WebSocket runtime endpoints, Next.js API routes, and UI reverse proxy.',
+    lainUrl: CLUSTER_B_LAIN,
     repos: [
       {
         id: 'repo_nat',
@@ -55,24 +83,6 @@ const WORKSPACES: SeedWorkspace[] = [
         uri: 'https://github.com/NVIDIA/NeMo-Agent-Toolkit-Examples.git',
         sha: 'eadbb7573b9ba12c01a9df85c601a32a886d7b25',
         local: './test-repos/nvidia/NeMo-Agent-Toolkit-Examples',
-      },
-      {
-        id: 'repo_openshell',
-        uri: 'https://github.com/NVIDIA/OpenShell.git',
-        sha: 'cc9995438f3fa509bb5400d32ec4b2bdc38cbc1d',
-        local: './test-repos/nvidia/OpenShell',
-      },
-      {
-        id: 'repo_nemo_fabric',
-        uri: 'https://github.com/NVIDIA/NeMo-Fabric.git',
-        sha: '4fdf65a4b4c96024327501ae28243f2d206e7ec7',
-        local: './test-repos/nvidia/NeMo-Fabric',
-      },
-      {
-        id: 'repo_nemoclaw',
-        uri: 'https://github.com/NVIDIA/NemoClaw.git',
-        sha: 'de00977585d04f3bac7b090a0870b0d2dca4972d',
-        local: './test-repos/nvidia/NemoClaw',
       },
     ],
   },
