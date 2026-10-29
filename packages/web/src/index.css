@@ -1,4 +1,8 @@
 @import "tailwindcss";
+/* Tipografía autoalojada (sin peticiones a terceros): Space Grotesk para la interfaz,
+   JetBrains Mono para código, ids y rutas. */
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
 
 /*
  * Design tokens. Values flip with the `.dark` class on <html> (see Theme.tsx),
@@ -6,6 +10,8 @@
  * `dark:` variant.
  */
 @theme {
+  --font-sans: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
   /* Marca (design/logo): negros de las losas del logo y su verde #76b900. En claro el acento
      es el mismo verde oscurecido (#4d7c0f, 5:1 sobre blanco) para que el texto se lea. */
   --color-bg: #fafafa;
@@ -60,5 +66,13 @@
 body {
   background: var(--color-bg);
   color: var(--color-fg);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "ss02";
+}
+
+/* Títulos con más carácter: algo más apretados, como el logo. */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.02em;
 }
