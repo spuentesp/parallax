@@ -17,6 +17,7 @@ import {
   type FileSymbol,
   lainErrorLine,
   parseAssessChange,
+  parseCrossRepoImpact,
   parseFileSymbols,
   parseIndexedCommit,
   parseSymbolCandidates,
@@ -238,8 +239,48 @@ async function measure(
     if (error) return { ...base, note: error };
     const impact = parseAssessChange(res.text);
     if (impact.risk === 'unknown') return { ...base, note: 'the engine answer was not understood' };
-    return { ...base, ...impact };
+    const crossRepo = await measureCrossRepo(lain, repoId, t);
+    return { ...base, ...impact, ...crossRepo };
   } catch (e) {
     return { ...base, note: e instanceof Error ? e.message : 'engine error' };
+  }
+}
+
+/** Federation resolves the seed by name and repo, so reject ambiguous or incomplete lookups. */
+async function measureCrossRepo(
+  lain: Pick<LainAdapter, 'codeTool'>,
+  repoId: string,
+  t: Touched,
+): Promise<Pick<ImpactedSymbol, 'crossRepo' | 'crossRepoNote'>> {
+  try {
+    const matches = await lain.codeTool('search_org', { query: t.symbol.name, limit: 300 });
+    const rows: unknown = JSON.parse(matches.text);
+    if (!Array.isArray(rows) || rows.length >= 300) {
+      return { crossRepo: null, crossRepoNote: 'cross-repo symbol lookup was incomplete' };
+    }
+    const exact = rows.filter(
+      (row: { repo_id?: unknown; name?: unknown }) =>
+        row.repo_id === repoId && row.name === t.symbol.name,
+    );
+    if (exact.length !== 1 || exact[0]?.path !== t.path) {
+      return {
+        crossRepo: null,
+        crossRepoNote: 'cross-repo lookup cannot uniquely identify this symbol',
+      };
+    }
+    const result = await lain.codeTool('get_cross_repo_blast_radius', {
+      symbol: t.symbol.name,
+      repo_id: repoId,
+      depth: 4,
+    });
+    const parsed = parseCrossRepoImpact(result.text, repoId);
+    if (!parsed)
+      return { crossRepo: null, crossRepoNote: 'cross-repo engine answer was not understood' };
+    return { crossRepo: parsed };
+  } catch (e) {
+    return {
+      crossRepo: null,
+      crossRepoNote: `cross-repo impact unavailable: ${e instanceof Error ? e.message : 'engine error'}`,
+    };
   }
 }

@@ -32,6 +32,15 @@ function engine(over: Partial<Record<string, (args: Record<string, unknown>) => 
     search_org: () => SEARCH_ORG_FILE,
     find_symbol: () => FIND_SYMBOL_UNIQUE,
     assess_change: () => ASSESS_UNTESTED_HIGH,
+    get_cross_repo_blast_radius: () =>
+      JSON.stringify({
+        by_repo: {
+          saleor: ['saleor:Function:a.py:local:1'],
+          storefront: ['storefront:Function:cart.ts:checkout:2'],
+        },
+        total_count: 2,
+        truncated: false,
+      }),
     ...over,
   };
   const lain = {
@@ -89,6 +98,15 @@ describe('reviewCodeImpact', () => {
       untested: true,
     });
     expect(r.highestRisk).toBe('high');
+    expect(r.symbols[0]?.crossRepo).toEqual({
+      repositories: [{ repo: 'storefront', leaves: ['storefront:Function:cart.ts:checkout:2'] }],
+      truncated: false,
+    });
+    expect(calls.find((c) => c.tool === 'get_cross_repo_blast_radius')?.args).toMatchObject({
+      symbol: 'stock_qs_select_for_update',
+      repo_id: 'saleor',
+      depth: 4,
+    });
     // assess_change recibe el id del nodo, no el nombre (los nombres se repiten entre archivos).
     const assess = calls.find((c) => c.tool === 'assess_change');
     expect(assess?.args).toMatchObject({
@@ -104,7 +122,7 @@ describe('reviewCodeImpact', () => {
   it("picks the node at THE FILE's path when a name is defined in several files", async () => {
     const { lain, calls } = engine({
       find_symbol: () => FIND_SYMBOL_AMBIGUOUS,
-      search_org: () =>
+      search_org: (args) =>
         JSON.stringify([
           {
             global_id: 'saleor:Function:saleor/warehouse/models.py:decrease_stock:546',
@@ -113,6 +131,17 @@ describe('reviewCodeImpact', () => {
             path: 'saleor/warehouse/models.py',
             repo_id: 'saleor',
           },
+          ...(args.query === 'decrease_stock'
+            ? [
+                {
+                  global_id: 'saleor:Function:saleor/other.py:decrease_stock:10',
+                  kind: 'Function',
+                  name: 'decrease_stock',
+                  path: 'saleor/other.py',
+                  repo_id: 'saleor',
+                },
+              ]
+            : []),
         ]),
     });
     const patch = ['@@ -547,2 +547,2 @@', ' def decrease_stock(self):', '-    a', '+    b'].join(
@@ -122,6 +151,29 @@ describe('reviewCodeImpact', () => {
     expect(calls.find((c) => c.tool === 'assess_change')?.args.symbol).toBe(
       '005bde1b-f4d4-53a1-9894-77d79be1a139',
     );
+    expect(calls.some((c) => c.tool === 'get_cross_repo_blast_radius')).toBe(false);
+  });
+
+  it('declares truncated federated traversals and unavailable results', async () => {
+    const truncated = engine({
+      get_cross_repo_blast_radius: () =>
+        JSON.stringify({
+          by_repo: { storefront: ['storefront:Function:cart.ts:checkout:2'] },
+          total_count: 1,
+          truncated: true,
+        }),
+    });
+    const result = await review([file({ path: PATH })], truncated.lain);
+    expect(result.symbols[0]?.crossRepo?.truncated).toBe(true);
+    const unavailable = engine({
+      get_cross_repo_blast_radius: () => 'Error: federation unavailable',
+    });
+    const failed = await review([file({ path: PATH })], unavailable.lain);
+    expect(failed.symbols[0]).toMatchObject({
+      risk: 'high',
+      crossRepo: null,
+      crossRepoNote: 'cross-repo engine answer was not understood',
+    });
   });
 
   it('does not attribute a newly added definition to the symbol next to it', async () => {
@@ -155,7 +207,7 @@ describe('reviewCodeImpact', () => {
     expect(r.skipped).toMatchObject({ nonCode: 1, tests: 1, addedFiles: 1, noDiff: 1 });
     expect(r.filesChanged).toBe(5);
     expect(r.filesAnalyzed).toBe(1);
-    expect(calls.filter((c) => c.tool === 'search_org')).toHaveLength(1);
+    expect(calls.filter((c) => c.tool === 'search_org' && c.args.query === PATH)).toHaveLength(1);
   });
 
   it('declares an index that is not at the PR base commit, and stays quiet when it is', async () => {

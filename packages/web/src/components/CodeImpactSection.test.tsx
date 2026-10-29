@@ -78,6 +78,26 @@ describe('CodeImpactSection', () => {
     expect(within(ghost).getByText('unknown')).toBeTruthy();
   });
 
+  it('shows bounded cross-repository impact', () => {
+    render(
+      <CodeImpactSection
+        impact={impact({
+          symbols: [
+            sym({
+              crossRepo: {
+                repositories: [{ repo: 'storefront', leaves: ['leaf'] }],
+                truncated: true,
+              },
+            }),
+          ],
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(/Cross-repo leaves: storefront \(1\) \(truncated\) · traversal depth 4/),
+    ).toBeTruthy();
+  });
+
   it('says what it did not analyze and what limits the reading', () => {
     render(<CodeImpactSection impact={impact()} />);
     expect(
