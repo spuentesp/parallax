@@ -14,8 +14,8 @@ export function CiSettingsPanel({ orgId }: { orgId: string }): React.ReactElemen
     <section className="rounded-xl p-4 mb-6 bg-surface border border-border">
       <h2 className="font-semibold mb-1">Auto CI</h2>
       <p className="text-xs text-muted mb-4">
-        Evalúa cada PR que se abre o actualiza en los repos de GitHub del workspace, y publica el
-        resultado en el PR.
+        Evaluate new or updated requests in the workspace&apos;s GitHub and GitLab repositories and
+        publish the result.
       </p>
       {isLoading && <p className="text-sm text-muted">Loading…</p>}
       {error && <p className="text-sm text-error">{String(error)}</p>}

@@ -52,6 +52,8 @@ const AppConfigSchema = z.object({
   gitlabReadToken: z.string().min(1).optional(),
   gitlabApiBase: z.string().url().optional(),
   gitlabHost: z.string().min(1).optional(),
+  gitlabWriteToken: z.string().min(1).optional(),
+  gitlabWebhookSecret: z.string().min(1).optional(),
   // URL pública de Parallax, para enlazar el informe desde el estado y el comentario.
   publicUrl: z.string().url().optional(),
   // Documentación de los repos: carpetas donde buscar un checkout ya existente (<raíz>/<repo>),
@@ -196,6 +198,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     gitlabReadToken: env.PARALLAX_GITLAB_READ_TOKEN,
     gitlabApiBase: env.PARALLAX_GITLAB_API_BASE,
     gitlabHost: env.PARALLAX_GITLAB_HOST,
+    gitlabWriteToken: env.PARALLAX_GITLAB_WRITE_TOKEN,
+    gitlabWebhookSecret: env.PARALLAX_GITLAB_WEBHOOK_SECRET,
     publicUrl: env.PARALLAX_PUBLIC_URL,
     docsRoots: nonEmpty(env.DOCS_ROOTS),
     docsCacheDir: nonEmpty(env.DOCS_CACHE_DIR),

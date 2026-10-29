@@ -19,6 +19,7 @@ import {
   ownerOf,
 } from '../conversation/store.js';
 import { githubReaderFor } from '../github/reader.js';
+import { gitlabReaderFor } from '../gitlab/reader.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { createWindowLimiter } from '../rate-limit.js';
 import { blastRadius, blastSentence } from '../roadmap/blast.js';
@@ -193,10 +194,15 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
       /^(?:(?:please|can you|could you)\s+)?(?:review|assess|evaluate|analy[sz]e)\b/i.test(
         question.trim(),
       );
-    const urls =
+    const githubUrls =
       question.match(
         /https?:\/\/(?:www\.)?github\.com\/[^\s/]+\/[^\s/]+\/pull\/\d+(?:[/?#][^\s]*)?/gi,
       ) ?? [];
+    const gitlab = gitlabReaderFor(app.config);
+    const gitlabUrls = (question.match(/https?:\/\/[^\s<>]+/gi) ?? [])
+      .map((url) => url.replace(/[.,!?)]+$/, ''))
+      .filter((url) => gitlab.canHandle(url));
+    const urls = [...githubUrls, ...gitlabUrls];
     if (reviewCommand && urls.length === 1) {
       if (!req.authToken?.scopes.includes('write'))
         return {
@@ -210,6 +216,7 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           body: { orgId, prUrl: urls[0] as string },
           analyzerVersion: app.lain.analyzerVersion,
           github: githubReaderFor(app.config),
+          gitlab,
         });
         void app.assessmentWorker
           .run(assessment.id)

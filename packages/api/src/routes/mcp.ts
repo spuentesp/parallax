@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { githubReaderFor } from '../github/reader.js';
+import { gitlabReaderFor } from '../gitlab/reader.js';
 import { buildMcpServer, buildTransport } from '../mcp/transport/http-sse.js';
 
 export const mcpRoutes: FastifyPluginAsync = async (app) => {
@@ -11,6 +12,7 @@ export const mcpRoutes: FastifyPluginAsync = async (app) => {
     worker: app.assessmentWorker,
     lain: app.lain,
     github: githubReaderFor(app.config),
+    gitlab: gitlabReaderFor(app.config),
   });
   const transport = buildTransport();
   await server.connect(transport as Parameters<typeof server.connect>[0]);

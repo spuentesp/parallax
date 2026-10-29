@@ -6,6 +6,7 @@ interface MergeRequest {
   title: string;
   state: string;
   draft?: boolean;
+  work_in_progress?: boolean;
   author?: { username?: string };
   source_branch: string;
   target_branch: string;
@@ -161,15 +162,35 @@ export class GitLabReader {
     const rows = await this.get<MergeRequest[]>(
       `/projects/${this.project({ owner, repo })}/merge_requests?state=opened&per_page=100&order_by=updated_at&sort=desc`,
     );
+    // Some GitLab list responses omit diff refs. Resolve those from the individual MR,
+    // with bounded concurrency; entries whose refs are still unavailable remain declared.
+    const resolved: MergeRequest[] = [];
+    for (let start = 0; start < rows.length; start += 5) {
+      const batch = rows.slice(start, start + 5);
+      resolved.push(
+        ...(await Promise.all(
+          batch.map(async (mr) => {
+            if (mr.diff_refs?.start_sha && mr.diff_refs.head_sha) return mr;
+            try {
+              return await this.get<MergeRequest>(
+                `/projects/${this.project({ owner, repo })}/merge_requests/${mr.iid}`,
+              );
+            } catch {
+              return mr;
+            }
+          }),
+        )),
+      );
+    }
     const items: OpenPrItem[] = [];
-    for (const mr of rows) {
+    for (const mr of resolved) {
       if (!mr.diff_refs?.start_sha || !mr.diff_refs.head_sha) continue;
       items.push({
         number: mr.iid,
         url: mr.web_url,
         title: mr.title,
         author: mr.author?.username ?? null,
-        draft: mr.draft ?? false,
+        draft: mr.draft ?? mr.work_in_progress ?? false,
         baseRef: mr.target_branch,
         headRef: mr.source_branch,
         baseSha: mr.diff_refs.start_sha,

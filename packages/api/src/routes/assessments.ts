@@ -174,7 +174,7 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
         return {
           pr,
           dryRun: true,
-          note: 'Read-only: resolving a PR posts nothing to GitHub. Results are published only by the CI reporting a workspace turns on (commit status, optional comment).',
+          note: 'Read-only: resolving a request posts nothing. Results are published only by workspace CI reporting (commit status, optional comment).',
         };
       } catch (e) {
         const code = e instanceof PrUrlError ? e.code : 'http_error';

@@ -2,6 +2,8 @@
 // PR de un repo del workspace (si el modo lo permite) se crea una evaluación para
 // (base, head) y, al terminar, se publica el resultado en GitHub: siempre un commit
 // status; un comentario sólo si el workspace lo activó.
+
+import { timingSafeEqual } from 'node:crypto';
 import { WorkspaceCiSettings } from '@parallax/shared/domain';
 import { eq, isNull } from 'drizzle-orm';
 import type { FastifyBaseLogger, FastifyPluginAsync } from 'fastify';
@@ -21,6 +23,8 @@ import {
   parsePullRequestEvent,
   verifySignature,
 } from '../github/webhook.js';
+import { gitlabReaderFor, parseGitLabRepoUri } from '../gitlab/reader.js';
+import { GitLabWriter } from '../gitlab/writer.js';
 import {
   createAssessment,
   getAssessmentRecord,
@@ -52,6 +56,8 @@ interface PrDeps {
   worker: AssessmentWorker;
   analyzerVersion: string;
   writer: GitHubWriter | null;
+  gitlabWriter?: GitLabWriter | null;
+  gitlabHost?: string | undefined;
   publicUrl: string | null;
   log: FastifyBaseLogger;
   /** Esperas entre reintentos de publicar a GitHub (los tests las acortan). */
@@ -113,15 +119,21 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
   if (!row || row.reportedAt !== null) return;
   const report = await getAssessmentReport(deps.db, id);
   if (!report) return;
-  if (!deps.writer) {
-    deps.log.warn({ assessment: id }, 'no write token: result not reported to GitHub');
+  const writer = row.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
+  if (!writer) {
+    deps.log.warn(
+      { assessment: id },
+      row.provider === 'gitlab'
+        ? 'no write token: result not reported to GitLab'
+        : 'no write token: result not reported to GitHub',
+    );
     return;
   }
   const reportUrl = deps.publicUrl
     ? `${deps.publicUrl}/app/orgs/${row.workspaceId}/assessments/${id}`
     : null;
   const ci = await readCiSettings(deps.db, row.workspaceId);
-  await deps.writer.setCommitStatus(row.owner, row.repo, row.headSha, {
+  await writer.setCommitStatus(row.owner, row.repo, row.headSha, {
     ...statusForReport(report),
     targetUrl: reportUrl,
     context: row.context,
@@ -131,7 +143,7 @@ async function publishResult(deps: PrDeps, id: string): Promise<void> {
       .select()
       .from(schema.workspace)
       .where(eq(schema.workspace.id, row.workspaceId));
-    await deps.writer.createIssueComment(
+    await writer.createIssueComment(
       row.owner,
       row.repo,
       row.number,
@@ -167,7 +179,10 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
   const repoRows = await deps.db.select().from(schema.repo);
   const matching: Array<(typeof repoRows)[number]> = [];
   for (const row of repoRows) {
-    const gh = parseGithubRepoUri(row.uri);
+    const gh =
+      pr.provider === 'gitlab'
+        ? parseGitLabRepoUri(row.uri, deps.gitlabHost)
+        : parseGithubRepoUri(row.uri);
     if (!gh || gh.owner.toLowerCase() !== pr.owner.toLowerCase()) continue;
     if (gh.repo.toLowerCase() !== pr.repo.toLowerCase()) continue;
     const ci = await readCiSettings(deps.db, row.workspaceId);
@@ -206,6 +221,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
         },
         // El PR de origen: el worker lee de GitHub sus archivos y diffs para la revisión de código.
         pr: {
+          ...(pr.provider === 'gitlab' ? { provider: 'gitlab' as const } : {}),
           owner: pr.owner,
           repo: pr.repo,
           number: pr.number,
@@ -213,6 +229,7 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
           name: repoDisplayName(row),
         },
         report: {
+          provider: pr.provider ?? 'github',
           workspaceId: row.workspaceId,
           owner: pr.owner,
           repo: pr.repo,
@@ -227,8 +244,9 @@ export async function handlePullRequest(deps: PrDeps, pr: PullRequestEvent): Pro
       // Existing rows already have a subscriber (or are recovered on startup).
       if (!reportCreated) continue;
       // El PR muestra "analizando" desde ya, no un hueco hasta el resultado.
-      if (deps.writer) {
-        await deps.writer
+      const writer = pr.provider === 'gitlab' ? deps.gitlabWriter : deps.writer;
+      if (writer) {
+        await writer
           .setCommitStatus(pr.owner, pr.repo, pr.headSha, {
             ...PENDING_STATUS,
             targetUrl: null,
@@ -302,6 +320,12 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
           ...(app.config.githubApiBase ? { apiBase: app.config.githubApiBase } : {}),
         })
       : null;
+    const gitlabWriter = app.config.gitlabWriteToken
+      ? new GitLabWriter({
+          token: app.config.gitlabWriteToken,
+          ...(app.config.gitlabApiBase ? { apiBase: app.config.gitlabApiBase } : {}),
+        })
+      : null;
     const publicUrl = app.config.publicUrl ?? null;
 
     // Al arrancar se retoma la publicación de los PR que quedaron a medias (reinicio, GitHub caído).
@@ -311,6 +335,8 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         worker: app.assessmentWorker,
         analyzerVersion: app.lain.analyzerVersion,
         writer,
+        gitlabWriter,
+        gitlabHost: app.config.gitlabHost,
         publicUrl,
         log: app.log,
       });
@@ -344,6 +370,101 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         pr,
       );
       return reply.code(202).send({ handled, action: pr.action });
+    });
+
+    scope.post('/webhooks/gitlab', async (req, reply) => {
+      const secret = app.config.gitlabWebhookSecret;
+      if (!secret) return reply.code(503).send({ error: 'webhooks are not configured' });
+      const token = req.headers['x-gitlab-token'];
+      const expected = Buffer.from(secret);
+      const received = Buffer.from(typeof token === 'string' ? token : '');
+      if (received.length !== expected.length || !timingSafeEqual(received, expected))
+        return reply.code(401).send({ error: 'invalid webhook token' });
+      const event = req.body as {
+        object_kind?: string;
+        project?: { path_with_namespace?: string };
+        object_attributes?: {
+          action?: string;
+          iid?: number;
+          source_project_id?: number;
+          target_project_id?: number;
+          draft?: boolean;
+          work_in_progress?: boolean;
+          oldrev?: string;
+          last_commit?: { id?: string };
+        };
+        changes?: { draft?: { current?: boolean }; target_branch?: unknown };
+      };
+      if (event.object_kind !== 'merge_request')
+        return reply.code(202).send({ handled: 0, ignored: event.object_kind });
+      const attrs = event.object_attributes;
+      const path = event.project?.path_with_namespace;
+      if (
+        !attrs?.iid ||
+        !path ||
+        !attrs.last_commit?.id ||
+        attrs.source_project_id === undefined ||
+        attrs.target_project_id === undefined
+      )
+        return reply.code(400).send({ error: 'merge request payload is missing fields' });
+      const updated =
+        attrs.action === 'update' &&
+        (!!attrs.oldrev ||
+          event.changes?.draft?.current === false ||
+          event.changes?.target_branch !== undefined);
+      if (!['open', 'reopen'].includes(attrs.action ?? '') && !updated)
+        return reply.code(202).send({ handled: 0, ignored: attrs.action });
+      if (
+        attrs.draft ||
+        attrs.work_in_progress ||
+        attrs.source_project_id !== attrs.target_project_id
+      )
+        return reply.code(202).send({ handled: 0, ignored: 'draft or fork' });
+      const url = `https://${app.config.gitlabHost ?? 'gitlab.com'}/${path}/-/merge_requests/${attrs.iid}`;
+      const reader = gitlabReaderFor(app.config);
+      if (!reader.canHandle(url))
+        return reply.code(400).send({ error: 'invalid GitLab project path' });
+      try {
+        const mr = await reader.fetchPr(url);
+        if (mr.headSha.toLowerCase() !== attrs.last_commit.id.toLowerCase())
+          return reply.code(202).send({ handled: 0, ignored: 'superseded event' });
+        const handled = await handlePullRequest(
+          {
+            db: app.db,
+            worker: app.assessmentWorker,
+            analyzerVersion: app.lain.analyzerVersion,
+            writer,
+            gitlabWriter,
+            gitlabHost: app.config.gitlabHost,
+            publicUrl,
+            log: app.log,
+          },
+          {
+            provider: 'gitlab',
+            action:
+              attrs.action === 'open'
+                ? 'opened'
+                : attrs.action === 'reopen'
+                  ? 'reopened'
+                  : 'synchronize',
+            owner: mr.ref.owner,
+            repo: mr.ref.repo,
+            number: mr.ref.number,
+            htmlUrl: mr.url,
+            baseRef: mr.baseRef,
+            headRef: mr.headRef,
+            baseSha: mr.baseSha,
+            headSha: mr.headSha,
+            isFork: false,
+            isDraft: false,
+            baseChanged: false,
+          },
+        );
+        return reply.code(202).send({ handled, action: attrs.action });
+      } catch (error) {
+        req.log.warn({ err: error }, 'could not resolve GitLab merge request');
+        return reply.code(503).send({ error: 'could not resolve merge request' });
+      }
     });
   });
 };

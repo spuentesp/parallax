@@ -2,6 +2,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { z } from 'zod';
 import type * as schema from '../../db/schema.js';
 import type { GitHubReader } from '../../github/reader.js';
+import type { GitLabReader } from '../../gitlab/reader.js';
 import { isLainCallError } from '../../lain-adapter/errors.js';
 import type { LainAdapter } from '../../lain-adapter/types.js';
 import {
@@ -54,6 +55,7 @@ export interface AssessmentToolDeps {
   worker: AssessmentWorker;
   lain: LainAdapter;
   github?: GitHubReader;
+  gitlab?: GitLabReader;
 }
 
 // P09: la tool MCP llama al MISMO servicio que la ruta HTTP; identidad,
@@ -74,6 +76,7 @@ export function makeAssessPrHandler(deps: AssessmentToolDeps) {
         body: parsed.data,
         analyzerVersion: deps.lain.analyzerVersion,
         ...(deps.github ? { github: deps.github } : {}),
+        ...(deps.gitlab ? { gitlab: deps.gitlab } : {}),
       });
       void deps.worker.run(assessment.id).catch(() => {});
       return jsonResult({ assessment, created });

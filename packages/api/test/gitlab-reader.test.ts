@@ -81,4 +81,17 @@ describe('GitLab merge request reader', () => {
       (await reader.listFilesAtCommits({ owner: 'g', repo: 'r', number: 1 }, base, head)).truncated,
     ).toBe(true);
   });
+  it('fetches missing list refs from the individual merge request', async () => {
+    const reader = new GitLabReader({
+      fetchImpl: async (input) =>
+        new Response(
+          JSON.stringify(
+            String(input).includes('?state=opened') ? [{ ...mr, diff_refs: undefined }] : mr,
+          ),
+        ),
+    });
+    const listing = await reader.listOpenPrs('group/sub', 'shop');
+    expect(listing.items[0]).toMatchObject({ baseSha: base, headSha: head });
+    expect(listing.truncated).toBe(false);
+  });
 });

@@ -132,6 +132,7 @@ export const workspaceCi = sqliteTable('workspace_ci', {
 
 export const prReport = sqliteTable('pr_report', {
   assessmentId: text('assessment_id').primaryKey(),
+  provider: text('provider').notNull().default('github'),
   workspaceId: text('workspace_id').notNull(),
   owner: text('owner').notNull(),
   repo: text('repo').notNull(),
