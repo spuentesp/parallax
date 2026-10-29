@@ -144,6 +144,14 @@ export const prReport = sqliteTable('pr_report', {
   reportedAt: integer('reported_at'),
 });
 
+export const gitlabWebhookInbox = sqliteTable('gitlab_webhook_inbox', {
+  id: text('id').primaryKey(),
+  url: text('url').notNull(),
+  headSha: text('head_sha').notNull(),
+  createdAt: integer('created_at').notNull(),
+  completedAt: integer('completed_at'),
+});
+
 export const conversation = sqliteTable(
   'conversation',
   {

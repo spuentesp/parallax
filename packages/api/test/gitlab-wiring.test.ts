@@ -27,6 +27,7 @@ describe('GitLab integration', () => {
     const dir = mkdtempSync(join(tmpdir(), 'parallax-gitlab-'));
     const writes: Array<{ url: string; body: Record<string, unknown> }> = [];
     const requests: Array<{ method: string; url: string; token: string | undefined }> = [];
+    let pendingRefs = 0;
     const server = createServer((req, res) => {
       const url = req.url ?? '';
       const token = req.headers['private-token'] as string | undefined;
@@ -54,21 +55,27 @@ describe('GitLab integration', () => {
       if (url.includes('/repository/compare'))
         res.end(JSON.stringify({ diffs: [diff], compare_timeout: false }));
       else if (url.includes('?state=opened')) res.end(JSON.stringify([mr]));
-      else res.end(JSON.stringify(mr));
+      else if (pendingRefs > 0) {
+        pendingRefs--;
+        res.end(JSON.stringify({ ...mr, diff_refs: null }));
+      } else res.end(JSON.stringify(mr));
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const app = await buildApp({
+    const config = {
       port: 0,
       databasePath: join(dir, 'db'),
-      lainAdapter: 'mock',
-      mcpTransport: 'http-sse',
-      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      lainAdapter: 'mock' as const,
+      mcpTransport: 'http-sse' as const,
+      authTokens: [
+        { token: 't', orgId: 'o', scopes: ['read', 'write'] as Array<'read' | 'write'> },
+      ],
       webBundlePath: join(dir, 'web'),
       gitlabApiBase: `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v4`,
       gitlabReadToken: 'read-token',
       gitlabWriteToken: 'write-token',
       gitlabWebhookSecret: 'secret',
-    });
+    };
+    let app = await buildApp(config);
     try {
       const headers = { authorization: 'Bearer t' };
       const ws = await app.inject({
@@ -125,7 +132,6 @@ describe('GitLab integration', () => {
       for (const attributes of [
         { ...event.object_attributes, draft: true },
         { ...event.object_attributes, source_project_id: 9 },
-        { ...event.object_attributes, last_commit: { id: 'c'.repeat(40) } },
       ]) {
         const ignored = await app.inject({
           method: 'POST',
@@ -135,24 +141,32 @@ describe('GitLab integration', () => {
         });
         expect(ignored.json().handled).toBe(0);
       }
+      pendingRefs = 1;
       const delivered = await app.inject({
         method: 'POST',
         url: '/webhooks/gitlab',
         headers: { 'x-gitlab-token': 'secret' },
         payload: event,
       });
-      expect(delivered.json().handled).toBe(1);
+      expect(delivered.json().queued).toBe(true);
       const duplicate = await app.inject({
         method: 'POST',
         url: '/webhooks/gitlab',
         headers: { 'x-gitlab-token': 'secret' },
         payload: event,
       });
-      expect(duplicate.json().handled).toBe(0);
-      await app.assessmentWorker.drain();
-      const deadline = Date.now() + 5000;
+      expect(duplicate.json().queued).toBe(false);
+      const waiting = Date.now() + 5000;
+      while (pendingRefs > 0 && Date.now() < waiting)
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(pendingRefs).toBe(0);
+      await app.close();
+      app = await buildApp(config);
+      await app.ready();
+      const deadline = Date.now() + 10000;
       while (writes.length < 2 && Date.now() < deadline)
         await new Promise((resolve) => setTimeout(resolve, 20));
+      await app.assessmentWorker.drain();
       expect(writes.map((w) => w.body.state)).toEqual(['pending', 'failed']);
       expect(
         writes.every((w) => w.url.includes(`/projects/group%2Fsub%2Fshop/statuses/${head}`)),
