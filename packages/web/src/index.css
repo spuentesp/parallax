@@ -46,8 +46,9 @@
   --color-fg: #fafafa;
   --color-muted: #a3a3a3;
   --color-border: #2a2a2a;
-  /* El verde del logo; sobre él, texto casi negro (9:1), no blanco (2:1). */
-  --color-accent: #76b900;
+  /* El verde del logo, algo más apagado para la interfaz (#76b900 gritaba en botones grandes);
+     sobre él, texto casi negro (5,8:1), no blanco. La marca conserva #76b900 exacto. */
+  --color-accent: #6a9a1f;
   --color-accent-fg: #0d0d0d;
   --logo-slab-a: #2e2e2e;
   --logo-slab-b: #1f1f1f;
