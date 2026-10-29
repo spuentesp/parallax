@@ -522,8 +522,6 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
   };
 
   const errorSchemas = {
-    400: z.object({ code: z.string(), detail: z.string() }),
-    403: z.object({ code: z.string(), detail: z.string() }),
     404: z.object({ code: z.string(), detail: z.string() }),
     409: z.object({ code: z.string(), detail: z.string() }),
     429: z.object({
