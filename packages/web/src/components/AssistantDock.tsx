@@ -15,6 +15,7 @@ import { DocsCard, DoorsCard, OrientCard } from '../onboarding/Cards.js';
 import {
   CHAPTERS,
   DEFAULT_TASK,
+  defaultTaskForWorkspace,
   explainDocPrompt,
   type TourContext,
 } from '../onboarding/chapters.js';
@@ -163,11 +164,14 @@ export function AssistantDock({
   const topSlot = setupOpen ? (
     <div className="border-b border-border p-3">
       <TourSetup
+        defaultTask={defaultTaskForWorkspace(workspaceId)}
+        workspaceId={workspaceId}
         onCancel={() => setSetupOpen(false)}
         onStart={(role, task) => {
+          const fallback = defaultTaskForWorkspace(workspaceId);
           tour.start(role, task);
           setSetupOpen(false);
-          openChapter(1, { role, task: task.trim() || DEFAULT_TASK });
+          openChapter(1, { role, task: task.trim() || fallback });
         }}
       />
     </div>

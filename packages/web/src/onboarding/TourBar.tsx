@@ -1,18 +1,29 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { CHAPTERS, DEFAULT_TASK, ROLE_LABEL, type Role } from './chapters.js';
+import {
+  CHAPTERS,
+  DEFAULT_TASK,
+  ROLE_LABEL,
+  type Role,
+  suggestedTasksForWorkspace,
+} from './chapters.js';
 import type { TourState } from './useOnboarding.js';
 
 /** Antes de empezar: quién eres y qué vienes a hacer. */
 export function TourSetup({
   onStart,
   onCancel,
+  defaultTask,
+  workspaceId,
 }: {
   onStart: (role: Role, task: string) => void;
   onCancel: () => void;
+  defaultTask?: string;
+  workspaceId?: string;
 }): React.ReactElement {
   const [role, setRole] = useState<Role>('fullstack');
-  const [task, setTask] = useState(DEFAULT_TASK);
+  const [task, setTask] = useState(defaultTask ?? DEFAULT_TASK);
+  const suggestions = suggestedTasksForWorkspace(workspaceId);
   return (
     <div
       className="space-y-2 rounded-xl border border-border bg-bg p-3 text-xs"
@@ -46,6 +57,20 @@ export function TourSetup({
           className="mt-1 w-full rounded-lg border border-border bg-surface px-2 py-1 outline-none focus:border-accent"
         />
       </label>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1 pt-0.5">
+          {suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setTask(s)}
+              className="rounded-md border border-border/80 bg-surface/50 px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-accent"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex gap-2">
         <button
           type="button"

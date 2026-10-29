@@ -76,7 +76,7 @@ export const CHAPTERS: Chapter[] = [
     asks: 'How do I run, test and contribute? Who owns this?',
     kind: 'ask',
     prompt: () =>
-      "Read the repositories' own documentation (README, CONTRIBUTING, CODEOWNERS, docs/) with the code tools and tell me: how to run the tests, the contribution conventions, and who owns the checkout code. Mark everything you report as documented (it comes from those files, not from analysis) and say which of those files you could not find.",
+      "Read the repositories' own documentation (README, CONTRIBUTING, CODEOWNERS, docs/) with the code tools and tell me: how to run the tests, the contribution conventions, and who owns the core services and contracts. Mark everything you report as documented (it comes from those files, not from analysis) and say which of those files you could not find.",
   },
   {
     n: 7,
@@ -101,3 +101,34 @@ export const explainDocPrompt = (d: { repo: string; path: string }, task: string
   `Read ${d.path} in the ${d.repo} repository with get_code_snippet: it is documentation the team wrote. Explain it to a new engineer: (1) the rules or decisions it sets, in at most four bullets, each quoting the line it comes from; (2) why the team wanted that, as the document says it; (3) where in the code those rules are enforced or obeyed (path:line), or say you could not find it. Only at the end, in ONE sentence, say whether it touches my task ("${task}"); do not dwell on the task and do not describe the workspace map. Mark what the document says as documented and what you see in code as observed; if they disagree, say so. ${EVIDENCE}`;
 
 export const DEFAULT_TASK = 'Add a delivery note to checkout';
+
+export function defaultTaskForWorkspace(workspaceId?: string | null): string {
+  if (workspaceId?.includes('openshell')) {
+    return 'Add telemetry and auth checks to sandbox creation in the gateway';
+  }
+  if (workspaceId?.includes('nat')) {
+    return 'Add authentication middleware to the agent actions endpoint';
+  }
+  return DEFAULT_TASK;
+}
+
+export function suggestedTasksForWorkspace(workspaceId?: string | null): string[] {
+  if (workspaceId?.includes('openshell')) {
+    return [
+      'Add telemetry and auth checks to sandbox creation in the gateway',
+      'Trace sandbox exec requests from python SDK to gateway',
+      'Audit session state and table mutations in nemoclaw',
+    ];
+  }
+  if (workspaceId?.includes('nat')) {
+    return [
+      'Add authentication middleware to the agent actions endpoint',
+      'Trace agent chat workflow from UI to toolkit backend',
+      'Expose health and readiness metrics for toolkit workflows',
+    ];
+  }
+  return [
+    'Add a delivery note to checkout',
+    'Add an export button to orders table',
+  ];
+}
