@@ -129,6 +129,20 @@ describe('GitLab integration', () => {
         payload: event,
       });
       expect(denied.statusCode).toBe(401);
+      const malformed = await app.inject({
+        method: 'POST',
+        url: '/webhooks/gitlab',
+        headers: { 'x-gitlab-token': 'secret' },
+        payload: {
+          ...event,
+          object_attributes: {
+            ...event.object_attributes,
+            source_project_id: null,
+            target_project_id: null,
+          },
+        },
+      });
+      expect(malformed.statusCode).toBe(400);
       for (const attributes of [
         { ...event.object_attributes, draft: true },
         { ...event.object_attributes, source_project_id: 9 },

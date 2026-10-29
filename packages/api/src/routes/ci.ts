@@ -488,11 +488,17 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
       const attrs = event.object_attributes;
       const path = event.project?.path_with_namespace;
       if (
-        !attrs?.iid ||
+        !attrs ||
+        !Number.isSafeInteger(attrs.iid) ||
+        (attrs.iid ?? 0) <= 0 ||
+        typeof path !== 'string' ||
         !path ||
-        !attrs.last_commit?.id ||
-        attrs.source_project_id === undefined ||
-        attrs.target_project_id === undefined
+        typeof attrs.last_commit?.id !== 'string' ||
+        !/^[a-f\d]{40,64}$/i.test(attrs.last_commit.id) ||
+        !Number.isSafeInteger(attrs.source_project_id) ||
+        !Number.isSafeInteger(attrs.target_project_id) ||
+        (attrs.source_project_id ?? 0) <= 0 ||
+        (attrs.target_project_id ?? 0) <= 0
       )
         return reply.code(400).send({ error: 'merge request payload is missing fields' });
       const updated =
