@@ -1,12 +1,6 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import {
-  type BriefingDto,
-  type DocEntryDto,
-  type DocKindDto,
-  useBriefing,
-  useDocs,
-} from '../api/hooks.js';
+import { type DocEntryDto, type DocKindDto, useBriefing, useDocs } from '../api/hooks.js';
 
 // Capítulos 1 y 2: sin modelo. Todo sale del mismo grafo que dibuja el mapa.
 

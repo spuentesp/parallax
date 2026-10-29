@@ -94,7 +94,10 @@ export function LooseEndsPanel({
       {r && r.source === 'lain' && (
         <>
           <div className="space-y-2 border-b border-border p-4">
-            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by category">
+            <fieldset
+              className="m-0 flex min-w-0 flex-wrap gap-1.5 border-0 p-0"
+              aria-label="Filter by category"
+            >
               {ORDER.filter((c) => r.summary.byCategory[c] > 0).map((c) => (
                 <button
                   key={c}
@@ -116,7 +119,7 @@ export function LooseEndsPanel({
                   {r.summary.pendingCases} not classified yet
                 </button>
               )}
-            </div>
+            </fieldset>
 
             <div className="flex flex-wrap items-center gap-2 text-[11px]">
               <button
