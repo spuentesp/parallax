@@ -62,7 +62,7 @@ describe('GitHub reads for PR evaluation use the configured read token and API b
       port: 0,
       databasePath: join(dir, 'p.db'),
       lainAdapter: 'mock',
-      mcpTransport: 'stdio',
+      mcpTransport: 'http-sse',
       authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
       webBundlePath: join(dir, 'web'),
       githubApiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
@@ -111,6 +111,67 @@ describe('GitHub reads for PR evaluation use the configured read token and API b
     });
     expect(r.statusCode).toBe(201);
     expect(r.json().pr).toMatchObject({ baseSha: BASE, headSha: HEAD });
+    expect(seen.every((s) => s.auth === 'Bearer read-token')).toBe(true);
+    await app.assessmentWorker.drain();
+  });
+
+  it('MCP assesses a private PR URL using the configured GitHub reader', async () => {
+    const ws = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: AUTH,
+      payload: { name: 'shop' },
+    });
+    const wsId = ws.json().workspace.id as string;
+    await app.db
+      .insert(schema.repo)
+      .values({
+        id: 'shop',
+        workspaceId: wsId,
+        uri: 'https://github.com/acme/shop.git',
+        createdAt: Date.now(),
+      });
+    const headers = {
+      ...AUTH,
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+    };
+    const init = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers,
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'test', version: '1' },
+        },
+      },
+    });
+    const session = init.headers['mcp-session-id'] as string;
+    const result = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { ...headers, 'mcp-session-id': session },
+      payload: {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'tools/call',
+        params: {
+          name: 'parallax_assess_pr',
+          arguments: { prUrl: 'https://github.com/acme/shop/pull/4', orgId: wsId },
+        },
+      },
+    });
+    const line = result.body.split('\n').find((s) => s.startsWith('data: '));
+    const envelope = JSON.parse(line?.slice(6) ?? '{}');
+    expect(envelope.result?.isError).not.toBe(true);
+    const payload = JSON.parse(envelope.result.content[0].text);
+    expect(payload.assessment.manifestJson).toContain('"number":4');
+    expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((s) => s.auth === 'Bearer read-token')).toBe(true);
     await app.assessmentWorker.drain();
   });

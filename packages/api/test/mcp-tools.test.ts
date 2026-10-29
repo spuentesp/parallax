@@ -14,7 +14,10 @@ describe('MCP HTTP transport', () => {
       databasePath: join(dir, 'p.db'),
       lainAdapter: 'mock',
       mcpTransport: 'http-sse',
-      authTokens: [{ token: 't', orgId: 'o', scopes: ['read', 'write'] }],
+      authTokens: [
+        { token: 't', orgId: 'o', scopes: ['read', 'write'] },
+        { token: 'read', orgId: 'o', scopes: ['read'] },
+      ],
       webBundlePath: join(dir, 'web'),
     });
   });
@@ -58,6 +61,24 @@ describe('MCP HTTP transport', () => {
     expect(body.jsonrpc).toBe('2.0');
     expect(body.id).toBe(1);
     expect((body.result as { serverInfo?: { name?: string } })?.serverInfo?.name).toBe('parallax');
+  });
+
+  it('does not let a read-only token start an assessment', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { ...headers, authorization: 'Bearer read' },
+      payload: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'parallax_assess_pr',
+          arguments: { orgId: 'o', prUrl: 'https://github.com/acme/shop/pull/4' },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(403);
   });
 
   it('POST /mcp with tools/list returns the four product tools', async () => {

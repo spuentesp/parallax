@@ -1,6 +1,7 @@
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { z } from 'zod';
 import type * as schema from '../../db/schema.js';
+import type { GitHubReader } from '../../github/reader.js';
 import { isLainCallError } from '../../lain-adapter/errors.js';
 import type { LainAdapter } from '../../lain-adapter/types.js';
 import {
@@ -16,7 +17,7 @@ export const assessPrTool = {
   name: 'parallax_assess_pr',
   description:
     'Trigger a PR impact assessment. Same service as POST /api/assessments: ' +
-    'same input digest, same persisted report. Send repo + resolved base/head SHAs.',
+    'same input digest, same persisted report. Send a PR URL or repo + resolved base/head SHAs.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -52,6 +53,7 @@ export interface AssessmentToolDeps {
   db: BetterSQLite3Database<typeof schema>;
   worker: AssessmentWorker;
   lain: LainAdapter;
+  github?: GitHubReader;
 }
 
 // P09: la tool MCP llama al MISMO servicio que la ruta HTTP; identidad,
@@ -71,6 +73,7 @@ export function makeAssessPrHandler(deps: AssessmentToolDeps) {
         worker: deps.worker,
         body: parsed.data,
         analyzerVersion: deps.lain.analyzerVersion,
+        ...(deps.github ? { github: deps.github } : {}),
       });
       void deps.worker.run(assessment.id).catch(() => {});
       return jsonResult({ assessment, created });
