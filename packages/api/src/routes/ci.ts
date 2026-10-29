@@ -346,7 +346,11 @@ export const ciRoutes: FastifyPluginAsync = async (app) => {
         if (!item || item.completedAt !== null) return;
         try {
           const mr = await gitlabReaderFor(app.config).fetchPr(item.url);
-          if (mr.headSha.toLowerCase() === item.headSha.toLowerCase()) {
+          if (
+            mr.headSha.toLowerCase() === item.headSha.toLowerCase() &&
+            mr.state === 'opened' &&
+            !mr.draft
+          ) {
             await handlePullRequest(
               {
                 db: app.db,

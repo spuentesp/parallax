@@ -143,6 +143,7 @@ export class GitLabReader {
       title: mr.title,
       author: mr.author?.username ?? null,
       state: mr.state,
+      draft: mr.draft ?? mr.work_in_progress ?? false,
       baseRef: mr.target_branch,
       headRef: mr.source_branch,
       baseSha,

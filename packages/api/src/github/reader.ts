@@ -20,6 +20,7 @@ export interface PrSummary {
   readonly title: string;
   readonly author: string | null;
   readonly state: string;
+  readonly draft?: boolean;
   readonly baseRef: string;
   readonly headRef: string;
   /** SHAs resueltos: son la identidad persistente (§5). Un nombre de rama no sirve. */

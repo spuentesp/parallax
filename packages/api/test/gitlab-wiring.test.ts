@@ -141,6 +141,26 @@ describe('GitLab integration', () => {
         });
         expect(ignored.json().handled).toBe(0);
       }
+      const stale = await app.inject({
+        method: 'POST',
+        url: '/webhooks/gitlab',
+        headers: { 'x-gitlab-token': 'secret' },
+        payload: {
+          ...event,
+          object_attributes: { ...event.object_attributes, last_commit: { id: 'c'.repeat(40) } },
+        },
+      });
+      expect(stale.json().queued).toBe(true);
+      const staleDeadline = Date.now() + 5000;
+      while (
+        (await app.db.select().from(schema.gitlabWebhookInbox))[0]?.completedAt == null &&
+        Date.now() < staleDeadline
+      )
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(
+        (await app.db.select().from(schema.gitlabWebhookInbox))[0]?.completedAt,
+      ).not.toBeNull();
+      expect(await app.db.select().from(schema.assessment)).toHaveLength(0);
       pendingRefs = 1;
       const delivered = await app.inject({
         method: 'POST',
