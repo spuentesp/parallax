@@ -17,6 +17,7 @@ import { INVESTIGATOR_DEFAULTS } from '../config.js';
 import type { History } from '../conversation/history.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import {
+  type Claim,
   type ClaimEvidence,
   type ClaimResult,
   type ClaimsSummary,
@@ -65,6 +66,7 @@ import {
   renderFindingsBlock,
   verifyPrSubmission,
 } from './pr-explain.js';
+import { WEB_REPO } from './web-search.js';
 
 /**
  * Progreso en vivo de una investigación: lo que el usuario ve mientras espera.
@@ -312,6 +314,13 @@ export interface InvestigateOptions {
   handoff?: boolean;
   maxResultChars?: number;
 }
+
+const WEB_UNCITED_MESSAGE =
+  'You searched the web but your answer cites nothing from it. Everything you state about the public library or standard must be attributed ("per <source>") and backed by a doc_quote claim (repo "web", path = the result URL, section = its title as shown, quote copied literally from its text). If none of the results was relevant, say so in the answer instead of stating what you know from memory.';
+
+/** ¿Alguna afirmación cita lo que devolvió la web? */
+const citesWeb = (claims: readonly Claim[] | undefined): boolean =>
+  (claims ?? []).some((c) => c.kind === 'doc_quote' && c.repo === WEB_REPO);
 
 const SYSTEM_PROMPT = `You are Parallax's architecture investigator. You answer questions about a fixed code workspace using ONLY the read-only research tools provided. The workspace view was fixed by the analysis: you cannot choose snapshots, repos outside the workspace, or any write/publish tool.
 
@@ -590,6 +599,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
   let claimsPushedBack = false;
   let absencePushedBack = false;
   let webPushedBack = false;
+  let webUncitedPushedBack = false;
   /** El borrador del trabajador (el relevo): lo reescribe el planificador. */
   let draft: { answer: string } | null = null;
   /** Las afirmaciones del MOTOR sobre la entrega aceptada (verificadas dentro del bucle). */
@@ -892,6 +902,20 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
         );
         continue;
       }
+      // Buscó en la web y no cita nada de ella: lo que dice de la librería queda sin fuente
+      // (medido en vivo: dos de dos respuestas usaron web_search y no atribuyeron nada).
+      if (
+        opts.web &&
+        // En el relevo el trabajador sólo entrega un borrador: atribuir es cosa del escritor.
+        !opts.handoff &&
+        !webUncitedPushedBack &&
+        dispatcher.toolUsed('web_search') &&
+        !citesWeb((checked.data as SubmitAnswerArgs).claims)
+      ) {
+        webUncitedPushedBack = true;
+        reject('web_uncited', WEB_UNCITED_MESSAGE);
+        continue;
+      }
       const acceptSubmit = (): void => {
         toolCallLog.push({
           toolCallId: submit.id,
@@ -1016,6 +1040,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
             draft,
             citableIds: dispatcher.deliveredEvidence(),
             receipts: dispatcher.receipts().map((r) => r.id),
+            webSearched: opts.web !== undefined && dispatcher.toolUsed('web_search'),
           }),
         },
       ];
@@ -1024,6 +1049,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
       const writerTokens = (attempt: number): number =>
         Math.min(16384, Math.max(maxTokens, 4096) * 2 ** attempt);
       let bounceUsed = false;
+      let writerWebBounced = false;
       for (let attempt = 0; attempt < 3; attempt++) {
         let resp: NemotronResponse;
         try {
@@ -1091,6 +1117,25 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
           }
           errors.push('the writer delivered an invalid answer; the draft of the worker stands');
           break;
+        }
+        // El escritor es quien redacta la respuesta final: lo que busque en la web se atribuye aquí.
+        if (
+          opts.web &&
+          !writerWebBounced &&
+          dispatcher.toolUsed('web_search') &&
+          !citesWeb(checked.data.claims)
+        ) {
+          writerWebBounced = true;
+          writeMessages.push({ role: 'assistant', content: resp.content, tool_calls: [call] });
+          writeMessages.push({
+            role: 'tool',
+            tool_call_id: call.id,
+            content: JSON.stringify({
+              ok: false,
+              error: { code: 'web_uncited', message: WEB_UNCITED_MESSAGE },
+            }),
+          });
+          continue;
         }
         const results = checked.data.claims?.length
           ? await verifyClaims(checked.data.claims, claimDeps)

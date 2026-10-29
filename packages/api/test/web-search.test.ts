@@ -272,6 +272,12 @@ describe('citing what the web said (write → read)', () => {
     expect(r?.verdict).toBe('verified');
   });
 
+  it('an abbreviated title still verifies: a web page is one section, the phrase decides', async () => {
+    await searchThroughDispatcher();
+    const [r] = await verifyClaims([quote({ section: 'QuerySet API reference' })], deps());
+    expect(r?.verdict).toBe('verified');
+  });
+
   it('a quote that is not in the shown text is contradicted', async () => {
     await searchThroughDispatcher();
     const [r] = await verifyClaims([quote({ quote: 'rows are locked forever' })], deps());
@@ -385,6 +391,37 @@ describe('investigator with web search', () => {
     expect(result.toolCallLog.some((t) => t.tool === 'web_search' && t.ok)).toBe(true);
   });
 
+  it('bounces once an answer that searched the web but cites nothing from it', async () => {
+    const model = new Scripted([
+      resp([call('w', 'web_search', { query: 'django select_for_update' })]),
+      resp([call('s1', 'submit_answer', { answer: 'select_for_update locks rows.' })]),
+      resp([
+        call('s2', 'submit_answer', {
+          answer: 'Per the Django docs, select_for_update locks rows until the transaction ends.',
+          claims: [
+            {
+              kind: 'doc_quote',
+              repo: WEB_REPO,
+              path: DJANGO.url,
+              section: DJANGO.title,
+              quote: 'lock rows until the end of the transaction',
+              text: 'select_for_update locks rows',
+            },
+          ],
+        }),
+      ]),
+    ]);
+    const result = await investigate({
+      question: 'What does select_for_update do in Django?',
+      lain: createLainMock(),
+      model,
+      web: web(),
+      docsSection,
+    });
+    expect(JSON.stringify(model.seen[2])).toContain('cites nothing from it');
+    expect(result.claims.find((c) => c.claim.kind === 'doc_quote')?.verdict).toBe('verified');
+  });
+
   it('without a web backend the same words are not policed and the tool is never offered', async () => {
     const model = new Scripted([
       resp([call('l', 'list_services', {})]),
@@ -450,5 +487,73 @@ describe('result cleanup inside official domains', () => {
     expect(requests[0]?.body).toMatchObject({ search_depth: 'advanced', max_results: 8 });
     expect(requests[1]?.body).toMatchObject({ search_depth: 'basic' });
     expect(requests[1]?.body.include_domains).toBeUndefined();
+  });
+});
+
+describe('relay mode: the writer attributes what the worker searched', () => {
+  let db: Database.Database;
+  beforeEach(() => {
+    db = new Database(':memory:');
+    runMigrations(db, resolve(process.cwd(), 'drizzle'));
+  });
+  afterEach(() => db.close());
+
+  it('the writer is told about the web results and is bounced once if its answer cites none', async () => {
+    const seen: ChatMessage[][] = [];
+    const resp = (toolCalls: ToolCall[]): NemotronResponse => ({
+      content: null,
+      toolCalls,
+      finishReason: 'tool_calls',
+      usage: { promptTokens: 1, completionTokens: 1 },
+      model: 'fake',
+      latencyMs: 1,
+    });
+    const quoteClaim = {
+      kind: 'doc_quote',
+      repo: WEB_REPO,
+      path: DJANGO.url,
+      section: DJANGO.title,
+      quote: 'lock rows until the end of the transaction',
+      text: 'select_for_update locks rows',
+    };
+    // planner (plan) -> worker (search, draft) -> writer (uncited, then cited)
+    const script = [
+      resp([call('p', 'submit_plan', { goal: 'explain select_for_update', steps: [] })]),
+      resp([call('w', 'web_search', { query: 'django select_for_update' })]),
+      resp([call('d', 'submit_answer', { answer: 'draft: it locks rows' })]),
+      resp([call('w1', 'submit_answer', { answer: 'It locks rows.' })]),
+      resp([
+        call('w2', 'submit_answer', {
+          answer: 'Per the Django docs it locks rows.',
+          claims: [quoteClaim],
+        }),
+      ]),
+    ];
+    const model: ChatCompleter = {
+      async complete(messages) {
+        seen.push(structuredClone(messages));
+        const next = script.shift();
+        if (!next) throw new Error('script exhausted');
+        return next;
+      },
+    };
+    const tav = fakeTavily([DJANGO]);
+    const result = await investigate({
+      question: 'What does select_for_update do in Django?',
+      lain: createLainMock(),
+      model,
+      handoff: true,
+      web: {
+        search: createTavilySearch({ apiKey: 'k', fetch: tav.fetchImpl }),
+        domainsFor: (q: string) => officialDomainsFor(q),
+        ingest: (pages) => indexWebPages(db, WS, WEB_REPO, pages),
+      },
+      docsSection: (repo, path, section) => findDocSections(db, WS, repo, path, section),
+    });
+    // El escritor recibió la instrucción de atribuir la web, y la respuesta sin cita volvió una vez.
+    expect(JSON.stringify(seen[3])).toContain('The worker searched the web');
+    expect(JSON.stringify(seen[4])).toContain('cites nothing from it');
+    expect(result.answer).toBe('Per the Django docs it locks rows.');
+    expect(result.claims.find((c) => c.claim.kind === 'doc_quote')?.verdict).toBe('verified');
   });
 });

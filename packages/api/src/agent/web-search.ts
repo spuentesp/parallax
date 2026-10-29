@@ -4,7 +4,10 @@
 // comprueba con el mismo verificador `doc_quote`: la frase tiene que estar en lo que el
 // modelo VIO. Los hechos de LAIN siguen mandando; la web explica, no sobrescribe.
 
-export const WEB_REPO = 'web';
+import { WEB_REPO } from '../docs/index.js';
+
+export { WEB_REPO };
+
 const TAVILY_URL = 'https://api.tavily.com/search';
 const MAX_CONTENT_CHARS = 1500;
 const DEFAULT_LIMIT = 4;
@@ -51,6 +54,7 @@ export const DEFAULT_OFFICIAL_DOCS: OfficialDocs = {
   fastify: ['fastify.dev'],
   express: ['expressjs.com'],
   graphql: ['graphql.org'],
+  relay: ['relay.dev', 'graphql.org'],
   apollo: ['apollographql.com'],
   django: ['docs.djangoproject.com'],
   celery: ['docs.celeryq.dev'],

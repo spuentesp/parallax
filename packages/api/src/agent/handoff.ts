@@ -87,6 +87,8 @@ export interface WriteContext {
   citableIds: readonly string[];
   /** Los recibos de consulta (q:N) que se pueden citar. */
   receipts: readonly string[];
+  /** Se buscó en la web: lo que diga de la librería hay que atribuirlo y citarlo. */
+  webSearched?: boolean;
 }
 
 /** El contexto del escritor: la pregunta, el plan, los resultados y el borrador. */
@@ -115,6 +117,11 @@ export function writeBlock(ctx: WriteContext): string {
   if (ctx.draft) {
     parts.push(
       `The worker's draft (it may be wrong: check every location and every citation against the results above):\n${ctx.draft.answer}`,
+    );
+  }
+  if (ctx.webSearched) {
+    parts.push(
+      'The worker searched the web. Whatever you state about the public library or standard comes from those web results: attribute it ("per <source>") and back it with a doc_quote claim (repo "web", path = the result URL, section = its title as shown, quote copied literally from its text). Keep it apart from what the engine observed in the code.',
     );
   }
   parts.push(

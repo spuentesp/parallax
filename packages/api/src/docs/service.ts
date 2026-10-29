@@ -1,7 +1,6 @@
 import type Database from 'better-sqlite3';
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { WEB_REPO } from '../agent/web-search.js';
 import { deriveLainRepoId } from '../code-graph.js';
 import * as schema from '../db/schema.js';
 import {
@@ -14,6 +13,7 @@ import {
   readDocs,
   resolveCheckout,
   searchDocs,
+  WEB_REPO,
   type WebDoc,
 } from './index.js';
 

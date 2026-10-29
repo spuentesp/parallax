@@ -27,6 +27,9 @@ const MAX_SECTION_CHARS = 1800;
 const MAX_EXCERPT_CHARS = 2500;
 const CLONE_HOSTS = new Set(['github.com', 'gitlab.com']);
 
+/** El repo ficticio bajo el que se indexan las páginas web que vio el modelo. */
+export const WEB_REPO = 'web';
+
 export interface Section {
   heading: string;
   body: string;
@@ -397,12 +400,14 @@ export function findDocSections(
     )
     .all(workspaceId, repo, path);
   const wanted = heading.trim().toLowerCase();
+  // Una página web es UNA sección cuyo título arrastra sufijos del sitio ("… | Django
+  // documentation | Django") que el modelo abrevia al citar: ahí manda la frase, no el título.
+  const matching =
+    repo === WEB_REPO ? rows : rows.filter((r) => r.heading.trim().toLowerCase() === wanted);
   return {
     fileFound: file !== undefined,
     headings: rows.map((r) => r.heading),
-    sections: rows
-      .filter((r) => r.heading.trim().toLowerCase() === wanted)
-      .map((r) => ({ heading: r.heading, body: r.body, lineStart: r.line_start })),
+    sections: matching.map((r) => ({ heading: r.heading, body: r.body, lineStart: r.line_start })),
   };
 }
 
