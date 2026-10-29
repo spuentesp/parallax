@@ -8,7 +8,7 @@
 import { randomBytes } from 'node:crypto';
 
 const base = (process.argv[2] ?? 'https://<demo-host>').replace(/\/+$/, '');
-const workspace = process.argv[3] ?? 'ws_saleor';
+const workspace = process.argv[3] ?? 'ws_nvidia';
 const make = (prefix) => `px_${prefix}_${randomBytes(18).toString('base64url')}`;
 
 const look = make('look');

@@ -25,11 +25,57 @@ interface SeedWorkspace {
   repos: SeedRepo[];
 }
 
+const NVIDIA_LAIN = process.env.NVIDIA_LAIN_URL ?? process.env.LAIN_URL ?? 'http://localhost:9999/mcp';
 const SALEOR_LAIN = process.env.SALEOR_LAIN_URL ?? 'http://localhost:9999/mcp';
 const BOUTIQUE_LAIN = process.env.BOUTIQUE_LAIN_URL ?? 'http://localhost:9998/mcp';
 const FIXTURE_LAIN = process.env.FIXTURE_LAIN_URL ?? 'http://localhost:9997/mcp';
 
 const WORKSPACES: SeedWorkspace[] = [
+  {
+    id: 'ws_nvidia',
+    name: 'NVIDIA AI & OpenShell Stack',
+    description:
+      'NVIDIA Agent Ecosystem: NeMo Agent Toolkit, OpenShell, NeMo-Fabric, and NemoClaw. gRPC & HTTP contracts.',
+    lainUrl: NVIDIA_LAIN,
+    repos: [
+      {
+        id: 'repo_nat',
+        uri: 'https://github.com/NVIDIA/NeMo-Agent-Toolkit.git',
+        sha: '3ec11d6f733f53ab0a0c3e7b3a7a3bb7cbf70db8',
+        local: './test-repos/nvidia/NeMo-Agent-Toolkit',
+      },
+      {
+        id: 'repo_nat_ui',
+        uri: 'https://github.com/NVIDIA/NeMo-Agent-Toolkit-UI.git',
+        sha: '41cb8cf843091a24bd06d0a5f844a3cb824049d8',
+        local: './test-repos/nvidia/NeMo-Agent-Toolkit-UI',
+      },
+      {
+        id: 'repo_nat_examples',
+        uri: 'https://github.com/NVIDIA/NeMo-Agent-Toolkit-Examples.git',
+        sha: 'eadbb7573b9ba12c01a9df85c601a32a886d7b25',
+        local: './test-repos/nvidia/NeMo-Agent-Toolkit-Examples',
+      },
+      {
+        id: 'repo_openshell',
+        uri: 'https://github.com/NVIDIA/OpenShell.git',
+        sha: 'cc9995438f3fa509bb5400d32ec4b2bdc38cbc1d',
+        local: './test-repos/nvidia/OpenShell',
+      },
+      {
+        id: 'repo_nemo_fabric',
+        uri: 'https://github.com/NVIDIA/NeMo-Fabric.git',
+        sha: '4fdf65a4b4c96024327501ae28243f2d206e7ec7',
+        local: './test-repos/nvidia/NeMo-Fabric',
+      },
+      {
+        id: 'repo_nemoclaw',
+        uri: 'https://github.com/NVIDIA/NemoClaw.git',
+        sha: 'de00977585d04f3bac7b090a0870b0d2dca4972d',
+        local: './test-repos/nvidia/NemoClaw',
+      },
+    ],
+  },
   {
     id: 'ws_saleor',
     name: 'Saleor',

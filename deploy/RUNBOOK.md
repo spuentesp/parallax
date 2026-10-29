@@ -36,47 +36,28 @@ If you prefer to use a tagged GitHub release binary:
 ./deploy/install-lain.sh ~/lain
 ```
 
-Clone the repos to analyse and describe them in `repos.yaml` (Saleor example):
+Clone the NVIDIA stack repositories and configure `repos.yaml`:
 ```bash
-mkdir -p ~/saleor && cd ~/saleor
-git clone --depth 1 https://github.com/saleor/saleor.git
-git clone --depth 1 https://github.com/saleor/saleor-dashboard.git
-git clone --depth 1 https://github.com/saleor/storefront.git
+# Clone the 6 NVIDIA repos into ~/nvidia
+./deploy/clone-nvidia-repos.sh ~/nvidia
 
-cat > repos.yaml <<'YAML'
-data_dir: /home/ubuntu/saleor/.lain/federation
-repos:
-  - id: saleor
-    source: {type: workspace_dir, path: /home/ubuntu/saleor/saleor}
-  - id: saleor-dashboard
-    source: {type: workspace_dir, path: /home/ubuntu/saleor/saleor-dashboard}
-  - id: storefront
-    source: {type: workspace_dir, path: /home/ubuntu/saleor/storefront}
-services:
-  - name: saleor-api
-    repo: saleor
-    env: [NEXT_PUBLIC_SALEOR_API_URL]
-  - name: saleor-dashboard
-    repo: saleor-dashboard
-    provides_graphql: false
-  - name: saleor-storefront
-    repo: storefront
-YAML
+# Copy the preconfigured nvidia-repos.yaml
+cp ./deploy/nvidia-repos.yaml ~/nvidia/repos.yaml
 ```
 
 Run Lain listening on **localhost only** (survives in tmux or systemd):
 ```bash
-~/lain/lain server --config ~/saleor/repos.yaml --transport http --port 9999
+~/lain/lain server --config ~/nvidia/repos.yaml --transport http --port 9999
 ```
-A cold index of this workspace takes ~2 minutes. Wait until indexing completes before seeding Parallax.
+Lain will index the NVIDIA stack (NeMo Agent Toolkit, OpenShell, NeMo-Fabric, NemoClaw). Wait until indexing completes before seeding Parallax.
 
 ## 3. Configure Parallax & Generate Tokens
 ```bash
 cd ~/parallax/deploy
 cp .env.demo.example .env
 
-# Generate the two demo tokens (looking & judges)
-node gen-tokens.mjs https://YOUR.DOMAIN ws_saleor
+# Generate the two demo tokens (looking & judges) for the NVIDIA workspace
+node gen-tokens.mjs https://YOUR.DOMAIN ws_nvidia
 ```
 This prints:
 1. `PARALLAX_TOKENS='...'` — paste into `deploy/.env`.
@@ -93,9 +74,9 @@ docker compose up -d --build
 `docker-compose.yml` automatically verifies container health before routing traffic via Caddy.
 
 ## 5. Seed the workspace
-The Saleor workspace must exist in the database, pointing at host Lain:
+The NVIDIA workspace must exist in the database, pointing at host Lain:
 ```bash
-docker compose exec -e SALEOR_LAIN_URL=http://host.docker.internal:9999/mcp parallax \
+docker compose exec -e NVIDIA_LAIN_URL=http://host.docker.internal:9999/mcp parallax \
   pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts
 ```
 
@@ -107,10 +88,10 @@ docker compose exec -e SALEOR_LAIN_URL=http://host.docker.internal:9999/mcp para
 ```
 
 ### Manual checks:
-- `https://YOUR.DOMAIN/orgs/ws_saleor` with no token → access screen prompting for token.
-- The **Looking link** → opens Saleor map in read-only mode (`[read-only]` badge).
-- The **Judges link** → opens Saleor map with testing access enabled.
-- Open **Ask the architecture**, ask *"Which services consume the checkout API?"* → answer with verified claims from Nemotron over Nebius Token Factory.
+- `https://YOUR.DOMAIN/orgs/ws_nvidia` with no token → access screen prompting for token.
+- The **Looking link** → opens NVIDIA map in read-only mode (`[read-only]` badge).
+- The **Judges link** → opens NVIDIA map with testing access enabled.
+- Open **Ask the architecture**, ask *"Which services consume the OpenShell gRPC API?"* or *"Who dials the NAT backend?"* → answer with verified claims from Nemotron over Nebius Token Factory.
 - `curl -s https://YOUR.DOMAIN/api/health` → `"status":"ok"` and `"lainAdapter":"real"`.
 
 ## Rules reminders (Devpost)
