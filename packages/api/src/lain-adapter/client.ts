@@ -424,36 +424,48 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
+    const retries = config.maxRetries ?? 0;
     const listTools = async (): Promise<string[]> => {
-      const res = await fetchImpl(config.lainUrl, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          accept: 'application/json, text/event-stream',
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'tools/list',
-          params: {},
-        }),
-        signal: ctl.signal,
-      });
-      if (!res.ok) {
-        throw LainCallError.parse({
-          code: 'LainUnavailable',
-          message: `lain handshake returned HTTP ${res.status}`,
-        });
+      let attempts = 0;
+      while (true) {
+        try {
+          const res = await fetchImpl(config.lainUrl, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              accept: 'application/json, text/event-stream',
+            },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'tools/list',
+              params: {},
+            }),
+            signal: ctl.signal,
+          });
+          if (!res.ok) {
+            throw LainCallError.parse({
+              code: 'LainUnavailable',
+              message: `lain handshake returned HTTP ${res.status}`,
+            });
+          }
+          const body = (await res.json()) as JsonRpcResponse;
+          if (body.error) {
+            throw LainCallError.parse({
+              code: 'LainUnavailable',
+              message: `lain handshake JSON-RPC error: ${body.error.message}`,
+            });
+          }
+          const result = body.result as { tools?: Array<{ name: string }> };
+          return (result.tools ?? []).map((t) => t.name);
+        } catch (e) {
+          attempts++;
+          if (attempts > retries || ctl.signal.aborted) {
+            throw e;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
-      const body = (await res.json()) as JsonRpcResponse;
-      if (body.error) {
-        throw LainCallError.parse({
-          code: 'LainUnavailable',
-          message: `lain handshake JSON-RPC error: ${body.error.message}`,
-        });
-      }
-      const result = body.result as { tools?: Array<{ name: string }> };
-      return (result.tools ?? []).map((t) => t.name);
     };
     let toolNames = await listTools();
     const expected = [
