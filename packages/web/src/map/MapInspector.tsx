@@ -3,17 +3,19 @@
 // y de otros repos), cada uno con la procedencia de la relación — continua si
 // el análisis la prueba, discontinua si es una inferencia con su confianza.
 
-import type { EndpointLink, NodeDetail, NodeRelation } from '@parallax/shared/org-map';
+import type { EndpointLink, NodeDetail, NodeRelation, OrgNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
 import { useState } from 'react';
 import { ApiError } from '../api/client.js';
-import { useImplementation, useMapNode } from '../api/hooks.js';
+import { useImplementation, useMapNode, useWorkspace, type Workspace } from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
 export interface MapInspectorProps {
   workspaceId: string;
   nodeId: string | null;
+  /** Datos síncronos del nodo disponibles de inmediato sin esperar a la API. */
+  node?: OrgNode | null | undefined;
   onSelect: (id: string) => void;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
@@ -28,6 +30,7 @@ const repoName = (id: string | null): string => (id ? id.replace(/^repo:/, '') :
 export function MapInspector({
   workspaceId,
   nodeId,
+  node: fallbackNode,
   onSelect,
   onFocus,
   onToggle,
@@ -36,6 +39,8 @@ export function MapInspector({
   onTrace,
 }: MapInspectorProps): React.ReactElement {
   const q = useMapNode(workspaceId, nodeId);
+  const wsQuery = useWorkspace(workspaceId);
+  const workspace = wsQuery.data?.workspace;
 
   if (nodeId === null) {
     return (
@@ -48,7 +53,20 @@ export function MapInspector({
       </div>
     );
   }
-  if (q.isPending) return <div className="p-5 text-sm text-muted">Loading…</div>;
+
+  const detail =
+    q.data?.detail ??
+    (fallbackNode
+      ? {
+          node: fallbackNode,
+          path: [],
+          children: [],
+          consumers: [],
+          providers: [],
+        }
+      : null);
+
+  if (q.isPending && !detail) return <div className="p-5 text-sm text-muted">Loading…</div>;
   if (q.isError) {
     // 404 = el enlace apunta a algo que este mapa no tiene (p. ej. tras un
     // refresh o con otros filtros): es recuperable, no un fallo.
@@ -65,7 +83,6 @@ export function MapInspector({
       <div className="p-5 text-sm text-error">Could not load this node.</div>
     );
   }
-  const detail = q.data?.detail;
   if (!detail) {
     return (
       <div className="p-5 text-sm text-muted">
@@ -77,6 +94,8 @@ export function MapInspector({
     <Detail
       workspaceId={workspaceId}
       detail={detail}
+      workspace={workspace}
+      loadingRelations={q.isPending}
       onSelect={onSelect}
       onFocus={onFocus}
       onToggle={onToggle}
@@ -90,13 +109,19 @@ export function MapInspector({
 function Detail({
   workspaceId,
   detail,
+  workspace,
+  loadingRelations = false,
   onSelect,
   onFocus,
   onToggle,
   focusing,
   onClearFocus,
   onTrace,
-}: Omit<MapInspectorProps, 'nodeId'> & { detail: NodeDetail }): React.ReactElement {
+}: Omit<MapInspectorProps, 'nodeId' | 'node'> & {
+  detail: NodeDetail;
+  workspace?: Workspace | null | undefined;
+  loadingRelations?: boolean;
+}): React.ReactElement {
   const { node } = detail;
   const consumerRepos = new Set(detail.consumers.map((c) => c.peer.parent));
   // El repo que contiene al nodo (o el nodo mismo) decide si hay código navegable.
@@ -105,6 +130,15 @@ function Detail({
   const providers =
     (node.meta.providers as Array<{ repo?: string; path?: string; line?: number }> | undefined) ??
     [];
+  const targetRepoName = node.kind === 'repo' ? node.label : repoNode?.label;
+  const wsRepo = workspace?.repos?.find(
+    (r) =>
+      r.id === node.id ||
+      (targetRepoName &&
+        (r.uri.endsWith(`/${targetRepoName}.git`) ||
+          r.uri.endsWith(`/${targetRepoName}`) ||
+          r.uri.toLowerCase().includes(targetRepoName.toLowerCase()))),
+  );
 
   return (
     <div className="divide-y divide-border" data-testid="map-inspector">
@@ -190,7 +224,90 @@ function Detail({
             </button>
           )}
         </div>
+
+        {/* Datos básicos / propiedades estructuradas */}
+        <div className="rounded-lg border border-border/70 bg-bg/60 p-2.5 space-y-2 text-xs">
+          <div className="flex items-center justify-between text-[11px] font-mono text-muted bg-surface/80 border border-border/50 rounded px-2 py-0.5 select-all">
+            <span className="text-[10px] uppercase font-sans text-muted/70 tracking-wider">
+              Node ID
+            </span>
+            <span className="truncate max-w-[15rem]">{node.id}</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
+            <div>
+              <span className="text-[10px] text-muted block uppercase tracking-wide">Type</span>
+              <span className="font-medium text-fg capitalize">{node.kind}</span>
+            </div>
+            {node.contract && (
+              <div>
+                <span className="text-[10px] text-muted block uppercase tracking-wide">
+                  Protocol
+                </span>
+                <span className="font-mono text-fg">{node.contract.toUpperCase()}</span>
+              </div>
+            )}
+            {targetRepoName && (
+              <div className="col-span-2">
+                <span className="text-[10px] text-muted block uppercase tracking-wide">
+                  Repository
+                </span>
+                <span className="font-medium text-fg break-all">{targetRepoName}</span>
+                {wsRepo?.uri && (
+                  <span className="block text-[10px] font-mono text-muted truncate">
+                    {wsRepo.uri}
+                  </span>
+                )}
+                {wsRepo?.sha && (
+                  <span className="block text-[10px] font-mono text-muted">
+                    Commit: {wsRepo.sha}
+                  </span>
+                )}
+                {wsRepo?.local && (
+                  <span className="block text-[10px] font-mono text-muted truncate">
+                    Local: {wsRepo.local}
+                  </span>
+                )}
+              </div>
+            )}
+            {typeof node.meta.definedAt === 'string' && (
+              <div className="col-span-2">
+                <span className="text-[10px] text-muted block uppercase tracking-wide">
+                  Defined at
+                </span>
+                <span className="font-mono text-fg text-[11px] break-all">
+                  {String(node.meta.definedAt)}
+                </span>
+              </div>
+            )}
+            {detail.children.length > 0 && (
+              <div>
+                <span className="text-[10px] text-muted block uppercase tracking-wide">
+                  Children
+                </span>
+                <span className="font-medium text-fg">{detail.children.length} elements</span>
+              </div>
+            )}
+            {(detail.consumers.length > 0 || detail.providers.length > 0) && (
+              <div>
+                <span className="text-[10px] text-muted block uppercase tracking-wide">
+                  Connections
+                </span>
+                <span className="font-medium text-fg">
+                  {detail.consumers.length} in · {detail.providers.length} out
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {loadingRelations && (
+        <div className="p-4 text-xs text-muted flex items-center gap-2">
+          <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-accent border-r-transparent" />
+          <span>Loading relationships…</span>
+        </div>
+      )}
 
       {node.kind !== 'repo' || detail.consumers.length > 0 || detail.providers.length > 0 ? (
         <>
@@ -214,8 +331,21 @@ function Detail({
         </>
       ) : null}
 
+      {node.kind === 'endpoint' && (
+        <EndpointCallers
+          workspaceId={workspaceId}
+          consumers={detail.consumers}
+          onSelect={onSelect}
+        />
+      )}
+
       {node.kind === 'endpoint' && node.contract === 'graphql' && (
-        <ImplementedBy workspaceId={workspaceId} endpointKey={node.label} repo={lainRepo} />
+        <ImplementedBy
+          workspaceId={workspaceId}
+          endpointKey={node.label}
+          repo={lainRepo}
+          onSelect={onSelect}
+        />
       )}
 
       {node.kind === 'repo' && node.meta.lainRepoId === null && (
@@ -229,18 +359,33 @@ function Detail({
       {providers.length > 0 && (
         <div className="p-5 space-y-2">
           <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">Defined at</h4>
-          {providers.map((p) => (
-            <div key={`${p.repo}:${p.path}:${p.line}`} className="space-y-1">
-              <p className="font-mono text-xs break-all">
-                {p.repo ? `${p.repo}:` : ''}
-                {p.path}
-                {p.line ? `:${p.line}` : ''}
-              </p>
-              {p.path && lainRepo && (
-                <SourcePeek workspaceId={workspaceId} repo={lainRepo} target={{ path: p.path }} />
-              )}
-            </div>
-          ))}
+          {providers.map((p) => {
+            const targetRepo = p.repo ?? lainRepo;
+            const targetNodeId = targetRepo ? `sym:${targetRepo}|File|${p.path}` : null;
+            return (
+              <div key={`${p.repo}:${p.path}:${p.line}`} className="space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="font-mono text-xs break-all">
+                    {p.repo ? `${p.repo}:` : ''}
+                    {p.path}
+                    {p.line ? `:${p.line}` : ''}
+                  </p>
+                  {targetNodeId && (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(targetNodeId)}
+                      className="rounded px-1.5 py-0.5 text-[10px] bg-bg border border-border text-accent hover:bg-border whitespace-nowrap shrink-0"
+                    >
+                      View in code
+                    </button>
+                  )}
+                </div>
+                {p.path && lainRepo && (
+                  <SourcePeek workspaceId={workspaceId} repo={lainRepo} target={{ path: p.path }} />
+                )}
+              </div>
+            );
+          })}
           {!lainRepo && (
             <p className="text-[11px] text-muted">
               Source unavailable: this repository is not linked to the engine's code graph.
@@ -419,10 +564,12 @@ function ImplementedBy({
   workspaceId,
   endpointKey,
   repo,
+  onSelect,
 }: {
   workspaceId: string;
   endpointKey: string;
   repo: string | null;
+  onSelect?: (id: string) => void;
 }): React.ReactElement {
   const [wanted, setWanted] = useState(false);
   const q = useImplementation(workspaceId, endpointKey, repo, wanted);
@@ -463,9 +610,27 @@ function ImplementedBy({
           </p>
           <ul className="space-y-1">
             {r.candidates.map((c) => (
-              <li key={c.id} className="font-mono text-xs break-all">
-                <span className="text-muted">{c.type} </span>
-                {c.path}:{c.line}
+              <li
+                key={c.id}
+                className="font-mono text-xs break-all flex items-center justify-between gap-2"
+              >
+                <div>
+                  <span className="text-muted">{c.type} </span>
+                  {c.path}:{c.line}
+                </div>
+                {onSelect && repo && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onSelect(
+                        `sym:${repo}|${c.type.toLowerCase() === 'file' ? 'File' : 'Function'}|${c.name || c.path}`,
+                      )
+                    }
+                    className="rounded px-1.5 py-0.5 text-[10px] bg-bg border border-border text-accent hover:bg-border whitespace-nowrap shrink-0"
+                  >
+                    View in code
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -484,6 +649,93 @@ function ImplementedBy({
           )}
         </>
       )}
+    </div>
+  );
+}
+
+function EndpointCallers({
+  workspaceId,
+  consumers,
+  onSelect,
+}: {
+  workspaceId: string;
+  consumers: NodeRelation[];
+  onSelect: (id: string) => void;
+}): React.ReactElement | null {
+  const callerSites = consumers.flatMap((c) =>
+    c.links.flatMap((l) =>
+      l.sites.map((s) => ({
+        ...s,
+        service: c.peer.label,
+        provenance: l.provenance,
+        confidence: l.confidence,
+        fields: l.fields,
+      })),
+    ),
+  );
+
+  if (callerSites.length === 0) return null;
+
+  return (
+    <div className="p-5 space-y-3 border-t border-border" data-testid="endpoint-callers">
+      <div className="flex items-baseline justify-between gap-2">
+        <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Code using this contract
+        </h4>
+        <span className="text-xs text-muted">
+          {callerSites.length} caller site{callerSites.length === 1 ? '' : 's'}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {callerSites.map((site) => {
+          const targetNodeId = site.repo ? `sym:${site.repo}|File|${site.path}` : null;
+          return (
+            <li
+              key={`${site.service}:${site.repo}:${site.path}:${site.line}`}
+              className="rounded-lg border border-border bg-surface p-2.5 space-y-2"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold">
+                    <EdgeSwatch provenance={site.provenance} width={16} />
+                    <span>{site.service}</span>
+                    {site.repo && (
+                      <span className="rounded px-1 text-[10px] bg-bg border border-border text-muted font-normal">
+                        {site.repo}
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-mono text-[11px] text-muted mt-1 break-all">
+                    {site.path}
+                    {site.line ? `:${site.line}` : ''}
+                  </p>
+                </div>
+                {targetNodeId && (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(targetNodeId)}
+                    className="rounded px-2 py-0.5 text-[10px] bg-bg border border-border text-accent hover:bg-border whitespace-nowrap shrink-0"
+                  >
+                    View caller code
+                  </button>
+                )}
+              </div>
+              {site.fields && site.fields.length > 0 && (
+                <p className="text-[10px] text-muted truncate">
+                  Uses: <span className="font-mono text-fg">{site.fields.join(', ')}</span>
+                </p>
+              )}
+              {site.repo && site.path && (
+                <SourcePeek
+                  workspaceId={workspaceId}
+                  repo={site.repo}
+                  target={{ path: site.path }}
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

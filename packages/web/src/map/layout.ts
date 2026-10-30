@@ -28,7 +28,10 @@ export const GAP = 14;
 export const PAD = 16;
 export const LABEL_H = 20;
 
-const CHAR_W = { proportional: 6.6, mono: 6.1 } as const;
+// Ancho medio de un carácter según la fuente del rótulo: el lienzo dibuja
+// Space Grotesk a 12px para repos y servicios, y JetBrains Mono a 11px para
+// contratos y código.
+const CHAR_W = { proportional: 6.6, mono: 6.7 } as const;
 
 /** Tamaño de una hoja según su rótulo (el lienzo trunca con puntos suspensivos). */
 export function measure(label: string, kind: ProjectedNode['kind']): Size {
@@ -125,10 +128,13 @@ function packGrid(kids: Tree[]): NonNullable<Tree['grid']> {
   );
   const avgW = sorted.reduce((s, k) => s + k.outer.w, 0) / sorted.length;
   const avgH = sorted.reduce((s, k) => s + k.outer.h, 0) / sorted.length;
-  const cols = Math.max(
-    1,
-    Math.min(sorted.length, Math.round(Math.sqrt((sorted.length * avgH * 1.6) / avgW))),
-  );
+  // Relación de aspecto del contenedor: expandir en horizontal para no apilar
+  // en torres verticales estrechas. Con 2+ elementos se reparten en al menos
+  // 2 columnas (o 3/4 si hay más hijos), aprovechando el espacio horizontal.
+  const idealColsByCount =
+    sorted.length >= 16 ? 4 : sorted.length >= 7 ? 3 : sorted.length >= 2 ? 2 : 1;
+  const rawCols = Math.round(Math.sqrt((sorted.length * avgH * 2.2) / avgW));
+  const cols = Math.max(1, Math.min(sorted.length, Math.max(idealColsByCount, rawCols)));
   const rows = Math.ceil(sorted.length / cols);
 
   const colW = new Array<number>(cols).fill(0);
@@ -223,11 +229,17 @@ export function arrange(
 ): void {
   const n = items.length;
   if (n <= 1) return;
-  const iterations = warm ? 120 : 320;
+  if (warm) {
+    // En caliente conservamos la posición elegida por el usuario o calculada previamente,
+    // sólo empujando lo estrictamente necesario para evitar solapes si alguna caja creció.
+    removeOverlaps(items);
+    return;
+  }
+  const iterations = 320;
   const radius = (it: Item) => 0.5 * Math.hypot(it.w, it.h);
 
   for (let step = 0; step < iterations; step++) {
-    const alpha = (warm ? 0.35 : 1) * (1 - step / iterations) + 0.02;
+    const alpha = 1 * (1 - step / iterations) + 0.02;
     const fx = new Float64Array(n);
     const fy = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -347,7 +359,7 @@ export function layoutMap(
     index.set(r.node.id, i);
     const prev = previous.get(r.node.id);
     const angle = i * 2.399963 + unit(r.node.id);
-    const spread = 90 * Math.sqrt(i + 1) + Math.hypot(r.outer.w, r.outer.h) * 0.3;
+    const spread = 140 * Math.sqrt(i + 1) + Math.hypot(r.outer.w, r.outer.h) * 0.45;
     return {
       id: r.node.id,
       w: r.outer.w,

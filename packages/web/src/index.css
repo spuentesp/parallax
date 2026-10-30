@@ -8,60 +8,98 @@
  * Design tokens. Values flip with the `.dark` class on <html> (see Theme.tsx),
  * so utilities like `bg-surface` / `text-muted` follow the theme without any
  * `dark:` variant.
+ *
+ * El color cuenta una historia, así que se reparte con reglas:
+ *  · Los contenedores del mapa (repo → service → group) comparten una sola
+ *    familia fría: el tono baja a medida que se baja en la jerarquía. La
+ *    jerarquía se lee en la profundidad del color, no en un arcoíris de tonos.
+ *  · Las hojas (endpoint, symbol) son neutras: son tarjetas, no contenedores.
+ *  · El grafo de código es una segunda familia (teal) para que se distinga del
+ *    de contratos sin inventar un tono nuevo por cada tipo.
+ *  · La procedencia de una relación es la única señal cálida: lo inferido es
+ *    ámbar y discontinuo; lo probado es una línea neutra y continua.
+ *  · El verde de marca es el de la interfaz (acciones, foco, selección). No
+ *    aparece en el grafo como color de nodo para no competir con el resto.
  */
 @theme {
   --font-sans: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Superficies y texto. */
+  --color-bg: #f4f5f7;
+  --color-surface: #ffffff;
+  --color-surface-2: #fafbfc;
+  --color-fg: #14161a;
+  --color-muted: #667080;
+  --color-border: #e3e6ea;
+  --color-border-strong: #ccd3db;
+
   /* Marca (design/logo): negros de las losas del logo y su verde #76b900. En claro el acento
      es el mismo verde oscurecido (#4d7c0f, 5:1 sobre blanco) para que el texto se lea. */
-  --color-bg: #fafafa;
-  --color-surface: #ffffff;
-  --color-fg: #171717;
-  --color-muted: #737373;
-  --color-border: #e5e5e5;
   --color-accent: #4d7c0f;
+  --color-accent-hover: #3f6212;
   --color-accent-fg: #ffffff;
+  --color-accent-soft: #edf4dc;
   --logo-slab-a: #1a1a1a;
   --logo-slab-b: #0d0d0d;
   --logo-slab-top: #333333;
-  --color-success: #16a34a;
-  --color-warning: #d97706;
-  --color-error: #dc2626;
-  /* Mapa: un color por tipo de nodo y uno por procedencia de la relación. */
-  --color-repo: #7c3aed;
-  --color-service: #2563eb;
-  --color-group: #0891b2;
-  --color-endpoint: #d97706;
-  --color-deterministic: #0f766e;
-  --color-inferred: #e11d48;
+
+  /* Estado. */
+  --color-success: #15803d;
+  --color-warning: #b45309;
+  --color-error: #b91c1c;
+  --color-info: #0e7490;
+
+  /* Mapa: el repo es estructura (neutro), el servicio es el actor (índigo) y
+     el endpoint es una hoja neutra. Los colores se cuentan, no se lucen. */
+  --color-repo: #5b6572;
+  --color-service: #4f46e5;
+  --color-group: #0e7490;
+  --color-endpoint: #475569;
   /* Grafo de código: la puerta, los contenedores (archivo/módulo) y los símbolos. */
-  --color-code: #64748b;
-  --color-file: #65a30d;
-  --color-symbol: #c026d3;
+  --color-code: #6d28d9;
+  --color-file: #7c3aed;
+  --color-symbol: #8b5cf6;
+
+  /* Procedencia de la relación: lo probado es la línea, lo inferido el aviso. */
+  --color-deterministic: #8a97a8;
+  --color-inferred: #d97706;
+
+  /* Retícula del lienzo. */
+  --color-grid: #d9dee5;
 }
 
 .dark {
-  --color-bg: #0d0d0d;
-  --color-surface: #161616;
-  --color-fg: #fafafa;
-  --color-muted: #a3a3a3;
-  --color-border: #2a2a2a;
+  --color-bg: #0b0d10;
+  --color-surface: #121519;
+  --color-surface-2: #171b21;
+  --color-fg: #f3f4f6;
+  --color-muted: #9aa4b2;
+  --color-border: #242931;
+  --color-border-strong: #343b45;
   /* El verde del logo, algo más apagado para la interfaz (#76b900 gritaba en botones grandes);
-     sobre él, texto casi negro (5,8:1), no blanco. La marca conserva #76b900 exacto. */
-  --color-accent: #6a9a1f;
-  --color-accent-fg: #0d0d0d;
+     sobre él, texto casi negro (7,8:1), no blanco. La marca conserva #76b900 exacto. */
+  --color-accent: #86bb2b;
+  --color-accent-hover: #9cca41;
+  --color-accent-fg: #0b0d10;
+  --color-accent-soft: #1b2410;
   --logo-slab-a: #2e2e2e;
   --logo-slab-b: #1f1f1f;
   --logo-slab-top: #454545;
-  --color-repo: #a78bfa;
-  --color-service: #60a5fa;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-info: #38bdf8;
+  --color-repo: #99a3b0;
+  --color-service: #818cf8;
   --color-group: #22d3ee;
-  --color-endpoint: #fbbf24;
-  --color-deterministic: #2dd4bf;
-  --color-inferred: #fb7185;
-  --color-code: #94a3b8;
-  --color-file: #a3e635;
-  --color-symbol: #e879f9;
+  --color-endpoint: #94a3b8;
+  --color-code: #a78bfa;
+  --color-file: #c084fc;
+  --color-symbol: #c4b5fd;
+  --color-deterministic: #7c8797;
+  --color-inferred: #f59e0b;
+  --color-grid: #232a33;
 }
 
 body {
@@ -69,6 +107,7 @@ body {
   color: var(--color-fg);
   font-family: var(--font-sans);
   font-feature-settings: "ss01", "ss02";
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Títulos con más carácter: algo más apretados, como el logo. */
@@ -76,4 +115,34 @@ h1,
 h2,
 h3 {
   letter-spacing: -0.02em;
+}
+
+/* El teclado se ve en todas partes: sin esto sólo se ven los anillos de los
+   navegadores donde ya venían puestos. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 5px;
+}
+
+/* Retícula del lienzo del mapa: da escala y profundidad al vacío que rodea al
+   grafo. La capa de Cytoscape va encima y es transparente. */
+.map-grid {
+  background-color: var(--color-bg);
+  background-image: radial-gradient(circle at 1px 1px, var(--color-grid) 1px, transparent 0);
+  background-size: 26px 26px;
+  background-position: 13px 13px;
+}
+
+/* Panel de madera flotante (leyenda, controles, inspector): el desenfoque sólo
+   donde el navegador lo soporta. */
+.pane-blur {
+  background-color: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .pane-blur {
+    background-color: var(--color-surface);
+  }
 }

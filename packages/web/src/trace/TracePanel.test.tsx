@@ -173,6 +173,43 @@ describe('TraceView', () => {
     expect(t).toMatch(/Dashed: asserted by the model/);
     expect(t).toMatch(/not a contradiction/);
   });
+
+  it('limits fanout when a node branches to multiple children, showing a capped indicator', () => {
+    const branching = trace({
+      hops: [
+        hop({ id: 'h1', lane: 'data' }),
+        hop({ id: 'call1', lane: 'client_call' }),
+        hop({ id: 'call2', lane: 'client_call' }),
+        hop({ id: 'call3', lane: 'client_call' }),
+      ],
+      links: [link('h1', 'call1'), link('h1', 'call2'), link('h1', 'call3')],
+    });
+    const onFanoutChange = vi.fn();
+    renderWithQuery(
+      <TraceView
+        trace={branching}
+        onSelect={() => {}}
+        fanout={2}
+        onFanoutChange={onFanoutChange}
+      />,
+    );
+    expect(screen.getByTestId('trace-fanout-capped').textContent).toMatch(
+      /\+1 more connection.*fanout limit: 2/,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Increase limit' }));
+    expect(onFanoutChange).toHaveBeenCalledWith(4);
+  });
+
+  it('gracefully handles looped / circular dependencies without infinite loops', () => {
+    const cyclic = trace({
+      hops: [hop({ id: 'h1', lane: 'data' }), hop({ id: 'h2', lane: 'domain' })],
+      links: [link('h1', 'h2'), link('h2', 'h1')],
+    });
+    renderWithQuery(<TraceView trace={cyclic} onSelect={() => {}} />);
+    expect(screen.getByTestId('trace-loop').textContent).toMatch(
+      /Loop \/ Cycle:.*calls back to h1/,
+    );
+  });
 });
 
 const enc = new TextEncoder();

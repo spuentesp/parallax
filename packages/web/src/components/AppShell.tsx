@@ -93,7 +93,7 @@ export function AppShell(): React.ReactElement {
   return (
     <div className="flex h-screen bg-bg text-fg">
       <aside
-        className="w-[4.75rem] shrink-0 flex flex-col items-stretch bg-surface border-r border-border"
+        className="w-[5.5rem] shrink-0 flex flex-col items-stretch bg-surface border-r border-border"
         aria-label="Navigation"
       >
         <div className="mx-auto mt-3" title="Parallax — architecture command center">
@@ -108,7 +108,7 @@ export function AppShell(): React.ReactElement {
           {NAV_ITEMS.map((item) => {
             const to = targetFor(item);
             const active = isActive(item);
-            const cls = `flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] leading-none transition-colors ${
+            const cls = `flex flex-col items-center gap-1 rounded-lg px-1 py-2 text-[10px] leading-tight tracking-tight transition-colors ${
               active
                 ? 'bg-accent/10 text-accent font-medium'
                 : to

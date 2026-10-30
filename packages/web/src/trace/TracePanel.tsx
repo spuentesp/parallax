@@ -1,5 +1,5 @@
 import type * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   type ProgressEventDto,
   type TraceHopDto,
@@ -140,17 +140,120 @@ function Link({ link }: { link?: TraceLinkDto | undefined }): React.ReactElement
 export function TraceView({
   trace,
   onSelect,
+  fanout = 3,
+  onFanoutChange,
 }: {
   trace: TraceResultDto;
   onSelect: (id: string) => void;
+  fanout?: number;
+  onFanoutChange?: (limit: number) => void;
 }): React.ReactElement {
   const repos = [...new Set(trace.hops.map((h) => h.repo))];
-  const linkBetween = (a: string, b: string) =>
-    trace.links.find((l) => (l.from === a && l.to === b) || (l.from === b && l.to === a));
+  const byId = new Map(trace.hops.map((h) => [h.id, h]));
   const engineLinks = trace.links.filter((l) => l.basis === 'engine').length;
   const asserted = trace.links.filter((l) => l.basis === 'asserted').length;
   const notFound = trace.links.filter((l) => l.basis === 'not_found').length;
   const gapAfter = (id: string) => trace.gaps.filter((g) => g.after === id);
+
+  // Construir mapa de adyacencia de enlaces válidos
+  const outgoing = new Map<string, TraceLinkDto[]>();
+  const incoming = new Map<string, TraceLinkDto[]>();
+  for (const l of trace.links) {
+    if (!byId.has(l.from) || !byId.has(l.to)) continue;
+    const outList = outgoing.get(l.from);
+    if (outList) outList.push(l);
+    else outgoing.set(l.from, [l]);
+
+    const inList = incoming.get(l.to);
+    if (inList) inList.push(l);
+    else incoming.set(l.to, [l]);
+  }
+
+  // Identificar raíces (nodos sin enlaces entrantes, típicamente del lado de datos)
+  const roots = trace.hops.filter((h) => (incoming.get(h.id)?.length ?? 0) === 0);
+  const initialRoots = roots.length > 0 ? roots : trace.hops.slice(0, 1);
+
+  const renderedHopIds = new Set<string>();
+
+  const renderNode = (
+    hop: TraceHopDto,
+    path: string[],
+    incomingLink?: TraceLinkDto,
+  ): React.ReactElement => {
+    // Protección contra bucles y dependencias cíclicas
+    if (path.includes(hop.id)) {
+      return (
+        <div key={`loop-${hop.id}-${path.length}`} className="space-y-1">
+          {incomingLink && <Link link={incomingLink} />}
+          <div
+            className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-1.5 text-xs text-warning"
+            data-testid="trace-loop"
+          >
+            <span className="font-semibold">Loop / Cycle:</span>
+            <span>calls back to {hop.label}</span>
+          </div>
+        </div>
+      );
+    }
+
+    renderedHopIds.add(hop.id);
+    const linksFromHop = outgoing.get(hop.id) ?? [];
+    const visibleLinks = linksFromHop.slice(0, fanout);
+    const cappedCount = linksFromHop.length - visibleLinks.length;
+    const currentPath = [...path, hop.id];
+
+    return (
+      <div key={hop.id} className="space-y-1">
+        {incomingLink && <Link link={incomingLink} />}
+        <Hop hop={hop} color={repoColor(hop.repo, repos)} onRepo={(r) => onSelect(`repo:${r}`)} />
+        {gapAfter(hop.id).map((g) => (
+          <div
+            key={g.reason}
+            className="my-1 ml-6 rounded-lg border border-dashed border-warning px-3 py-1.5 text-[11px] text-warning"
+            data-testid="trace-gap"
+          >
+            Trail lost: {g.reason}
+          </div>
+        ))}
+        {/* Bifurcaciones: cuando hay más de un enlace saliente */}
+        {linksFromHop.length > 1 ? (
+          <div className="my-1.5 ml-3 border-l-2 border-accent/40 pl-3 space-y-2">
+            {cappedCount > 0 && (
+              <div
+                className="flex items-center justify-between rounded border border-dashed border-border bg-bg/80 px-2 py-1 text-[11px] text-muted"
+                data-testid="trace-fanout-capped"
+              >
+                <span>
+                  +{cappedCount} more connection{cappedCount === 1 ? '' : 's'} (fanout limit:{' '}
+                  {fanout})
+                </span>
+                {onFanoutChange && (
+                  <button
+                    type="button"
+                    onClick={() => onFanoutChange(fanout + 2)}
+                    className="font-medium text-accent hover:underline ml-2"
+                  >
+                    Increase limit
+                  </button>
+                )}
+              </div>
+            )}
+            {visibleLinks.map((l) => {
+              const target = byId.get(l.to);
+              return target ? (
+                <div key={`${l.from}->${l.to}`}>{renderNode(target, currentPath, l)}</div>
+              ) : null;
+            })}
+          </div>
+        ) : linksFromHop.length === 1 && visibleLinks[0] && byId.get(visibleLinks[0].to) ? (
+          (() => {
+            const tgt = byId.get(visibleLinks[0].to);
+            return tgt ? <div>{renderNode(tgt, currentPath, visibleLinks[0])}</div> : null;
+          })()
+        ) : null}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3 p-4" data-testid="trace-view">
@@ -174,31 +277,58 @@ export function TraceView({
           {trace.complete ? `reaches its end: ${trace.sink?.kind}` : 'does not reach its end'}
         </span>
       </div>
+
+      {/* Control de límite numérico de bifurcación (fanout) */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-xs"
+        data-testid="trace-fanout-control"
+      >
+        <div className="flex items-center gap-1.5 text-muted">
+          <span className="font-medium text-fg">Fanout limit:</span>
+          <span>branches per node</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onFanoutChange?.(n)}
+              className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                fanout === n
+                  ? 'bg-accent text-accent-fg'
+                  : 'bg-surface text-muted hover:bg-border hover:text-fg'
+              }`}
+            >
+              {n === 1 ? '1 (single)' : n}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onFanoutChange?.(Infinity)}
+            className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+              fanout === Infinity
+                ? 'bg-accent text-accent-fg'
+                : 'bg-surface text-muted hover:bg-border hover:text-fg'
+            }`}
+          >
+            All
+          </button>
+        </div>
+      </div>
+
       <p className="text-[11px] text-muted">
         Solid line: a fact the engine recorded or confirmed. Dashed: asserted by the model after
         reading the code (the location is checked; the link is not). Dotted: the engine looked and
         found no call path; its graph cannot see dynamic dispatch, so that is not a contradiction.
       </p>
 
-      <div>
-        {trace.hops.map((h, i) => {
-          const next = trace.hops[i + 1];
-          return (
-            <div key={h.id}>
-              <Hop hop={h} color={repoColor(h.repo, repos)} onRepo={(r) => onSelect(`repo:${r}`)} />
-              {gapAfter(h.id).map((g) => (
-                <div
-                  key={g.reason}
-                  className="my-1 ml-6 rounded-lg border border-dashed border-warning px-3 py-1.5 text-[11px] text-warning"
-                  data-testid="trace-gap"
-                >
-                  Trail lost: {g.reason}
-                </div>
-              ))}
-              {next && <Link link={linkBetween(h.id, next.id)} />}
-            </div>
-          );
-        })}
+      {/* Árbol completo del trazado de conexiones */}
+      <div className="space-y-3" data-testid="trace-tree">
+        {initialRoots.map((root) => renderNode(root, []))}
+        {/* Incluir cualquier nodo restante no alcanzado por las raíces */}
+        {trace.hops
+          .filter((h) => !renderedHopIds.has(h.id))
+          .map((orphan) => renderNode(orphan, []))}
       </div>
 
       {trace.sink ? (
@@ -247,17 +377,26 @@ export function TraceView({
   );
 }
 
+export interface TracePanelProps {
+  workspaceId: string;
+  contract: { key: string; service: string | null };
+  onSelect: (id: string) => void;
+  onClose: () => void;
+  fanout?: number;
+  onFanoutChange?: (limit: number) => void;
+}
+
 export function TracePanel({
   workspaceId,
   contract,
   onSelect,
   onClose,
-}: {
-  workspaceId: string;
-  contract: { key: string; service: string | null };
-  onSelect: (id: string) => void;
-  onClose: () => void;
-}): React.ReactElement {
+  fanout,
+  onFanoutChange,
+}: TracePanelProps): React.ReactElement {
+  const [internalFanout, setInternalFanout] = useState(3);
+  const currentFanout = fanout ?? internalFanout;
+  const handleFanoutChange = onFanoutChange ?? setInternalFanout;
   const t = useTrace(workspaceId);
   const started = useRef<string | null>(null);
   // Una traza por contrato abierto: se lanza al abrir y no se repite al volver a renderizar.
@@ -322,7 +461,12 @@ export function TracePanel({
           </div>
         )}
         {t.data && t.data.status === 'available' && (
-          <TraceView trace={t.data} onSelect={onSelect} />
+          <TraceView
+            trace={t.data}
+            onSelect={onSelect}
+            fanout={currentFanout}
+            onFanoutChange={handleFanoutChange}
+          />
         )}
       </div>
     </div>

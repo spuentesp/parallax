@@ -17,6 +17,10 @@ export function OrgLayout(): React.ReactElement {
     <div className="h-full">
       {orgId ? (
         <MapExplorer
+          // Otro workspace es otro mapa: se monta de cero. Sin esto, el mapa
+          // nuevo hereda los nodos abiertos, los recuentos y las posiciones del
+          // anterior, y parece que al cambiar de workspace no pasa nada.
+          key={orgId}
           workspaceId={orgId}
           actions={<FlowActions orgId={orgId} selectedNode={ctx} />}
         />

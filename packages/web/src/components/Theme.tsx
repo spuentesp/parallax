@@ -1,38 +1,36 @@
 import type * as React from 'react';
 import { useEffect, useState } from 'react';
 
-// Design tokens for the org dev tool aesthetic (Linear/Vercel style).
-export const THEME = {
-  light: {
-    bg: '#fafafa',
-    surface: '#ffffff',
-    fg: '#171717',
-    muted: '#737373',
-    border: '#e5e5e5',
-    accent: '#4d7c0f',
-    accentHover: '#3f6212',
-    success: '#16a34a',
-    warning: '#d97706',
-    error: '#dc2626',
-  },
-  dark: {
-    bg: '#0d0d0d',
-    surface: '#161616',
-    fg: '#fafafa',
-    muted: '#a3a3a3',
-    border: '#2a2a2a',
-    accent: '#6a9a1f',
-    accentHover: '#7fb52a',
-    success: '#22c55e',
-    warning: '#f59e0b',
-    error: '#ef4444',
-  },
-} as const;
+// El tema vive en la clase `dark` de <html>; los colores salen de los tokens de
+// index.css. Este módulo sólo decide si esa clase está puesta — la paleta no
+// se duplica aquí: una segunda copia de los mismos hex se desincroniza sola.
+const KEY = 'parallax.theme';
+
+function readStored(): boolean | null {
+  try {
+    const v = localStorage.getItem(KEY);
+    if (v === 'dark') return true;
+    if (v === 'light') return false;
+  } catch {
+    // sin almacenamiento: el tema dura lo que dure la pestaña
+  }
+  return null;
+}
+
+function store(dark: boolean): void {
+  try {
+    localStorage.setItem(KEY, dark ? 'dark' : 'light');
+  } catch {
+    // nada que hacer: el tema sigue funcionando en memoria
+  }
+}
 
 export function useTheme() {
-  const [dark, setDark] = useState(true);
+  // Oscuro por defecto; si el usuario eligió, manda su elección.
+  const [dark, setDark] = useState(() => readStored() ?? true);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
+    store(dark);
   }, [dark]);
   return { dark, toggle: () => setDark((d) => !d) };
 }

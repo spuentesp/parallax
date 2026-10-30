@@ -62,6 +62,23 @@ export function CodeInspector({
           )}
         </div>
         <h3 className="text-sm font-semibold font-mono break-words">{node.label}</h3>
+        {Boolean(node.meta?.exposesEndpoint) && (
+          <div className="flex items-center justify-between rounded-lg bg-accent/10 border border-accent/20 px-3 py-2 text-xs">
+            <span className="text-muted">
+              Exposes Contract:{' '}
+              <span className="font-mono font-medium text-fg">
+                {String((node.meta.exposesEndpoint as { label: string }).label)}
+              </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => onSelect(String((node.meta.exposesEndpoint as { id: string }).id))}
+              className="text-accent hover:underline font-medium ml-2 whitespace-nowrap"
+            >
+              Inspect contract
+            </button>
+          </div>
+        )}
         {trail.length > 0 && (
           <p className="text-xs text-muted break-words">
             {[...trail].reverse().map((p, i) => (

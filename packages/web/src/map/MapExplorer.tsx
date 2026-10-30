@@ -20,7 +20,7 @@ import { CodeInspector } from './CodeInspector.js';
 import { canOpen, isCodeId, mergeCode } from './code.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { LooseEndsPanel } from './LooseEndsPanel.js';
-import { MapCanvas } from './MapCanvas.js';
+import { MapCanvas, type MapCanvasHandle } from './MapCanvas.js';
 import { MapInspector } from './MapInspector.js';
 import { MapOutline } from './MapOutline.js';
 import { useCodeLayer } from './useCodeLayer.js';
@@ -103,9 +103,11 @@ export function MapExplorer({
   const [looseOpen, setLooseOpen] = useState(false);
   // El contrato cuyo trazado de punta a punta está abierto (un panel ancho sobre el mapa).
   const [trace, setTrace] = useState<{ key: string; service: string | null } | null>(null);
+  const [traceFanout, setTraceFanout] = useState<number>(3);
   const [limits, setLimits] = useState<Record<string, number>>({});
-  const [fitNonce, setFitNonce] = useState(0);
   const [activeRelations, setActiveRelations] = useState<ReadonlySet<string>>(new Set());
+  // Controles del lienzo (zoom, encuadre): el lienzo es quien tiene el grafo.
+  const mapRef = useRef<MapCanvasHandle>(null);
 
   const q = useOrgMap(workspaceId, {
     expand: [...expanded],
@@ -144,6 +146,7 @@ export function MapExplorer({
   // Al abrir, los repos se muestran con sus servicios dentro: tres cajas
   // cerradas no cuentan nada. Una sola vez, y sólo si no hay foco ni demasiados.
   const autoOpened = useRef(false);
+
   useEffect(() => {
     if (autoOpened.current || !serverView || q.isPlaceholderData) return;
     autoOpened.current = true;
@@ -175,6 +178,10 @@ export function MapExplorer({
   useEffect(() => writeMapSearch(workspaceId, params), [params, workspaceId]);
 
   const byId = useMemo(() => new Map((view?.nodes ?? []).map((n) => [n.id, n])), [view]);
+  const selectedTrail = useMemo(
+    () => (selectedId ? trailOf(byId, selectedId) : []),
+    [byId, selectedId],
+  );
 
   const toggle = useCallback(
     (id: string) => {
@@ -230,7 +237,6 @@ export function MapExplorer({
         refreshing={refresh.isPending}
         readOnly={readOnly}
         onRefresh={() => refresh.mutate(undefined, { onSuccess: code.reset })}
-        onFit={() => setFitNonce((n) => n + 1)}
         loading={q.isFetching}
         looseOpen={looseOpen}
         onToggleLoose={() => setLooseOpen((o) => !o)}
@@ -249,11 +255,50 @@ export function MapExplorer({
       ) : (
         <div
           className={`grid flex-1 min-h-0 border-t border-border ${
-            outlineOpen ? 'grid-cols-[14rem_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]'
+            outlineOpen ? 'grid-cols-[13.5rem_minmax(0,1fr)]' : 'grid-cols-[minmax(0,1fr)]'
           }`}
         >
           {outlineOpen && (
-            <aside className="overflow-y-auto border-r border-border" aria-label="Structure">
+            <aside
+              className="overflow-y-auto border-r border-border bg-surface"
+              aria-label="Structure"
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between gap-1 border-b border-border bg-surface px-2.5 py-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    Structure
+                  </span>
+                  {view && (
+                    <span className="tabular-nums text-[10px] text-muted truncate">
+                      ({view.nodes.length})
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOutlineOpen(false);
+                    writeOutlineOpen(false);
+                  }}
+                  className="grid h-5 w-5 place-items-center rounded text-muted hover:bg-bg hover:text-fg transition-colors shrink-0"
+                  aria-label="Fold structure panel"
+                  title="Fold structure panel"
+                >
+                  <svg
+                    role="img"
+                    aria-label="Fold structure panel icon"
+                    width="10"
+                    height="10"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  >
+                    <title>Fold structure panel</title>
+                    <path d="M6.5 2L3.5 5L6.5 8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </div>
               {view ? (
                 <MapOutline
                   view={view}
@@ -272,14 +317,42 @@ export function MapExplorer({
           )}
 
           <div className="relative bg-bg min-w-0">
+            {!outlineOpen && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOutlineOpen(true);
+                  writeOutlineOpen(true);
+                }}
+                className="absolute top-2.5 left-2.5 z-20 flex items-center gap-1.5 rounded-lg border border-border bg-surface/90 px-2 py-1 text-[11px] font-medium text-muted shadow-sm backdrop-blur hover:bg-surface hover:text-fg transition-colors"
+                title="Unfold structure panel"
+              >
+                <svg
+                  role="img"
+                  aria-label="Unfold structure panel icon"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <title>Unfold structure panel</title>
+                  <path d="M3.5 2L6.5 5L3.5 8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <span>Structure</span>
+              </button>
+            )}
             {view && view.nodes.length > 0 ? (
               <MapCanvas
+                ref={mapRef}
                 view={view}
                 selectedId={selectedId}
                 focusIds={focusIds}
                 onSelect={(id) => setParam({ sel: id })}
                 onToggle={toggle}
-                fitNonce={fitNonce}
+                traceContract={trace}
+                traceFanoutLimit={traceFanout}
               />
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted">
@@ -305,24 +378,95 @@ export function MapExplorer({
                 )}
               </div>
             )}
-            {activeRelations.size > 0 && (
-              <div
-                className="absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-full border border-border bg-surface/95 backdrop-blur px-3 py-1 text-xs shadow-sm"
-                data-testid="active-relations-pill"
-              >
-                <span className="text-muted">
-                  Showing code relations for {activeRelations.size} symbol
-                  {activeRelations.size === 1 ? '' : 's'}
-                </span>
-                <button
-                  type="button"
-                  className="text-accent hover:underline text-[11px]"
-                  onClick={() => setActiveRelations(new Set())}
+            <div className="absolute bottom-4 left-4 z-20 flex flex-col gap-2">
+              {trace && (
+                <div
+                  className="flex items-center gap-2.5 rounded-lg border border-accent/40 bg-surface/95 backdrop-blur px-3 py-1.5 text-xs shadow-md"
+                  data-testid="trace-hud"
                 >
-                  clear
-                </button>
-              </div>
-            )}
+                  <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+                  <span className="font-semibold text-fg truncate max-w-[12rem]" title={trace.key}>
+                    Trace: {trace.key}
+                  </span>
+                  <div className="flex items-center gap-1 border-l border-border pl-2 text-[11px] text-muted">
+                    <span>Fanout:</span>
+                    {[1, 2, 3, 5].map((lim) => (
+                      <button
+                        key={lim}
+                        type="button"
+                        onClick={() => setTraceFanout(lim)}
+                        className={`rounded px-1.5 py-0.5 text-[10px] ${
+                          traceFanout === lim
+                            ? 'bg-accent text-accent-fg font-medium'
+                            : 'bg-bg text-muted hover:bg-border'
+                        }`}
+                      >
+                        {lim}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTrace(null)}
+                    className="text-muted hover:text-fg ml-1 text-xs"
+                    aria-label="Exit trace mode"
+                    title="Exit trace mode"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+              {selectedId &&
+                byId.get(selectedId) &&
+                !trace &&
+                (() => {
+                  const selNode = byId.get(selectedId);
+                  if (!selNode) return null;
+                  return (
+                    <div
+                      className="flex items-center gap-2.5 rounded-lg border border-border bg-surface/95 backdrop-blur px-3 py-1.5 text-xs shadow-md"
+                      data-testid="selected-node-hud"
+                    >
+                      <KindIcon kind={selNode.kind} />
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-semibold text-fg truncate max-w-[14rem]">
+                          {selNode.label}
+                        </span>
+                        <span className="rounded px-1 text-[10px] uppercase font-medium bg-bg border border-border text-muted">
+                          {selNode.contract ?? KIND_LABEL[selNode.kind]}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setParam({ sel: null })}
+                        className="text-muted hover:text-fg ml-1 text-xs"
+                        aria-label="Clear selection"
+                        title="Clear selection"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })()}
+              {activeRelations.size > 0 && (
+                <div
+                  className="flex items-center gap-2 rounded-full border border-border bg-surface/95 backdrop-blur px-3 py-1 text-xs shadow-sm"
+                  data-testid="active-relations-pill"
+                >
+                  <span className="text-muted">
+                    Showing code relations for {activeRelations.size} symbol
+                    {activeRelations.size === 1 ? '' : 's'}
+                  </span>
+                  <button
+                    type="button"
+                    className="text-accent hover:underline text-[11px]"
+                    onClick={() => setActiveRelations(new Set())}
+                  >
+                    clear
+                  </button>
+                </div>
+              )}
+            </div>
             {focus && view && !view.focus && (
               <div
                 className="absolute top-3 left-3 z-10 flex items-center gap-2 rounded-full border border-warning bg-surface px-3 py-1 text-xs shadow-sm"
@@ -381,7 +525,13 @@ export function MapExplorer({
                 </button>
               </div>
             )}
-            <Legend open={legendOpen} onToggle={() => setLegendOpen((o) => !o)} />
+            <CanvasControls
+              onZoomIn={() => mapRef.current?.zoomIn()}
+              onZoomOut={() => mapRef.current?.zoomOut()}
+              onFit={() => mapRef.current?.fit()}
+              legendOpen={legendOpen}
+              onToggleLegend={() => setLegendOpen((o) => !o)}
+            />
 
             {trace && (
               <div className="absolute right-3 top-3 bottom-3 z-40 flex w-[34rem] max-w-[85%] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
@@ -390,6 +540,8 @@ export function MapExplorer({
                   contract={trace}
                   onSelect={(id) => setParam({ sel: id })}
                   onClose={() => setTrace(null)}
+                  fanout={traceFanout}
+                  onFanoutChange={setTraceFanout}
                 />
               </div>
             )}
@@ -422,7 +574,7 @@ export function MapExplorer({
                       nodeId={selectedId}
                       node={byId.get(selectedId)}
                       entry={code.state[selectedId]}
-                      trail={trailOf(byId, selectedId)}
+                      trail={selectedTrail}
                       onSelect={(id) => setParam({ sel: id })}
                       onToggle={toggle}
                       relationsActive={activeRelations.has(selectedId)}
@@ -439,6 +591,7 @@ export function MapExplorer({
                     <MapInspector
                       workspaceId={workspaceId}
                       nodeId={selectedId}
+                      node={byId.get(selectedId)}
                       onSelect={(id) => setParam({ sel: id })}
                       onFocus={(id) => setParam({ focus: id, hops: String(hops), sel: id })}
                       onToggle={toggle}
@@ -518,7 +671,6 @@ function Toolbar(props: {
   refreshing: boolean;
   readOnly: boolean;
   onRefresh: () => void;
-  onFit: () => void;
   loading: boolean;
   outlineOpen: boolean;
   onToggleOutline: () => void;
@@ -533,103 +685,133 @@ function Toolbar(props: {
     return () => clearInterval(t);
   }, []);
 
-  const chip = (active: boolean) =>
-    `px-2 py-0.5 rounded-full text-xs transition-colors ${active ? 'bg-accent text-accent-fg' : 'bg-bg text-muted hover:bg-border'}`;
+  // Botón de estado: encendido = el filtro está puesto.
+  const seg = (active: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-md px-2 py-[3px] text-xs transition-colors ${
+      active ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-bg hover:text-fg'
+    }`;
   const prov = filters.provenance;
   const setProv = (p: Provenance | undefined) =>
     setParam({ prov: p ?? null, ...(p === 'deterministic' ? { minc: null } : {}) });
 
   return (
-    <div className="px-3 py-2" data-testid="map-toolbar">
+    <div className="border-b border-border px-3 py-2" data-testid="map-toolbar">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <button
-          type="button"
-          onClick={props.onToggleOutline}
-          aria-pressed={props.outlineOpen}
-          title={props.outlineOpen ? 'Hide the structure list' : 'Show the structure list'}
-          className={`${chip(props.outlineOpen)} shrink-0`}
-        >
-          Structure
-        </button>
-        <button
-          type="button"
-          onClick={props.onToggleLoose}
-          aria-pressed={props.looseOpen}
-          title="Calls the engine could not bind, and what each one is"
-          className={`${chip(props.looseOpen)} shrink-0`}
-        >
-          Loose ends
-        </button>
+        {/* Qué se ve */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={props.onToggleOutline}
+            aria-pressed={props.outlineOpen}
+            title={props.outlineOpen ? 'Hide the structure list' : 'Show the structure list'}
+            className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+              props.outlineOpen
+                ? 'border-border bg-surface text-fg'
+                : 'border-transparent text-muted hover:bg-surface hover:text-fg'
+            }`}
+          >
+            Structure
+          </button>
+          <button
+            type="button"
+            onClick={props.onToggleLoose}
+            aria-pressed={props.looseOpen}
+            title="Calls the engine could not bind, and what each one is"
+            className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+              props.looseOpen
+                ? 'border-border bg-surface text-fg'
+                : 'border-transparent text-muted hover:bg-surface hover:text-fg'
+            }`}
+          >
+            Loose ends
+          </button>
+        </div>
+
+        <Divider />
+
         <SearchBox workspaceId={props.workspaceId} onPick={props.onSelect} />
 
-        <fieldset
-          className="flex items-center gap-1 border-0 p-0 m-0 min-w-0"
-          aria-label="Relation provenance"
-        >
-          <button
-            type="button"
-            aria-pressed={!prov}
-            className={chip(!prov)}
-            onClick={() => setProv(undefined)}
-          >
-            all
-          </button>
-          <button
-            type="button"
-            aria-pressed={prov === 'deterministic'}
-            className={`${chip(prov === 'deterministic')} inline-flex items-center gap-1.5`}
-            onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
-          >
-            <EdgeSwatch provenance="deterministic" width={16} />
-            deterministic
-          </button>
-          <button
-            type="button"
-            aria-pressed={prov === 'inferred'}
-            className={`${chip(prov === 'inferred')} inline-flex items-center gap-1.5`}
-            onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
-          >
-            <EdgeSwatch provenance="inferred" width={16} />
-            inferred
-          </button>
-        </fieldset>
+        <Divider />
 
-        {prov !== 'deterministic' && (
-          <label className="flex items-center gap-1.5 text-xs text-muted">
-            Min confidence
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.1}
-              value={filters.minConfidence ?? 0}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setParam({ minc: v === 0 ? null : String(v) });
-              }}
-              aria-label="Minimum confidence of inferred relations"
-              className="w-20 accent-[var(--color-accent)]"
-            />
-            <span className="tabular-nums w-7">{(filters.minConfidence ?? 0).toFixed(1)}</span>
-          </label>
-        )}
-
-        <fieldset
-          className="flex items-center gap-1 border-0 p-0 m-0 min-w-0"
-          aria-label="Contract kind"
-        >
-          {CONTRACTS.map((c) => (
+        {/* De dónde viene cada relación */}
+        <div className="flex items-center gap-2">
+          <Caption>Provenance</Caption>
+          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5">
             <button
-              key={c}
               type="button"
-              aria-pressed={filters.contract === c}
-              className={chip(filters.contract === c)}
-              onClick={() => setParam({ contract: filters.contract === c ? null : c })}
+              aria-pressed={!prov}
+              className={seg(!prov)}
+              onClick={() => setProv(undefined)}
             >
-              {c}
+              all
             </button>
-          ))}
-        </fieldset>
+            <button
+              type="button"
+              aria-pressed={prov === 'deterministic'}
+              className={seg(prov === 'deterministic')}
+              onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
+            >
+              <EdgeSwatch provenance="deterministic" width={16} />
+              deterministic
+            </button>
+            <button
+              type="button"
+              aria-pressed={prov === 'inferred'}
+              className={seg(prov === 'inferred')}
+              onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
+            >
+              <EdgeSwatch provenance="inferred" width={16} />
+              inferred
+            </button>
+          </div>
+
+          {prov !== 'deterministic' && (
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              Min confidence
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.1}
+                value={filters.minConfidence ?? 0}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setParam({ minc: v === 0 ? null : String(v) });
+                }}
+                aria-label="Minimum confidence of inferred relations"
+                className="w-20 accent-[var(--color-accent)]"
+              />
+              <span className="tabular-nums w-7">{(filters.minConfidence ?? 0).toFixed(1)}</span>
+            </label>
+          )}
+        </div>
+
+        <Divider />
+
+        {/* Sobre qué contratos */}
+        <div className="flex items-center gap-2">
+          <Caption>Contract</Caption>
+          <div className="flex items-center gap-1">
+            {CONTRACTS.map((c) => {
+              const on = filters.contract === c;
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  aria-pressed={on}
+                  className={`rounded-md px-1.5 py-[3px] font-mono text-[11px] transition-colors ${
+                    on
+                      ? 'bg-accent text-accent-fg'
+                      : 'border border-transparent text-muted hover:bg-surface hover:text-fg'
+                  }`}
+                  onClick={() => setParam({ contract: on ? null : c })}
+                >
+                  {c}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {props.hasFilters && (
           <button
@@ -661,14 +843,6 @@ function Toolbar(props: {
           )}
           <button
             type="button"
-            onClick={props.onFit}
-            className="px-2 py-0.5 rounded-md hover:bg-border"
-            title="Fit to view"
-          >
-            Fit
-          </button>
-          <button
-            type="button"
             onClick={props.onRefresh}
             disabled={props.refreshing || props.readOnly}
             title={
@@ -676,7 +850,7 @@ function Toolbar(props: {
                 ? 'Read-only access cannot rebuild the graph'
                 : 'Rebuild the graph from LAIN'
             }
-            className="px-2 py-0.5 rounded-md border border-border hover:bg-border disabled:opacity-60"
+            className="rounded-md border border-border px-2 py-0.5 transition-colors hover:bg-surface disabled:opacity-60"
           >
             {props.refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -684,6 +858,20 @@ function Toolbar(props: {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Separador vertical entre grupos de la barra: agrupa sin recargar de cajas. */
+function Divider(): React.ReactElement {
+  return <span aria-hidden="true" className="hidden h-4 w-px bg-border sm:block" />;
+}
+
+/** Rótulo de un grupo de filtros. */
+function Caption({ children }: { children: React.ReactNode }): React.ReactElement {
+  return (
+    <span className="text-[10px] font-medium uppercase tracking-wider text-muted/80">
+      {children}
+    </span>
   );
 }
 
@@ -704,7 +892,7 @@ function SearchBox({
   const results = useMapSearch(workspaceId, debounced).data?.results ?? [];
 
   return (
-    <div className="relative w-80">
+    <div className="relative w-[17rem]">
       <input
         type="search"
         value={text}
@@ -714,9 +902,9 @@ function SearchBox({
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
-        placeholder="Search repos, services, endpoints…"
+        placeholder="Search repos, services…"
         aria-label="Search the map"
-        className="w-full rounded-lg border border-border bg-bg px-3 py-1.5 text-sm outline-none focus:border-accent"
+        className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
       />
       {open && debounced.trim().length >= 2 && (
         <ul className="absolute z-20 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-border bg-surface shadow-lg">
@@ -750,19 +938,35 @@ function SearchBox({
 function Legend({ open, onToggle }: { open: boolean; onToggle: () => void }): React.ReactElement {
   return (
     <div
-      className="absolute bottom-3 left-3 z-10 rounded-lg border border-border bg-surface/95 px-3 py-1.5 text-[11px] text-muted space-y-1"
+      className="overflow-hidden rounded-xl border border-border bg-surface/95 shadow-sm backdrop-blur"
       data-testid="map-legend"
     >
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="text-[11px] text-muted hover:text-fg"
+        className="flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium text-muted transition-colors hover:text-fg"
       >
-        {open ? 'Hide legend' : 'Legend'}
+        Legend
+        <svg
+          width="9"
+          height="9"
+          viewBox="0 0 10 10"
+          aria-hidden="true"
+          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+        >
+          <path
+            d="M2 4l3 3 3-3"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </button>
       {open && (
-        <>
+        <div className="space-y-1.5 border-t border-border px-3 py-2 text-[11px] text-muted">
           <div className="flex items-center gap-3">
             {(['repo', 'service', 'group', 'endpoint'] as const).map((k) => (
               <span key={k} className="inline-flex items-center gap-1">
@@ -780,8 +984,85 @@ function Legend({ open, onToggle }: { open: boolean; onToggle: () => void }): Re
             </span>
           </div>
           <div>Dashed box = has contents · double-click to open · ×N = N relations rolled up</div>
-        </>
+        </div>
       )}
+    </div>
+  );
+}
+
+/** Controles flotantes del lienzo: zoom, encuadre y la leyenda, en una sola pieza. */
+function CanvasControls({
+  onZoomIn,
+  onZoomOut,
+  onFit,
+  legendOpen,
+  onToggleLegend,
+}: {
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFit: () => void;
+  legendOpen: boolean;
+  onToggleLegend: () => void;
+}): React.ReactElement {
+  const btn =
+    'grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-fg';
+  return (
+    <div className="absolute bottom-3 left-3 z-20 flex items-end gap-2">
+      <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">
+        <button
+          type="button"
+          className={btn}
+          onClick={onZoomIn}
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M6 2v8M2 6h8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={onZoomOut}
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M2 6h8"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={onFit}
+          aria-label="Fit to view"
+          title="Fit to view"
+        >
+          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path
+              d="M2 4.5V2h2.5M7.5 2H10v2.5M10 7.5V10H7.5M4.5 10H2V7.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
+      <Legend open={legendOpen} onToggle={onToggleLegend} />
     </div>
   );
 }

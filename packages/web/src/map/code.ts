@@ -80,6 +80,20 @@ export function canOpen(n: ProjectedNode): boolean {
 export const isContainerType = (type: string): boolean => CONTAINER_TYPES.has(type);
 export const isOpenableType = (type: string): boolean => OPENABLE_TYPES.has(type);
 
+/** Extrae las rutas candidatas donde se define o implementa un endpoint */
+export function candidateEndpointPaths(node: ProjectedNode): string[] {
+  const defPath =
+    typeof node.meta.definedAt === 'string'
+      ? node.meta.definedAt
+      : typeof node.meta.path === 'string'
+        ? node.meta.path
+        : '';
+  const providers = Array.isArray(node.meta.providers)
+    ? (node.meta.providers as Array<{ repo?: string; path?: string }>)
+    : [];
+  return [defPath, ...providers.map((p) => p.path)].filter(Boolean) as string[];
+}
+
 function codeNode(
   repo: string,
   parent: string,
@@ -111,7 +125,7 @@ function codeNode(
   };
 }
 
-const MAX_COMM_PER_GROUP = 12;
+const MAX_COMM_PER_GROUP = 4;
 
 /**
  * Proyección del servidor + capa de código. `open` son los nodos de código que
@@ -128,12 +142,21 @@ export function mergeCode(
   activeRelations?: ReadonlySet<string>,
 ): MapViewResponse {
   const extra: ProjectedNode[] = [];
+  const extraById = new Map<string, ProjectedNode>();
   const extraEdges: import('@parallax/shared/org-map').OrgEdge[] = [];
+  const extraEdgeIds = new Set<string>();
   const seen = new Set(view.nodes.map((n) => n.id));
   const add = (n: ProjectedNode) => {
     if (seen.has(n.id)) return;
     seen.add(n.id);
     extra.push(n);
+    extraById.set(n.id, n);
+  };
+
+  const addEdge = (e: import('@parallax/shared/org-map').OrgEdge) => {
+    if (extraEdgeIds.has(e.id)) return;
+    extraEdgeIds.add(e.id);
+    extraEdges.push(e);
   };
 
   const grow = (root: ProjectedNode, repo: string) => {
@@ -144,7 +167,7 @@ export function mergeCode(
     while (queue.length > 0 && depth < MAX_GROW_DEPTH) {
       depth++;
       const parent = queue.shift();
-      if (!parent || !parent.expanded) continue;
+      if (!parent?.expanded) continue;
       const entry = state[parent.id];
       if (entry?.state !== 'ready') continue;
       for (const child of entry.children) {
@@ -187,14 +210,60 @@ export function mergeCode(
     grow(root, repo);
   }
 
+  // Índice de endpoints para lookup O(1)
+  const endpointsById = new Map<string, ProjectedNode>();
+  for (const n of view.nodes) {
+    if (n.kind === 'endpoint') endpointsById.set(n.id, n);
+  }
+
   // Relaciones de código proyectadas bajo demanda para los nodos activados
   if (activeRelations && activeRelations.size > 0) {
     for (const activeId of activeRelations) {
+      // Si el nodo activado es un endpoint, proyectamos su archivo implementador si existe
+      const epNode = endpointsById.get(activeId);
+      if (epNode) {
+        const candidatePaths = candidateEndpointPaths(epNode);
+        for (const [repoName, rootId] of repoRoots.entries()) {
+          for (const targetPath of candidatePaths) {
+            const fileId = codeNodeId(repoName, 'File', targetPath);
+            if (!seen.has(fileId)) {
+              add({
+                id: fileId,
+                label: targetPath,
+                kind: 'file',
+                parent: rootId,
+                contract: 'File',
+                meta: { repo: repoName, type: 'File', name: targetPath },
+                childCount: 0,
+                expanded: false,
+                lazy: true,
+              });
+            }
+            addEdge({
+              id: `servedby:${epNode.id}->${fileId}`,
+              source: epNode.id,
+              target: fileId,
+              kind: 'servedBy',
+              provenance: 'deterministic',
+              confidence: 1,
+              count: 1,
+              deterministicCount: 1,
+              inferredCount: 0,
+              label: 'implements',
+            });
+          }
+        }
+        continue;
+      }
+
       const parsed = parseCodeId(activeId);
       const entry = state[activeId];
       if (parsed?.kind !== 'node' || entry?.state !== 'ready') continue;
       const rootId = repoRoots.get(parsed.repo) ?? codeRootId(parsed.repo);
       for (const comm of entry.communications) {
+        // En el lienzo sólo proyectamos relaciones de ejecución directa (Calls, CallsHttp, Consumes, Produces)
+        // para evitar que decenas de sentencias 'import' o 'use' saturen el mapa en una maraña.
+        if (!/^(calls|callshttp|consumes|produces)$/i.test(comm.edge)) continue;
         const edgeKind = comm.edge.toLowerCase() as import('@parallax/shared/org-map').OrgEdgeKind;
         for (const peer of comm.nodes.slice(0, MAX_COMM_PER_GROUP)) {
           const peerId = codeNodeId(parsed.repo, peer.type, peer.name);
@@ -212,7 +281,7 @@ export function mergeCode(
               lazy: isOpenableType(peer.type),
             });
           }
-          extraEdges.push({
+          addEdge({
             id: `${edgeKind}:${activeId}->${peerId}`,
             source: activeId,
             target: peerId,
@@ -223,6 +292,96 @@ export function mergeCode(
             deterministicCount: 1,
             inferredCount: 0,
             label: comm.edge,
+          });
+        }
+      }
+    }
+  }
+
+  // Enlace automático: si tanto el endpoint como su archivo de código están visibles, se unen con 'implements'
+  for (const ep of view.nodes) {
+    if (ep.kind !== 'endpoint') continue;
+    const candidatePaths = candidateEndpointPaths(ep);
+
+    for (const [repoName] of repoRoots.entries()) {
+      for (const targetPath of candidatePaths) {
+        const fileId = codeNodeId(repoName, 'File', targetPath);
+        if (seen.has(fileId)) {
+          const targetNode = extraById.get(fileId);
+          if (targetNode) {
+            targetNode.meta = {
+              ...targetNode.meta,
+              exposesEndpoint: { id: ep.id, label: ep.label },
+            };
+          }
+          addEdge({
+            id: `servedby:${ep.id}->${fileId}`,
+            source: ep.id,
+            target: fileId,
+            kind: 'servedBy',
+            provenance: 'deterministic',
+            confidence: 1,
+            count: 1,
+            deterministicCount: 1,
+            inferredCount: 0,
+            label: 'implements',
+          });
+        }
+      }
+    }
+  }
+
+  // Indexar aristas 'consumes' por destino (endpoint) para evitar O(endpoints × edges)
+  const consumesByTarget = new Map<string, typeof view.edges>();
+  for (const edge of view.edges) {
+    if (edge.kind === 'consumes' && edge.sites && edge.sites.length > 0) {
+      let list = consumesByTarget.get(edge.target);
+      if (!list) {
+        list = [];
+        consumesByTarget.set(edge.target, list);
+      }
+      list.push(edge);
+    }
+  }
+
+  // Enlace explícito: Código que USA contratos (consumidores en código)
+  for (const ep of view.nodes) {
+    if (ep.kind !== 'endpoint') continue;
+    const incomingEdges = consumesByTarget.get(ep.id);
+    if (!incomingEdges) continue;
+    for (const edge of incomingEdges) {
+      if (!edge.sites) continue;
+      for (const site of edge.sites) {
+        if (!site.repo || !site.path) continue;
+        const callerId = codeNodeId(site.repo, 'File', site.path);
+        const isEpActive =
+          activeRelations && (activeRelations.has(ep.id) || activeRelations.has(callerId));
+        if (isEpActive && !seen.has(callerId)) {
+          const rootId = repoRoots.get(site.repo) ?? codeRootId(site.repo);
+          add({
+            id: callerId,
+            label: site.path,
+            kind: 'file',
+            parent: rootId,
+            contract: 'File',
+            meta: { repo: site.repo, type: 'File', name: site.path },
+            childCount: 0,
+            expanded: false,
+            lazy: true,
+          });
+        }
+        if (seen.has(callerId)) {
+          addEdge({
+            id: `calls:${callerId}->${ep.id}`,
+            source: callerId,
+            target: ep.id,
+            kind: 'consumes',
+            provenance: edge.provenance,
+            confidence: edge.confidence,
+            count: 1,
+            deterministicCount: edge.provenance === 'deterministic' ? 1 : 0,
+            inferredCount: edge.provenance === 'inferred' ? 1 : 0,
+            label: 'calls',
           });
         }
       }

@@ -286,16 +286,17 @@ describe('buildStyle', () => {
   });
 
   it('falls back to defaults when a token is missing', () => {
-    expect(rule('node.repo')?.['border-color']).toBe('#7c3aed');
-    expect(rule('node.service')?.['border-color']).toBe('#2563eb');
-    expect(rule('node.endpoint')?.['border-color']).toBe('#d97706');
+    expect(rule('node.repo')?.['border-color']).toBe('#5b6572');
+    expect(rule('node.service')?.['border-color']).toBe('#4f46e5');
+    expect(rule('node.endpoint')?.['border-color']).toBe('#475569');
   });
 
   it('inferred edges are dashed, deterministic solid, and secondary edges fade', () => {
     expect(rule('edge.inferred')?.['line-style']).toBe('dashed');
     expect(rule('edge.deterministic')?.['line-style']).toBe('solid');
-    expect(rule('.dim')?.opacity).toBe(0.12);
-    expect(rule('edge.quiet')).toMatchObject({ opacity: 0.07, width: 1 });
+    // Atenuar jerarquiza: por debajo de 0.2 el nodo se vuelve ilegible.
+    expect(rule('.dim')?.opacity).toBe(0.2);
+    expect(rule('edge.quiet')).toMatchObject({ opacity: 0.12, width: 1 });
     expect(rule('node.collapsible')?.['border-style']).toBe('dashed');
   });
 
