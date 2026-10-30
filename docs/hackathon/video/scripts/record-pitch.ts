@@ -146,16 +146,34 @@ async function main() {
   }
 
   console.log('⏹️ Closing recording session...');
+  const video = page.video();
   await page.close();
   await context.close();
   await browser.close();
 
-  const videoFiles = fs.readdirSync(RECORDINGS_DIR).filter((f) => f.endsWith('.webm'));
-  if (videoFiles.length > 0) {
-    const latest = path.join(RECORDINGS_DIR, videoFiles[videoFiles.length - 1]);
+  let recordedPath: string | null = null;
+  if (video) {
+    try {
+      recordedPath = await video.path();
+    } catch {
+      // fallback to mtime
+    }
+  }
+  if (!recordedPath || !fs.existsSync(recordedPath)) {
+    const pageVideos = fs
+      .readdirSync(RECORDINGS_DIR)
+      .filter((f) => f.startsWith('page@') && f.endsWith('.webm'))
+      .map((f) => ({ name: f, time: fs.statSync(path.join(RECORDINGS_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.time - a.time);
+    if (pageVideos.length > 0) {
+      recordedPath = path.join(RECORDINGS_DIR, pageVideos[0].name);
+    }
+  }
+
+  if (recordedPath && fs.existsSync(recordedPath)) {
     const target = path.join(RECORDINGS_DIR, 'raw-demo.webm');
-    fs.copyFileSync(latest, target);
-    console.log(`✅ Raw recording ready at: ${target}`);
+    fs.copyFileSync(recordedPath, target);
+    console.log(`✅ Raw recording ready at: ${target} (copied from ${recordedPath})`);
     console.log('Run ./docs/hackathon/video/scripts/build-video.sh to merge with master voiceover.');
   }
 }
