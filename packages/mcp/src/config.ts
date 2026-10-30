@@ -1,6 +1,9 @@
 export interface EntryConfig {
   readonly baseUrl: string;
   readonly token: string;
+  readonly disableLsp?: boolean;
+  readonly lspLean?: boolean;
+  readonly indexTimeout?: number;
 }
 
 /**
@@ -24,5 +27,11 @@ export function loadEntryConfig(env: NodeJS.ProcessEnv): EntryConfig {
   if (!first) {
     throw new Error('PARALLAX_TOKENS must contain at least one token');
   }
-  return { baseUrl, token: first.token };
+  return {
+    baseUrl,
+    token: first.token,
+    disableLsp: env.LAIN_DISABLE_LSP === 'true',
+    lspLean: env.LAIN_LSP_LEAN === 'true',
+    indexTimeout: env.LAIN_INDEX_TIMEOUT ? parseInt(env.LAIN_INDEX_TIMEOUT, 10) : undefined,
+  };
 }

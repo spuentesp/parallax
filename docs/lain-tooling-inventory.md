@@ -30,6 +30,14 @@ Date: 2026-10-28. Lain **0.13.0** (live server loaded with every package: `list_
 | `getCallSites` | `get_call_sites` | OK |
 | `codeTool` (15 allowlisted) | `understand_repository`, `search_code`, `find_symbol`, `search_org`, `find_anchors`, `list_entry_points`, `get_context`, `get_call_chain`, `get_blast_radius`, `get_cross_repo_blast_radius`, `find_related`, `get_coupling_radar`, `explain_symbol`, `get_call_sites`, `get_code_snippet` | all OK |
 
+## Performance Controls
+
+| Control | Description |
+|---|---|
+| `LAIN_DISABLE_LSP` | Disable language server features |
+| `LAIN_LSP_LEAN` | Enable memory-saving LSP profile |
+| `LAIN_INDEX_TIMEOUT` | Set per-repo indexing timeout in seconds |
+
 Not smoke-tested here: `prepare_snapshot`, `get_snapshot`, `diff_contracts`, `check_binding` (they need pinned commits or a proposal; they are exercised by the assessment worker and advisor gates, `pnpm gate:saleor`, last recorded as passing in the handoff note) and `load_package` (called by the client at connect time).
 
 ## Product + investigator (8)
