@@ -1,0 +1,155 @@
+{
+  "description": "Cross-Boundary Trace Demo Result",
+  "input": {
+    "from": { "contract": "http:GET /api/orders/:id" },
+    "strategy": "BFS",
+    "maxHops": 10,
+    "maxPaths": 3,
+    "snapshot": "live",
+    "workspaceId": "demo-workspace"
+  },
+  "path": [
+    {
+      "id": "contract",
+      "lane": "contract",
+      "label": "http:GET /api/orders/:id",
+      "repo": "api",
+      "path": "src/index.ts",
+      "line": 12,
+      "contains": "getOrder",
+      "status": "verified",
+      "reason": "Contract endpoint definition",
+      "origin": "engine"
+    },
+    {
+      "id": "api_handler",
+      "lane": "api_handler",
+      "label": "getOrder handler",
+      "repo": "api",
+      "path": "src/index.ts",
+      "line": 15,
+      "contains": "getOrder",
+      "status": "verified",
+      "reason": "HTTP route handler",
+      "origin": "model"
+    },
+    {
+      "id": "domain",
+      "lane": "domain",
+      "label": "OrderService.getOrder",
+      "repo": "shared",
+      "path": "src/services/order-service.ts",
+      "line": 8,
+      "contains": "getOrder",
+      "status": "verified",
+      "reason": "Domain logic service method",
+      "origin": "model"
+    },
+    {
+      "id": "data_access",
+      "lane": "data_access",
+      "label": "Database.getOrder",
+      "repo": "shared",
+      "path": "src/database.ts",
+      "line": 5,
+      "contains": "getOrder",
+      "status": "verified",
+      "reason": "Database access method",
+      "origin": "model"
+    },
+    {
+      "id": "data",
+      "lane": "data",
+      "label": "orders table",
+      "repo": "shared",
+      "path": "src/database.ts",
+      "line": 1,
+      "contains": "Database",
+      "status": "verified",
+      "reason": "Database model/table",
+      "origin": "model"
+    },
+    {
+      "id": "client_call",
+      "lane": "client_call",
+      "label": "Frontend API call",
+      "repo": "frontend",
+      "path": "src/api.ts",
+      "line": 15,
+      "contains": "getOrder",
+      "status": "verified",
+      "reason": "Client API call site",
+      "origin": "engine"
+    },
+    {
+      "id": "client_logic",
+      "lane": "client_logic",
+      "label": "Order display logic",
+      "repo": "frontend",
+      "path": "src/components/Order.tsx",
+      "line": 42,
+      "contains": "displayOrder",
+      "status": "verified",
+      "reason": "Client-side display logic",
+      "origin": "model"
+    }
+  ],
+  "links": [
+    {
+      "from": "contract",
+      "to": "api_handler",
+      "relation": "implements",
+      "basis": "engine",
+      "because": "Contract is implemented by this handler"
+    },
+    {
+      "from": "api_handler",
+      "to": "domain",
+      "relation": "calls",
+      "basis": "engine",
+      "because": "Handler calls OrderService.getOrder"
+    },
+    {
+      "from": "domain",
+      "to": "data_access",
+      "relation": "calls",
+      "basis": "engine",
+      "because": "Service calls Database.getOrder"
+    },
+    {
+      "from": "data_access",
+      "to": "data",
+      "relation": "reads",
+      "basis": "engine",
+      "because": "Database method reads from orders table"
+    },
+    {
+      "from": "contract",
+      "to": "client_call",
+      "relation": "consumes",
+      "basis": "engine",
+      "because": "Contract is consumed by frontend API call"
+    },
+    {
+      "from": "client_call",
+      "to": "client_logic",
+      "relation": "calls",
+      "basis": "engine",
+      "because": "API call result is used in display logic"
+    }
+  ],
+  "gaps": [],
+  "sink": {
+    "hop": "client_logic",
+    "kind": "rendered",
+    "description": "Order data is rendered in the UI component"
+  },
+  "complete": true,
+  "stats": {
+    "hopsExplored": 12,
+    "hopsConfirmed": 7,
+    "linksConfirmed": 6,
+    "gapsDetected": 0,
+    "durationMs": 42
+  }
+}

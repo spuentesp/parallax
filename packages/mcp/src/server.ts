@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { type ApiClient, ApiEndpointNotImplemented } from './api-client.js';
+import { TraceFlowInputSchema } from './tools/trace_flow.js';
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
@@ -166,6 +167,29 @@ export function buildMcpServer(api: ApiClient): McpServer {
       try {
         const qs = new URLSearchParams({ repo: args.repo, from: args.from, to: args.to });
         const data = await api.get(`/api/workspaces/${args.workspaceId}/graph/call-chain?${qs}`);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'trace_flow',
+    'Trace a value\'s flow through the codebase across boundaries (UI to DB, RPC to service, etc.). ' +
+    'Replaces manual get_call_chain + trace_impact with a single cross-boundary trace. ' +
+    'Supports BFS (impact analysis) and DFS (root cause analysis) strategies. ' +
+    'Reports explicit gaps where the trace cannot continue.',
+    TraceFlowInputSchema,
+    async (args) => {
+      try {
+        const data = await api.post(`/api/workspaces/${args.workspaceId || 'default'}/trace/flow`, args);
         return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
       } catch (e) {
         if (e instanceof ApiEndpointNotImplemented) {

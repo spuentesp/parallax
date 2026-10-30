@@ -35,6 +35,42 @@ export const SUBMIT_TRACE_SPEC: ToolSpec = {
   },
 };
 
+// New trace_flow tool specification for cross-boundary tracing
+export const TRACE_FLOW_SPEC: ToolSpec = {
+  type: 'function',
+  function: {
+    name: 'trace_flow',
+    description:
+      'Trace a value\'s flow through the codebase across boundaries (UI to DB, RPC to service, etc.). ' +
+      'Replaces manual get_call_chain + trace_impact with a single cross-boundary trace. ' +
+      'Supports BFS (impact analysis) and DFS (root cause analysis) strategies. ' +
+      'Reports explicit gaps where the trace cannot continue.',
+    parameters: {
+      $schema: "http://json-schema.org/draft-07/schema#",
+      type: "object",
+      properties: {
+        from: {
+          type: "object",
+          properties: {
+            contract: { type: "string" },
+            symbol: { type: "string" },
+            globalId: { type: "string" }
+          },
+          required: []
+        },
+        strategy: { type: "string", enum: ["BFS", "DFS"] },
+        maxHops: { type: "integer", minimum: 1 },
+        maxPaths: { type: "integer", minimum: 1 },
+        snapshot: { type: "string" },
+        repo: { type: "string" },
+        detectGaps: { type: "boolean" }
+      },
+      required: ["from"],
+      additionalProperties: false
+    } as Record<string, unknown>,
+  },
+};
+
 const SYSTEM_PROMPT = `You trace how a value travels through a codebase, end to end and across repositories, using only read-only code tools. For one API contract you show the chain from the DATA it comes from, through the code that fetches and transforms it, to the function that exposes the endpoint, to the client code that calls it, and on through the client code to where the value ends up.
 
 Lanes, left to right: ${LANES.map((l) => `${l} (${LANE_LABEL[l]})`).join(' · ')}.
