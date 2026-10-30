@@ -1,104 +1,104 @@
 {
-  "total_duration": 152.66,
+  "total_duration": 156.17,
   "cues": [
     {
       "id": "scene_1_1",
       "speaker": "junior",
-      "text": "I just joined a team and got assigned to checkout. I don't know the stack, which repos matter, or what depends on what.",
+      "text": "I just joined an AI agent platform team working on NVIDIA's OpenShell and NeMo stack. I don't know the service mesh, which repos matter, or what depends on what.",
       "start_time": 0.0,
-      "duration": 6.984,
+      "duration": 9.936,
       "pause_after": 0.4,
-      "end_time": 6.984
+      "end_time": 9.936
     },
     {
       "id": "scene_1_2",
       "speaker": "architect",
-      "text": "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented service mesh. Parallax turns that tribal knowledge into an explorable reality.",
-      "start_time": 7.384,
-      "duration": 11.568,
+      "text": "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented cross-repo mesh. Parallax turns that tribal knowledge into an explorable reality.",
+      "start_time": 10.336,
+      "duration": 11.832,
       "pause_after": 1.2,
-      "end_time": 18.952
+      "end_time": 22.168
     },
     {
       "id": "scene_2_1",
       "speaker": "junior",
-      "text": "So I ask Parallax: Which services consume the checkout API, and from which repos?",
-      "start_time": 20.152,
-      "duration": 6.504,
+      "text": "So I ask Parallax: Trace the call stack from our database ORM table up to the client endpoint consuming it.",
+      "start_time": 23.368,
+      "duration": 6.792,
       "pause_after": 10.0,
-      "end_time": 26.656
+      "end_time": 30.16
     },
     {
       "id": "scene_2_2",
       "speaker": "architect",
       "text": "Watch Nemotron investigate using the code analysis engine's tools. Look at the result: every relationship it claims was checked by the engine. Verified. Contradicted. Unverifiable. The model doesn't decide what's true; the engine does.",
-      "start_time": 36.656,
+      "start_time": 40.16,
       "duration": 16.128,
       "pause_after": 2.5,
-      "end_time": 52.784
+      "end_time": 56.288
     },
     {
       "id": "scene_2_3",
       "speaker": "architect",
       "text": "Click Show on map, and it takes us directly to the architecture backing the answer.",
-      "start_time": 55.284,
+      "start_time": 58.788,
       "duration": 4.848,
       "pause_after": 3.0,
-      "end_time": 60.132
+      "end_time": 63.636
     },
     {
       "id": "scene_3_1",
       "speaker": "architect",
       "text": "Now I want the whole picture. Repos, services, endpoints, down to the actual functions. Everything is loaded on demand, so even massive monorepos scale smoothly.",
-      "start_time": 63.132,
+      "start_time": 66.636,
       "duration": 11.472,
       "pause_after": 4.0,
-      "end_time": 74.604
+      "end_time": 78.108
     },
     {
       "id": "scene_3_2",
       "speaker": "architect",
       "text": "Solid lines are proven by static analysis. Dashed lines are inferred, fainter the less sure the engine is. Parallax never promotes a guess to a fact.",
-      "start_time": 78.604,
+      "start_time": 82.108,
       "duration": 10.56,
       "pause_after": 3.0,
-      "end_time": 89.164
+      "end_time": 92.668
     },
     {
       "id": "scene_3_3",
       "speaker": "architect",
       "text": "Click any endpoint to see who consumes it across repos, and how confident we are.",
-      "start_time": 92.164,
+      "start_time": 95.668,
       "duration": 5.448,
       "pause_after": 4.0,
-      "end_time": 97.612
+      "end_time": 101.116
     },
     {
       "id": "scene_4_1",
       "speaker": "architect",
       "text": "Before code ships: what does this pull request break downstream? The engine determines the blast radius and severity, while Nemotron explains the impact finding by finding\u2014no invented regressions, zero hallucinations.",
-      "start_time": 101.612,
+      "start_time": 105.116,
       "duration": 14.448,
       "pause_after": 5.0,
-      "end_time": 116.06
+      "end_time": 119.564
     },
     {
       "id": "scene_5_1",
       "speaker": "architect",
       "text": "Under the hood: Nemotron Super plans the investigation and Lightning handles fast tool execution through Nebius Token Factory. Every tool call and prompt version is saved to the audit log. The entire platform runs on Nebius.",
-      "start_time": 121.06,
+      "start_time": 124.564,
       "duration": 15.48,
       "pause_after": 4.0,
-      "end_time": 136.54
+      "end_time": 140.044
     },
     {
       "id": "scene_6_1",
       "speaker": "architect",
       "text": "Knowledge locked in people's heads, made navigable and verifiable. That's Parallax: if it's in your org's code, it can guide you.",
-      "start_time": 140.54,
+      "start_time": 144.044,
       "duration": 8.52,
       "pause_after": 3.0,
-      "end_time": 149.06
+      "end_time": 152.564
     }
   ]
 }

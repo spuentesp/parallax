@@ -25,19 +25,19 @@ SCENES = [
     {
         "id": "scene_1_1",
         "speaker": "junior",
-        "text": "I just joined a team and got assigned to checkout. I don't know the stack, which repos matter, or what depends on what.",
+        "text": "I just joined an AI agent platform team working on NVIDIA's OpenShell and NeMo stack. I don't know the service mesh, which repos matter, or what depends on what.",
         "pause_after": 0.4
     },
     {
         "id": "scene_1_2",
         "speaker": "architect",
-        "text": "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented service mesh. Parallax turns that tribal knowledge into an explorable reality.",
+        "text": "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented cross-repo mesh. Parallax turns that tribal knowledge into an explorable reality.",
         "pause_after": 1.2
     },
     {
         "id": "scene_2_1",
         "speaker": "junior",
-        "text": "So I ask Parallax: Which services consume the checkout API, and from which repos?",
+        "text": "So I ask Parallax: Trace the call stack from our database ORM table up to the client endpoint consuming it.",
         "pause_after": 10.0 # Time for typing on screen and Nemotron investigating
     },
     {
@@ -50,7 +50,7 @@ SCENES = [
         "id": "scene_2_3",
         "speaker": "architect",
         "text": "Click Show on map, and it takes us directly to the architecture backing the answer.",
-        "pause_after": 3.0 # Camera panning to checkout subgraph
+        "pause_after": 3.0 # Camera panning to subgraph
     },
     {
         "id": "scene_3_1",

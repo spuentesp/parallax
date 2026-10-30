@@ -29,8 +29,10 @@ async function main() {
   const timeline = JSON.parse(fs.readFileSync(TIMELINE_PATH, 'utf8'));
   console.log(`🎬 Launching browser for recording (${timeline.total_duration}s target)...`);
 
+  const chromePath = process.env.CHROME_BIN || (fs.existsSync('/usr/bin/google-chrome') ? '/usr/bin/google-chrome' : undefined);
   const browser = await chromium.launch({
-    headless: false,
+    executablePath: chromePath,
+    headless: process.env.HEADLESS !== 'false',
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--window-size=1920,1080'],
   });
 
@@ -44,6 +46,7 @@ async function main() {
 
   const page = await context.newPage();
 
+  const startTime = Date.now();
   console.log(`📡 Navigating to ${APP_URL}...`);
   await page.goto(APP_URL, { waitUntil: 'networkidle' });
 
@@ -61,7 +64,7 @@ async function main() {
   const chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"]').first();
   if (await chatInput.isVisible()) {
     await chatInput.click();
-    await chatInput.pressSequentially('Which services consume the OpenShell gateway gRPC API, and from which repos?', { delay: 45 });
+    await chatInput.pressSequentially('Trace the call stack from our database ORM table up to the client endpoint consuming it.', { delay: 45 });
     await page.keyboard.press('Enter');
   }
 
@@ -76,18 +79,32 @@ async function main() {
   }
   await sleep(6000);
 
-  // SCENE 3: Lead Architect Deep Dive (1:03 - 1:40)
-  console.log('▶️ Scene 3: Hierarchical canvas & confidence styling...');
-  await page.mouse.wheel(0, -300);
-  await sleep(5000);
+  // SCENE 3: Lead Architect Deep Dive & Deep Call Stack (1:03 - 1:40)
+  console.log('▶️ Scene 3: Hierarchical canvas, call stack stepper & confidence styling...');
+  await page.mouse.wheel(0, -250);
+  await sleep(4000);
 
   const filterToggle = page.locator('button:has-text("Inferred"), input[type="checkbox"]').first();
   if (await filterToggle.isVisible()) {
     await filterToggle.click();
-    await sleep(4000);
+    await sleep(3000);
     await filterToggle.click();
   }
-  await sleep(15000);
+  await sleep(4000);
+
+  // Demonstrate CallStackStepper or View Source if visible
+  const stepIntoBtn = page.locator('button:has-text("Step into")').first();
+  const viewSourceBtn = page.locator('button:has-text("View source")').first();
+  if (await stepIntoBtn.isVisible()) {
+    console.log('  Stepping into downstream call stack frame...');
+    await stepIntoBtn.click();
+    await sleep(3000);
+  } else if (await viewSourceBtn.isVisible()) {
+    console.log('  Opening source peek...');
+    await viewSourceBtn.click();
+    await sleep(3000);
+  }
+  await sleep(10000);
 
   // SCENE 4: Blast Radius & PR Safety (1:43 - 2:02)
   console.log('▶️ Scene 4: PR Assessment blast radius...');
@@ -104,6 +121,14 @@ async function main() {
   // SCENE 6: Close & Outro (2:22 - 2:32)
   console.log('▶️ Scene 6: Outro & URLs...');
   await sleep(10000);
+
+  // Guarantee recording duration matches or exceeds audio narration
+  const elapsedSec = (Date.now() - startTime) / 1000;
+  if (elapsedSec < timeline.total_duration) {
+    const remainingMs = Math.ceil((timeline.total_duration - elapsedSec + 1.5) * 1000);
+    console.log(`⏳ Holding final screen for ${remainingMs}ms to match narration track (${timeline.total_duration}s)...`);
+    await sleep(remainingMs);
+  }
 
   console.log('⏹️ Closing recording session...');
   await page.close();

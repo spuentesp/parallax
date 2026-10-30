@@ -6,6 +6,9 @@
  *    - OpenShell gRPC proto surface (proto/openshell/v1/sandbox.proto)
  *    - Python SDK client
  *    - Cross-repo consumers: NeMo-Fabric (sandbox runner) and NemoClaw (session router)
+ *    - DEEP DEPENDENCY CALL STACK:
+ *      NeMo-Fabric Client -> gRPC Transport -> Gateway Handler -> Domain Service ->
+ *      Session Manager -> Repository/DAL -> ORM Table Model (SandboxSessionTable)
  * 2. Cluster B (ws_cluster_b):
  *    - NeMo Agent Toolkit (NAT) HTTP & WebSocket runtime endpoints (/chat/stream, /chat, /websocket)
  *    - NeMo-Agent-Toolkit-UI reverse proxy
@@ -14,10 +17,11 @@
  * Video Scenes supported:
  * - Scene 1: Multi-repo architecture map (OpenShell, NeMo-Fabric, NemoClaw).
  * - Scene 2: Live streaming Nemotron investigation with engine tool calls:
- *   "Which services consume the OpenShell gateway gRPC API, and from which repos?"
+ *   - "Which services consume the OpenShell gateway gRPC API, and from which repos?"
+ *   - "Show the call stack between a very deep dependency: from the ORM table to the client that consumes the endpoint"
  *   Badges: Verified, Contradicted, Unverifiable + "Show on map" camera glide.
  * - Scene 3: Canvas hierarchy, deterministic vs inferred filtering, and CallStackStepper
- *   (create_sandbox, spawn_container, anchor score 0.96).
+ *   (Full 8-frame traversal with [Step back] and [Step into] from dispatch_agent_job to SandboxSessionTable).
  * - Scene 4: PR Assessment blast radius report:
  *   PR #42 "Add mandatory security context to SandboxService.CreateSandbox"
  *   Downstream impacted services: nemo-fabric, nemoclaw.
@@ -427,7 +431,185 @@ function getGraphForWorkspace(wsId?: string): { nodes: OrgNode[]; edges: OrgEdge
   return { nodes: CLUSTER_A_NODES, edges: CLUSTER_A_EDGES };
 }
 
-// ── 3. Scripted NVIDIA Answers for Demo Video & Use Cases ───────────────────
+// ── 3. Deep Dependency Chain Definitions ────────────────────────────────────
+
+/**
+ * Full 8-layer call stack between consumer client down to the database ORM table:
+ * 1. dispatch_agent_job         (NeMo-Fabric Client Application)
+ * 2. run_sandbox_container       (NeMo-Fabric Runner Workflow)
+ * 3. grpc_client.create_sandbox  (OpenShell Python SDK Client Stub)
+ * 4. handle_create_sandbox_rpc   (OpenShell Gateway RPC Controller)
+ * 5. create_sandbox              (OpenShell Core Domain Logic)
+ * 6. provision_session           (NemoClaw Session Lifecycle Manager)
+ * 7. insert_session_state        (NemoClaw Data Access Layer / Repository)
+ * 8. SandboxSessionTable::mutate (NemoClaw Database ORM Model / `sandbox_sessions` table)
+ */
+const DEEP_CALL_CHAIN = [
+  'dispatch_agent_job',
+  'run_sandbox_container',
+  'grpc_client.create_sandbox',
+  'handle_create_sandbox_rpc',
+  'create_sandbox',
+  'provision_session',
+  'insert_session_state',
+  'SandboxSessionTable::mutate',
+];
+
+interface SymbolDefinition {
+  symbol: string;
+  repo: string;
+  path: string;
+  type: string;
+  anchorScore: number;
+  calledBy: string[];
+  calls: string[];
+  snippet: string;
+  explanation: string;
+}
+
+const SYMBOL_DIRECTORY: Record<string, SymbolDefinition> = {
+  dispatch_agent_job: {
+    symbol: 'dispatch_agent_job',
+    repo: 'NeMo-Fabric',
+    path: 'src/fabric/sandbox_runner.py',
+    type: 'Function',
+    anchorScore: 0.88,
+    calledBy: ['WorkflowScheduler.on_job_received', 'main'],
+    calls: ['run_sandbox_container', 'validate_job_spec'],
+    snippet: `def dispatch_agent_job(job_spec: AgentJobSpec) -> JobExecutionResult:
+    """Entry point in NeMo-Fabric agent scheduler for remote job dispatching."""
+    validate_job_spec(job_spec)
+    session = run_sandbox_container(job_spec.environment, job_spec.security_context)
+    return monitor_job_execution(session.id)`,
+    explanation: 'High-level client dispatcher in NeMo-Fabric that initiates agent job workflows.',
+  },
+  run_sandbox_container: {
+    symbol: 'run_sandbox_container',
+    repo: 'NeMo-Fabric',
+    path: 'src/fabric/sandbox_runner.py',
+    type: 'Function',
+    anchorScore: 0.91,
+    calledBy: ['dispatch_agent_job'],
+    calls: ['grpc_client.create_sandbox'],
+    snippet: `def run_sandbox_container(env: EnvironmentSpec, sec_ctx: SecurityContext):
+    """Invokes OpenShell gRPC client to provision isolated container."""
+    client = OpenShellClient(gateway_url=settings.OPENSHELL_GATEWAY)
+    return client.create_sandbox(spec=env.to_proto(), security_context=sec_ctx)`,
+    explanation: 'NeMo-Fabric runner workflow that prepares sandbox environment and delegates to RPC client.',
+  },
+  'grpc_client.create_sandbox': {
+    symbol: 'grpc_client.create_sandbox',
+    repo: 'OpenShell',
+    path: 'python/openshell/client.py',
+    type: 'Method',
+    anchorScore: 0.94,
+    calledBy: ['run_sandbox_container'],
+    calls: ['handle_create_sandbox_rpc'],
+    snippet: `def create_sandbox(self, spec: SandboxSpec, security_context: SecurityContext):
+    """Python SDK client stub sending gRPC CreateSandboxRequest to Gateway."""
+    req = pb.CreateSandboxRequest(spec=spec, security_context=security_context)
+    return self._stub.CreateSandbox(req, timeout=self.timeout)`,
+    explanation: 'Client-side gRPC transport stub connecting client application to remote Gateway.',
+  },
+  handle_create_sandbox_rpc: {
+    symbol: 'handle_create_sandbox_rpc',
+    repo: 'OpenShell',
+    path: 'crates/openshell-gateway/src/server.rs',
+    type: 'Function',
+    anchorScore: 0.95,
+    calledBy: ['grpc_client.create_sandbox', 'SandboxServiceServer'],
+    calls: ['create_sandbox'],
+    snippet: `async fn handle_create_sandbox_rpc(
+    &self,
+    request: Request<CreateSandboxRequest>,
+) -> Result<Response<CreateSandboxResponse>, Status> {
+    let req = request.into_inner();
+    let sandbox = self.engine.create_sandbox(req).await?;
+    Ok(Response::new(sandbox.into_proto()))
+}`,
+    explanation: 'Server-side gRPC request boundary in OpenShell Gateway validating incoming network payload.',
+  },
+  create_sandbox: {
+    symbol: 'create_sandbox',
+    repo: 'OpenShell',
+    path: 'crates/openshell-gateway/src/sandbox.rs',
+    type: 'Function',
+    anchorScore: 0.96,
+    calledBy: ['handle_create_sandbox_rpc'],
+    calls: ['provision_session', 'spawn_container', 'validate_security_context'],
+    snippet: `pub async fn create_sandbox(&self, req: CreateSandboxRequest) -> Result<Sandbox, GatewayError> {
+    self.validate_security_context(&req.security_context)?;
+    let session = self.session_mgr.provision_session(&req.tenant_id, &req.spec).await?;
+    let container = self.runtime.spawn_container(&req.spec).await?;
+    Ok(Sandbox::new(session.id, container))` ,
+    explanation: 'Core gateway orchestration engine that provisions both session state and execution containers.',
+  },
+  provision_session: {
+    symbol: 'provision_session',
+    repo: 'NemoClaw',
+    path: 'crates/openshell-gateway/src/session.rs',
+    type: 'Function',
+    anchorScore: 0.92,
+    calledBy: ['create_sandbox'],
+    calls: ['insert_session_state', 'generate_session_token'],
+    snippet: `pub async fn provision_session(&self, tenant_id: &str, spec: &SandboxSpec) -> Result<Session, SessionError> {
+    let token = generate_session_token(tenant_id);
+    let record = SessionRecord::new(tenant_id, spec, token);
+    self.repository.insert_session_state(&record).await
+}`,
+    explanation: 'Session management coordinator in NemoClaw handling tenant tokens and lifecycle state.',
+  },
+  insert_session_state: {
+    symbol: 'insert_session_state',
+    repo: 'NemoClaw',
+    path: 'crates/nemoclaw-state/src/repository.rs',
+    type: 'Function',
+    anchorScore: 0.89,
+    calledBy: ['provision_session'],
+    calls: ['SandboxSessionTable::mutate', 'SandboxSessionTable::commit'],
+    snippet: `pub async fn insert_session_state(&self, session: &SessionRecord) -> Result<Session, DbError> {
+    let mut table = SandboxSessionTable::load(&self.db_pool).await?;
+    table.mutate(|row| {
+        row.id = session.id;
+        row.tenant_id = session.tenant_id.clone();
+        row.state = SessionState::Provisioning;
+        row.created_at = Utc::now();
+    }).await?;
+    table.commit().await
+}`,
+    explanation: 'Data Access Layer (DAL) repository handling atomic transaction encapsulation.',
+  },
+  'SandboxSessionTable::mutate': {
+    symbol: 'SandboxSessionTable::mutate',
+    repo: 'NemoClaw',
+    path: 'crates/nemoclaw-state/src/models/session_table.rs',
+    type: 'Struct',
+    anchorScore: 0.97,
+    calledBy: ['insert_session_state'],
+    calls: ['SessionORM::execute_insert', 'SqliteConnection::query'],
+    snippet: `#[derive(Debug, Clone, Table, Queryable, Insertable)]
+#[diesel(table_name = sandbox_sessions)]
+pub struct SandboxSessionTable {
+    pub id: Uuid,
+    pub tenant_id: String,
+    pub state: String,
+    pub allocated_ports: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl SandboxSessionTable {
+    pub async fn mutate<F>(&mut self, mutator: F) -> Result<(), DbError>
+    where F: FnOnce(&mut Self) {
+        mutator(self);
+        SessionORM::execute_insert(self).await
+    }
+}`,
+    explanation: 'Underlying ORM Table model for the `sandbox_sessions` relational table in NemoClaw.',
+  },
+};
+
+// ── 4. Scripted NVIDIA Answers for Demo Video & Use Cases ───────────────────
 
 interface ScriptedScenario {
   matches: (q: string, wsId?: string) => boolean;
@@ -448,9 +630,157 @@ interface ScriptedScenario {
 }
 
 const SCENARIOS: ScriptedScenario[] = [
+  // Deep Call Stack Scenario: From ORM Table up to the Client that consumes the endpoint
+  {
+    matches: (q) => /call stack|deep dependency|orm|table|client.*endpoint|trace.*orm|stack.*client/i.test(q),
+    progressSteps: [
+      { type: 'round', round: 1, toolCallsUsed: 0, maxToolCalls: 8, forced: false, delayMs: 500 },
+      { type: 'tool', tool: 'get_call_chain', summary: 'trace end-to-end call path between dispatch_agent_job and SandboxSessionTable', ok: true, ms: 180, delayMs: 1200 },
+      { type: 'tool', tool: 'get_context', summary: 'inspect ORM entity SandboxSessionTable and caller hierarchy', ok: true, ms: 140, delayMs: 1100 },
+      { type: 'tool', tool: 'get_call_sites', summary: 'verify cross-repo gRPC invocation in NeMo-Fabric sandbox runner', ok: true, ms: 125, delayMs: 1300 },
+      { type: 'round', round: 2, toolCallsUsed: 3, maxToolCalls: 8, forced: false, delayMs: 600 },
+      { type: 'verify', claims: 4, delayMs: 900 },
+    ],
+    response: {
+      answer: `### End-to-End Architectural Call Stack (Client Consumer ➔ Database ORM Table)
+
+The analysis engine followed an **8-layer deep dependency chain** across 3 repositories in the NVIDIA agent stack:
+
+\`\`\`
+[1] NeMo-Fabric (Client App)        : dispatch_agent_job()
+  ↳ [2] NeMo-Fabric (Workflow)       : run_sandbox_container()
+    ↳ [3] OpenShell SDK (Transport)   : grpc_client.create_sandbox()
+      ═══════ Network Boundary: gRPC CreateSandbox RPC ═══════
+      ↳ [4] OpenShell Gateway (Controller): handle_create_sandbox_rpc()
+        ↳ [5] OpenShell Core (Domain)       : create_sandbox()
+          ↳ [6] NemoClaw (Session Manager)    : provision_session()
+            ↳ [7] NemoClaw (Repository / DAL)  : insert_session_state()
+              ↳ [8] NemoClaw (ORM Model Table)  : SandboxSessionTable::mutate()
+\`\`\`
+
+#### Architectural Highlights:
+1. **Consumer Origin (\`NeMo-Fabric\`):**
+   - \`dispatch_agent_job\` in \`src/fabric/sandbox_runner.py:110\` triggers container provisioning via the Python SDK stub.
+2. **Process / Network Edge:**
+   - Crossed at \`grpc:openshell.v1.SandboxService/CreateSandbox\`, passing Protobuf specs to \`crates/openshell-gateway/src/server.rs\`.
+3. **Database / ORM Anchor (\`NemoClaw\`):**
+   - The gateway's \`create_sandbox\` delegates session persistence to \`provision_session\` ➔ \`insert_session_state\` ➔ \`SandboxSessionTable::mutate\` in \`crates/nemoclaw-state/src/models/session_table.rs\`.
+   - **Anchor Score: 0.97.** The relational table \`sandbox_sessions\` is the grounding root for all agent container tracking.`,
+      explanation_status: 'available',
+      claims: [
+        {
+          claim: {
+            kind: 'relation',
+            consumer: 'nemo-fabric',
+            provider: 'openshell-gateway',
+            polarity: 'present',
+          },
+          verdict: 'verified',
+          engine: { uses: 6, endpoints: ['grpc:openshell.v1.SandboxService/CreateSandbox'] },
+          reason: 'Engine verified: dispatch_agent_job calls CreateSandbox across process boundary',
+        },
+        {
+          claim: {
+            kind: 'location',
+            repo: 'NeMo-Fabric',
+            path: 'src/fabric/sandbox_runner.py',
+            line: 110,
+            contains: 'def dispatch_agent_job',
+          },
+          verdict: 'verified',
+          reason: 'Engine verified: client entry point definition',
+        },
+        {
+          claim: {
+            kind: 'location',
+            repo: 'NemoClaw',
+            path: 'crates/nemoclaw-state/src/models/session_table.rs',
+            line: 34,
+            contains: 'pub struct SandboxSessionTable',
+          },
+          verdict: 'verified',
+          reason: 'Engine verified: ORM table struct declaration in repository',
+        },
+        {
+          claim: {
+            kind: 'relation',
+            consumer: 'nemoclaw',
+            provider: 'openshell-gateway',
+            polarity: 'present',
+          },
+          verdict: 'verified',
+          engine: { uses: 3, endpoints: ['grpc:openshell.v1.Gateway/Route'] },
+          reason: 'Engine verified: session manager integrates with gateway state',
+        },
+      ],
+      claims_summary: {
+        total: 4,
+        verified: 4,
+        contradicted: 0,
+        unverifiable: 0,
+        supported: 4,
+        unsupported: 0,
+      },
+      map_focus: {
+        seed: 'ep:grpc:openshell.v1.SandboxService/CreateSandbox',
+        ids: [
+          'svc:nemo-fabric',
+          'svc:openshell-gateway',
+          'svc:nemoclaw',
+          'ep:grpc:openshell.v1.SandboxService/CreateSandbox',
+          'grp:sandbox-rpc',
+        ],
+        relations: [
+          {
+            consumer: 'nemo-fabric',
+            provider: 'openshell-gateway',
+            polarity: 'present',
+            uses: 6,
+            endpoints: ['grpc:openshell.v1.SandboxService/CreateSandbox'],
+            complete: true,
+          },
+        ],
+        query: 'deep-call-stack',
+      },
+      conversation: { id: 'conv_demo_deep_stack', seq: 1 },
+      budget: {
+        maxToolCalls: 8,
+        maxModelMs: 120000,
+        toolCallsUsed: 3,
+        modelMsUsed: 1910,
+        exhausted: false,
+        cutShort: false,
+        rounds: 2,
+        promptTokens: 18200,
+        completionTokens: 490,
+      },
+      model: 'nvidia/nemotron-3-super-120b-a12b',
+      tool_calls: [
+        {
+          id: 'call_chain_1',
+          tool: 'get_call_chain',
+          args: { from: 'dispatch_agent_job', to: 'SandboxSessionTable', repo_id: 'OpenShell' },
+          output: DEEP_CALL_CHAIN.join(' → '),
+        },
+        {
+          id: 'call_context_1',
+          tool: 'get_context',
+          args: { symbol: 'SandboxSessionTable', repo_id: 'NemoClaw' },
+          output: 'ORM Table struct for sandbox_sessions table with callers in repository.rs',
+        },
+        {
+          id: 'call_sites_1',
+          tool: 'get_call_sites',
+          args: { symbol: 'CreateSandbox', repo_id: 'OpenShell' },
+          output: 'Called by NeMo-Fabric/src/fabric/sandbox_runner.py:128',
+        },
+      ],
+    },
+  },
+
   // Scene 2 Video Pitch: "Which services consume the OpenShell gateway gRPC API, and from which repos?"
   {
-    matches: (q) => /openshell|gateway|sandbox|which services consume.*openshell|grpc/i.test(q),
+    matches: (q) => /openshell|gateway|sandbox|which services consume.*openshell|grpc/i.test(q) && !/orm|table|stack|deep/i.test(q),
     progressSteps: [
       {
         type: 'round',
@@ -622,7 +952,7 @@ Additionally, **openshell-sdk** (internal to repo \`OpenShell\`) consumes the \`
     },
   },
 
-  // Cluster B / NAT: "Which services consume the NeMo Agent Toolkit endpoints, and from which repos?"
+  // Cluster B / NAT Scenario
   {
     matches: (q) => /nat|toolkit|who dials.*nat|chat\/stream|dials.*nat/i.test(q),
     progressSteps: [
@@ -669,50 +999,6 @@ Additionally, **openshell-sdk** (internal to repo \`OpenShell\`) consumes the \`
       model: 'nvidia/nemotron-3-super-120b-a12b',
     },
   },
-
-  // Onboarding Chapter 1 & 6 Task: Telemetry & auth checks in OpenShell Gateway
-  {
-    matches: (q) => /telemetry|auth checks|sandbox creation|trace sandbox/i.test(q),
-    progressSteps: [
-      { type: 'round', round: 1, toolCallsUsed: 0, maxToolCalls: 8, forced: false, delayMs: 400 },
-      { type: 'tool', tool: 'get_code_snippet', summary: 'read crates/openshell-gateway/src/sandbox.rs around create_sandbox', ok: true, ms: 90, delayMs: 800 },
-      { type: 'tool', tool: 'get_call_chain', summary: 'trace caller chain: handle_grpc_request -> create_sandbox -> spawn_container', ok: true, ms: 120, delayMs: 900 },
-      { type: 'verify', claims: 2, delayMs: 500 },
-    ],
-    response: {
-      answer: `To add telemetry and authentication checks to sandbox creation:
-
-1. **Target Function in Gateway:**
-   - \`crates/openshell-gateway/src/sandbox.rs:48\`: function \`create_sandbox(req: CreateSandboxRequest)\`.
-   - This function has an **anchor score of 0.96** as the primary entry point for all remote sandbox provisioning.
-
-2. **Incoming Call Stack:**
-   - \`handle_grpc_request\` → \`create_sandbox\` → \`spawn_container\`.
-   - Upstream consumers: \`NeMo-Fabric\` (\`sandbox_runner.py\`) and \`NemoClaw\` (\`worker.rs\`).
-
-3. **Recommended Implementation:**
-   - Add auth token header extraction in \`crates/openshell-gateway/src/middleware/auth.rs\`.
-   - Emit telemetry counters in \`create_sandbox\` before calling \`spawn_container\`.`,
-      explanation_status: 'available',
-      claims: [
-        {
-          claim: { kind: 'location', repo: 'OpenShell', path: 'crates/openshell-gateway/src/sandbox.rs', line: 48, contains: 'pub async fn create_sandbox' },
-          verdict: 'verified',
-          reason: 'Engine verified: function definition exists at line 48',
-        },
-      ],
-      claims_summary: { total: 1, verified: 1, contradicted: 0, unverifiable: 0, supported: 1, unsupported: 0 },
-      map_focus: {
-        seed: 'ep:grpc:openshell.v1.SandboxService/CreateSandbox',
-        ids: ['svc:openshell-gateway', 'ep:grpc:openshell.v1.SandboxService/CreateSandbox'],
-        relations: [],
-        query: 'create_sandbox',
-      },
-      conversation: { id: 'conv_demo_telemetry', seq: 1 },
-      budget: { maxToolCalls: 8, maxModelMs: 120000, toolCallsUsed: 2, modelMsUsed: 890, exhausted: false, cutShort: false, rounds: 1, promptTokens: 6400, completionTokens: 210 },
-      model: 'nvidia/nemotron-3-super-120b-a12b',
-    },
-  },
 ];
 
 function fallbackScenario(question: string) {
@@ -747,7 +1033,7 @@ function fallbackScenario(question: string) {
   };
 }
 
-// ── 4. Build Fastify App ─────────────────────────────────────────────────────
+// ── 5. Build Fastify App ─────────────────────────────────────────────────────
 
 export async function buildDemoServer() {
   const app = Fastify({ logger: { level: 'info' } });
@@ -776,7 +1062,7 @@ export async function buildDemoServer() {
     readOnly: false,
   }));
 
-  // Workspaces & Orgs (EXACTLY the two NVIDIA clusters)
+  // Workspaces & Orgs
   const WORKSPACE_A = {
     id: 'ws_cluster_a',
     name: 'Cluster A: OpenShell RPC Stack',
@@ -860,7 +1146,6 @@ export async function buildDemoServer() {
     };
 
     const expand = new Set(body.expand ?? []);
-    // Auto expand top repositories and main services
     for (const n of allNodes) {
       if (n.kind === 'repo' || n.kind === 'service') expand.add(n.id);
     }
@@ -1049,83 +1334,140 @@ export async function buildDemoServer() {
     };
   });
 
-  // Code Graph Root
+  // Code Graph Root (Including Client, Gateway, and ORM Table Nodes)
   app.get('/api/workspaces/:id/graph', async (req) => {
     const { id: wsId } = req.params as { id: string };
+    const { repo: filterRepo } = (req.query ?? {}) as { repo?: string };
+
     if (wsId.includes('cluster_b') || wsId.includes('nat')) {
-      return {
-        graph: {
-          repos: [
-            {
-              repo: 'NeMo-Agent-Toolkit',
-              truncated: false,
-              nodes: [
-                { id: 'f:app.py', name: 'nat/server/app.py', type: 'File', kind: 'file' },
-                { id: 'fn:chat_stream', name: 'chat_stream_endpoint', type: 'Function', kind: 'symbol' },
-              ],
-            },
-            {
-              repo: 'NeMo-Agent-Toolkit-UI',
-              truncated: false,
-              nodes: [{ id: 'f:proxy.js', name: 'proxy/server.js', type: 'File', kind: 'file' }],
-            },
+      const allRepos = [
+        {
+          repo: 'NeMo-Agent-Toolkit',
+          truncated: false,
+          nodes: [
+            { id: 'f:app.py', name: 'nat/server/app.py', type: 'File', kind: 'file' },
+            { id: 'fn:chat_stream', name: 'chat_stream_endpoint', type: 'Function', kind: 'symbol' },
           ],
         },
+        {
+          repo: 'NeMo-Agent-Toolkit-UI',
+          truncated: false,
+          nodes: [{ id: 'f:proxy.js', name: 'proxy/server.js', type: 'File', kind: 'file' }],
+        },
+      ];
+      const sortedRepos = filterRepo
+        ? [...allRepos].sort((a, b) => (a.repo === filterRepo ? -1 : b.repo === filterRepo ? 1 : 0))
+        : allRepos;
+      return {
+        graph: { repos: sortedRepos },
         source: 'lain',
         workspace: { id: 'ws_cluster_b', name: 'Cluster B: NeMo Agent Toolkit HTTP Stack', repoCount: 3 },
       };
     }
 
-    return {
-      graph: {
-        repos: [
-          {
-            repo: 'OpenShell',
-            truncated: false,
-            nodes: [
-              { id: 'f:sandbox.proto', name: 'proto/openshell/v1/sandbox.proto', type: 'File', kind: 'file' },
-              { id: 'f:sandbox.rs', name: 'crates/openshell-gateway/src/sandbox.rs', type: 'File', kind: 'file' },
-              { id: 'fn:create_sandbox', name: 'create_sandbox', type: 'Function', kind: 'symbol' },
-              { id: 'fn:spawn_container', name: 'spawn_container', type: 'Function', kind: 'symbol' },
-            ],
-          },
-          {
-            repo: 'NeMo-Fabric',
-            truncated: false,
-            nodes: [
-              { id: 'f:sandbox_runner.py', name: 'src/fabric/sandbox_runner.py', type: 'File', kind: 'file' },
-            ],
-          },
-          {
-            repo: 'NemoClaw',
-            truncated: false,
-            nodes: [
-              { id: 'f:worker.rs', name: 'crates/nemoclaw-node/src/worker.rs', type: 'File', kind: 'file' },
-            ],
-          },
+    const allRepos = [
+      {
+        repo: 'NeMo-Fabric',
+        truncated: false,
+        nodes: [
+          { id: 'f:sandbox_runner.py', name: 'src/fabric/sandbox_runner.py', type: 'File', kind: 'file' },
+          { id: 'fn:dispatch_agent_job', name: 'dispatch_agent_job', type: 'Function', kind: 'symbol' },
+          { id: 'fn:run_sandbox_container', name: 'run_sandbox_container', type: 'Function', kind: 'symbol' },
         ],
       },
+      {
+        repo: 'OpenShell',
+        truncated: false,
+        nodes: [
+          { id: 'f:client.py', name: 'python/openshell/client.py', type: 'File', kind: 'file' },
+          { id: 'f:sandbox.proto', name: 'proto/openshell/v1/sandbox.proto', type: 'File', kind: 'file' },
+          { id: 'f:sandbox.rs', name: 'crates/openshell-gateway/src/sandbox.rs', type: 'File', kind: 'file' },
+          { id: 'fn:handle_create_sandbox_rpc', name: 'handle_create_sandbox_rpc', type: 'Function', kind: 'symbol' },
+          { id: 'fn:create_sandbox', name: 'create_sandbox', type: 'Function', kind: 'symbol' },
+        ],
+      },
+      {
+        repo: 'NemoClaw',
+        truncated: false,
+        nodes: [
+          { id: 'f:session.rs', name: 'crates/openshell-gateway/src/session.rs', type: 'File', kind: 'file' },
+          { id: 'f:repository.rs', name: 'crates/nemoclaw-state/src/repository.rs', type: 'File', kind: 'file' },
+          { id: 'f:session_table.rs', name: 'crates/nemoclaw-state/src/models/session_table.rs', type: 'File', kind: 'file' },
+          { id: 'fn:provision_session', name: 'provision_session', type: 'Function', kind: 'symbol' },
+          { id: 'fn:insert_session_state', name: 'insert_session_state', type: 'Function', kind: 'symbol' },
+          { id: 'c:SandboxSessionTable', name: 'SandboxSessionTable::mutate', type: 'Struct', kind: 'symbol' },
+        ],
+      },
+    ];
+
+    const sortedRepos = filterRepo
+      ? [...allRepos].sort((a, b) => (a.repo === filterRepo ? -1 : b.repo === filterRepo ? 1 : 0))
+      : allRepos;
+
+    return {
+      graph: { repos: sortedRepos },
       source: 'lain',
       workspace: { id: 'ws_cluster_a', name: 'Cluster A: OpenShell RPC Stack', repoCount: 3 },
     };
   });
 
-  // Code Graph Children
+  // Code Graph Children (drilling into files & communication relations)
   app.get('/api/workspaces/:id/graph/children', async (req) => {
     const { repo, name } = req.query as { repo: string; type: string; name: string };
-    if (name.includes('sandbox') || name.includes('create_sandbox')) {
+
+    if (name.includes('sandbox_runner') || name.includes('dispatch_agent_job')) {
       return {
         node: { repo, type: 'File', name },
         children: [
+          { id: 'fn:dispatch_agent_job', name: 'dispatch_agent_job', type: 'Function', kind: 'symbol' },
+          { id: 'fn:run_sandbox_container', name: 'run_sandbox_container', type: 'Function', kind: 'symbol' },
+        ],
+        communications: [
+          {
+            edge: 'Calls',
+            nodes: [
+              { id: 'fn:run_sandbox_container', name: 'run_sandbox_container', type: 'Function', kind: 'symbol' },
+              { id: 'fn:grpc_client.create_sandbox', name: 'grpc_client.create_sandbox', type: 'Method', kind: 'symbol' },
+            ],
+          },
+        ],
+        hasCommunication: true,
+        source: 'lain',
+      };
+    }
+
+    if (name.includes('client.py') || name.includes('grpc_client')) {
+      return {
+        node: { repo, type: 'File', name },
+        children: [
+          { id: 'fn:grpc_client.create_sandbox', name: 'grpc_client.create_sandbox', type: 'Method', kind: 'symbol' },
+        ],
+        communications: [
+          {
+            edge: 'Calls',
+            nodes: [
+              { id: 'fn:handle_create_sandbox_rpc', name: 'handle_create_sandbox_rpc', type: 'Function', kind: 'symbol' },
+            ],
+          },
+        ],
+        hasCommunication: true,
+        source: 'lain',
+      };
+    }
+
+    if (name.includes('sandbox.rs') || name.includes('create_sandbox')) {
+      return {
+        node: { repo, type: 'File', name },
+        children: [
+          { id: 'fn:handle_create_sandbox_rpc', name: 'handle_create_sandbox_rpc', type: 'Function', kind: 'symbol' },
           { id: 'fn:create_sandbox', name: 'create_sandbox', type: 'Function', kind: 'symbol' },
-          { id: 'fn:validate_security_context', name: 'validate_security_context', type: 'Function', kind: 'symbol' },
           { id: 'fn:spawn_container', name: 'spawn_container', type: 'Function', kind: 'symbol' },
         ],
         communications: [
           {
             edge: 'Calls',
             nodes: [
-              { id: 'fn:validate_security_context', name: 'validate_security_context', type: 'Function', kind: 'symbol' },
+              { id: 'fn:provision_session', name: 'provision_session', type: 'Function', kind: 'symbol' },
               { id: 'fn:spawn_container', name: 'spawn_container', type: 'Function', kind: 'symbol' },
             ],
           },
@@ -1134,27 +1476,88 @@ export async function buildDemoServer() {
         source: 'lain',
       };
     }
+
+    if (name.includes('session.rs') || name.includes('provision_session')) {
+      return {
+        node: { repo, type: 'File', name },
+        children: [
+          { id: 'fn:provision_session', name: 'provision_session', type: 'Function', kind: 'symbol' },
+        ],
+        communications: [
+          {
+            edge: 'Calls',
+            nodes: [
+              { id: 'fn:insert_session_state', name: 'insert_session_state', type: 'Function', kind: 'symbol' },
+            ],
+          },
+        ],
+        hasCommunication: true,
+        source: 'lain',
+      };
+    }
+
+    if (name.includes('repository.rs') || name.includes('insert_session_state')) {
+      return {
+        node: { repo, type: 'File', name },
+        children: [
+          { id: 'fn:insert_session_state', name: 'insert_session_state', type: 'Function', kind: 'symbol' },
+        ],
+        communications: [
+          {
+            edge: 'Uses',
+            nodes: [
+              { id: 'c:SandboxSessionTable', name: 'SandboxSessionTable::mutate', type: 'Struct', kind: 'symbol' },
+            ],
+          },
+        ],
+        hasCommunication: true,
+        source: 'lain',
+      };
+    }
+
+    if (name.includes('session_table') || name.includes('SandboxSessionTable')) {
+      return {
+        node: { repo, type: 'File', name },
+        children: [
+          { id: 'c:SandboxSessionTable', name: 'SandboxSessionTable::mutate', type: 'Struct', kind: 'symbol' },
+        ],
+        communications: [
+          {
+            edge: 'Uses',
+            nodes: [
+              { id: 'fn:insert_session_state', name: 'insert_session_state', type: 'Function', kind: 'symbol' },
+            ],
+          },
+        ],
+        hasCommunication: true,
+        source: 'lain',
+      };
+    }
+
     return { node: { repo, type: 'File', name }, children: [], communications: [], source: 'lain' };
   });
 
-  // Symbol Context & CallStackStepper (Scene 3)
+  // Symbol Context & CallStackStepper (Supports Full 8-Step Navigation)
   app.get('/api/workspaces/:id/graph/symbol-context', async (req) => {
     const { repo, symbol } = req.query as { repo: string; symbol: string };
-    if (symbol.includes('sandbox') || symbol === 'create_sandbox') {
+    const sym = SYMBOL_DIRECTORY[symbol] || Object.values(SYMBOL_DIRECTORY).find((s) => s.symbol.includes(symbol));
+
+    if (sym) {
       return {
         context: {
-          symbol: 'create_sandbox',
-          repo: 'OpenShell',
-          path: 'crates/openshell-gateway/src/sandbox.rs',
-          type: 'Function',
-          anchorScore: 0.96,
-          calledBy: ['handle_grpc_request', 'SandboxServiceServer'],
-          calls: ['validate_security_context', 'spawn_container', 'allocate_ports'],
-          rawText: `## Explanation for 'create_sandbox' (Function)\n**Path:** crates/openshell-gateway/src/sandbox.rs\n- **Anchor Score:** 0.96\n- **Called by:** handle_grpc_request, SandboxServiceServer\n- **Calls:** validate_security_context, spawn_container, allocate_ports`,
+          symbol: sym.symbol,
+          repo: sym.repo,
+          path: sym.path,
+          type: sym.type,
+          anchorScore: sym.anchorScore,
+          calledBy: sym.calledBy,
+          calls: sym.calls,
+          rawText: `## Explanation for '${sym.symbol}' (${sym.type})\n**Path:** ${sym.path}\n- **Anchor Score:** ${sym.anchorScore.toFixed(2)}\n- **Called by:** ${sym.calledBy.join(', ')}\n- **Calls:** ${sym.calls.join(', ')}\n\n${sym.explanation}`,
         },
         source: 'lain',
       };
     }
+
     return {
       context: {
         symbol,
@@ -1162,51 +1565,65 @@ export async function buildDemoServer() {
         path: `src/${symbol}.rs`,
         type: 'Function',
         anchorScore: 0.82,
-        calledBy: ['main'],
-        calls: ['init_logger'],
+        calledBy: ['dispatch_agent_job'],
+        calls: ['SandboxSessionTable::mutate'],
         rawText: `Explanation for '${symbol}'`,
       },
       source: 'lain',
     };
   });
 
-  // Call Chain
+  // Call Chain (Supports 8-Hop Deep Call Stack)
   app.get('/api/workspaces/:id/graph/call-chain', async (req) => {
     const { from, to, repo } = req.query as { from: string; to: string; repo: string };
+
+    const fromIdx = DEEP_CALL_CHAIN.findIndex((s) => s.toLowerCase().includes(from?.toLowerCase() ?? ''));
+    const toIdx = DEEP_CALL_CHAIN.findIndex((s) => s.toLowerCase().includes(to?.toLowerCase() ?? ''));
+
+    let chain = DEEP_CALL_CHAIN;
+    if (fromIdx !== -1 && toIdx !== -1 && fromIdx < toIdx) {
+      chain = DEEP_CALL_CHAIN.slice(fromIdx, toIdx + 1);
+    } else if (fromIdx !== -1 && toIdx !== -1 && fromIdx > toIdx) {
+      chain = DEEP_CALL_CHAIN.slice(toIdx, fromIdx + 1).reverse();
+    }
+
     return {
       chain: {
-        from: from ?? 'handle_grpc_request',
-        to: to ?? 'spawn_container',
+        from: from ?? 'dispatch_agent_job',
+        to: to ?? 'SandboxSessionTable::mutate',
         repo: repo ?? 'OpenShell',
-        chain: [from ?? 'handle_grpc_request', 'create_sandbox', to ?? 'spawn_container'],
-        rawText: `${from} → create_sandbox → ${to}`,
+        chain,
+        rawText: chain.join(' → '),
       },
       source: 'lain',
     };
   });
 
-  // Code Snippet
+  // Code Snippet (Shows real code for the deep stack symbols)
   app.get('/api/workspaces/:id/graph/snippet', async (req) => {
-    const { symbol } = req.query as { repo: string; symbol: string };
+    const { symbol, path: filePath } = (req.query ?? {}) as { repo?: string; symbol?: string; path?: string };
+    const sym =
+      (symbol && (SYMBOL_DIRECTORY[symbol] || Object.values(SYMBOL_DIRECTORY).find((s) => s.symbol.includes(symbol)))) ||
+      (filePath && Object.values(SYMBOL_DIRECTORY).find((s) => s.path.includes(filePath) || filePath.includes(s.path)));
+
+    if (sym) {
+      return {
+        snippet: {
+          symbol: sym.symbol,
+          repo: sym.repo,
+          path: sym.path,
+          text: sym.snippet,
+        },
+        source: 'lain',
+      };
+    }
+
     return {
       snippet: {
-        symbol: symbol ?? 'create_sandbox',
+        symbol: symbol ?? filePath ?? 'create_sandbox',
         repo: 'OpenShell',
-        path: 'crates/openshell-gateway/src/sandbox.rs',
-        text: `pub async fn create_sandbox(
-    &self,
-    request: Request<CreateSandboxRequest>,
-) -> Result<Response<CreateSandboxResponse>, Status> {
-    let req = request.into_inner();
-    self.validate_security_context(&req.security_context)?;
-    let container = self.spawn_container(&req.spec).await?;
-    let ports = self.allocate_ports(&container).await?;
-    Ok(Response::new(CreateSandboxResponse {
-        sandbox_id: container.id,
-        status: SandboxStatus::Running as i32,
-        endpoints: ports,
-    }))
-}`,
+        path: filePath ?? 'crates/openshell-gateway/src/sandbox.rs',
+        text: SYMBOL_DIRECTORY.create_sandbox.snippet,
       },
       source: 'lain',
     };
@@ -1271,6 +1688,7 @@ export async function buildDemoServer() {
       touchedSymbols: [
         'openshell.v1.CreateSandboxRequest.security_context',
         'openshell_gateway::sandbox::create_sandbox',
+        'nemoclaw_state::models::session_table::SandboxSessionTable',
       ],
       blastRadius: {
         directDependents: 4,
@@ -1316,9 +1734,9 @@ Static analysis identified **2 affected downstream repositories**:
 
 2. **NemoClaw** (\`crates/nemoclaw-node/src/worker.rs:215\`):
    - **Severity: Type Mismatch / Warning**
-   - Node worker dispatching omits tenant authorization fields.
+   - Node worker dispatching omits tenant authorization fields before calling \`SandboxSessionTable::mutate\`.
 
-**Recommendation:** Do not merge until \`NeMo-Fabric\` PR #18 adds security context headers to the gRPC runner stub.`,
+**Recommendation:** Do not merge until \`NeMo-Fabric\` adds security context headers in \`dispatch_agent_job\`.`,
     },
   };
 
@@ -1343,9 +1761,9 @@ Static analysis identified **2 affected downstream repositories**:
   app.get('/api/conversations', async () => ({
     conversations: [
       {
-        id: 'conv_demo_openshell',
+        id: 'conv_demo_deep_stack',
         workspaceId: 'ws_cluster_a',
-        title: 'Which services consume the OpenShell gateway gRPC API, and from which repos?',
+        title: 'Trace call stack from ORM table to client endpoint consumer',
         createdAt: Date.now() - 120_000,
         updatedAt: Date.now(),
         turns: 1,
@@ -1355,15 +1773,15 @@ Static analysis identified **2 affected downstream repositories**:
 
   app.get('/api/conversations/:id', async () => ({
     conversation: {
-      id: 'conv_demo_openshell',
+      id: 'conv_demo_deep_stack',
       workspaceId: 'ws_cluster_a',
-      title: 'Which services consume the OpenShell gateway gRPC API, and from which repos?',
+      title: 'Trace call stack from ORM table to client endpoint consumer',
       createdAt: Date.now() - 120_000,
     },
     turns: [
       {
         seq: 1,
-        question: 'Which services consume the OpenShell gateway gRPC API, and from which repos?',
+        question: 'Show the call stack between a very deep dependency: from the ORM table to the client that consumes the endpoint',
         answer: SCENARIOS[0].response.answer as string,
         status: 'available',
         claims: SCENARIOS[0].response.claims,
@@ -1374,7 +1792,7 @@ Static analysis identified **2 affected downstream repositories**:
     ],
   }));
 
-  // ── 5. Streaming Query Handler (Scene 2) ───────────────────────────────────
+  // ── 6. Streaming Query Handler ─────────────────────────────────────────────
 
   app.post('/api/query/stream', async (req, reply) => {
     const { question, orgId } = (req.body ?? {}) as { question?: string; orgId?: string };
@@ -1395,7 +1813,6 @@ Static analysis identified **2 affected downstream repositories**:
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
 
-    // Emit live progress steps with configured delays
     for (const step of scenario.progressSteps) {
       await new Promise((r) => setTimeout(r, step.delayMs));
       sendSse('progress', step);
@@ -1416,7 +1833,7 @@ Static analysis identified **2 affected downstream repositories**:
   return app;
 }
 
-// ── 6. Run Server ───────────────────────────────────────────────────────────
+// ── 7. Run Server ───────────────────────────────────────────────────────────
 
 async function main() {
   const app = await buildDemoServer();
@@ -1424,8 +1841,8 @@ async function main() {
   console.log(`\n🚀 Parallax NVIDIA Stack Demo Mock Server running at http://${HOST}:${PORT}`);
   console.log(`📡 Ready for Playwright video recording against NVIDIA agent clusters:\n`);
   console.log(`  • Cluster A (Primary Video URL): http://localhost:5173/orgs/ws_cluster_a`);
-  console.log(`  • Cluster B (NeMo Agent Toolkit): http://localhost:5173/orgs/ws_cluster_b`);
-  console.log(`  • Scene 2 Prompt: "Which services consume the OpenShell gateway gRPC API, and from which repos?"`);
+  console.log(`  • Deep Call Stack Query: "Show the call stack between a very deep dependency: from the ORM table to the client"`);
+  console.log(`  • Call Stack Stepper: Traverses 8 frames between dispatch_agent_job and SandboxSessionTable::mutate`);
   console.log(`  • Scene 4 PR: PR #42 "Add mandatory security context to SandboxService.CreateSandbox"\n`);
 }
 

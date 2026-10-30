@@ -22,7 +22,7 @@ Format: 1080p (1920x1080), dual-voice AI narration synced to Playwright browser 
 
 #### Scene 2: The Question & The Engine (0:20 – 1:00)
 - `0:20 - 0:27` **Junior (Brian):**
-  > "So I ask Parallax: Which services consume the OpenShell gateway gRPC API, and from which repos?"
+  > "So I ask Parallax: Trace the call stack from our database ORM table up to the client endpoint consuming it."
   *(Visual: Types question into the investigator search box, presses enter)*
 - `0:27 - 0:37` *(UI Pause: Nemotron streams investigation tool calls)*
 - `0:37 - 0:53` **Architect (Ava):**
@@ -32,16 +32,16 @@ Format: 1080p (1920x1080), dual-voice AI narration synced to Playwright browser 
   > "Click Show on map, and it takes us directly to the architecture backing the answer."
   *(Visual: Clicks 'Show on map' -> camera glides to OpenShell gateway subgraph)*
 
-#### Scene 3: The Architecture Canvas (1:03 – 1:40)
+#### Scene 3: The Architecture Canvas & Deep Call Stack (1:03 – 1:40)
 - `1:03 - 1:15` **Architect (Ava):**
   > "Now I want the whole picture. Repos, services, endpoints, down to the actual functions. Everything is loaded on demand, so even massive monorepos scale smoothly."
-  *(Visual: Drills down repo -> service -> endpoint -> file -> function)*
+  *(Visual: Drills down repo -> service -> endpoint -> file -> function, stepping 8 frames from dispatch_agent_job to SandboxSessionTable)*
 - `1:19 - 1:30` **Architect (Ava):**
   > "Solid lines are proven by static analysis. Dashed lines are inferred, fainter the less sure the engine is. Parallax never promotes a guess to a fact."
   *(Visual: Toggles filter between deterministic proven edges and heuristic inferred edges)*
 - `1:33 - 1:39` **Architect (Ava):**
   > "Click any endpoint to see who consumes it across repos, and how confident we are."
-  *(Visual: Clicks an endpoint node; inspector drawer slides out showing consumers)*
+  *(Visual: Clicks an endpoint node; inspector drawer slides out showing consumers and CallStackStepper)*
 
 #### Scene 4: Blast Radius & PR Safety (1:43 – 2:02)
 - `1:43 - 1:57` **Architect (Ava):**
