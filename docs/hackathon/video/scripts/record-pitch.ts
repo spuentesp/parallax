@@ -61,7 +61,16 @@ async function main() {
 
   // SCENE 2: The Question & Nemotron Investigation (0:20 - 1:00)
   console.log('▶️ Scene 2: Asking question & investigator verification...');
-  const chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"]').first();
+  let chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"]').first();
+  if (!(await chatInput.isVisible())) {
+    const askToggle = page.locator('button:has-text("Ask the architecture"), button[aria-label*="Ask"]').first();
+    if (await askToggle.isVisible()) {
+      console.log('  Opening AssistantDock...');
+      await askToggle.click();
+      await sleep(1200);
+    }
+  }
+  chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"]').first();
   if (await chatInput.isVisible()) {
     await chatInput.click();
     await chatInput.pressSequentially('Trace the call stack from our database ORM table up to the client endpoint consuming it.', { delay: 45 });
