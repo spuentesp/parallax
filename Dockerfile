@@ -46,6 +46,12 @@ COPY deploy/workspaces.yaml /repos/workspaces.yaml
 RUN pnpm install --frozen-lockfile \
  && pnpm --filter @parallax/web build
 
+# Pre-index Lain federation cache so on-demand wakeups have warm cache immediately
+RUN mkdir -p /var/cache/lain-federation \
+ && sed -i 's|data_dir: .*|data_dir: /var/cache/lain-federation|' /repos/repos.yaml \
+ && (cd /repos && /usr/local/bin/lain reindex --config /repos/repos.yaml || true) \
+ && sed -i 's|data_dir: .*|data_dir: /data/lain-federation|' /repos/repos.yaml
+
 ENV NODE_ENV=production \
     PORT=8080 \
     LAIN_URL=http://127.0.0.1:9999/mcp \

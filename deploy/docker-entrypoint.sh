@@ -5,7 +5,13 @@ echo "=========================================="
 echo "  Parallax All-in-One Cloud Entrypoint"
 echo "=========================================="
 
-mkdir -p /var/log
+mkdir -p /var/log /data/lain-federation
+
+# If persistent cache does not exist on /data, initialize from pre-baked image cache if available
+if [ ! -f "/data/lain-federation/federated_graph.bin" ] && [ -d "/var/cache/lain-federation" ]; then
+  echo "==> Initializing persistent Lain cache from image cache..."
+  cp -a /var/cache/lain-federation/* /data/lain-federation/ || true
+fi
 
 # 1. Start Lain federation server if binary and config exist
 if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
@@ -36,14 +42,18 @@ fi
 
 # 2. Seed database with EXACTLY the two NVIDIA workspaces (ws_cluster_a & ws_cluster_b)
 cd /app
-echo "==> Seeding workspaces..."
 export LAIN_URL="${LAIN_URL:-http://127.0.0.1:9999/mcp}"
 export CLUSTER_A_LAIN_URL="${CLUSTER_A_LAIN_URL:-http://127.0.0.1:9999/mcp}"
 export CLUSTER_B_LAIN_URL="${CLUSTER_B_LAIN_URL:-http://127.0.0.1:9999/mcp}"
 
-pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts || {
-  echo "Warning: workspace seeding returned non-zero."
-}
+if [ ! -f "/data/parallax.db" ]; then
+  echo "==> Initializing and seeding database at /data/parallax.db..."
+  pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts || {
+    echo "Warning: workspace seeding returned non-zero."
+  }
+else
+  echo "==> Database already present at /data/parallax.db."
+fi
 
 # 3. Start Parallax web & API server
 echo "==> Starting Parallax server on port ${PORT:-8080}..."
