@@ -7,6 +7,10 @@ echo "=========================================="
 
 mkdir -p /var/log
 
+# Performance optimization: file watcher and commit sync are disabled in static container environment
+export LAIN_DISABLE_FILE_WATCHER=1
+export LAIN_DISABLE_COMMIT_SYNC=1
+
 # 1. Start Lain federation server in background
 if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
   echo "==> Starting Lain federation server on port 9999 in background..."

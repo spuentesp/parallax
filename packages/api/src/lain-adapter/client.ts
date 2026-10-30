@@ -415,7 +415,7 @@ export class RealLainAdapter implements LainAdapter {
 }
 
 export async function createLainClient(config: LainClientConfig): Promise<LainAdapter> {
-  const timeoutMs = config.timeoutMs ?? 10_000;
+  const timeoutMs = config.timeoutMs ?? 20_000;
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   const adapter = new RealLainAdapter(config, 'unknown');
@@ -424,7 +424,9 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const retries = config.maxRetries ?? (process.env.NODE_ENV === 'test' ? 0 : 10);
+    const retries =
+      config.maxRetries ??
+      (process.env.NODE_ENV === 'test' ? 0 : Math.max(10, Math.floor(timeoutMs / 500)));
     const listTools = async (): Promise<string[]> => {
       let attempts = 0;
       while (true) {

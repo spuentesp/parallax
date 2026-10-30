@@ -59,6 +59,8 @@ ENV NODE_ENV=production \
     LAIN_URL=http://127.0.0.1:9999/mcp \
     CLUSTER_A_LAIN_URL=http://127.0.0.1:9999/mcp \
     CLUSTER_B_LAIN_URL=http://127.0.0.1:9999/mcp \
+    LAIN_DISABLE_FILE_WATCHER=1 \
+    LAIN_DISABLE_COMMIT_SYNC=1 \
     DATABASE_PATH=/data/parallax.db \
     WEB_BUNDLE_PATH=/app/packages/web/dist
 
