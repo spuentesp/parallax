@@ -35,7 +35,7 @@ export function OpenPrPicker({ orgId }: { orgId: string }): React.ReactElement {
       {isLoading && <p className="text-sm text-muted">Loading pull requests…</p>}
       {error && <p className="text-sm text-error">{String(error)}</p>}
 
-      {data && data.errors.length > 0 && (
+      {data && (data.errors?.length ?? 0) > 0 && (
         <ul className="text-xs text-error mb-3 space-y-1">
           {data.errors.map((e) => (
             <li key={e.repo}>
@@ -44,20 +44,20 @@ export function OpenPrPicker({ orgId }: { orgId: string }): React.ReactElement {
           ))}
         </ul>
       )}
-      {data && data.truncated.length > 0 && (
+      {data && (data.truncated?.length ?? 0) > 0 && (
         <p className="text-xs text-muted mb-3">
           Some requests could not be listed for {data.truncated.join(', ')} (page limit or missing
           commit data).
         </p>
       )}
-      {data && data.skipped.length > 0 && (
+      {data && (data.skipped?.length ?? 0) > 0 && (
         <p className="text-xs text-muted mb-3">
           Not on GitHub or GitLab, so no requests to list:{' '}
           {data.skipped.map((s) => s.repo).join(', ')}.
         </p>
       )}
 
-      {data && data.prs.length === 0 && !isLoading && (
+      {data && (data.prs?.length ?? 0) === 0 && !isLoading && (
         <p className="text-sm text-muted">
           No open requests in this workspace&apos;s GitHub or GitLab repos.
         </p>

@@ -1171,6 +1171,9 @@ export async function buildDemoServer() {
         updatedAt: new Date().toISOString(),
       },
     ],
+    skipped: [],
+    errors: [],
+    truncated: [],
   }));
 
   // Map View
@@ -1192,7 +1195,7 @@ export async function buildDemoServer() {
 
     const expand = new Set(body.expand ?? []);
     for (const n of allNodes) {
-      if (n.kind === 'repo' || n.kind === 'service') expand.add(n.id);
+      if (n.kind === 'repo' || n.kind === 'service' || n.kind === 'group') expand.add(n.id);
     }
 
     let filteredNodes = allNodes;
@@ -1226,7 +1229,40 @@ export async function buildDemoServer() {
       };
     });
 
-    const activeEdges = filteredEdges.filter((e) => visibleIds.has(e.source) && visibleIds.has(e.target));
+    const byId = new Map(filteredNodes.map((n) => [n.id, n]));
+    const ancestorsOf = (id: string): string[] => {
+      const out: string[] = [];
+      let cur = byId.get(id)?.parent;
+      while (cur) {
+        out.push(cur);
+        cur = byId.get(cur)?.parent;
+      }
+      return out;
+    };
+    const lift = (id: string): string | null => {
+      if (visibleIds.has(id)) return id;
+      for (const a of ancestorsOf(id)) if (visibleIds.has(a)) return a;
+      return null;
+    };
+
+    const agg = new Map<string, OrgEdge>();
+    for (const e of filteredEdges) {
+      const s = lift(e.source);
+      const t = lift(e.target);
+      if (s === null || t === null || s === t) continue;
+      const key = `${e.kind}:${s}->${t}`;
+      const prev = agg.get(key);
+      if (!prev) {
+        agg.set(key, { ...e, id: key, source: s, target: t });
+        continue;
+      }
+      prev.count += e.count;
+      prev.deterministicCount += e.deterministicCount;
+      prev.inferredCount += e.inferredCount;
+      prev.confidence = Math.max(prev.confidence, e.confidence);
+      if (e.provenance === 'deterministic') prev.provenance = 'deterministic';
+    }
+    const activeEdges = [...agg.values()];
 
     const response: MapViewResponse = {
       nodes: projected,
@@ -1728,18 +1764,56 @@ export async function buildDemoServer() {
       },
     ],
     codeImpact: {
-      baseSha: 'cc999543',
-      headSha: 'f8d39a1c',
-      touchedSymbols: [
-        'openshell.v1.CreateSandboxRequest.security_context',
-        'openshell_gateway::sandbox::create_sandbox',
-        'nemoclaw_state::models::session_table::SandboxSessionTable',
+      repo: 'OpenShell',
+      index: { commit: 'cc999543', matchesBase: true },
+      filesChanged: 2,
+      filesAnalyzed: 2,
+      highestRisk: 'high',
+      symbols: [
+        {
+          name: 'CreateSandboxRequest.security_context',
+          kind: 'Field',
+          repo: 'OpenShell',
+          path: 'proto/openshell/v1/sandbox.proto',
+          line: 28,
+          change: 'edited',
+          direct: 4,
+          transitive: 9,
+          risk: 'high',
+          untested: false,
+          dependents: [
+            { name: 'dispatch_agent_job', path: 'NeMo-Fabric/src/fabric/sandbox_runner.py' },
+            { name: 'provision_session', path: 'NemoClaw/crates/nemoclaw-node/src/worker.rs' },
+          ],
+        },
+        {
+          name: 'create_sandbox',
+          kind: 'Function',
+          repo: 'OpenShell',
+          path: 'crates/openshell-gateway/src/sandbox.rs',
+          line: 42,
+          change: 'edited',
+          direct: 2,
+          transitive: 6,
+          risk: 'medium',
+          untested: false,
+          dependents: [
+            { name: 'handle_create_sandbox_rpc', path: 'crates/openshell-gateway/src/server.rs' },
+          ],
+        },
       ],
-      blastRadius: {
-        directDependents: 4,
-        transitiveDependents: 9,
-        crossRepoDependents: 2,
+      newDefinitions: 1,
+      moduleScopeFiles: [],
+      skipped: {
+        nonCode: 0,
+        tests: 0,
+        addedFiles: 0,
+        noDiff: 0,
+        overFileLimit: 0,
+        reposWithoutIndex: [],
+        reposSkipped: [],
       },
+      gaps: [],
     },
     coverage: {
       complete: true,

@@ -120,6 +120,12 @@ async function main() {
   const assessmentsLink = page.locator('a[href*="assessments"]').first();
   if (await assessmentsLink.isVisible()) {
     await assessmentsLink.click();
+    await sleep(3000);
+    const prRow = page.locator('a[href*="asm_openshell_pr_42"], a:has-text("PR #42")').first();
+    if (await prRow.isVisible()) {
+      console.log('  Opening PR #42 Assessment Impact Report...');
+      await prRow.click();
+    }
   }
   await sleep(15000);
 

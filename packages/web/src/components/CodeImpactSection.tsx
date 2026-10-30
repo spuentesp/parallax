@@ -14,11 +14,12 @@ const RISK_STYLE: Record<CodeRisk, string> = {
 const RISK_ORDER: Record<CodeRisk, number> = { high: 3, medium: 2, low: 1, unknown: 0 };
 
 export function CodeImpactSection({ impact }: { impact: CodeImpact }): React.ReactElement {
-  const rows = [...impact.symbols].sort(
+  const symbols = impact.symbols ?? [];
+  const rows = [...symbols].sort(
     (a, b) =>
       RISK_ORDER[b.risk] - RISK_ORDER[a.risk] || (b.transitive ?? -1) - (a.transitive ?? -1),
   );
-  const sk = impact.skipped;
+  const sk = impact.skipped ?? { tests: 0, nonCode: 0, addedFiles: 0, noDiff: 0, overFileLimit: 0 };
   const skipped = [
     sk.tests > 0 ? `${String(sk.tests)} test file(s)` : '',
     sk.nonCode > 0 ? `${String(sk.nonCode)} non-code file(s)` : '',
@@ -30,7 +31,7 @@ export function CodeImpactSection({ impact }: { impact: CodeImpact }): React.Rea
   return (
     <section data-testid="code-impact">
       <h2 className="font-semibold mb-2">
-        Code impact <span className="text-muted font-normal">({impact.symbols.length})</span>
+        Code impact <span className="text-muted font-normal">({symbols.length})</span>
       </h2>
       <div className="rounded-xl border border-border bg-surface p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -134,14 +135,14 @@ export function CodeImpactSection({ impact }: { impact: CodeImpact }): React.Rea
               so there are no dependents to measure.
             </li>
           )}
-          {impact.moduleScopeFiles.length > 0 && (
+          {(impact.moduleScopeFiles ?? []).length > 0 && (
             <li>
               Changes outside any definition (imports, constants) in{' '}
               <span className="font-mono">{impact.moduleScopeFiles.join(', ')}</span>.
             </li>
           )}
           {skipped.length > 0 && <li>Not analyzed: {skipped.join(', ')}.</li>}
-          {impact.gaps.map((g) => (
+          {(impact.gaps ?? []).map((g) => (
             <li key={g}>{g}</li>
           ))}
         </ul>
