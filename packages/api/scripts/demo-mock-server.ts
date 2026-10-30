@@ -31,6 +31,8 @@
  *   pnpm --filter @parallax/api exec tsx scripts/demo-mock-server.ts [--port 8080]
  */
 
+import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import type {
   OrgEdge,
@@ -611,6 +613,31 @@ impl SandboxSessionTable {
 
 // ── 4. Scripted NVIDIA Answers for Demo Video & Use Cases ───────────────────
 
+const CACHE_FILE = fileURLToPath(new URL('../test/fixtures/nvidia-agent-cache.json', import.meta.url));
+interface CachedAgentRun {
+  caseId: string;
+  wsId: string;
+  question: string;
+  answer: string;
+  explanationStatus: string;
+  claims: unknown[];
+  claimsSummary: unknown;
+  citations: unknown;
+  budget: Record<string, unknown>;
+  model: string;
+  toolCallLog: Array<{ tool: string; ok: boolean; args: string }>;
+}
+
+let CACHED_AGENT_RUNS: Record<string, CachedAgentRun> = {};
+if (fs.existsSync(CACHE_FILE)) {
+  try {
+    CACHED_AGENT_RUNS = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
+    console.log(`📦 Loaded ${Object.keys(CACHED_AGENT_RUNS).length} real Nemotron agent responses from ${CACHE_FILE}`);
+  } catch (err) {
+    console.warn('⚠️ Could not load nvidia-agent-cache.json:', err);
+  }
+}
+
 interface ScriptedScenario {
   matches: (q: string, wsId?: string) => boolean;
   progressSteps: Array<{
@@ -657,6 +684,12 @@ The analysis engine followed an **8-layer deep dependency chain** across 3 repos
             ↳ [7] NemoClaw (Repository / DAL)  : insert_session_state()
               ↳ [8] NemoClaw (ORM Model Table)  : SandboxSessionTable::mutate()
 \`\`\`
+
+#### Nemotron Verified Finding:
+${
+  CACHED_AGENT_RUNS.deep_call_stack?.answer ??
+  `The ORM table \`objects\` in the persistence layer is read by several Postgres functions (e.g., \`count_in_workspace\`, \`create_if_workspace_count_below\`). Those functions bind to the \`sql-read\` operation, which is invoked by the RPC handlers exposed by \`openshell-gateway\`. The \`openshell-sdk\` consumes those RPC endpoints (e.g., \`CreateSandbox\`, \`ListSandboxes\`) to call the gateway. Thus the call stack is: \`objects\` table → Postgres persistence functions → \`sql-read\` binding → RPC handler → \`openshell-sdk\` client.`
+}
 
 #### Architectural Highlights:
 1. **Consumer Origin (\`NeMo-Fabric\`):**
@@ -743,18 +776,18 @@ The analysis engine followed an **8-layer deep dependency chain** across 3 repos
         query: 'deep-call-stack',
       },
       conversation: { id: 'conv_demo_deep_stack', seq: 1 },
-      budget: {
-        maxToolCalls: 8,
+      budget: CACHED_AGENT_RUNS.deep_call_stack?.budget ?? {
+        maxToolCalls: 12,
         maxModelMs: 120000,
-        toolCallsUsed: 3,
-        modelMsUsed: 1910,
+        toolCallsUsed: 6,
+        modelMsUsed: 21594,
         exhausted: false,
         cutShort: false,
-        rounds: 2,
-        promptTokens: 18200,
-        completionTokens: 490,
+        rounds: 8,
+        promptTokens: 117833,
+        completionTokens: 1881,
       },
-      model: 'nvidia/nemotron-3-super-120b-a12b',
+      model: CACHED_AGENT_RUNS.deep_call_stack?.model ?? 'nvidia/nemotron-3-super-120b-a12b',
       tool_calls: [
         {
           id: 'call_chain_1',
@@ -840,6 +873,12 @@ The analysis engine followed an **8-layer deep dependency chain** across 3 repos
    - Relationship is **inferred** with confidence 0.78 based on Rust gRPC client stubs in \`crates/nemoclaw-router/\`.
 
 Additionally, **openshell-sdk** (internal to repo \`OpenShell\`) consumes the \`Exec\` RPC method for Python SDK client sessions.
+
+#### Nemotron Verified Finding:
+${
+  CACHED_AGENT_RUNS.openshell_consumers?.answer ??
+  'The OpenShell gateway gRPC API is consumed by the openshell-sdk service (from the openshell repository).'
+}
 
 **Engine Verification:** The static analysis engine confirmed that \`openshell-gateway\` maintains **zero downstream dependencies** back into \`NeMo-Fabric\` or \`NemoClaw\`.`,
       explanation_status: 'available',
@@ -971,7 +1010,13 @@ Additionally, **openshell-sdk** (internal to repo \`OpenShell\`) consumes the \`
 
 2. **nat-examples** (repo: \`NeMo-Agent-Toolkit-Examples\`):
    - Consumes \`http:POST /chat\` for automated workflow evaluation benchmarks.
-   - Relationship is **inferred** (85% confidence) from sample orchestration scripts.`,
+   - Relationship is **inferred** (85% confidence) from sample orchestration scripts.
+
+#### Nemotron Verified Finding:
+${
+  CACHED_AGENT_RUNS.nat_runtime?.answer ??
+  'No workspace service dials the nat agent runtime HTTP or WebSocket endpoints directly without reverse proxy configuration.'
+}`,
       explanation_status: 'available',
       claims: [
         {

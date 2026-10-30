@@ -24,6 +24,7 @@
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
     "dev:api": "pnpm --filter @parallax/api dev",
     "dev:mock": "pnpm --filter @parallax/api mock:server",
+    "cache:nvidia": "pnpm --filter @parallax/api cache:nvidia",
     "dev:web": "pnpm --filter @parallax/web dev",
     "dev:mcp": "pnpm --filter @parallax/mcp dev",
     "gate:release": "pnpm --filter @parallax/api run gate:release",

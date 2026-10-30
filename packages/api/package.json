@@ -14,6 +14,7 @@
     "test:heldout": "vitest run --config vitest.heldout.config.ts",
     "smoke": "tsx scripts/smoke.ts",
     "mock:server": "tsx scripts/demo-mock-server.ts",
+    "cache:nvidia": "tsx --env-file-if-exists=../../.env scripts/cache-nvidia-agent.ts",
     "gate:release": "tsx scripts/gate-g1.ts && tsx scripts/gate-g2.ts && tsx scripts/gate-graph.ts && tsx --env-file-if-exists=../../.env scripts/gate-g3.ts",
     "gate:saleor": "tsx scripts/gate-saleor.ts",
     "gate:graphql": "tsx scripts/gate-graphql.ts"

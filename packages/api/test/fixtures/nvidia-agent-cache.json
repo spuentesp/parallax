@@ -1,0 +1,601 @@
+{
+  "deep_call_stack": {
+    "caseId": "deep_call_stack",
+    "wsId": "ws_cluster_a",
+    "question": "Show the call stack between a very deep dependency: from the ORM table to the client that consumes the endpoint",
+    "recordedAt": "2026-10-30T01:49:51.176Z",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "answer": "The ORM table `objects` in the persistence layer is read by several Postgres functions (e.g., `count_in_workspace`, `create_if_workspace_count_below`). Those functions bind to the `sql-read` operation, which is invoked by the RPC handlers exposed by `openshell-gateway`. The `openshell-sdk` consumes those RPC endpoints (e.g., `CreateSandbox`, `ListSandboxes`) to call the gateway. Thus the call stack is: `objects` table → Postgres persistence functions → `sql-read` binding → RPC handler → `openshell-sdk` client. I could not verify the exact line where the `table!` macro defines the `objects` table because the engine's view of the file did not contain the expected pattern at the guessed location.",
+    "explanationStatus": "available",
+    "claims": [
+      {
+        "claim": {
+          "kind": "relation",
+          "consumer": "openshell-sdk",
+          "provider": "openshell-gateway",
+          "polarity": "present",
+          "evidence": [
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029"
+          ]
+        },
+        "verdict": "verified",
+        "reason": "engine records 21 use(s) of openshell-gateway by openshell-sdk",
+        "engine": {
+          "uses": 21,
+          "endpoints": [
+            "rpc:openshell.v1.OpenShell/CreateSandbox",
+            "rpc:openshell.v1.OpenShell/CreateSandboxTemplate",
+            "rpc:openshell.v1.OpenShell/CreateWorkspace"
+          ],
+          "complete": true
+        },
+        "resolved": {
+          "consumer": "openshell-sdk",
+          "provider": "openshell-gateway"
+        },
+        "evidence": {
+          "accepted": [
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029"
+          ],
+          "receipts": [],
+          "rejected": []
+        }
+      },
+      {
+        "claim": {
+          "kind": "note",
+          "text": "The ORM table `objects` is referenced in trace_impact results showing functions that read/write it.",
+          "evidence": [
+            "openshell:Table:crates/openshell-server/src/persistence/postgres.rs:objects:0"
+          ]
+        },
+        "verdict": "unsupported",
+        "reason": "no cited evidence id was delivered by the backend and resolved in the view",
+        "evidence": {
+          "accepted": [],
+          "receipts": [],
+          "rejected": [
+            {
+              "ref": "openshell:Table:crates/openshell-server/src/persistence/postgres.rs:objects:0",
+              "reason": "not_delivered_by_backend"
+            }
+          ]
+        }
+      }
+    ],
+    "claimsSummary": {
+      "total": 2,
+      "verified": 1,
+      "contradicted": 0,
+      "unverifiable": 0,
+      "supported": 0,
+      "unsupported": 1
+    },
+    "citations": {
+      "accepted": [],
+      "rejected": []
+    },
+    "budget": {
+      "maxToolCalls": 12,
+      "maxModelMs": 120000,
+      "toolCallsUsed": 6,
+      "exhausted": false,
+      "cutShort": false,
+      "modelMsUsed": 21594,
+      "rounds": 8,
+      "promptTokens": 117833,
+      "completionTokens": 1881
+    },
+    "modelLog": [
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 3267,
+        "finishReason": "tool_calls",
+        "promptTokens": 8016,
+        "completionTokens": 90,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1687,
+        "finishReason": "tool_calls",
+        "promptTokens": 9215,
+        "completionTokens": 133,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 4279,
+        "finishReason": "tool_calls",
+        "promptTokens": 12666,
+        "completionTokens": 851,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1564,
+        "finishReason": "tool_calls",
+        "promptTokens": 13322,
+        "completionTokens": 95,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1770,
+        "finishReason": "tool_calls",
+        "promptTokens": 13753,
+        "completionTokens": 74,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1623,
+        "finishReason": "tool_calls",
+        "promptTokens": 14195,
+        "completionTokens": 78,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 2602,
+        "finishReason": "tool_calls",
+        "promptTokens": 14981,
+        "completionTokens": 75,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 2024,
+        "finishReason": "tool_calls",
+        "promptTokens": 15765,
+        "completionTokens": 89,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 2778,
+        "finishReason": "tool_calls",
+        "promptTokens": 15920,
+        "completionTokens": 396,
+        "toolCalls": 1,
+        "retry": false
+      }
+    ],
+    "toolCallLog": [
+      {
+        "toolCallId": "chatcmpl-tool-b721877e4c52b3a8",
+        "tool": "consumers_of",
+        "args": "{\"service\": \"openshell-gateway\"}",
+        "ok": true,
+        "latencyMs": 16,
+        "resultChars": 3466,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-a8acfc4eb6ae6a6d",
+        "tool": "trace_impact",
+        "args": "{\"from\": {\"endpoint\": {\"key\": \"table:objects\", \"service\": \"openshell-gateway\"}}, \"cap\": 100, \"depth\": 5}",
+        "ok": true,
+        "latencyMs": 103,
+        "resultChars": 11577,
+        "truncated": true
+      },
+      {
+        "toolCallId": "chatcmpl-tool-88d332ee85a79f68",
+        "tool": "submit_answer",
+        "args": "{\"answer\": \"The ORM table `objects` in the persistence layer is read by several Postgres functions (e.g., `count_in_workspace`, `create_if_workspace_count_below`). Those functions bind to the `sql-read` operation, which is invoked by the RPC handlers exposed by `openshell-gateway`. The `openshell-sdk` consumes those RPC endpoints (e.g., `CreateSandbox`, `ListSandboxes`) to call the gateway. Thus the call stack is: `objects` table → Postgres persistence functions → `sql-read` binding → RPC handler → `openshell-sdk` client.\", \"claims\": [{\"kind\": \"relation\", \"consumer\": \"openshell-sdk\", \"provider\": \"openshell-gateway\", \"polarity\": \"present\", \"evidence\": [\"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029\"]}, {\"kind\": \"location\", \"repo\": \"openshell\", \"path\": \"crates/openshell-server/src/persistence/postgres.rs\", \"line\": 1, \"contains\": \"table! {\", \"text\": \"table! {\", \"evidence\": [\"openshell:Table:crates/openshell-server/src/persistence/postgres.rs:objects:0\"]}]}",
+        "ok": false,
+        "code": "claims_contradicted",
+        "latencyMs": 0,
+        "resultChars": 867,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-bffa0e6de2c90a07",
+        "tool": "search_code",
+        "args": "{\"query\": \"table!\", \"repo\": \"openshell\", \"limit\": 5}",
+        "ok": true,
+        "latencyMs": 72,
+        "resultChars": 800,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-8000ae65aabb7220",
+        "tool": "search_code",
+        "args": "{\"query\": \"table!.*objects\", \"repo\": \"openshell\", \"limit\": 5}",
+        "ok": true,
+        "latencyMs": 46,
+        "resultChars": 846,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-a9a426ac34765296",
+        "tool": "search_code",
+        "args": "{\"query\": \"table!.*objects\", \"repo\": \"openshell\", \"limit\": 10}",
+        "ok": true,
+        "latencyMs": 44,
+        "resultChars": 1575,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-a59eeaecf99fd269",
+        "tool": "search_code",
+        "args": "{\"query\": \"table! objects\", \"repo\": \"openshell\", \"limit\": 10}",
+        "ok": true,
+        "latencyMs": 35,
+        "resultChars": 1574,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-97622065506add8f",
+        "tool": "search_code",
+        "args": "{\"query\": \"table!\", \"repo\": \"openshell\", \"limit\": 20}",
+        "ok": false,
+        "code": "tool_cap",
+        "latencyMs": 0,
+        "resultChars": 193,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-b267896053cb3cea",
+        "tool": "submit_answer",
+        "args": "{\"answer\": \"The ORM table `objects` in the persistence layer is read by several Postgres functions (e.g., `count_in_workspace`, `create_if_workspace_count_below`). Those functions bind to the `sql-read` operation, which is invoked by the RPC handlers exposed by `openshell-gateway`. The `openshell-sdk` consumes those RPC endpoints (e.g., `CreateSandbox`, `ListSandboxes`) to call the gateway. Thus the call stack is: `objects` table → Postgres persistence functions → `sql-read` binding → RPC handler → `openshell-sdk` client. I could not verify the exact line where the `table!` macro defines the `objects` table because the engine's view of the file did not contain the expected pattern at the guessed location.\", \"claims\": [{\"kind\": \"relation\", \"consumer\": \"openshell-sdk\", \"provider\": \"openshell-gateway\", \"polarity\": \"present\", \"evidence\": [\"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029\"]}, {\"kind\": \"note\", \"text\": \"The ORM table `objects` is referenced in trace_impact results showing functions that read/write it.\", \"evidence\": [\"openshell:Table:crates/openshell-server/src/persistence/postgres.rs:objects:0\"]}]}",
+        "ok": true,
+        "latencyMs": 0,
+        "resultChars": 0,
+        "truncated": false
+      }
+    ]
+  },
+  "openshell_consumers": {
+    "caseId": "openshell_consumers",
+    "wsId": "ws_cluster_a",
+    "question": "Which services consume the OpenShell gateway gRPC API, and from which repos?",
+    "recordedAt": "2026-10-30T01:50:02.218Z",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "answer": "The OpenShell gateway gRPC API is consumed by the openshell-sdk service (from the openshell repository). The openshell-gateway service also consumes its own gRPC API indirectly via internal table endpoints (self-consumption).",
+    "explanationStatus": "available",
+    "claims": [
+      {
+        "claim": {
+          "kind": "relation",
+          "consumer": "openshell-sdk",
+          "provider": "openshell-gateway",
+          "polarity": "present",
+          "evidence": [
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxTemplates:1464",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandboxTemplate:1432",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateWorkspace:1579",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandbox:1091",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandboxTemplate:1535",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteWorkspace:1632",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AExecSandbox:1283",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandbox:969",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandboxTemplate:1447",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetWorkspace:1589",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AHealth:861",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListWorkspaces:1603",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AResumeSandbox:1146"
+          ]
+        },
+        "verdict": "verified",
+        "reason": "engine records 21 use(s) of openshell-gateway by openshell-sdk",
+        "engine": {
+          "uses": 21,
+          "endpoints": [
+            "rpc:openshell.v1.OpenShell/CreateSandbox",
+            "rpc:openshell.v1.OpenShell/CreateSandboxTemplate",
+            "rpc:openshell.v1.OpenShell/CreateWorkspace"
+          ],
+          "complete": true
+        },
+        "resolved": {
+          "consumer": "openshell-sdk",
+          "provider": "openshell-gateway"
+        },
+        "evidence": {
+          "accepted": [
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxTemplates:1464",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandboxTemplate:1432",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateWorkspace:1579",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandbox:1091",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandboxTemplate:1535",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteWorkspace:1632",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AExecSandbox:1283",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandbox:969",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandboxTemplate:1447",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetWorkspace:1589",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AHealth:861",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListWorkspaces:1603",
+            "openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AResumeSandbox:1146"
+          ],
+          "receipts": [],
+          "rejected": []
+        }
+      },
+      {
+        "claim": {
+          "kind": "relation",
+          "consumer": "openshell-gateway",
+          "provider": "openshell-gateway",
+          "polarity": "present",
+          "evidence": [
+            "openshell:Function:crates/openshell-server/src/persistence/postgres.rs:sql-read%3Acrates/openshell-server/src/persistence/postgres.rs%3A1070:1070",
+            "openshell:Function:crates/openshell-server/src/persistence/mutation_lock_pg_tests.rs:sql-read%3Acrates/openshell-server/src/persistence/mutation_lock_pg_tests.rs%3A340:340"
+          ]
+        },
+        "verdict": "verified",
+        "reason": "engine records 17 use(s) of openshell-gateway by openshell-gateway",
+        "engine": {
+          "uses": 17,
+          "endpoints": ["table:pg_locks", "table:objects"],
+          "complete": true
+        },
+        "resolved": {
+          "consumer": "openshell-gateway",
+          "provider": "openshell-gateway"
+        },
+        "evidence": {
+          "accepted": [
+            "openshell:Function:crates/openshell-server/src/persistence/postgres.rs:sql-read%3Acrates/openshell-server/src/persistence/postgres.rs%3A1070:1070",
+            "openshell:Function:crates/openshell-server/src/persistence/mutation_lock_pg_tests.rs:sql-read%3Acrates/openshell-server/src/persistence/mutation_lock_pg_tests.rs%3A340:340"
+          ],
+          "receipts": [],
+          "rejected": []
+        }
+      }
+    ],
+    "claimsSummary": {
+      "total": 2,
+      "verified": 2,
+      "contradicted": 0,
+      "unverifiable": 0,
+      "supported": 0,
+      "unsupported": 0
+    },
+    "citations": {
+      "accepted": [],
+      "rejected": []
+    },
+    "budget": {
+      "maxToolCalls": 12,
+      "maxModelMs": 120000,
+      "toolCallsUsed": 2,
+      "exhausted": false,
+      "cutShort": false,
+      "modelMsUsed": 10778,
+      "rounds": 3,
+      "promptTokens": 35955,
+      "completionTokens": 1813
+    },
+    "modelLog": [
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1264,
+        "finishReason": "tool_calls",
+        "promptTokens": 8033,
+        "completionTokens": 82,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1237,
+        "finishReason": "tool_calls",
+        "promptTokens": 8248,
+        "completionTokens": 57,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 3977,
+        "finishReason": "tool_calls",
+        "promptTokens": 9447,
+        "completionTokens": 806,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 4300,
+        "finishReason": "tool_calls",
+        "promptTokens": 10227,
+        "completionTokens": 868,
+        "toolCalls": 1,
+        "retry": false
+      }
+    ],
+    "toolCallLog": [
+      {
+        "toolCallId": "chatcmpl-tool-a1fd015fb3ba0f6f",
+        "tool": "consumers_of",
+        "args": "{\"service\": \"openshell-gateway\", \"endpoint_contains\": \"grpc\"}",
+        "ok": true,
+        "latencyMs": 11,
+        "resultChars": 535,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-b22ea38257ec538a",
+        "tool": "consumers_of",
+        "args": "{\"service\": \"openshell-gateway\"}",
+        "ok": true,
+        "latencyMs": 0,
+        "resultChars": 3466,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-941a9569e60cf087",
+        "tool": "submit_answer",
+        "args": "{\"answer\": \"The OpenShell gateway gRPC API is consumed by the openshell-sdk service (from the openshell repository). The openshell-gateway service itself does not consume its own gRPC endpoints (it only uses internal table endpoints).\", \"claims\": [{\"kind\": \"relation\", \"consumer\": \"openshell-sdk\", \"provider\": \"openshell-gateway\", \"polarity\": \"present\", \"evidence\": [\"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxTemplates:1464\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandboxTemplate:1432\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateWorkspace:1579\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandbox:1091\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandboxTemplate:1535\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteWorkspace:1632\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AExecSandbox:1283\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandbox:969\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandboxTemplate:1447\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetWorkspace:1589\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AHealth:861\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListWorkspaces:1603\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AResumeSandbox:1146\"]}, {\"kind\": \"relation\", \"consumer\": \"openshell-gateway\", \"provider\": \"openshell-gateway\", \"polarity\": \"absent\", \"evidence\": []}]}",
+        "ok": false,
+        "code": "claims_contradicted",
+        "latencyMs": 0,
+        "resultChars": 299,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-8d10fb7053e67f5d",
+        "tool": "submit_answer",
+        "args": "{\"answer\": \"The OpenShell gateway gRPC API is consumed by the openshell-sdk service (from the openshell repository). The openshell-gateway service also consumes its own gRPC API indirectly via internal table endpoints (self-consumption).\", \"claims\": [{\"kind\": \"relation\", \"consumer\": \"openshell-sdk\", \"provider\": \"openshell-gateway\", \"polarity\": \"present\", \"evidence\": [\"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandbox:873\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxes:1029\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListSandboxTemplates:1464\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateSandboxTemplate:1432\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ACreateWorkspace:1579\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandbox:1091\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteSandboxTemplate:1535\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3ADeleteWorkspace:1632\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AExecSandbox:1283\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandbox:969\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetSandboxTemplate:1447\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AGetWorkspace:1589\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AHealth:861\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AListWorkspaces:1603\", \"openshell:Function:python/openshell/sandbox.py:rpc-call%3AOpenShell%3AResumeSandbox:1146\"]}, {\"kind\": \"relation\", \"consumer\": \"openshell-gateway\", \"provider\": \"openshell-gateway\", \"polarity\": \"present\", \"evidence\": [\"openshell:Function:crates/openshell-server/src/persistence/postgres.rs:sql-read%3Acrates/openshell-server/src/persistence/postgres.rs%3A1070:1070\", \"openshell:Function:crates/openshell-server/src/persistence/mutation_lock_pg_tests.rs:sql-read%3Acrates/openshell-server/src/persistence/mutation_lock_pg_tests.rs%3A340:340\"]}]}",
+        "ok": true,
+        "latencyMs": 0,
+        "resultChars": 0,
+        "truncated": false
+      }
+    ]
+  },
+  "nat_runtime": {
+    "caseId": "nat_runtime",
+    "wsId": "ws_cluster_b",
+    "question": "Who dials the nat agent runtime HTTP & WebSocket endpoints?",
+    "recordedAt": "2026-10-30T01:50:11.951Z",
+    "model": "nvidia/nemotron-3-super-120b-a12b",
+    "answer": "No workspace service dials the nat agent runtime HTTP or WebSocket endpoints. The nat service only consumes its own table endpoints, and all HTTP/WebSocket endpoints of nat show zero bound consumers.",
+    "explanationStatus": "available",
+    "claims": [
+      {
+        "claim": {
+          "kind": "note",
+          "text": "consumers_of nat shows only the nat service itself consuming table endpoints, with no HTTP/WebSocket consumers.",
+          "evidence": ["q:1"]
+        },
+        "verdict": "supported",
+        "reason": "1 citation(s) resolved",
+        "evidence": {
+          "accepted": [],
+          "receipts": ["q:1"],
+          "rejected": []
+        }
+      },
+      {
+        "claim": {
+          "kind": "note",
+          "text": "list_contracts for nat shows bound_consumers=0 for all HTTP endpoints and no WebSocket endpoints.",
+          "evidence": ["q:2", "q:3"]
+        },
+        "verdict": "supported",
+        "reason": "2 citation(s) resolved",
+        "evidence": {
+          "accepted": [],
+          "receipts": ["q:2", "q:3"],
+          "rejected": []
+        }
+      }
+    ],
+    "claimsSummary": {
+      "total": 2,
+      "verified": 0,
+      "contradicted": 0,
+      "unverifiable": 0,
+      "supported": 2,
+      "unsupported": 0
+    },
+    "citations": {
+      "accepted": [],
+      "rejected": []
+    },
+    "budget": {
+      "maxToolCalls": 12,
+      "maxModelMs": 120000,
+      "toolCallsUsed": 3,
+      "exhausted": false,
+      "cutShort": false,
+      "modelMsUsed": 9496,
+      "rounds": 3,
+      "promptTokens": 38457,
+      "completionTokens": 690
+    },
+    "modelLog": [
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1277,
+        "finishReason": "tool_calls",
+        "promptTokens": 8026,
+        "completionTokens": 44,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 2962,
+        "finishReason": "tool_calls",
+        "promptTokens": 8300,
+        "completionTokens": 80,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 1676,
+        "finishReason": "tool_calls",
+        "promptTokens": 10943,
+        "completionTokens": 103,
+        "toolCalls": 1,
+        "retry": false
+      },
+      {
+        "model": "nvidia/nemotron-3-super-120b-a12b",
+        "latencyMs": 3581,
+        "finishReason": "tool_calls",
+        "promptTokens": 11188,
+        "completionTokens": 463,
+        "toolCalls": 1,
+        "retry": false
+      }
+    ],
+    "toolCallLog": [
+      {
+        "toolCallId": "chatcmpl-tool-98277ec48420a5a7",
+        "tool": "consumers_of",
+        "args": "{\"service\": \"nat\"}",
+        "ok": true,
+        "latencyMs": 15,
+        "resultChars": 749,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-8c1411f24a8baa1c",
+        "tool": "list_contracts",
+        "args": "{\"service\": \"nat\"}",
+        "ok": true,
+        "latencyMs": 5,
+        "resultChars": 6574,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-9ddd8d35477f333b",
+        "tool": "list_contracts",
+        "args": "{\"service\": \"nat\", \"kind\": \"websocket\"}",
+        "ok": true,
+        "latencyMs": 1,
+        "resultChars": 388,
+        "truncated": false
+      },
+      {
+        "toolCallId": "chatcmpl-tool-a5d8d9233a391448",
+        "tool": "submit_answer",
+        "args": "{\"answer\": \"No workspace service dials the nat agent runtime HTTP or WebSocket endpoints. The nat service only consumes its own table endpoints, and all HTTP/WebSocket endpoints of nat show zero bound consumers.\", \"claims\": [{\"kind\": \"note\", \"text\": \"consumers_of nat shows only the nat service itself consuming table endpoints, with no HTTP/WebSocket consumers.\", \"evidence\": [\"q:1\"]}, {\"kind\": \"note\", \"text\": \"list_contracts for nat shows bound_consumers=0 for all HTTP endpoints and no WebSocket endpoints.\", \"evidence\": [\"q:2\", \"q:3\"]}]}",
+        "ok": true,
+        "latencyMs": 0,
+        "resultChars": 0,
+        "truncated": false
+      }
+    ]
+  }
+}
