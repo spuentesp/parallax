@@ -142,7 +142,7 @@ export function MapOutline({
               onClick={() => onSelect(n.id)}
               onDoubleClick={() => openable && onToggle(n.id)}
               onKeyDown={(e) => onKey(e, row, i)}
-              className={`group flex items-center gap-1.5 pr-3 py-[3px] text-[13px] cursor-pointer outline-none border-l-2 ${
+              className={`group flex items-center gap-1.5 pr-2 py-[2px] text-[11px] cursor-pointer outline-none border-l-2 ${
                 selected
                   ? 'bg-accent/10 border-accent'
                   : inFocus

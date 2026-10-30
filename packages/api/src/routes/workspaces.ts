@@ -67,11 +67,12 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         prs.push(...listing.items.map((pr) => ({ ...pr, repo: r.uri })));
         if (listing.truncated) truncated.push(r.uri);
       } catch (err) {
-        if (!(err instanceof PrUrlError) && !gl) throw err;
+        // Un fallo en un repo individual (red, autenticación, etc.) se aísla por repo
+        // y no tumba el endpoint completo para el resto de repositorios.
         errors.push({
           repo: r.uri,
           code: err instanceof PrUrlError ? err.code : 'http_error',
-          message: err instanceof Error ? err.message : 'GitLab read failed',
+          message: err instanceof Error ? err.message : 'could not list pull requests',
         });
       }
     }

@@ -157,8 +157,15 @@ export function annotateRepos(graph: OrgGraph, lainRepoIds: ReadonlySet<string>)
   };
 }
 
-function indexById(graph: OrgGraph): Map<string, OrgNode> {
-  return new Map(graph.nodes.map((n) => [n.id, n]));
+const indexCache = new WeakMap<OrgGraph, Map<string, OrgNode>>();
+
+export function indexById(graph: OrgGraph): Map<string, OrgNode> {
+  let idx = indexCache.get(graph);
+  if (!idx) {
+    idx = new Map(graph.nodes.map((n) => [n.id, n]));
+    indexCache.set(graph, idx);
+  }
+  return idx;
 }
 
 /** Ancestros de un nodo, del padre inmediato a la raíz. Tolera ciclos. */
@@ -338,20 +345,34 @@ export function projectOrgGraph(
     for (const n of ranked.slice(limit)) hiddenByCap.add(n.id);
   }
 
-  const visible = (n: OrgNode): boolean => {
-    if (hiddenByCap.has(n.id)) return false;
-    let cur = n.parent;
-    const seen = new Set<string>([n.id]);
-    while (cur !== null && byId.has(cur)) {
-      if (!expanded.has(cur) || seen.has(cur) || hiddenByCap.has(cur)) return false;
-      seen.add(cur);
-      cur = byId.get(cur)?.parent ?? null;
+  // Recorrido top-down desde raíces para calcular nodos visibles sin asignar Sets por nodo.
+  // Un nodo es raíz si no tiene padre o su padre no está en el grafo.
+  // Cualquier miembro de ciclo o bajo un padre no expandido cae como invisible.
+  const visibleIds = new Set<string>();
+  const topQueue: string[] = [];
+  for (const n of graph.nodes) {
+    if (n.parent === null || !byId.has(n.parent)) {
+      if (!hiddenByCap.has(n.id)) {
+        visibleIds.add(n.id);
+        if (expanded.has(n.id)) topQueue.push(n.id);
+      }
     }
-    return true;
-  };
+  }
+  while (topQueue.length > 0) {
+    const parentId = topQueue.pop();
+    if (!parentId) break;
+    const children = kids.get(parentId);
+    if (children) {
+      for (const child of children) {
+        if (!hiddenByCap.has(child.id) && !visibleIds.has(child.id)) {
+          visibleIds.add(child.id);
+          if (expanded.has(child.id)) topQueue.push(child.id);
+        }
+      }
+    }
+  }
 
-  const visibleNodes = graph.nodes.filter(visible);
-  const visibleIds = new Set(visibleNodes.map((n) => n.id));
+  const visibleNodes = graph.nodes.filter((n) => visibleIds.has(n.id));
 
   // Un grupo abierto con decenas de operaciones: una línea por operación es una
   // mancha. Sus relaciones se dibujan al grupo (con el total) y las de cada
@@ -363,17 +384,41 @@ export function projectOrgGraph(
   const fanout = opts.fanoutLimit ?? FANOUT_LIMIT;
   const crowdedParent = (id: string): string | null => {
     const n = byId.get(id);
-    if (!n || n.kind !== 'endpoint' || n.parent === null) return null;
+    if (n?.kind !== 'endpoint' || n.parent === null) return null;
     if (opts.pinned?.has(id)) return null;
     return (visibleKids.get(n.parent) ?? 0) > fanout && visibleIds.has(n.parent) ? n.parent : null;
   };
 
+  const liftCache = new Map<string, string | null>();
   const lift = (id: string): string | null => {
+    const cached = liftCache.get(id);
+    if (cached !== undefined) return cached;
     const crowded = visibleIds.has(id) ? crowdedParent(id) : null;
-    if (crowded !== null) return crowded;
-    if (visibleIds.has(id)) return id;
-    for (const a of ancestorsOf(id, byId)) if (visibleIds.has(a)) return a;
-    return null;
+    let res: string | null = null;
+    if (crowded !== null) {
+      res = crowded;
+    } else if (visibleIds.has(id)) {
+      res = id;
+    } else {
+      for (const a of ancestorsOf(id, byId)) {
+        if (visibleIds.has(a)) {
+          res = a;
+          break;
+        }
+      }
+    }
+    liftCache.set(id, res);
+    return res;
+  };
+
+  const ancestorSetCache = new Map<string, Set<string>>();
+  const getAncestorSet = (id: string): Set<string> => {
+    let s = ancestorSetCache.get(id);
+    if (!s) {
+      s = new Set(ancestorsOf(id, byId));
+      ancestorSetCache.set(id, s);
+    }
+    return s;
   };
 
   const agg = new Map<string, OrgEdge>();
@@ -381,7 +426,7 @@ export function projectOrgGraph(
     const s = lift(e.source);
     const t = lift(e.target);
     if (s === null || t === null || s === t) continue;
-    if (ancestorsOf(s, byId).includes(t) || ancestorsOf(t, byId).includes(s)) continue;
+    if (getAncestorSet(s).has(t) || getAncestorSet(t).has(s)) continue;
     const key = `${e.kind}:${s}->${t}`;
     const prev = agg.get(key);
     if (!prev) {
@@ -467,22 +512,53 @@ export function describeNode(graph: OrgGraph, id: string): NodeDetail | null {
   const node = byId.get(id);
   if (!node) return null;
 
+  // Índice de hijos para BFS en O(n) del subárbol
+  const childrenByParent = new Map<string, string[]>();
+  for (const n of graph.nodes) {
+    if (n.parent !== null) {
+      let list = childrenByParent.get(n.parent);
+      if (!list) {
+        list = [];
+        childrenByParent.set(n.parent, list);
+      }
+      list.push(n.id);
+    }
+  }
+
   const subtree = new Set<string>([id]);
-  for (let grew = true; grew; ) {
-    grew = false;
-    for (const n of graph.nodes) {
-      if (n.parent !== null && subtree.has(n.parent) && !subtree.has(n.id)) {
-        subtree.add(n.id);
-        grew = true;
+  const subtreeQueue = [id];
+  while (subtreeQueue.length > 0) {
+    const cur = subtreeQueue.pop();
+    if (!cur) break;
+    const kids = childrenByParent.get(cur);
+    if (kids) {
+      for (const kid of kids) {
+        if (!subtree.has(kid)) {
+          subtree.add(kid);
+          subtreeQueue.push(kid);
+        }
       }
     }
   }
 
+  const ownerCache = new Map<string, OrgNode | undefined>();
   const ownerOf = (nid: string): OrgNode | undefined => {
-    // El servicio (o, si no lo hay, el nodo mismo) que representa a `nid`.
-    const chain = [nid, ...ancestorsOf(nid, byId)];
-    for (const c of chain) if (byId.get(c)?.kind === 'service') return byId.get(c);
-    return byId.get(nid);
+    if (ownerCache.has(nid)) return ownerCache.get(nid);
+    let cur: string | null = nid;
+    let found: OrgNode | undefined;
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const n = byId.get(cur);
+      if (n?.kind === 'service') {
+        found = n;
+        break;
+      }
+      cur = n?.parent ?? null;
+    }
+    const result = found ?? byId.get(nid);
+    ownerCache.set(nid, result);
+    return result;
   };
 
   const consumers = new Map<string, NodeRelation>();

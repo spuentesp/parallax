@@ -26,9 +26,9 @@ describe('measure — exact', () => {
     expect(measure('a', 'service')).toEqual({ w: 84, h: 28 });
     expect(measure('x'.repeat(20), 'service').w).toBe(154); // 20·6.6 + 22
     expect(measure('x'.repeat(20), 'repo').w).toBe(154);
-    expect(measure('x'.repeat(20), 'endpoint').w).toBe(144); // 20·6.1 + 22
-    expect(measure('x'.repeat(20), 'file').w).toBe(144);
-    expect(measure('x'.repeat(20), 'symbol').w).toBe(144);
+    expect(measure('x'.repeat(20), 'endpoint').w).toBe(156); // 20·6.7 + 22
+    expect(measure('x'.repeat(20), 'file').w).toBe(156);
+    expect(measure('x'.repeat(20), 'symbol').w).toBe(156);
     expect(measure('x'.repeat(20), 'code').w).toBe(154); // la puerta no es monoespaciada
     expect(measure('x'.repeat(500), 'service').w).toBe(230);
     expect(measure('', 'service').w).toBe(84);

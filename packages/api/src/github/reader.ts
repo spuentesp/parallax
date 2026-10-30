@@ -165,15 +165,24 @@ export class GitHubReader {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
     try {
-      const res = await this.fetchImpl(`${this.apiBase}${path}`, {
-        method: 'GET',
-        headers: {
-          accept: 'application/vnd.github+json',
-          'user-agent': 'parallax-dry-run',
-          ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
-        },
-        signal: ctl.signal,
-      });
+      let res: Response;
+      try {
+        res = await this.fetchImpl(`${this.apiBase}${path}`, {
+          method: 'GET',
+          headers: {
+            accept: 'application/vnd.github+json',
+            'user-agent': 'parallax-dry-run',
+            ...(this.token ? { authorization: `Bearer ${this.token}` } : {}),
+          },
+          signal: ctl.signal,
+        });
+      } catch (err) {
+        if (err instanceof PrUrlError) throw err;
+        throw new PrUrlError(
+          'http_error',
+          `GitHub request failed for ${path}: ${err instanceof Error ? err.message : 'network error'}`,
+        );
+      }
       if (res.status === 403 && res.headers.get('x-ratelimit-remaining') === '0') {
         throw new PrUrlError('rate_limited', `GitHub API rate limit exceeded on ${path}`);
       }

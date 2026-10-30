@@ -6,7 +6,7 @@
 import type { MapViewResponse } from '@parallax/shared/org-map';
 import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from 'cytoscape';
 import type * as React from 'react';
-import { useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { type CyElement, layoutInput, toCyElements } from './elements.js';
 import { layoutMap, type MapLayout, type Point } from './layout.js';
 
@@ -20,6 +20,17 @@ export interface MapCanvasProps {
   onToggle: (id: string) => void;
   /** Cambia cuando el usuario pide recentrar (botón "fit" de fuera). */
   fitNonce?: number;
+  /** Trazado de punta a punta activo (clave y servicio). */
+  traceContract?: { key: string; service: string | null } | null;
+  /** Límite numérico de bifurcación (fanout) para el trazado de punta a punta. */
+  traceFanoutLimit?: number;
+}
+
+/** Controles del lienzo que la barra de fuera no puede alcanzar (zoom). */
+export interface MapCanvasHandle {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fit: () => void;
 }
 
 const TOKEN = (name: string, fallback: string): string => {
@@ -28,88 +39,114 @@ const TOKEN = (name: string, fallback: string): string => {
   return v || fallback;
 };
 
+const FONT_UI = '"Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif';
+const FONT_MONO = '"JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace';
+
 export function buildStyle(): StylesheetJson {
-  const fg = TOKEN('--color-fg', '#171717');
-  const muted = TOKEN('--color-muted', '#737373');
+  const fg = TOKEN('--color-fg', '#14161a');
+  const muted = TOKEN('--color-muted', '#667080');
   const surface = TOKEN('--color-surface', '#ffffff');
-  const accent = TOKEN('--color-accent', '#2563eb');
-  const repo = TOKEN('--color-repo', '#7c3aed');
-  const service = TOKEN('--color-service', '#2563eb');
-  const group = TOKEN('--color-group', '#0891b2');
-  const endpoint = TOKEN('--color-endpoint', '#d97706');
-  const codeC = TOKEN('--color-code', '#64748b');
-  const fileC = TOKEN('--color-file', '#65a30d');
-  const symbolC = TOKEN('--color-symbol', '#c026d3');
-  const det = TOKEN('--color-deterministic', '#0f766e');
-  const inf = TOKEN('--color-inferred', '#e11d48');
+  const accent = TOKEN('--color-accent', '#4d7c0f');
+  const repo = TOKEN('--color-repo', '#5b6572');
+  const service = TOKEN('--color-service', '#4f46e5');
+  const endpoint = TOKEN('--color-endpoint', '#475569');
+  const codeC = TOKEN('--color-code', '#6d28d9');
+  const fileC = TOKEN('--color-file', '#7c3aed');
+  const symbolC = TOKEN('--color-symbol', '#8b5cf6');
+  const det = TOKEN('--color-deterministic', '#8a97a8');
+  const inf = TOKEN('--color-inferred', '#d97706');
 
   return [
     {
       selector: 'node',
       style: {
         label: 'data(label)',
-        'font-family': 'Inter, system-ui, sans-serif',
-        'font-size': 11,
+        'font-family': FONT_UI,
+        'font-size': 12,
         color: fg,
         'text-wrap': 'ellipsis',
         'text-max-width': 'data(tw)' as unknown as string,
         'text-valign': 'center',
         'text-halign': 'center',
-        'min-zoomed-font-size': 7,
+        'min-zoomed-font-size': 8,
         'overlay-opacity': 0,
         'border-width': 1.5,
+        'transition-property': 'border-width, border-color, background-opacity, opacity',
+        'transition-duration': 120,
+        'transition-timing-function': 'ease-out',
       },
     },
+    // Repositorio: la caja más externa. Su halo suave da profundidad sin
+    // sombras (Cytoscape no las tiene).
     {
       selector: 'node.repo',
       style: {
         shape: 'round-rectangle',
+        'corner-radius': 16 as unknown as string,
         'background-color': repo,
-        'background-opacity': 0.1,
+        'background-opacity': 0.04,
         'border-color': repo,
+        'border-width': 1.5,
+        'underlay-color': repo,
+        'underlay-opacity': 0.07,
+        'underlay-padding': 4,
         'font-weight': 600,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
+        // Los repos contienen servicios, y cada servicio lleva su rótulo
+        // encima de su caja: sin esta banda, el rótulo del servicio cae
+        // sobre el borde del repo y parece tachado.
+        padding: '28px',
       },
     },
     {
       selector: 'node.service',
       style: {
         shape: 'round-rectangle',
+        'corner-radius': 12 as unknown as string,
         'background-color': service,
-        'background-opacity': 0.14,
+        'background-opacity': 0.03,
         'border-color': service,
+        'font-weight': 500,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
+        padding: '14px',
       },
     },
     {
       selector: 'node.group',
       style: {
         shape: 'round-rectangle',
-        'background-color': group,
-        'background-opacity': 0.12,
-        'border-color': group,
+        'corner-radius': 8 as unknown as string,
+        'background-color': 'transparent',
+        'background-opacity': 0,
+        'border-color': muted,
+        'border-width': 1,
+        'border-style': 'dashed',
+        'border-opacity': 0.35,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
-        'font-weight': 600,
+        padding: '10px',
+        'font-weight': 500,
+        'font-size': 10,
+        color: muted,
       },
     },
+    // Hoja: tarjeta neutra. El color lo pone el borde; el fondo es la superficie.
     {
       selector: 'node.endpoint',
       style: {
         shape: 'round-rectangle',
+        'corner-radius': 8 as unknown as string,
         'background-color': surface,
+        'background-opacity': 1,
         'border-color': endpoint,
-        'border-width': 1.5,
+        'border-width': 1.25,
         width: 'data(w)',
         height: 'data(h)',
         padding: '0px',
-        'font-size': 10,
-        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        'font-size': 11,
+        'font-family': FONT_MONO,
       },
     },
     // Grafo de código: la puerta ("Code"), archivos/módulos y símbolos.
@@ -117,40 +154,61 @@ export function buildStyle(): StylesheetJson {
       selector: 'node.code',
       style: {
         shape: 'round-rectangle',
-        'background-color': codeC,
-        'background-opacity': 0.1,
+        'corner-radius': 10 as unknown as string,
+        'background-color': 'transparent',
+        'background-opacity': 0,
         'border-color': codeC,
-        'font-weight': 600,
+        'border-width': 1,
+        'border-style': 'dashed',
+        'border-opacity': 0.45,
+        'font-weight': 500,
+        'font-size': 11,
+        color: codeC,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
+        padding: '12px',
+      },
+    },
+    {
+      selector: 'node.code:parent',
+      style: {
+        'background-color': codeC,
+        'background-opacity': 0.04,
+        'border-style': 'solid',
+        'border-opacity': 0.75,
+        'border-width': 1.25,
+        padding: '16px',
       },
     },
     {
       selector: 'node.file',
       style: {
         shape: 'round-rectangle',
+        'corner-radius': 10 as unknown as string,
         'background-color': fileC,
-        'background-opacity': 0.12,
+        'background-opacity': 0.05,
         'border-color': fileC,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
-        'font-size': 10,
-        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        padding: '16px',
+        'font-size': 11,
+        'font-family': FONT_MONO,
       },
     },
     {
       selector: 'node.symbol',
       style: {
         shape: 'round-rectangle',
+        'corner-radius': 8 as unknown as string,
         'background-color': surface,
+        'background-opacity': 1,
         'border-color': symbolC,
+        'border-width': 1.25,
         width: 'data(w)',
         height: 'data(h)',
         padding: '0px',
-        'font-size': 10,
-        'font-family': 'ui-monospace, SFMono-Regular, Menlo, monospace',
+        'font-size': 11,
+        'font-family': FONT_MONO,
       },
     },
     // Abiertos: contenedor, la etiqueta va arriba y el padding deja sitio a los hijos.
@@ -159,16 +217,68 @@ export function buildStyle(): StylesheetJson {
       style: {
         'text-valign': 'top',
         'text-halign': 'center',
-        'text-margin-y': -4,
-        padding: '16px',
+        // El rótulo vive en la banda reservada por el reparto (arriba del
+        // rectángulo): si roza el borde, parecía tachado.
+        'text-margin-y': -8,
         'compound-sizing-wrt-labels': 'exclude',
-        'background-opacity': 0.06,
         'border-style': 'solid',
       },
     },
     // Plegados con hijos: borde punteado = "hay más dentro" (doble clic).
     { selector: 'node.collapsible', style: { 'border-style': 'dashed' } },
-    { selector: 'node:selected', style: { 'border-width': 3, 'border-color': accent } },
+    // Selección: el nodo no pierde el color de su tipo; se le pone un halo.
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 2.5,
+        'outline-width': 3,
+        'outline-color': accent,
+        'outline-opacity': 0.9,
+        'outline-offset': 2,
+        'z-index': 10,
+      },
+    },
+    // Hover: el nodo responde al puntero sin cambiar de color.
+    {
+      selector: 'node.hover',
+      style: { 'border-width': 2.5, 'underlay-opacity': 0.16, 'z-index': 9 },
+    },
+    // Nodo conectado destacado cuando se selecciona su par: se muestra claro con halo
+    {
+      selector: 'node.connected-peer',
+      style: {
+        'border-width': 2.5,
+        'border-color': accent,
+        'border-style': 'solid',
+        'underlay-color': accent,
+        'underlay-opacity': 0.18,
+        'underlay-padding': 4,
+        'z-index': 9,
+      },
+    },
+    // Trazado de punta a punta: nodos y enlaces destacados a lo largo de toda la cadena
+    {
+      selector: 'node.trace-node',
+      style: {
+        'border-width': 3,
+        'border-color': accent,
+        'border-style': 'solid',
+        'underlay-color': accent,
+        'underlay-opacity': 0.28,
+        'underlay-padding': 6,
+        'z-index': 12,
+      },
+    },
+    {
+      selector: 'edge.trace-edge',
+      style: {
+        'line-color': accent,
+        'target-arrow-color': accent,
+        width: 3.2,
+        opacity: 1,
+        'z-index': 11,
+      },
+    },
     {
       selector: 'edge',
       style: {
@@ -192,7 +302,7 @@ export function buildStyle(): StylesheetJson {
         'overlay-opacity': 0,
       },
     },
-    // Determinista = trazo continuo; inferido = trazo discontinuo y otro tono.
+    // Determinista = trazo continuo y neutro; inferido = trazo discontinuo y ámbar.
     {
       selector: 'edge.deterministic',
       style: { 'line-color': det, 'target-arrow-color': det, 'line-style': 'solid' },
@@ -206,31 +316,72 @@ export function buildStyle(): StylesheetJson {
         'line-dash-pattern': [5, 4],
       },
     },
-    // Relaciones de código bajo demanda
+    // Relaciones de código bajo demanda: limpias por defecto, rótulo sólo al enfocar
     {
       selector: 'edge.code-edge',
       style: {
         'line-style': 'dashed',
         'target-arrow-shape': 'triangle',
         'arrow-scale': 0.55,
-        label: 'data(label)',
+        label: '',
         'font-size': 8,
         color: muted,
-        'text-rotation': 'autorotate',
+        opacity: 0.45,
         'text-background-color': surface,
         'text-background-opacity': 0.85,
         'text-background-padding': '1px',
+      },
+    },
+    {
+      selector: 'edge.code-edge:selected, edge.code-edge.hl, edge.code-edge.loud',
+      style: {
+        label: 'data(label)',
+        opacity: 1,
+        width: 1.8,
       },
     },
     { selector: 'edge.calls', style: { 'line-color': accent, 'target-arrow-color': accent } },
     { selector: 'edge.uses', style: { 'line-color': symbolC, 'target-arrow-color': symbolC } },
     {
       selector: 'edge.imports',
-      style: { 'line-color': muted, 'target-arrow-color': muted, 'line-style': 'dotted' },
+      style: {
+        'line-color': muted,
+        'target-arrow-color': muted,
+        'line-style': 'dotted',
+        opacity: 0.25,
+      },
     },
-    { selector: '.dim', style: { opacity: 0.12 } },
+    {
+      selector: 'edge.servedby, edge.implements',
+      style: {
+        'line-color': codeC,
+        'target-arrow-color': codeC,
+        'line-style': 'dashed',
+        'line-dash-pattern': [4, 3],
+        width: 1.5,
+        'target-arrow-shape': 'triangle',
+        'arrow-scale': 0.6,
+        label: '',
+        'font-size': 8,
+        color: codeC,
+        'text-background-color': surface,
+        'text-background-opacity': 0.85,
+      },
+    },
+    {
+      selector:
+        'edge.servedby:selected, edge.servedby.hl, edge.servedby.loud, edge.implements:selected',
+      style: {
+        label: 'data(label)',
+        opacity: 1,
+        width: 2,
+      },
+    },
+    // Atenuar es jerarquizar, no borrar: por debajo de este valor el nodo se
+    // vuelve ilegible y se pierde el contexto de dónde estaba.
+    { selector: '.dim', style: { opacity: 0.2 } },
     // Relaciones secundarias de un grafo denso: presentes, pero en segundo plano.
-    { selector: 'edge.quiet', style: { opacity: 0.07, width: 1 } },
+    { selector: 'edge.quiet', style: { opacity: 0.12, width: 1 } },
     { selector: 'edge.hl, edge.loud', style: { opacity: 1, 'z-index': 10, label: 'data(label)' } },
   ];
 }
@@ -269,14 +420,19 @@ function signature(els: CyElement[]): string {
     .join('|');
 }
 
-export function MapCanvas({
-  view,
-  selectedId,
-  focusIds,
-  onSelect,
-  onToggle,
-  fitNonce = 0,
-}: MapCanvasProps): React.ReactElement {
+export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function MapCanvas(
+  {
+    view,
+    selectedId,
+    focusIds,
+    onSelect,
+    onToggle,
+    fitNonce = 0,
+    traceContract = null,
+    traceFanoutLimit = 3,
+  },
+  ref,
+): React.ReactElement {
   const host = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const lastSig = useRef('');
@@ -286,6 +442,35 @@ export function MapCanvas({
   // Los handlers de Cytoscape se registran una vez: leen siempre lo último.
   const handlers = useRef({ onSelect, onToggle });
   handlers.current = { onSelect, onToggle };
+
+  // Zoom y encuadre desde los controles flotantes del lienzo.
+  useImperativeHandle(
+    ref,
+    () => ({
+      zoomIn: () => {
+        const cy = cyRef.current;
+        if (!cy) return;
+        cy.zoom({
+          level: Math.min(cy.zoom() * 1.25, cy.maxZoom()),
+          renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+        });
+      },
+      zoomOut: () => {
+        const cy = cyRef.current;
+        if (!cy) return;
+        cy.zoom({
+          level: Math.max(cy.zoom() / 1.25, cy.minZoom()),
+          renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
+        });
+      },
+      fit: () => {
+        const cy = cyRef.current;
+        if (!cy || cy.elements().empty()) return;
+        cy.animate({ fit: { eles: cy.elements(), padding: 40 }, duration: 200 });
+      },
+    }),
+    [],
+  );
 
   // Montaje único de la instancia.
   useEffect(() => {
@@ -306,6 +491,31 @@ export function MapCanvas({
     cy.on('tap', (ev) => {
       if (ev.target === cy) handlers.current.onSelect(null);
     });
+    // Hover: el nodo se ilumina un instante bajo el puntero. Cytoscape no
+    // tiene propiedad de cursor, así que el puntero se cambia en el lienzo.
+    cy.on('mouseover', 'node', (ev) => {
+      ev.target.addClass('hover');
+      if (host.current) host.current.style.cursor = 'pointer';
+    });
+    cy.on('mouseout', 'node', (ev) => {
+      ev.target.removeClass('hover');
+      if (host.current) host.current.style.cursor = '';
+    });
+    // Conservar las posiciones movidas por el usuario para que al expandir o
+    // plegar un contenedor no rebote a la posición previa.
+    const syncTopPositions = () => {
+      const next = new Map<string, Point>(topRef.current);
+      for (const n of cy.nodes()) {
+        if (n.isChild()) continue;
+        const bb = n.boundingBox();
+        next.set(n.id(), {
+          x: (bb.x1 + bb.x2) / 2,
+          y: (bb.y1 + bb.y2) / 2,
+        });
+      }
+      topRef.current = next;
+    };
+    cy.on('dragfree', 'node', syncTopPositions);
     cyRef.current = cy;
     // Instancia nueva = lienzo vacío: el diff de datos tiene que volver a repartir
     // (StrictMode monta, desmonta y monta de nuevo conservando los refs).
@@ -322,6 +532,8 @@ export function MapCanvas({
     host.current?.addEventListener('pointerdown', take);
 
     // Cuántos nodos caen dentro del lienzo visible (comprobable desde fuera).
+    // Con rAF para no evaluar renderedBoundingBox() N veces por cuadro durante animaciones o arrastre.
+    let reportFrame: number | null = null;
     const reportVisible = () => {
       const box = cy.container();
       if (!box) return;
@@ -333,7 +545,17 @@ export function MapCanvas({
       }).length;
       host.current?.setAttribute('data-visible', String(visible));
     };
-    cy.on('viewport layoutstop add remove position', reportVisible);
+
+    const scheduleReport = () => {
+      if (reportFrame !== null) return;
+      reportFrame = requestAnimationFrame(() => {
+        reportFrame = null;
+        reportVisible();
+      });
+    };
+
+    cy.on('layoutstop add remove', reportVisible);
+    cy.on('viewport position', scheduleReport);
     reportVisible();
 
     const ro = new ResizeObserver(() => {
@@ -354,6 +576,7 @@ export function MapCanvas({
     const mo = new MutationObserver(() => cy.style(buildStyle()));
     mo.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => {
+      if (reportFrame !== null) cancelAnimationFrame(reportFrame);
       host.current?.removeEventListener('wheel', take);
       host.current?.removeEventListener('pointerdown', take);
       ro.disconnect();
@@ -407,8 +630,23 @@ export function MapCanvas({
         const fresh = added as cytoscape.Collection | null;
         if (state === 'done' && !first && fresh?.nodes().nonempty()) {
           if (touched.current) {
-            const target = fresh.nodes().union(fresh.nodes().ancestors());
-            cy.animate({ fit: { eles: target, padding: 70 }, duration: 220 });
+            // Si el usuario ya movió o ajustó la vista, sólo reencuadrar si lo
+            // nuevo cae fuera del lienzo visible; si ya está en pantalla, no
+            // mover la cámara para evitar que la caja parezca rebotar.
+            const box = cy.container();
+            if (box && box.clientWidth > 0 && box.clientHeight > 0) {
+              const target = fresh.nodes().union(fresh.nodes().ancestors());
+              const bb = target.renderedBoundingBox();
+              const pad = 24;
+              const isOffscreen =
+                bb.x1 < pad ||
+                bb.y1 < pad ||
+                bb.x2 > box.clientWidth - pad ||
+                bb.y2 > box.clientHeight - pad;
+              if (isOffscreen) {
+                cy.animate({ fit: { eles: target, padding: 60 }, duration: 200 });
+              }
+            }
           } else {
             // Si el usuario aún no movió la vista (apertura automática, filtros), se
             // encuadra TODO: nada puede quedar fuera de pantalla sin que lo sepa.
@@ -419,14 +657,13 @@ export function MapCanvas({
     }
   }, [view]);
 
-  // Selección y foco: sólo clases, sin tocar la geometría. Depende de `view`
-  // porque el diff de datos reemplaza las clases de los elementos existentes.
+  // Selección, foco y trazado de punta a punta: sólo clases, sin tocar la geometría.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `view` re-aplica las clases
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
     cy.batch(() => {
-      cy.elements().removeClass('dim hl loud');
+      cy.elements().removeClass('dim hl loud connected-peer trace-node trace-edge');
       cy.nodes().unselect();
       if (focusIds) {
         cy.nodes()
@@ -438,26 +675,122 @@ export function MapCanvas({
         inside.addClass('loud');
         cy.edges().not(inside).addClass('dim');
       }
-      if (selectedId) {
+
+      // Si hay un trazado de punta a punta activo, se recorre toda la cadena de conexiones
+      // respetando el límite numérico de bifurcación (fanout) y protegiendo contra bucles cíclicos.
+      if (traceContract) {
+        let startNode = selectedId ? cy.getElementById(selectedId) : cy.collection();
+        if (startNode.empty() || startNode.data('kind') !== 'endpoint') {
+          const matching = cy.nodes().filter((n) => {
+            const label = n.data('label');
+            const k = n.data('contract');
+            return (
+              (label === traceContract.key || k === traceContract.key) &&
+              (!traceContract.service ||
+                n.parent().data('label') === traceContract.service ||
+                n.id().includes(traceContract.service))
+            );
+          });
+          if (matching.nonempty() && matching[0]) {
+            startNode = cy.collection().merge(matching[0]);
+          }
+        }
+
+        if (startNode.nonempty()) {
+          startNode.select();
+          const fanoutCap = traceFanoutLimit && traceFanoutLimit > 0 ? traceFanoutLimit : 3;
+
+          // Recorrido bidireccional multirramal (upstream + downstream)
+          const traceNodes = cy.collection();
+          const traceEdges = cy.collection();
+          const visitedNodeIds = new Set<string>();
+
+          traceNodes.merge(startNode);
+          visitedNodeIds.add(startNode.id());
+
+          const queue: string[] = [startNode.id()];
+
+          while (queue.length > 0) {
+            const currId = queue.shift();
+            if (!currId) break;
+            const curr = cy.getElementById(currId);
+            if (curr.empty()) continue;
+
+            const edges = curr.connectedEdges();
+            let branchesTaken = 0;
+
+            for (let i = 0; i < edges.length; i++) {
+              const edge = edges[i];
+              if (!edge) continue;
+              const src = edge.source();
+              const tgt = edge.target();
+              const other = src.id() === currId ? tgt : src;
+
+              // Detección de bucles/dependencias cíclicas: la arista se mantiene visible
+              // pero no se vuelve a encolar para evitar loops infinitos
+              if (visitedNodeIds.has(other.id())) {
+                traceEdges.merge(edge);
+                continue;
+              }
+
+              // Límite de bifurcación (fanout) por nodo
+              if (branchesTaken >= fanoutCap) {
+                continue;
+              }
+
+              branchesTaken++;
+              visitedNodeIds.add(other.id());
+              traceNodes.merge(other);
+              traceEdges.merge(edge);
+              queue.push(other.id());
+            }
+          }
+
+          const keepNodes = traceNodes.union(traceNodes.ancestors());
+          const keepElements = keepNodes.union(traceEdges);
+
+          // Atenuar elementos fuera del trazado
+          cy.elements().not(keepElements).addClass('dim');
+          keepElements.removeClass('dim');
+
+          // Destacar nodos y aristas a lo largo de todo el trazado
+          traceNodes.addClass('trace-node connected-peer');
+          traceEdges.addClass('trace-edge hl loud');
+        }
+      } else if (selectedId) {
         const n = cy.getElementById(selectedId);
         if (n.nonempty()) {
           n.select();
-          // Atenuar el resto sólo tiene sentido si el nodo tiene con qué
-          // contrastar (relaciones): uno sin aristas — p. ej. un símbolo de
-          // código — dejaría a sus hermanos ilegibles sin decir nada.
-          if (n.connectedEdges().nonempty()) {
-            const around = n.closedNeighborhood();
-            cy.elements().not(around).not(n.ancestors()).addClass('dim');
-            n.connectedEdges().addClass('hl');
-            around.removeClass('dim');
+          const connectedEdges = n.connectedEdges();
+          if (connectedEdges.nonempty()) {
+            const peers = connectedEdges.connectedNodes().not(n);
+            // Conservar nítidos el nodo elegido, sus ancestros/hijos, y todas las
+            // cajas conectadas a él con sus contenedores correspondientes.
+            const keepNodes = n
+              .union(n.ancestors())
+              .union(n.descendants())
+              .union(peers)
+              .union(peers.ancestors())
+              .union(peers.descendants());
+            const keepElements = keepNodes.union(connectedEdges);
+
+            // Atenuar elementos no relacionados
+            cy.elements().not(keepElements).addClass('dim');
+            keepElements.removeClass('dim');
+
+            // Destacar las aristas conectadas sobre el resto
+            connectedEdges.addClass('hl loud');
+
+            // Resaltar las cajas conectadas para que no queden como bloques opacos/apagados
+            peers.addClass('connected-peer');
           }
         }
       }
     });
-  }, [selectedId, focusIds, view]);
+  }, [selectedId, focusIds, view, traceContract, traceFanoutLimit]);
 
   // Un foco nuevo (agente, "Focus neighborhood") encuadra su vecindad.
-  const focusKey = focusIds ? [...focusIds].sort().join('|') : '';
+  const focusKey = useMemo(() => (focusIds ? [...focusIds].sort().join('|') : ''), [focusIds]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: sólo reencuadra cuando cambia el conjunto enfocado
   useEffect(() => {
     const cy = cyRef.current;
@@ -492,8 +825,10 @@ export function MapCanvas({
         data-testid="map-canvas"
         data-nodes={view.nodes.length}
         data-edges={view.edges.length}
-        className="w-full h-full"
+        role="application"
+        aria-label="Architecture map"
+        className="map-grid w-full h-full"
       />
     </div>
   );
-}
+});
