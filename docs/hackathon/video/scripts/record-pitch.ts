@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from '../../../../packages/web/node_modules/playwright/index.mjs';
 
-const APP_URL = process.env.APP_URL || 'http://localhost:5173/orgs/ws_saleor';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173/orgs/ws_cluster_a';
 const TIMELINE_PATH = 'docs/hackathon/video/audio-timeline.json';
 const RECORDINGS_DIR = path.resolve('docs/hackathon/video/recordings');
 
@@ -61,7 +61,7 @@ async function main() {
   const chatInput = page.locator('input[placeholder*="Ask"], textarea[placeholder*="Ask"]').first();
   if (await chatInput.isVisible()) {
     await chatInput.click();
-    await chatInput.pressSequentially('Which services consume the checkout API, and from which repos?', { delay: 45 });
+    await chatInput.pressSequentially('Which services consume the OpenShell gateway gRPC API, and from which repos?', { delay: 45 });
     await page.keyboard.press('Enter');
   }
 

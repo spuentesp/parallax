@@ -15,14 +15,14 @@ Format: 1080p (1920x1080), dual-voice AI narration synced to Playwright browser 
 
 #### Scene 1: The Problem (0:00 – 0:20)
 - `0:00 - 0:07` **Junior (Brian):**
-  > "I just joined a team and got assigned to checkout. I don't know the stack, which repos matter, or what depends on what."
+  > "I just joined an AI agent platform team working on NVIDIA's OpenShell and NeMo stack. I don't know the service mesh, which repos matter, or what depends on what."
 - `0:07 - 0:19` **Architect (Ava):**
-  > "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented service mesh. Parallax turns that tribal knowledge into an explorable reality."
+  > "Normally, that's two weeks of bugging seniors. And at architect scale, it's an undocumented cross-repo mesh. Parallax turns that tribal knowledge into an explorable reality."
 *(Visual: Zoomed-out map showing top-level repos; gentle camera pan across service clusters)*
 
 #### Scene 2: The Question & The Engine (0:20 – 1:00)
 - `0:20 - 0:27` **Junior (Brian):**
-  > "So I ask Parallax: Which services consume the checkout API, and from which repos?"
+  > "So I ask Parallax: Which services consume the OpenShell gateway gRPC API, and from which repos?"
   *(Visual: Types question into the investigator search box, presses enter)*
 - `0:27 - 0:37` *(UI Pause: Nemotron streams investigation tool calls)*
 - `0:37 - 0:53` **Architect (Ava):**
@@ -30,7 +30,7 @@ Format: 1080p (1920x1080), dual-voice AI narration synced to Playwright browser 
   *(Visual: Highlight engine verification verdict badges)*
 - `0:55 - 1:00` **Architect (Ava):**
   > "Click Show on map, and it takes us directly to the architecture backing the answer."
-  *(Visual: Clicks 'Show on map' -> camera glides to checkout subgraph)*
+  *(Visual: Clicks 'Show on map' -> camera glides to OpenShell gateway subgraph)*
 
 #### Scene 3: The Architecture Canvas (1:03 – 1:40)
 - `1:03 - 1:15` **Architect (Ava):**
