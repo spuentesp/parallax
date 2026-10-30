@@ -1,5 +1,6 @@
-# Stage 1: Build latest Lain from preview dev branch tip on Bookworm for glibc compatibility
-FROM node:24-bookworm-slim AS lain-builder
+# Stage 1: Build latest Lain from preview dev branch tip on Ubuntu 24.04 (Noble)
+FROM ubuntu:24.04 AS lain-builder
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl build-essential pkg-config libssl-dev git cmake ca-certificates \
  && rm -rf /var/lib/apt/lists/*
@@ -19,14 +20,18 @@ RUN git clone --depth 1 https://github.com/NVIDIA/NeMo-Agent-Toolkit.git \
  && git clone --depth 1 https://github.com/NVIDIA/NeMo-Fabric.git \
  && git clone --depth 1 https://github.com/NVIDIA/NemoClaw.git
 
-# Stage 3: Parallax Application + Lain Runtime
-FROM node:24-bookworm-slim
+# Stage 3: Parallax Application + Lain Runtime on Ubuntu 24.04
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive
 ENV CI=true
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git curl bash \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl ca-certificates git build-essential bash \
+ && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && corepack enable \
  && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable
 WORKDIR /app
 
 # Copy Lain binary and NVIDIA repos
