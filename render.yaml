@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: parallax-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    region: frankfurt
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATABASE_PATH
+        value: /data/parallax.db
+      - key: PARALLAX_TOKENS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NEBIUS_TOKEN
+        sync: false
+      - key: LAIN_ADAPTER
+        value: mock
+    disk:
+      name: parallax-data
+      mountPath: /data
+      sizeGB: 1
