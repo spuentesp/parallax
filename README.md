@@ -56,6 +56,22 @@ pnpm install
 cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ```
 
+## Install on a machine (one command)
+
+`install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
+Lain built from the **`dev` branch** of [lain](https://github.com/spuentesp/lain),
+the Saleor demo repos, the engine as a service, the HTTPS front end (Caddy),
+and a `deploy/.env` with generated tokens.
+
+```bash
+sudo ./install.sh --domain demo.example.com --nebius-token ntb_...
+```
+
+It prints the admin link and the read-only link when it finishes. The engine is
+built from source, so the first run takes 15–40 minutes. `deploy/RUNBOOK.md`
+describes the same stack by hand; `parallax-stack {status|logs|restart}` drives
+it afterwards.
+
 ## Run (dev mode)
 
 ```bash

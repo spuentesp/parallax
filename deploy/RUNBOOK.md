@@ -9,6 +9,13 @@ Everything runs on one VM:
 - A single Parallax instance + automatic HTTPS (Caddy) in Docker serving both workspaces in the same UI.
 - Models (Nemotron) run via **Nebius Token Factory** (`NEBIUS_TOKEN`).
 
+> **Automated:** `install.sh` in the repository root does all of this in one
+> command (Docker, Lain built from the `dev` branch, the demo repos, the
+> engine service, `deploy/.env` with generated tokens, the compose stack and
+> the seeded workspace): `sudo ./install.sh --domain <name> --nebius-token <token>`.
+> This runbook is the manual path it follows — read it when something in the
+> script needs changing, or when you want to do a step by hand.
+
 ---
 
 ## ⚡ Option A: Vultr Cloud Compute (Recommended)
