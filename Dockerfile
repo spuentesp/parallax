@@ -1,7 +1,10 @@
-# Stage 1: Build latest Lain from preview dev branch tip
-FROM rust:latest AS lain-builder
-RUN apt-get update && apt-get install -y --no-install-recommends cmake pkg-config libssl-dev git ca-certificates \
+# Stage 1: Build latest Lain from preview dev branch tip on Bookworm for glibc compatibility
+FROM node:24-bookworm-slim AS lain-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl build-essential pkg-config libssl-dev git cmake ca-certificates \
  && rm -rf /var/lib/apt/lists/*
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+ENV PATH="/root/.cargo/bin:$PATH"
 RUN git clone --depth 1 --branch dev https://github.com/spuentesp/lain.git /lain-build
 WORKDIR /lain-build
 RUN cargo build --release --bin lain

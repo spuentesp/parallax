@@ -5,27 +5,36 @@ echo "=========================================="
 echo "  Parallax All-in-One Cloud Entrypoint"
 echo "=========================================="
 
+mkdir -p /var/log
+
 # 1. Start Lain federation server if binary and config exist
 if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
   echo "==> Starting Lain federation server on port 9999..."
   cd /repos
-  /usr/local/bin/lain server --config /repos/repos.yaml --transport http --port 9999 &
+  /usr/local/bin/lain server --config /repos/repos.yaml --transport http --port 9999 > /var/log/lain.log 2>&1 &
   LAIN_PID=$!
   echo "    Lain started with PID $LAIN_PID"
 
   echo "==> Waiting for Lain MCP endpoint to become responsive..."
-  for i in $(seq 1 30); do
+  READY=0
+  for i in $(seq 1 45); do
     if node -e "fetch('http://127.0.0.1:9999/mcp').then(r => process.exit(0)).catch(() => process.exit(1))" 2>/dev/null; then
-      echo "    Lain federation server is ready!"
+      echo "    Lain federation server is ready on port 9999!"
+      READY=1
       break
     fi
     sleep 1
   done
+
+  if [ "$READY" -eq 0 ]; then
+    echo "Warning: Lain did not respond within 45s. Log output:"
+    cat /var/log/lain.log || true
+  fi
 else
   echo "==> Running with external or mock Lain."
 fi
 
-# 2. Seed database with workspaces (ws_cluster_a & ws_cluster_b)
+# 2. Seed database with EXACTLY the two NVIDIA workspaces (ws_cluster_a & ws_cluster_b)
 cd /app
 echo "==> Seeding workspaces..."
 export LAIN_URL="${LAIN_URL:-http://127.0.0.1:9999/mcp}"
@@ -33,7 +42,7 @@ export CLUSTER_A_LAIN_URL="${CLUSTER_A_LAIN_URL:-http://127.0.0.1:9999/mcp}"
 export CLUSTER_B_LAIN_URL="${CLUSTER_B_LAIN_URL:-http://127.0.0.1:9999/mcp}"
 
 pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts || {
-  echo "Warning: workspace seeding returned non-zero (database already initialized or partial)."
+  echo "Warning: workspace seeding returned non-zero."
 }
 
 # 3. Start Parallax web & API server
