@@ -273,9 +273,7 @@ describe('mergeCode — node meta and structure', () => {
         communications: [
           {
             edge: 'Calls',
-            nodes: [
-              { id: '1', name: 'process_payment', type: 'Function', kind: 'symbol' },
-            ],
+            nodes: [{ id: '1', name: 'process_payment', type: 'Function', kind: 'symbol' }],
           },
         ],
       },

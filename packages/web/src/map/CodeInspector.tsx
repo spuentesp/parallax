@@ -220,12 +220,12 @@ function CallStackStepper({
   repo: string;
   symbol: string;
   onStep: (sym: string) => void;
-}): React.ReactElement {
+}): React.ReactElement | null {
   const q = useSymbolContext(workspaceId, repo, symbol);
   const ctx = q.data?.context;
 
   if (q.isPending) return <p className="p-5 text-xs text-muted">Tracing call stack…</p>;
-  if (!ctx || q.isError || (ctx.calledBy.length === 0 && ctx.calls.length === 0)) return <></>;
+  if (!ctx || q.isError || (ctx.calledBy.length === 0 && ctx.calls.length === 0)) return null;
 
   return (
     <div className="p-5 space-y-3 border-t border-border" data-testid="call-stack-stepper">

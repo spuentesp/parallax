@@ -143,8 +143,8 @@ export function mergeCode(
     let depth = 0;
     while (queue.length > 0 && depth < MAX_GROW_DEPTH) {
       depth++;
-      const parent = queue.shift()!;
-      if (!parent.expanded) continue;
+      const parent = queue.shift();
+      if (!parent || !parent.expanded) continue;
       const entry = state[parent.id];
       if (entry?.state !== 'ready') continue;
       for (const child of entry.children) {
@@ -192,7 +192,7 @@ export function mergeCode(
     for (const activeId of activeRelations) {
       const parsed = parseCodeId(activeId);
       const entry = state[activeId];
-      if (!parsed || parsed.kind !== 'node' || entry?.state !== 'ready') continue;
+      if (parsed?.kind !== 'node' || entry?.state !== 'ready') continue;
       const rootId = repoRoots.get(parsed.repo) ?? codeRootId(parsed.repo);
       for (const comm of entry.communications) {
         const edgeKind = comm.edge.toLowerCase() as import('@parallax/shared/org-map').OrgEdgeKind;

@@ -424,7 +424,7 @@ export async function resolveSymbolContext(
     const scoreMatch = /-\s+\*\*Anchor Score:\*\*\s*([\d.]+)/.exec(text);
 
     const parseList = (m: RegExpExecArray | null): string[] => {
-      if (!m || !m[1]) return [];
+      if (!m?.[1]) return [];
       return m[1]
         .split(',')
         .map((s) => s.trim())

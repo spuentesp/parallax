@@ -137,7 +137,9 @@ export function buildMcpServer(api: ApiClient): McpServer {
     async (args) => {
       try {
         const qs = new URLSearchParams({ repo: args.repo, symbol: args.symbol });
-        const data = await api.get(`/api/workspaces/${args.workspaceId}/graph/symbol-context?${qs}`);
+        const data = await api.get(
+          `/api/workspaces/${args.workspaceId}/graph/symbol-context?${qs}`,
+        );
         return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
       } catch (e) {
         if (e instanceof ApiEndpointNotImplemented) {

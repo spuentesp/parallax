@@ -284,16 +284,21 @@ export function MapExplorer({
             ) : (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted">
                 <p>{view ? 'No nodes match these filters.' : 'Loading…'}</p>
-                {view && view.totals?.edges === 0 && (filters.provenance || filters.minConfidence !== undefined) && (
-                  <p className="max-w-md text-xs text-muted/80">
-                    This workspace has no inter-service relationships; all {view.totals?.nodes ?? 0} nodes are standalone declarations.
-                  </p>
-                )}
+                {view &&
+                  view.totals?.edges === 0 &&
+                  (filters.provenance || filters.minConfidence !== undefined) && (
+                    <p className="max-w-md text-xs text-muted/80">
+                      This workspace has no inter-service relationships; all{' '}
+                      {view.totals?.nodes ?? 0} nodes are standalone declarations.
+                    </p>
+                  )}
                 {view && hasFilters && (
                   <button
                     type="button"
                     className="mt-1 rounded-lg border border-border px-2.5 py-1 text-xs text-accent hover:bg-bg"
-                    onClick={() => setParam({ contract: null, prov: null, minc: null, service: null })}
+                    onClick={() =>
+                      setParam({ contract: null, prov: null, minc: null, service: null })
+                    }
                   >
                     Clear filters
                   </button>
@@ -306,7 +311,8 @@ export function MapExplorer({
                 data-testid="active-relations-pill"
               >
                 <span className="text-muted">
-                  Showing code relations for {activeRelations.size} symbol{activeRelations.size === 1 ? '' : 's'}
+                  Showing code relations for {activeRelations.size} symbol
+                  {activeRelations.size === 1 ? '' : 's'}
                 </span>
                 <button
                   type="button"
