@@ -190,7 +190,7 @@ describe('buildMcpServer', () => {
 });
 
 describe('buildMcpServer (tool contract)', () => {
-  it('registers four tools with the documented descriptions and input schemas', async () => {
+  it('registers six tools with the documented descriptions and input schemas', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const byName = new Map(tools.map((t) => [t.name, t]));
@@ -198,7 +198,9 @@ describe('buildMcpServer (tool contract)', () => {
       'parallax_assess_pr',
       'parallax_explore',
       'parallax_get_assessment',
+      'parallax_get_call_chain',
       'parallax_get_evidence',
+      'parallax_step_call_stack',
     ]);
     expect(byName.get('parallax_explore')?.description).toBe(
       'Explore an organization: list services, get a service with its consumers.',
@@ -212,6 +214,31 @@ describe('buildMcpServer (tool contract)', () => {
     expect(byName.get('parallax_get_evidence')?.description).toBe(
       'Read evidence (lands in subproject 3).',
     );
+    expect(byName.get('parallax_step_call_stack')?.description).toBe(
+      'Traverse the call stack on demand for a function or class. Returns definition file:line, outgoing calls (what it calls), and incoming callers (who calls it).',
+    );
+    expect(byName.get('parallax_get_call_chain')?.description).toBe(
+      'Find the call path between two symbols within a repo (from -> to).',
+    );
+
+    const step = byName.get('parallax_step_call_stack')?.inputSchema as {
+      properties: Record<string, Record<string, unknown>>;
+      required: string[];
+    };
+    expect(step.required).toEqual(['workspaceId', 'repo', 'symbol']);
+    expect(step.properties.workspaceId).toMatchObject({ minLength: 1 });
+    expect(step.properties.repo).toMatchObject({ minLength: 1 });
+    expect(step.properties.symbol).toMatchObject({ minLength: 1 });
+
+    const chain = byName.get('parallax_get_call_chain')?.inputSchema as {
+      properties: Record<string, Record<string, unknown>>;
+      required: string[];
+    };
+    expect(chain.required).toEqual(['workspaceId', 'repo', 'from', 'to']);
+    expect(chain.properties.workspaceId).toMatchObject({ minLength: 1 });
+    expect(chain.properties.repo).toMatchObject({ minLength: 1 });
+    expect(chain.properties.from).toMatchObject({ minLength: 1 });
+    expect(chain.properties.to).toMatchObject({ minLength: 1 });
 
     const explore = byName.get('parallax_explore')?.inputSchema as {
       properties: Record<string, Record<string, unknown>>;
@@ -307,5 +334,46 @@ describe('buildMcpServer (tool contract)', () => {
     expect(textOf(res as { content: Array<{ type: string; text?: string }> })).toBe(
       'api 500: {"boom":true}',
     );
+  });
+
+  it('parallax_step_call_stack queries symbol-context endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { symbol: 'foo', callers: [], callees: [] }));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_step_call_stack',
+      arguments: { workspaceId: 'ws_1', repo: 'backend', symbol: 'foo' },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/graph/symbol-context?repo=backend&symbol=foo',
+      expect.anything(),
+    );
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual({
+      symbol: 'foo',
+      callers: [],
+      callees: [],
+    });
+  });
+
+  it('parallax_get_call_chain queries call-chain endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { found: true, chain: ['a', 'b'] }));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_get_call_chain',
+      arguments: { workspaceId: 'ws_1', repo: 'backend', from: 'a', to: 'b' },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/graph/call-chain?repo=backend&from=a&to=b',
+      expect.anything(),
+    );
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual({
+      found: true,
+      chain: ['a', 'b'],
+    });
   });
 });

@@ -96,6 +96,9 @@ export function edgeOpacity(e: Pick<OrgEdge, 'provenance' | 'confidence'>): numb
 }
 
 export function edgeLabel(e: OrgEdge): string {
+  if (['calls', 'uses', 'imports', 'produces', 'callshttp'].includes(e.kind.toLowerCase())) {
+    return e.label ?? e.kind;
+  }
   const mixed = e.provenance === 'deterministic' && e.inferredCount > 0;
   if (e.count <= 1 && !mixed) return '';
   return mixed ? `×${e.count} (${e.inferredCount}~)` : `×${e.count}`;
@@ -128,6 +131,9 @@ export function toCyElements(
   }
   for (const e of view.edges) {
     if (!ids.has(e.source) || !ids.has(e.target)) continue;
+    const isCodeEdge = ['calls', 'uses', 'imports', 'produces', 'callshttp'].includes(
+      e.kind.toLowerCase(),
+    );
     out.push({
       group: 'edges',
       data: {
@@ -138,11 +144,17 @@ export function toCyElements(
         provenance: e.provenance,
         confidence: e.confidence,
         count: e.count,
-        width: edgeWidth(e.count),
-        opacity: edgeOpacity(e),
+        width: isCodeEdge ? 1.4 : edgeWidth(e.count),
+        opacity: isCodeEdge ? 0.9 : edgeOpacity(e),
         mixed: e.provenance === 'deterministic' && e.inferredCount > 0,
       },
-      classes: quiet.has(e.id) ? `${e.provenance} quiet` : e.provenance,
+      classes: [
+        e.provenance,
+        quiet.has(e.id) ? 'quiet' : '',
+        isCodeEdge ? `code-edge ${e.kind.toLowerCase()}` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
     });
   }
   return out;

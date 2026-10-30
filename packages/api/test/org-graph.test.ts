@@ -291,6 +291,24 @@ describe('filterOrgGraph', () => {
     expect(f.nodes.some((n) => n.id === reports)).toBe(true);
     expect(f.nodes.some((n) => n.id === billing)).toBe(false);
   });
+
+  it('includeStandalone preserves endpoint declarations even when relation filter matches zero edges', () => {
+    const emptyEdgesGraph = {
+      nodes: graph.nodes,
+      edges: [],
+    };
+    const withoutFlag = filterOrgGraph(emptyEdgesGraph, { provenance: 'deterministic' });
+    expect(withoutFlag.nodes).toHaveLength(0);
+
+    const withFlag = filterOrgGraph(emptyEdgesGraph, {
+      provenance: 'deterministic',
+      includeStandalone: true,
+    });
+    expect(withFlag.nodes.filter((n) => n.kind === 'endpoint').length).toBeGreaterThan(0);
+    // ancestors should also be preserved
+    expect(withFlag.nodes.some((n) => n.kind === 'repo')).toBe(true);
+    expect(withFlag.nodes.some((n) => n.kind === 'service')).toBe(true);
+  });
 });
 
 describe('describeNode — "quién consume este endpoint"', () => {

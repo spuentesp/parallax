@@ -90,8 +90,28 @@ function buildTrees(nodes: readonly LayoutNode[]): Tree[] {
   for (const n of nodes) {
     const t = trees.get(n.id) as Tree;
     const p = n.parent !== null && ids.has(n.parent) ? trees.get(n.parent) : undefined;
-    if (p && p !== t) p.kids.push(t);
-    else roots.push(t);
+    if (p && p !== t) {
+      // Guard against ancestor cycle to prevent recursive call stack overflow
+      let cur: Tree | undefined = p;
+      let cycle = false;
+      const seen = new Set<string>([t.node.id]);
+      while (cur) {
+        if (seen.has(cur.node.id)) {
+          cycle = true;
+          break;
+        }
+        seen.add(cur.node.id);
+        const nextId: string | null = cur.node.parent;
+        cur = nextId && ids.has(nextId) ? trees.get(nextId) : undefined;
+      }
+      if (!cycle) {
+        p.kids.push(t);
+      } else {
+        roots.push(t);
+      }
+    } else {
+      roots.push(t);
+    }
   }
   return roots;
 }

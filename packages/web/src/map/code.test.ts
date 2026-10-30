@@ -261,4 +261,39 @@ describe('mergeCode — node meta and structure', () => {
     });
     expect(errored.nodes.filter((n) => n.parent === 'code:orders')).toEqual([]);
   });
+
+  it('projects on-demand relationships and peer nodes when activeRelations is set', () => {
+    const targetNodeId = codeNodeId('orders', 'Function', 'handle_order');
+    const state: CodeState = {
+      'code:orders': ready([{ type: 'Function', name: 'handle_order' }]),
+      [targetNodeId]: {
+        state: 'ready',
+        children: [],
+        truncated: false,
+        communications: [
+          {
+            edge: 'Calls',
+            nodes: [{ id: '1', name: 'process_payment', type: 'Function', kind: 'symbol' }],
+          },
+        ],
+      },
+    };
+    const m = mergeCode(
+      view([repoNode()]),
+      new Set(['code:orders', targetNodeId]),
+      state,
+      new Set([targetNodeId]),
+    );
+
+    // Peer node process_payment should be materialized
+    const peer = m.nodes.find((n) => n.label === 'process_payment');
+    expect(peer).toBeDefined();
+    expect(peer?.kind).toBe('symbol');
+
+    // On-demand calls edge should connect target to peer
+    const edge = m.edges.find((e) => e.source === targetNodeId && e.target === peer?.id);
+    expect(edge).toBeDefined();
+    expect(edge?.kind).toBe('calls');
+    expect(edge?.label).toBe('Calls');
+  });
 });

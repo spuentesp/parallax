@@ -62,6 +62,7 @@ export interface OrgGraphFilters {
   provenance?: Provenance | undefined;
   minConfidence?: number | undefined;
   service?: string | undefined;
+  includeStandalone?: boolean | undefined;
 }
 
 export interface ProjectedNode extends OrgNode {

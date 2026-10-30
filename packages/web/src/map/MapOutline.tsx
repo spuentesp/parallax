@@ -35,23 +35,41 @@ export function flattenOutline(nodes: readonly ProjectedNode[]): Row[] {
   }
   const out: Row[] = [];
   const seen = new Set<string>();
-  const walk = (parent: string | null, depth: number) => {
-    const list = [...(kids.get(parent) ?? [])].sort((a, b) => a.label.localeCompare(b.label));
-    for (const n of list) {
-      if (seen.has(n.id)) continue;
-      seen.add(n.id);
-      out.push({ node: n, depth });
-      walk(n.id, depth + 1);
+  const MAX_DEPTH = 32;
+
+  const expandChildren = (parent: string | null, depth: number) => {
+    const stack: Array<{ node: ProjectedNode; depth: number }> = [];
+    const rootList = [...(kids.get(parent) ?? [])].sort((a, b) => a.label.localeCompare(b.label));
+    for (let i = rootList.length - 1; i >= 0; i--) {
+      const item = rootList[i];
+      if (item) stack.push({ node: item, depth });
+    }
+    while (stack.length > 0) {
+      const top = stack.pop();
+      if (!top) break;
+      const { node, depth: d } = top;
+      if (seen.has(node.id) || d > MAX_DEPTH) continue;
+      seen.add(node.id);
+      out.push({ node, depth: d });
+      const children = [...(kids.get(node.id) ?? [])].sort((a, b) =>
+        a.label.localeCompare(b.label),
+      );
+      for (let i = children.length - 1; i >= 0; i--) {
+        const child = children[i];
+        if (child) stack.push({ node: child, depth: d + 1 });
+      }
     }
   };
-  walk(null, 0);
+
+  expandChildren(null, 0);
+
   // Un ciclo de padres (o un nodo que es su propio padre) no cuelga de ninguna
   // raíz: se muestra como raíz en vez de desaparecer del árbol.
   for (const n of nodes) {
     if (seen.has(n.id)) continue;
     seen.add(n.id);
     out.push({ node: n, depth: 0 });
-    walk(n.id, 1);
+    expandChildren(n.id, 1);
   }
   return out;
 }
