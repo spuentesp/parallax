@@ -23,6 +23,7 @@
     "smoke": "pnpm --filter @parallax/api run smoke",
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
     "dev:api": "pnpm --filter @parallax/api dev",
+    "dev:mock": "pnpm --filter @parallax/api mock:server",
     "dev:web": "pnpm --filter @parallax/web dev",
     "dev:mcp": "pnpm --filter @parallax/mcp dev",
     "gate:release": "pnpm --filter @parallax/api run gate:release",

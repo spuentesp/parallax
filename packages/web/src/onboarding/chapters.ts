@@ -127,8 +127,5 @@ export function suggestedTasksForWorkspace(workspaceId?: string | null): string[
       'Expose health and readiness metrics for toolkit workflows',
     ];
   }
-  return [
-    'Add a delivery note to checkout',
-    'Add an export button to orders table',
-  ];
+  return ['Add a delivery note to checkout', 'Add an export button to orders table'];
 }
