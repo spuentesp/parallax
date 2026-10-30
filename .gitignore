@@ -30,3 +30,7 @@ packages/*/.stryker-tmp/
 
 # Temp scratch (TMPDIR for local test runs)
 .tmp/
+
+# Video demo recordings and render outputs
+docs/hackathon/video/recordings/
+docs/hackathon/video/output/

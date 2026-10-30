@@ -4,7 +4,7 @@ set -euo pipefail
 # Parallax Video Pitch Builder
 # Merges Playwright screen recording with the dual-voice narration audio track.
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+ROOT_DIR="$(git rev-parse --show-toplevel)"
 cd "$ROOT_DIR"
 
 OUTPUT_DIR="docs/hackathon/video/output"
