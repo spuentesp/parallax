@@ -4,6 +4,8 @@
 // in the plan: a bad URL must fail fast, not on the first request).
 
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
@@ -24,6 +26,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -38,6 +42,8 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
@@ -310,6 +316,24 @@ export class RealLainAdapter implements LainAdapter {
     );
   }
 
+  async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
+    return this.call<TraceFlowResponse>('trace_flow', req as unknown as Record<string, unknown>);
+  }
+
+  async applyContractContext(req: ApplyContractContextArgs): Promise<ApplyContractContextResponse> {
+    return this.call<ApplyContractContextResponse>(
+      'apply_contract_context',
+      req as unknown as Record<string, unknown>,
+    );
+  }
+
+  async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
+    return this.call<ListServiceRefsResponse>(
+      'list_service_refs',
+      req as unknown as Record<string, unknown>,
+    );
+  }
+
   async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {
     return this.call<GetCoverageResponse>(
       'get_coverage',
@@ -467,6 +491,9 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
       'get_snapshot',
       'diff_contracts',
       'trace_impact',
+      'trace_flow',
+      'apply_contract_context',
+      'list_service_refs',
       'get_coverage',
       'resolve_evidence',
       'read_source',
@@ -482,7 +509,7 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
         code: 'ToolSchemaMismatch',
         message: `lain tools/list is missing: ${missing.join(', ')}`,
         tool: firstMissing,
-        detail: `expected 13 contract tools, got ${toolNames.length}`,
+        detail: `expected 16 contract tools, got ${toolNames.length}`,
       });
     }
   } catch (e) {

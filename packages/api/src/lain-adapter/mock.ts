@@ -1,4 +1,6 @@
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
@@ -19,6 +21,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -33,6 +37,8 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
@@ -129,6 +135,46 @@ export function createLainMock(): LainAdapter {
     async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {
       recordMockCall({ tool: 'trace_impact', snapshot: req.snapshot, args: req });
       return pickScenario(req.snapshot).traceImpact;
+    },
+
+    async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
+      recordMockCall({ tool: 'trace_flow', snapshot: req.snapshot, args: req });
+      const seed = req.from.endpoint?.key ?? req.from.symbol ?? req.from.table ?? '';
+      return {
+        from: req.from,
+        direction: req.direction ?? (req.from.table ? 'upstream' : 'downstream'),
+        seeds: [seed],
+        paths: [],
+        gaps: [{ node: seed, name: seed, kind: 'no_handler', reason: 'no path in mock graph' }],
+        truncated: false,
+        truncation_reasons: [],
+        nodes_visited: 1,
+        scope: { configured_only: true, reviewed: [], unreviewed: [] },
+        ...(req.strategy === 'depth' ? { strategy: 'depth' as const } : {}),
+      };
+    },
+
+    async applyContractContext(
+      req: ApplyContractContextArgs,
+    ): Promise<ApplyContractContextResponse> {
+      recordMockCall({ tool: 'apply_contract_context', snapshot: req.snapshot, args: req });
+      return {
+        applied: !req.dry_run,
+        dry_run: req.dry_run,
+        yaml: '# contract context validated by mock\n',
+        added: req.provides ?? [],
+        added_host_aliases: req.host_aliases ?? [],
+        added_bindings: req.bindings ?? [],
+      };
+    },
+
+    async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
+      recordMockCall({ tool: 'list_service_refs', snapshot: req.snapshot, args: req });
+      return {
+        items: [],
+        scope: { configured_only: true, reviewed: [], unreviewed: [] },
+        ...(req.suggestions ? { suggestions_status: 'no_embedding_model' as const } : {}),
+      };
     },
 
     async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {

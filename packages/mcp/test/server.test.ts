@@ -190,7 +190,7 @@ describe('buildMcpServer', () => {
 });
 
 describe('buildMcpServer (tool contract)', () => {
-  it('registers six tools with the documented descriptions and input schemas', async () => {
+  it('registers eight tools with the documented descriptions and input schemas', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const byName = new Map(tools.map((t) => [t.name, t]));
@@ -200,7 +200,9 @@ describe('buildMcpServer (tool contract)', () => {
       'parallax_get_assessment',
       'parallax_get_call_chain',
       'parallax_get_evidence',
+      'parallax_list_service_refs',
       'parallax_step_call_stack',
+      'parallax_trace_flow',
     ]);
     expect(byName.get('parallax_explore')?.description).toBe(
       'Explore an organization: list services, get a service with its consumers.',
@@ -375,5 +377,66 @@ describe('buildMcpServer (tool contract)', () => {
       found: true,
       chain: ['a', 'b'],
     });
+  });
+
+  it('parallax_list_service_refs forwards filters and returns structured data', async () => {
+    const payload = { items: [{ service: 'orders', outcome: { kind: 'resolved' } }], scope: {} };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, payload));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_list_service_refs',
+      arguments: {
+        workspaceId: 'ws_1',
+        outcome: 'resolved',
+        suggestions: true,
+        min_score: 0.7,
+        limit: 10,
+      },
+    });
+    const [url] = fetchSpy.mock.calls[0] as [string];
+    expect(url).toBe(
+      'http://api/api/workspaces/ws_1/service-refs?snapshot=live&outcome=resolved&suggestions=true&min_score=0.7&limit=10',
+    );
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual(payload);
+  });
+
+  it('parallax_trace_flow posts the native flow request and returns structured data', async () => {
+    const payload = { paths: [], gaps: [], strategy: 'depth', truncated: false };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, payload));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_trace_flow',
+      arguments: {
+        workspaceId: 'ws_1',
+        from: { endpoint: { key: 'graphql:query:products', service: 'api' } },
+        direction: 'downstream',
+        strategy: 'depth',
+        depth: 8,
+        cap: 2,
+      },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/trace/flow',
+      expect.anything(),
+    );
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      from: { endpoint: { key: 'graphql:query:products', service: 'api' } },
+      direction: 'downstream',
+      strategy: 'depth',
+      depth: 8,
+      cap: 2,
+      snapshot: 'live',
+    });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual(payload);
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual(
+      payload,
+    );
   });
 });

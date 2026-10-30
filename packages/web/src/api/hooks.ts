@@ -2,7 +2,11 @@ import type {
   AssessmentReport,
   AssessmentRequest,
   AssessmentSummary,
+  ContractApplyBody,
+  ContractApplyResult,
+  TraceFlowBody,
 } from '@parallax/shared/domain';
+import type { TraceFlowResponse } from '@parallax/shared/lain';
 import type {
   MapMeta,
   MapViewResponse,
@@ -68,6 +72,16 @@ export function useCreateAssessment() {
   return useMutation({
     mutationFn: (body: AssessmentRequest) =>
       client.post<{ assessment: AssessmentReport; created: boolean }>('/api/assessments', body),
+  });
+}
+
+export function useApplyContractRemediation() {
+  return useMutation({
+    mutationFn: ({ workspaceId, body }: { workspaceId: string; body: ContractApplyBody }) =>
+      client.post<ContractApplyResult>(
+        `/api/workspaces/${workspaceId}/contracts/remediation`,
+        body,
+      ),
   });
 }
 
@@ -987,6 +1001,26 @@ export function useTrace(workspaceId: string | undefined) {
         },
       );
       return streamed ?? client.post<TraceResultDto>(base, body);
+    },
+  });
+  return Object.assign(mutation, { progress });
+}
+
+export function useTraceFlow(workspaceId: string | undefined) {
+  const [progress, setProgress] = useState<ProgressEventDto[]>([]);
+  const mutation = useMutation({
+    mutationFn: async (body: TraceFlowBody) => {
+      setProgress([]);
+      const base = `/api/workspaces/${workspaceId}/trace/flow`;
+      const streamed = await client.postSse<TraceFlowResponse>(
+        `${base}/stream`,
+        body,
+        (event, data) => {
+          if (event === 'progress')
+            setProgress((current) => [...current, data as ProgressEventDto]);
+        },
+      );
+      return streamed ?? client.post<TraceFlowResponse>(base, body);
     },
   });
   return Object.assign(mutation, { progress });

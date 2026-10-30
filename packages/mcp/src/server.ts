@@ -1,8 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { TraceFlowInput } from '@parallax/shared/domain';
+import { ListServiceRefsArgs } from '@parallax/shared/lain';
 import { z } from 'zod';
 import { type ApiClient, ApiEndpointNotImplemented } from './api-client.js';
-import { TraceFlowInputSchema } from './tools/trace_flow.js';
+
+const ServiceRefsInput = ListServiceRefsArgs.extend({ workspaceId: z.string().min(1) });
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
@@ -181,16 +184,43 @@ export function buildMcpServer(api: ApiClient): McpServer {
   );
 
   server.tool(
-    'trace_flow',
-    'Trace a value\'s flow through the codebase across boundaries (UI to DB, RPC to service, etc.). ' +
-    'Replaces manual get_call_chain + trace_impact with a single cross-boundary trace. ' +
-    'Supports BFS (impact analysis) and DFS (root cause analysis) strategies. ' +
-    'Reports explicit gaps where the trace cannot continue.',
-    TraceFlowInputSchema,
-    async (args) => {
+    'parallax_list_service_refs',
+    'List service URL and host references discovered by Lain, including resolution outcomes and optional route suggestions.',
+    ServiceRefsInput.shape,
+    async ({ workspaceId, ...query }) => {
       try {
-        const data = await api.post(`/api/workspaces/${args.workspaceId || 'default'}/trace/flow`, args);
-        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(query)) {
+          if (value !== undefined) params.set(key, String(value));
+        }
+        const data = await api.get(`/api/workspaces/${workspaceId}/service-refs?${params}`);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+          structuredContent: data as Record<string, unknown>,
+        };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'parallax_trace_flow',
+    'Trace an endpoint, symbol, or table across contract boundaries using Lain, with breadth or depth traversal.',
+    TraceFlowInput.shape,
+    async ({ workspaceId, ...body }) => {
+      try {
+        const data = await api.post(`/api/workspaces/${workspaceId}/trace/flow`, body);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+          structuredContent: data as Record<string, unknown>,
+        };
       } catch (e) {
         if (e instanceof ApiEndpointNotImplemented) {
           return {

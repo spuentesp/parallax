@@ -241,6 +241,179 @@ export const GetContractResponse = z.object({
 });
 export type GetContractResponse = z.infer<typeof GetContractResponse>;
 
+export const TraceFlowFrom = z
+  .object({
+    endpoint: EndpointRef.optional(),
+    symbol: z.string().min(1).optional(),
+    table: z.string().min(1).optional(),
+    repo_id: z.string().min(1).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const count = [value.endpoint, value.symbol, value.table].filter(Boolean).length;
+    if (count !== 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'exactly one of endpoint, symbol, or table is required',
+      });
+    }
+  });
+
+export const TraceFlowArgs = z
+  .object({
+    snapshot: LainView.default('live'),
+    from: TraceFlowFrom,
+    direction: z.enum(['downstream', 'upstream']).optional(),
+    strategy: z.enum(['breadth', 'depth']).default('breadth'),
+    depth: z.number().int().min(1).max(12).optional(),
+    cap: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+export type TraceFlowArgs = z.infer<typeof TraceFlowArgs>;
+
+export const TraceFlowHop = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    node_type: z.string(),
+    edge_type: z.string().nullable(),
+    engine_fact: z.boolean(),
+    repo: z.string().optional(),
+    path: z.string().optional(),
+    line: z.number().int().nullable().optional(),
+    provenance: z.looseObject({}).nullable().optional(),
+  })
+  .passthrough();
+
+export const TraceFlowResponse = z
+  .object({
+    from: z.record(z.string(), z.unknown()),
+    direction: z.enum(['downstream', 'upstream']),
+    seeds: z.array(z.string()),
+    paths: z.array(
+      z
+        .object({
+          min_confidence: z.number(),
+          boundary_hops: z.number().int().nonnegative(),
+          hops: z.array(TraceFlowHop),
+        })
+        .passthrough(),
+    ),
+    gaps: z.array(
+      z
+        .object({
+          node: z.string(),
+          name: z.string(),
+          kind: z.string(),
+          reason: z.string(),
+        })
+        .passthrough(),
+    ),
+    truncated: z.boolean(),
+    truncation_reasons: z.array(z.enum(['depth', 'cap', 'node_budget'])),
+    nodes_visited: z.number().int().nonnegative(),
+    scope: z.record(z.string(), z.unknown()),
+    strategy: z.literal('depth').optional(),
+    repos_not_ready: z.array(z.string()).optional(),
+  })
+  .strict();
+export type TraceFlowResponse = z.infer<typeof TraceFlowResponse>;
+
+const ContractDeclaration = z
+  .object({
+    service: z.string().min(1),
+    key: z.string().min(1),
+    source: z.string().optional(),
+  })
+  .strict();
+
+const HostAliasDeclaration = z
+  .object({
+    service: z.string().min(1),
+    host: z.string().min(1).optional(),
+    file: z.string().min(1).optional(),
+    source: z.string().optional(),
+  })
+  .strict();
+
+const BindingDeclaration = z
+  .object({
+    consumer: z
+      .object({
+        repo: z.string().min(1),
+        path: z.string().min(1),
+        symbol: z.string().min(1),
+        key: z.string().min(1),
+        site: z.string().min(1).optional(),
+      })
+      .strict(),
+    provider: EndpointRef.strict(),
+  })
+  .strict();
+
+export const ApplyContractContextArgs = z
+  .object({
+    snapshot: z.literal('live').default('live'),
+    provides: z.array(ContractDeclaration).optional(),
+    host_aliases: z.array(HostAliasDeclaration).optional(),
+    bindings: z.array(BindingDeclaration).optional(),
+    dry_run: z.boolean().default(true),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      (value.provides?.length ?? 0) +
+        (value.host_aliases?.length ?? 0) +
+        (value.bindings?.length ?? 0) ===
+      0
+    ) {
+      ctx.addIssue({ code: 'custom', message: 'provide at least one contract declaration' });
+    }
+  });
+export type ApplyContractContextArgs = z.infer<typeof ApplyContractContextArgs>;
+
+export const ApplyContractContextResponse = z
+  .object({
+    applied: z.boolean().optional(),
+    dry_run: z.boolean().optional(),
+    yaml: z.string().optional(),
+    backup: z.string().optional(),
+    config_path: z.string().optional(),
+    note: z.string().optional(),
+    added: z.array(z.record(z.string(), z.unknown())).optional(),
+    added_bindings: z.array(z.record(z.string(), z.unknown())).optional(),
+    added_host_aliases: z.array(z.record(z.string(), z.unknown())).optional(),
+  })
+  .strict();
+export type ApplyContractContextResponse = z.infer<typeof ApplyContractContextResponse>;
+
+export const ListServiceRefsArgs = z
+  .object({
+    snapshot: z.literal('live').default('live'),
+    repo: z.string().min(1).optional(),
+    outcome: z.enum(['resolved', 'ambiguous', 'unknown']).optional(),
+    usage: z.enum(['production', 'test', 'configuration', 'documentation']).optional(),
+    suggestions: z.boolean().optional(),
+    min_score: z.number().min(0).max(1).optional(),
+    limit: z.number().int().min(1).max(1000).optional(),
+    cursor: z.string().min(1).optional(),
+  })
+  .strict();
+export type ListServiceRefsArgs = z.infer<typeof ListServiceRefsArgs>;
+
+export const ListServiceRefsResponse = z
+  .object({
+    items: z.array(z.record(z.string(), z.unknown())),
+    scope: z.record(z.string(), z.unknown()),
+    cursor: z.string().optional(),
+    suggestions: z.array(z.record(z.string(), z.unknown())).optional(),
+    suggestions_status: z
+      .enum(['ok', 'no_server_context', 'no_contract_index', 'no_embedding_model'])
+      .optional(),
+  })
+  .strict();
+export type ListServiceRefsResponse = z.infer<typeof ListServiceRefsResponse>;
+
 const UnresolvedScope = z
   .object({
     configured_only: z.boolean().optional(),

@@ -193,6 +193,51 @@ describe('POST /api/workspaces/:id/trace', () => {
     expect(r.json()).toMatchObject({ status: 'available', seed: { key: KEY, service: 'api' } });
   });
 
+  it('calls native trace_flow with endpoint, direction, strategy, and bounds', async () => {
+    await start();
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/workspaces/${wsId}/trace/flow`,
+      headers: H,
+      payload: {
+        from: { endpoint: { key: KEY, service: 'api' } },
+        direction: 'downstream',
+        strategy: 'breadth',
+        depth: 2,
+        cap: 5,
+      },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      direction: 'downstream',
+      seeds: [KEY],
+      paths: [],
+      gaps: [{ kind: 'no_handler' }],
+      truncated: false,
+    });
+  });
+
+  it('streams the native trace_flow result and tool progress', async () => {
+    await start();
+    const r = await app.inject({
+      method: 'POST',
+      url: `/api/workspaces/${wsId}/trace/flow/stream`,
+      headers: H,
+      payload: {
+        from: { symbol: 'products', repo_id: 'api' },
+        strategy: 'depth',
+        depth: 3,
+      },
+    });
+    expect(r.statusCode).toBe(200);
+    const events = parseSse(r.body);
+    expect(events.some((event) => event.data.tool === 'trace_flow')).toBe(true);
+    expect(events.at(-1)).toMatchObject({
+      event: 'result',
+      data: { strategy: 'depth', seeds: ['products'], truncated: false },
+    });
+  });
+
   it('says why it cannot trace, before opening any stream: unknown contract, no model, no LAIN', async () => {
     await start();
     stubModel();

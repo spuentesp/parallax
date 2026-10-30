@@ -38,6 +38,10 @@ LAIN_SRC_DIR="${LAIN_SRC_DIR:-/opt/lain/src}"
 LAIN_BIN_DIR="${LAIN_BIN_DIR:-/usr/local/bin}"
 LAIN_PORT="${LAIN_PORT:-9999}"
 LAIN_HOST="${LAIN_HOST:-127.0.0.1}"
+LAIN_DISABLE_LSP="${LAIN_DISABLE_LSP:-0}"
+LAIN_LSP_LEAN="${LAIN_LSP_LEAN:-0}"
+LAIN_INDEX_TIMEOUT="${LAIN_INDEX_TIMEOUT:-60}"
+# Independent operator wait for the whole demo, not Lain's per-repo pipeline budget.
 LAIN_INDEX_TIMEOUT_SEC="${LAIN_INDEX_TIMEOUT_SEC:-1800}"
 
 PREFIX="${PREFIX:-/opt/parallax}"
@@ -110,7 +114,8 @@ Options:
   -y, --yes                Never prompt; use the values from the environment.
 
 Environment overrides: DOMAIN, NEBIUS_TOKEN, LAIN_BRANCH, LAIN_PORT,
-LAIN_REPO_URL, LAIN_BIN, PREFIX, DEMO_DIR, WORKSPACE_ID.
+LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP, LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT,
+LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR, WORKSPACE_ID.
 EOF
 }
 
@@ -134,6 +139,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+[[ "$LAIN_INDEX_TIMEOUT" =~ ^[1-9][0-9]*$ ]] || die "LAIN_INDEX_TIMEOUT must be positive seconds"
+[[ "$LAIN_INDEX_TIMEOUT_SEC" =~ ^[1-9][0-9]*$ ]] || die "LAIN_INDEX_TIMEOUT_SEC must be positive seconds"
+
 TOTAL_STEPS=12
 
 # --------------------------------------------------------------------------
@@ -151,6 +159,8 @@ require_root() {
   exec sudo env \
     DOMAIN="$DOMAIN" NEBIUS_TOKEN="$NEBIUS_TOKEN" LAIN_BRANCH="$LAIN_BRANCH" \
     LAIN_PORT="$LAIN_PORT" LAIN_REPO_URL="$LAIN_REPO_URL" LAIN_BIN="$LAIN_BIN" \
+    LAIN_DISABLE_LSP="$LAIN_DISABLE_LSP" LAIN_LSP_LEAN="$LAIN_LSP_LEAN" \
+    LAIN_INDEX_TIMEOUT="$LAIN_INDEX_TIMEOUT" LAIN_INDEX_TIMEOUT_SEC="$LAIN_INDEX_TIMEOUT_SEC" \
     PREFIX="$PREFIX" DEMO_DIR="$DEMO_DIR" WORKSPACE_ID="$WORKSPACE_ID" \
     bash "${BASH_SOURCE[0]}" "${ORIGINAL_ARGS[@]}"
 }
@@ -450,6 +460,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+Environment=LAIN_DISABLE_LSP=$LAIN_DISABLE_LSP
+Environment=LAIN_LSP_LEAN=$LAIN_LSP_LEAN
+Environment=LAIN_INDEX_TIMEOUT=$LAIN_INDEX_TIMEOUT
 ExecStart=$LAIN_BIN_DIR/lain server --config $ENGINE_CONFIG --transport http --port $LAIN_PORT --bind $LAIN_HOST --workspace none
 Restart=always
 RestartSec=5
@@ -474,7 +487,9 @@ else
     kill "$(cat "$ENGINE_DIR/lain.pid")" 2>/dev/null || true
     sleep 2
   fi
-  nohup "$LAIN_BIN_DIR/lain" server --config "$ENGINE_CONFIG" --transport http \
+  LAIN_DISABLE_LSP="$LAIN_DISABLE_LSP" LAIN_LSP_LEAN="$LAIN_LSP_LEAN" \
+    LAIN_INDEX_TIMEOUT="$LAIN_INDEX_TIMEOUT" \
+    nohup "$LAIN_BIN_DIR/lain" server --config "$ENGINE_CONFIG" --transport http \
     --port "$LAIN_PORT" --bind "$LAIN_HOST" --workspace none >>"$ENGINE_LOG" 2>&1 &
   printf '%s' "$!" > "$ENGINE_DIR/lain.pid"
   ok "engine started (no systemd): pid $(cat "$ENGINE_DIR/lain.pid"), log $ENGINE_LOG"

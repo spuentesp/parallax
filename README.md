@@ -100,6 +100,14 @@ Point Parallax at that server:
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
 ```
 
+Verify the native 0.13 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
+
+```bash
+LAIN_URL=http://localhost:9999/mcp pnpm demo:lain
+```
+
+For resource-constrained installs, `install.sh` passes `LAIN_DISABLE_LSP`, `LAIN_LSP_LEAN`, and the per-repo `LAIN_INDEX_TIMEOUT` to the Lain service. `LAIN_INDEX_TIMEOUT_SEC` is only the installer's separate readiness wait. See `docs/lain-tooling-inventory.md` for fidelity tradeoffs and supported route sensors.
+
 ## Judging and testing
 
 **Live demo and access.** The demo URL and a read-only access link are in the

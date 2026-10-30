@@ -8,6 +8,7 @@ import {
   type TraceResultDto,
   useTrace,
 } from '../api/hooks.js';
+import { TraceFlowVisualizer } from './TraceFlowVisualizer.js';
 
 // El recorrido de un valor, del dato a donde termina, como una línea vertical. Cada
 // salto es un lugar del código que el motor LEYÓ; cada enlace se dibuja según quién lo
@@ -395,6 +396,7 @@ export function TracePanel({
   onFanoutChange,
 }: TracePanelProps): React.ReactElement {
   const [internalFanout, setInternalFanout] = useState(3);
+  const [nativeFlow, setNativeFlow] = useState(false);
   const currentFanout = fanout ?? internalFanout;
   const handleFanoutChange = onFanoutChange ?? setInternalFanout;
   const t = useTrace(workspaceId);
@@ -420,6 +422,13 @@ export function TracePanel({
         </div>
         <button
           type="button"
+          onClick={() => setNativeFlow((current) => !current)}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-[11px] text-muted hover:bg-bg hover:text-fg"
+        >
+          {nativeFlow ? 'Verified trace' : 'Native flow'}
+        </button>
+        <button
+          type="button"
           onClick={onClose}
           aria-label="Close trace"
           className="h-6 w-6 shrink-0 rounded-md text-xs text-muted hover:bg-bg hover:text-fg"
@@ -428,45 +437,51 @@ export function TracePanel({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto">
-        {t.isPending && <Running progress={t.progress} />}
-        {t.isError && (
-          <div className="space-y-2 p-4 text-sm" role="alert">
-            <p className="text-warning">
-              {err?.status === 429
-                ? 'Traces are limited per hour for this workspace. Try again later.'
-                : err?.body?.detail
-                  ? `Could not trace this contract: ${err.body.detail}.`
-                  : 'Could not trace this contract.'}
-            </p>
-            <button
-              type="button"
-              onClick={() => mutate({ key: contract.key, service: contract.service })}
-              className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-bg"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-        {t.data && t.data.status !== 'available' && (
-          <div
-            className="space-y-1 p-4 text-sm text-warning"
-            role="alert"
-            data-testid="trace-failed"
-          >
-            <p>
-              The trace could not be completed (
-              {t.data.status.replace('failed:', '').replace(/_/g, ' ')}).
-            </p>
-            {t.data.errors[0] && <p className="text-[11px]">{t.data.errors[0]}</p>}
-          </div>
-        )}
-        {t.data && t.data.status === 'available' && (
-          <TraceView
-            trace={t.data}
-            onSelect={onSelect}
-            fanout={currentFanout}
-            onFanoutChange={handleFanoutChange}
-          />
+        {nativeFlow ? (
+          <TraceFlowVisualizer workspaceId={workspaceId} contract={contract} />
+        ) : (
+          <>
+            {t.isPending && <Running progress={t.progress} />}
+            {t.isError && (
+              <div className="space-y-2 p-4 text-sm" role="alert">
+                <p className="text-warning">
+                  {err?.status === 429
+                    ? 'Traces are limited per hour for this workspace. Try again later.'
+                    : err?.body?.detail
+                      ? `Could not trace this contract: ${err.body.detail}.`
+                      : 'Could not trace this contract.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => mutate({ key: contract.key, service: contract.service })}
+                  className="rounded-lg border border-border px-2.5 py-1 text-xs hover:bg-bg"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {t.data && t.data.status !== 'available' && (
+              <div
+                className="space-y-1 p-4 text-sm text-warning"
+                role="alert"
+                data-testid="trace-failed"
+              >
+                <p>
+                  The trace could not be completed (
+                  {t.data.status.replace('failed:', '').replace(/_/g, ' ')}).
+                </p>
+                {t.data.errors[0] && <p className="text-[11px]">{t.data.errors[0]}</p>}
+              </div>
+            )}
+            {t.data && t.data.status === 'available' && (
+              <TraceView
+                trace={t.data}
+                onSelect={onSelect}
+                fanout={currentFanout}
+                onFanoutChange={handleFanoutChange}
+              />
+            )}
+          </>
         )}
       </div>
     </div>

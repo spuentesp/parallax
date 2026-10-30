@@ -7,6 +7,7 @@ import {
   useWorkspace,
   useWorkspaceTopology,
 } from '../api/hooks.js';
+import { ContractEditor } from '../components/ContractEditor.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
 
@@ -46,6 +47,8 @@ export function Contracts(): React.ReactElement {
             <Stat label="Repositories" value={ws?.repoCount ?? 0} />
             <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
           </div>
+
+          {id && <ContractEditor workspaceId={id} />}
 
           {/* Filtros de la lista de dependencias */}
           <div>

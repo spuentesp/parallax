@@ -31,11 +31,11 @@ describe('LainAdapter real client', () => {
       code: 'ToolSchemaMismatch',
       tool: 'list_services',
       message: expect.stringContaining('list_services, get_service'),
-      detail: expect.stringContaining('13'),
+      detail: expect.stringContaining('16'),
     });
   });
 
-  it('accepts when the handshake returns all 13 contract tools', async () => {
+  it('accepts when the handshake returns all 16 contract tools', async () => {
     const tools = [
       'list_services',
       'get_service',
@@ -47,6 +47,9 @@ describe('LainAdapter real client', () => {
       'get_snapshot',
       'diff_contracts',
       'trace_impact',
+      'trace_flow',
+      'apply_contract_context',
+      'list_service_refs',
       'get_coverage',
       'resolve_evidence',
       'read_source',
@@ -138,6 +141,9 @@ const contractTools = [
   'get_snapshot',
   'diff_contracts',
   'trace_impact',
+  'trace_flow',
+  'apply_contract_context',
+  'list_service_refs',
   'get_coverage',
   'resolve_evidence',
   'read_source',

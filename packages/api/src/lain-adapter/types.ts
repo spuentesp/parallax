@@ -1,4 +1,6 @@
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
@@ -19,6 +21,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -33,13 +37,15 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
 
-// Firmas alineadas con las tools reales de lain 0.9.1: todas reciben
+// Firmas alineadas con las tools reales de lain 0.13: todas reciben
 // `snapshot` (o `base`/`head` en diff_contracts) y los argumentos homónimos
-// de docs/lain-tool-schemas.json. Las 13 del paquete contracts.
+// del schema publicado por Lain. Las 16 del paquete contracts.
 // Las del grafo crudo (query_graph y anexas) viven en el paquete `raw`,
 // que hay que load_package antes de usarlas.
 import type { CodeTool } from '../agent/code-tools.js';
@@ -59,6 +65,9 @@ export interface LainAdapter {
   checkBinding(req: CheckBindingArgs): Promise<CheckBindingResponse>;
   diffContracts(req: DiffContractsArgs): Promise<DiffContractsResponse>;
   traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse>;
+  traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse>;
+  applyContractContext(req: ApplyContractContextArgs): Promise<ApplyContractContextResponse>;
+  listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse>;
   getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse>;
   resolveEvidence(req: ResolveEvidenceArgs): Promise<ResolveEvidenceResponse>;
   readSource(req: ReadSourceArgs): Promise<ReadSourceResponse>;

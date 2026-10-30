@@ -21,6 +21,7 @@
     "gate:mutation": "pnpm --filter @parallax/gates run gate:mutation",
     "build": "pnpm -r --filter=!./packages/shared run build",
     "smoke": "pnpm --filter @parallax/api run smoke",
+    "demo:lain": "pnpm --filter @parallax/api exec tsx ../../test/lain-0.13-demo.ts",
     "gate:separation": "pnpm --filter @parallax/gates run gate:separation",
     "dev:api": "pnpm --filter @parallax/api dev",
     "dev:web": "pnpm --filter @parallax/web dev",

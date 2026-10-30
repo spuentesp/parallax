@@ -5,10 +5,10 @@ Date: 2026-10-28. Lain **0.13.0** (live server loaded with every package: `list_
 ## Bottom line
 
 - Lain exposes **97 tools** (90 on the live 0.13.0 server once every package is loaded; 7 more in the federation set that `docs/tool-schema.json` lists).
-- Parallax references **31** of them in production code; **66** are not referenced at all.
+- Parallax references **34** of them in production code; **63** are not referenced at all.
 - **Nothing in the adapter is fake.** Every wrapper was called against the live server with real arguments and returned data (results below). The implementation is real; the *coverage* is narrow.
 - Until 2026-10-28 the investigator (the model that answers questions) could call only **9 Lain tools**, all from the contract view. It could not search code, find a symbol, follow a call or measure a change. It now has **24** (9 contract + 15 code, read-only, allowlisted).
-- The product (map, assessments, advisor) uses **13** Lain tools. The code layer of the map uses only `query_graph` + snippets.
+- The product (map, assessments, advisor, native flow, contract remediation) uses **16** Lain tools. The code layer of the map uses only `query_graph` + snippets.
 
 ## Verified working against the live server (Saleor: 3 repos)
 
@@ -30,15 +30,18 @@ Date: 2026-10-28. Lain **0.13.0** (live server loaded with every package: `list_
 | `getCallSites` | `get_call_sites` | OK |
 | `codeTool` (15 allowlisted) | `understand_repository`, `search_code`, `find_symbol`, `search_org`, `find_anchors`, `list_entry_points`, `get_context`, `get_call_chain`, `get_blast_radius`, `get_cross_repo_blast_radius`, `find_related`, `get_coupling_radar`, `explain_symbol`, `get_call_sites`, `get_code_snippet` | all OK |
 
-## Performance Controls
-
-| Control | Description |
-|---|---|
-| `LAIN_DISABLE_LSP` | Disable language server features |
-| `LAIN_LSP_LEAN` | Enable memory-saving LSP profile |
-| `LAIN_INDEX_TIMEOUT` | Set per-repo indexing timeout in seconds |
-
 Not smoke-tested here: `prepare_snapshot`, `get_snapshot`, `diff_contracts`, `check_binding` (they need pinned commits or a proposal; they are exercised by the assessment worker and advisor gates, `pnpm gate:saleor`, last recorded as passing in the handoff note) and `load_package` (called by the client at connect time).
+
+## Operator performance controls
+
+These variables belong to the **Lain server process**, not the Parallax MCP client. `install.sh` passes them through both the systemd unit and the no-systemd launch path.
+
+| Control | Default | Effect |
+|---|---|---|
+| `LAIN_DISABLE_LSP` | `0` | `1` disables every Lain-spawned language server; indexing falls back to tree-sitter. |
+| `LAIN_LSP_LEAN` | `0` | `1` keeps LSP with rust-analyzer's memory-saving profile, at the documented cost of symbol fidelity. |
+| `LAIN_INDEX_TIMEOUT` | `60` | Per-repository indexing pipeline budget in seconds. |
+| `LAIN_INDEX_TIMEOUT_SEC` | `1800` | Separate installer wait for the whole demo to become ready; it does not configure Lain. |
 
 ## Product + investigator (8)
 
@@ -186,6 +189,15 @@ Not for Parallax: the coordination set (`register_agent`, `heartbeat`, `claim_fi
 - **Namespaces in the code graph are directories**, and `Contains` edges give the folder tree. Names repeat (many `components`), so Parallax compares nodes by id. Nodes carry a `test` label on functions and classes, which could replace the filename heuristic for hiding tests.
 - **The engine's HTTP sensor reports route-like strings** (`http:ANY /click`, `/0`, `/14:00`, `/Action handler thrown`): `HttpRoute` nodes whose providers are `operandExclusions.test.ts:126` and `useSuppressClickAfterDrag.ts:33`. That is a Lain sensor false-positive class (event names and test data in browser code); Parallax now groups them separately and says why.
 - **The inferred line `saleor-dashboard → saleor-storefront` is almost certainly spurious.** Its 8 uses are `HttpClientCall`s with *unbound host* (`GET /`) in `e2e/lib/docker.ts`, `scripts/fetch-local-schema.cjs`, `src/graphql/authFetch.ts`…, matched to the storefront's catch-all `http:ANY /` at confidence 0.6. These are calls to arbitrary hosts, not to the storefront. This is exactly the dangling-relationship case the loose-ends classifier should label.
+
+## Native 0.13 integration added in this change
+
+- `traceFlow` calls Lain's native `trace_flow` with endpoint, symbol, or table seeds, `breadth`/`depth`, direction, depth, and cap. It is available at `POST /api/workspaces/:id/trace/flow[/stream]` and as `parallax_trace_flow`. The opt-in web visualizer renders native paths, provenance, gaps, and truncation; the existing model-verified trace remains available.
+- `applyContractContext` calls native `apply_contract_context` with `provides`, `host_aliases`, and `bindings`. Dry-run is the default. The write-scoped API and contract editor return Lain's YAML/apply response; atomic write, backup, re-join, and rollback belong to Lain, not a second Parallax store.
+- `listServiceRefs` calls native `list_service_refs`, exposed at `GET /api/workspaces/:id/service-refs` and as `parallax_list_service_refs`. `GET /api/workspaces/:id/http-routes` exposes native HTTP provider discovery, including Next.js App Router `route.ts` files.
+- The adapter handshake requires all 16 contract-package tools, so an older server fails explicitly instead of silently degrading the new workflows.
+- Protocol, schema, API, MCP, and UI behavior is covered by tests. A live 0.13 server was not available in this checkout (the installed CLI is 0.12.1); run `LAIN_URL=http://localhost:9999/mcp pnpm demo:lain` for the real-server check. The demo prints the actual engine response and writes nothing.
+- Lain supports Next.js **App Router** but explicitly not Pages Router. No disconnected local Pages parser is advertised as integrated; Pages support needs an upstream Lain sensor change.
 
 ## Method and caveats
 

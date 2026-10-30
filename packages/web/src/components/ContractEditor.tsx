@@ -1,90 +1,118 @@
-import React, { useState } from 'react';
-import { Contract, ContractContext } from '../../types';
-import { apply_contract_context } from '../../tools/contract';
+import { ContractApplyBody, type ContractApplyResult } from '@parallax/shared/domain';
+import type * as React from 'react';
+import { useState } from 'react';
+import { ApiError } from '../api/client.js';
+import { useApplyContractRemediation, useWhoami } from '../api/hooks.js';
 
-interface ContractEditorProps {
-  initialContract: Contract;
+const INITIAL_CONTEXT = JSON.stringify(
+  {
+    provides: [
+      {
+        service: 'api',
+        key: 'http:GET /orders',
+        source: 'Parallax contract editor',
+      },
+    ],
+    host_aliases: [],
+    bindings: [],
+  },
+  null,
+  2,
+);
+
+function errorText(error: unknown): string {
+  if (error instanceof ApiError) {
+    const body = error.body as { detail?: string } | null;
+    return body?.detail ?? `request failed (${error.status})`;
+  }
+  return error instanceof Error ? error.message : 'request failed';
 }
 
-const ContractEditor: React.FC<ContractEditorProps> = ({ initialContract }) => {
-  const [contract, setContract] = useState<Contract>(initialContract);
-  const [context, setContext] = useState<ContractContext>({});
-  const [preview, setPreview] = useState<Contract | null>(null);
-  const [message, setMessage] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+export function ContractEditor({ workspaceId }: { workspaceId: string }): React.ReactElement {
+  const [contextText, setContextText] = useState(INITIAL_CONTEXT);
+  const [validationError, setValidationError] = useState('');
+  const [result, setResult] = useState<ContractApplyResult | null>(null);
+  const mutation = useApplyContractRemediation();
+  const readOnly = useWhoami().data?.readOnly === true;
 
-  const handleContextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const apply = (dryRun: boolean) => {
+    setValidationError('');
+    let raw: unknown;
     try {
-      const newContext = JSON.parse(e.target.value);
-      setContext(newContext);
+      raw = JSON.parse(contextText);
     } catch (error) {
-      console.error('Invalid JSON:', error);
+      setValidationError(error instanceof Error ? error.message : 'invalid JSON');
+      return;
     }
-  };
-
-  const handleApplyContext = async (dryRun: boolean) => {
-    setIsLoading(true);
-    try {
-      const result = await apply_contract_context(contract, context, dryRun);
-      setMessage(result.message);
-
-      if (dryRun && result.preview) {
-        setPreview(result.preview);
-      } else if (result.success) {
-        setContract(result.preview || contract);
-        setPreview(null);
-      }
-    } catch (error) {
-      setMessage(`Error: ${error.message}`);
-    } finally {
-      setIsLoading(false);
+    const parsed = ContractApplyBody.safeParse({
+      snapshot: 'live',
+      ...(typeof raw === 'object' && raw !== null && !Array.isArray(raw) ? raw : {}),
+      dry_run: dryRun,
+    });
+    if (!parsed.success) {
+      setValidationError(
+        parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; '),
+      );
+      return;
     }
+    mutation.mutate({ workspaceId, body: parsed.data }, { onSuccess: setResult });
   };
 
   return (
-    <div className="contract-editor">
-      <h2>Contract Editor</h2>
-
-      <div className="editor-section">
-        <h3>Current Contract</h3>
-        <pre>{JSON.stringify(contract, null, 2)}</pre>
+    <section
+      className="rounded-xl border border-border bg-surface p-4 space-y-4"
+      data-testid="contract-editor"
+    >
+      <div>
+        <h2 className="font-semibold">Contract remediation</h2>
+        <p className="text-xs text-muted mt-1">
+          Declare providers, host aliases, and bindings in Lain. Dry-run returns the exact YAML;
+          apply validates and writes it atomically with a backup.
+        </p>
       </div>
-
-      <div className="editor-section">
-        <h3>Context</h3>
+      <label className="block text-xs text-muted">
+        Context JSON
         <textarea
-          value={JSON.stringify(context, null, 2)}
-          onChange={handleContextChange}
-          rows={10}
-          cols={50}
+          className="mt-1 min-h-56 w-full rounded border border-border bg-bg p-3 font-mono text-sm"
+          value={contextText}
+          onChange={(event) => setContextText(event.target.value)}
         />
-      </div>
-
-      <div className="button-group">
+      </label>
+      {validationError && <p className="text-xs text-error">{validationError}</p>}
+      {mutation.error && <p className="text-xs text-error">{errorText(mutation.error)}</p>}
+      <div className="flex gap-2">
         <button
-          onClick={() => handleApplyContext(true)}
-          disabled={isLoading}
+          type="button"
+          className="rounded border border-border px-3 py-2 text-sm disabled:opacity-50"
+          disabled={readOnly || mutation.isPending}
+          onClick={() => apply(true)}
         >
-          {isLoading ? 'Processing...' : 'Preview Changes'}
+          Preview changes
         </button>
         <button
-          onClick={() => handleApplyContext(false)}
-          disabled={isLoading}
+          type="button"
+          className="rounded bg-accent px-3 py-2 text-sm text-accent-fg disabled:opacity-50"
+          disabled={readOnly || mutation.isPending}
+          onClick={() => apply(false)}
         >
-          {isLoading ? 'Processing...' : 'Apply Changes'}
+          Apply changes
         </button>
       </div>
-
-      {message && <div className="message">{message}</div>}
-
-      {preview && (
-        <div className="preview-section">
-          <h3>Preview</h3>
-          <pre>{JSON.stringify(preview, null, 2)}</pre>
+      {result && (
+        <div>
+          <h3 className="text-sm font-semibold" data-testid="remediation-result">
+            {result.applied ? 'Applied by Lain' : 'Dry-run preview'}
+          </h3>
+          {result.note && <p className="text-xs text-muted mt-1">{result.note}</p>}
+          {result.backup && <p className="text-xs text-muted mt-1">Backup: {result.backup}</p>}
+          <pre
+            className="mt-2 max-h-80 overflow-auto rounded bg-bg p-3 text-xs"
+            data-testid="contract-preview"
+          >
+            {result.yaml ?? JSON.stringify(result, null, 2)}
+          </pre>
         </div>
       )}
-    </div>
+    </section>
   );
-};
-
-export default ContractEditor;
+}
