@@ -206,6 +206,28 @@ export function buildStyle(): StylesheetJson {
         'line-dash-pattern': [5, 4],
       },
     },
+    // Relaciones de código bajo demanda
+    {
+      selector: 'edge.code-edge',
+      style: {
+        'line-style': 'dashed',
+        'target-arrow-shape': 'triangle',
+        'arrow-scale': 0.55,
+        label: 'data(label)',
+        'font-size': 8,
+        color: muted,
+        'text-rotation': 'autorotate',
+        'text-background-color': surface,
+        'text-background-opacity': 0.85,
+        'text-background-padding': '1px',
+      },
+    },
+    { selector: 'edge.calls', style: { 'line-color': accent, 'target-arrow-color': accent } },
+    { selector: 'edge.uses', style: { 'line-color': symbolC, 'target-arrow-color': symbolC } },
+    {
+      selector: 'edge.imports',
+      style: { 'line-color': muted, 'target-arrow-color': muted, 'line-style': 'dotted' },
+    },
     { selector: '.dim', style: { opacity: 0.12 } },
     // Relaciones secundarias de un grafo denso: presentes, pero en segundo plano.
     { selector: 'edge.quiet', style: { opacity: 0.07, width: 1 } },

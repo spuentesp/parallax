@@ -105,6 +105,7 @@ export function MapExplorer({
   const [trace, setTrace] = useState<{ key: string; service: string | null } | null>(null);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [fitNonce, setFitNonce] = useState(0);
+  const [activeRelations, setActiveRelations] = useState<ReadonlySet<string>>(new Set());
 
   const q = useOrgMap(workspaceId, {
     expand: [...expanded],
@@ -118,8 +119,8 @@ export function MapExplorer({
   const code = useCodeLayer(workspaceId);
   // La capa de código (archivos/símbolos de LAIN) se suma a la proyección del servidor.
   const view = useMemo(
-    () => (serverView ? mergeCode(serverView, code.open, code.state) : undefined),
-    [serverView, code.open, code.state],
+    () => (serverView ? mergeCode(serverView, code.open, code.state, activeRelations) : undefined),
+    [serverView, code.open, code.state, activeRelations],
   );
   const refresh = useRefreshMap(workspaceId);
   const readOnly = useWhoami().data?.readOnly === true;
@@ -281,8 +282,45 @@ export function MapExplorer({
                 fitNonce={fitNonce}
               />
             ) : (
-              <div className="absolute inset-0 grid place-items-center text-sm text-muted">
-                {view ? 'No nodes match these filters.' : 'Loading…'}
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-muted">
+                <p>{view ? 'No nodes match these filters.' : 'Loading…'}</p>
+                {view &&
+                  view.totals?.edges === 0 &&
+                  (filters.provenance || filters.minConfidence !== undefined) && (
+                    <p className="max-w-md text-xs text-muted/80">
+                      This workspace has no inter-service relationships; all{' '}
+                      {view.totals?.nodes ?? 0} nodes are standalone declarations.
+                    </p>
+                  )}
+                {view && hasFilters && (
+                  <button
+                    type="button"
+                    className="mt-1 rounded-lg border border-border px-2.5 py-1 text-xs text-accent hover:bg-bg"
+                    onClick={() =>
+                      setParam({ contract: null, prov: null, minc: null, service: null })
+                    }
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            )}
+            {activeRelations.size > 0 && (
+              <div
+                className="absolute bottom-4 left-4 z-20 flex items-center gap-2 rounded-full border border-border bg-surface/95 backdrop-blur px-3 py-1 text-xs shadow-sm"
+                data-testid="active-relations-pill"
+              >
+                <span className="text-muted">
+                  Showing code relations for {activeRelations.size} symbol
+                  {activeRelations.size === 1 ? '' : 's'}
+                </span>
+                <button
+                  type="button"
+                  className="text-accent hover:underline text-[11px]"
+                  onClick={() => setActiveRelations(new Set())}
+                >
+                  clear
+                </button>
               </div>
             )}
             {focus && view && !view.focus && (
@@ -387,6 +425,15 @@ export function MapExplorer({
                       trail={trailOf(byId, selectedId)}
                       onSelect={(id) => setParam({ sel: id })}
                       onToggle={toggle}
+                      relationsActive={activeRelations.has(selectedId)}
+                      onToggleRelations={() =>
+                        setActiveRelations((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(selectedId)) next.delete(selectedId);
+                          else next.add(selectedId);
+                          return next;
+                        })
+                      }
                     />
                   ) : (
                     <MapInspector

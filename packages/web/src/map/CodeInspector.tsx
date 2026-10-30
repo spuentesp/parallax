@@ -4,7 +4,8 @@
 
 import type { ProjectedNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
-import type { CodeEntry } from './code.js';
+import { useSymbolContext } from '../api/hooks.js';
+import { type CodeEntry, codeNodeId } from './code.js';
 import { KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -17,6 +18,8 @@ export interface CodeInspectorProps {
   trail: ProjectedNode[];
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
+  relationsActive?: boolean;
+  onToggleRelations?: () => void;
 }
 
 export function CodeInspector({
@@ -27,6 +30,8 @@ export function CodeInspector({
   trail,
   onSelect,
   onToggle,
+  relationsActive,
+  onToggleRelations,
 }: CodeInspectorProps): React.ReactElement {
   if (!node) {
     return (
@@ -96,7 +101,21 @@ export function CodeInspector({
           </p>
         </div>
       ) : (
-        <Relationships entry={entry} />
+        <>
+          <Relationships
+            entry={entry}
+            relationsActive={Boolean(relationsActive)}
+            onToggleRelations={onToggleRelations}
+          />
+          {node.kind === 'symbol' && (
+            <CallStackStepper
+              workspaceId={workspaceId}
+              repo={repo}
+              symbol={node.label}
+              onStep={(sym) => onSelect(codeNodeId(repo, 'Function', sym))}
+            />
+          )}
+        </>
       )}
 
       {!isRoot && repo && (type === 'File' || node.kind === 'symbol') && (
@@ -112,7 +131,15 @@ export function CodeInspector({
   );
 }
 
-function Relationships({ entry }: { entry: CodeEntry | undefined }): React.ReactElement {
+function Relationships({
+  entry,
+  relationsActive,
+  onToggleRelations,
+}: {
+  entry: CodeEntry | undefined;
+  relationsActive?: boolean | undefined;
+  onToggleRelations?: (() => void) | undefined;
+}): React.ReactElement {
   if (!entry || entry.state === 'loading') {
     return <p className="p-5 text-xs text-muted">Loading relationships…</p>;
   }
@@ -129,9 +156,24 @@ function Relationships({ entry }: { entry: CodeEntry | undefined }): React.React
   }
   return (
     <div className="p-5 space-y-3" data-testid="code-relations">
-      <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">
-        Communicates with
-      </h4>
+      <div className="flex items-center justify-between">
+        <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Communicates with
+        </h4>
+        {onToggleRelations && (
+          <button
+            type="button"
+            onClick={onToggleRelations}
+            className={`rounded px-2 py-0.5 text-[11px] border transition-colors ${
+              relationsActive
+                ? 'bg-accent text-accent-fg border-accent'
+                : 'border-border text-muted hover:bg-bg hover:text-fg'
+            }`}
+          >
+            {relationsActive ? 'Hide from canvas' : 'Show on canvas'}
+          </button>
+        )}
+      </div>
       {groups.map((g) => (
         <div key={g.edge}>
           <p className="text-xs font-medium">
@@ -167,3 +209,86 @@ function Relationships({ entry }: { entry: CodeEntry | undefined }): React.React
 
 const isOpenableLike = (type: string): boolean =>
   ['File', 'Namespace', 'Module', 'Package'].includes(type);
+
+function CallStackStepper({
+  workspaceId,
+  repo,
+  symbol,
+  onStep,
+}: {
+  workspaceId: string;
+  repo: string;
+  symbol: string;
+  onStep: (sym: string) => void;
+}): React.ReactElement | null {
+  const q = useSymbolContext(workspaceId, repo, symbol);
+  const ctx = q.data?.context;
+
+  if (q.isPending) return <p className="p-5 text-xs text-muted">Tracing call stack…</p>;
+  if (!ctx || q.isError || (ctx.calledBy.length === 0 && ctx.calls.length === 0)) return null;
+
+  return (
+    <div className="p-5 space-y-3 border-t border-border" data-testid="call-stack-stepper">
+      <div className="flex items-center justify-between">
+        <h4 className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          Call Stack Navigation
+        </h4>
+        {ctx.anchorScore !== undefined && (
+          <span className="text-[10px] text-muted rounded bg-bg px-1.5 py-0.5 border border-border">
+            Anchor: {ctx.anchorScore.toFixed(0)}
+          </span>
+        )}
+      </div>
+
+      {ctx.calledBy.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium text-muted flex items-center gap-1">
+            <span>▲ Called by (Upstream)</span>
+            <span className="text-muted/60 font-normal">· {ctx.calledBy.length}</span>
+          </p>
+          <ul className="space-y-1">
+            {ctx.calledBy.slice(0, 6).map((caller) => (
+              <li key={caller} className="flex items-center justify-between text-xs font-mono">
+                <span className="truncate max-w-[13rem]" title={caller}>
+                  {caller}
+                </span>
+                <button
+                  type="button"
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-bg border border-border text-accent hover:bg-border font-sans"
+                  onClick={() => onStep(caller)}
+                >
+                  Step back
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {ctx.calls.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[11px] font-medium text-muted flex items-center gap-1">
+            <span>▼ Calls (Downstream)</span>
+            <span className="text-muted/60 font-normal">· {ctx.calls.length}</span>
+          </p>
+          <ul className="space-y-1">
+            {ctx.calls.slice(0, 6).map((callee) => (
+              <li key={callee} className="flex items-center justify-between text-xs font-mono">
+                <span className="truncate max-w-[13rem]" title={callee}>
+                  {callee}
+                </span>
+                <button
+                  type="button"
+                  className="rounded px-1.5 py-0.5 text-[10px] bg-bg border border-border text-accent hover:bg-border font-sans"
+                  onClick={() => onStep(callee)}
+                >
+                  Step into
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}

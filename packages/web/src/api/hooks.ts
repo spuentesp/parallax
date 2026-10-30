@@ -313,6 +313,38 @@ export function fetchGraphSnippet(
   return client.get<GraphSnippetResponse>(`/api/workspaces/${workspaceId}/graph/snippet?${qs}`);
 }
 
+export interface SymbolContextDto {
+  symbol: string;
+  repo: string;
+  path: string | null;
+  type: string | null;
+  calls: string[];
+  calledBy: string[];
+  anchorScore?: number;
+  rawText?: string;
+  error?: string;
+}
+
+export function useSymbolContext(
+  workspaceId: string | undefined,
+  repo: string | undefined,
+  symbol: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['symbol-context', workspaceId, repo, symbol],
+    queryFn: () => {
+      const qs = new URLSearchParams({ repo: repo ?? '', symbol: symbol ?? '' });
+      return client.get<{
+        context: SymbolContextDto | null;
+        source: 'lain' | 'error' | 'unconfigured';
+      }>(`/api/workspaces/${workspaceId}/graph/symbol-context?${qs}`);
+    },
+    enabled: enabled && Boolean(workspaceId && repo && symbol),
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useCreateWorkspace() {
   return useMutation({
     mutationFn: (body: {

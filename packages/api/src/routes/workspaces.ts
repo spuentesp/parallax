@@ -7,7 +7,9 @@ import {
   buildGraphChildren,
   buildGraphRoot,
   deriveLainRepoId,
+  resolveCallChain,
   resolvePathSnippet,
+  resolveSymbolContext,
   resolveSymbolSnippet,
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
@@ -708,6 +710,115 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       } catch (e) {
         return {
           snippet: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
+  // Contexto de un símbolo en el call stack: definición, llamadas salientes y llamadas entrantes.
+  app.get(
+    '/api/workspaces/:id/graph/symbol-context',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            symbol: z.string().min(1),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, symbol } = req.query as { repo: string; symbol: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { context: null, source: 'unconfigured' as const };
+      }
+      try {
+        const client = await app.lainClientFor({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const context = await resolveSymbolContext(client, repo, symbol);
+        return { context, source: 'lain' as const };
+      } catch (e) {
+        return {
+          context: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
+  // Cadena de llamadas entre dos símbolos: ruta exacta dentro del repo.
+  app.get(
+    '/api/workspaces/:id/graph/call-chain',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            from: z.string().min(1),
+            to: z.string().min(1),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, from, to } = req.query as { repo: string; from: string; to: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { chain: null, source: 'unconfigured' as const };
+      }
+      try {
+        const client = await app.lainClientFor({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const chain = await resolveCallChain(client, repo, from, to);
+        return { chain, source: 'lain' as const };
+      } catch (e) {
+        return {
+          chain: null,
           source: 'error' as const,
           error: isLainCallError(e) ? e.message : 'lain unreachable',
         };
