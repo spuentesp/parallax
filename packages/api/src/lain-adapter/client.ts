@@ -415,7 +415,7 @@ export class RealLainAdapter implements LainAdapter {
 }
 
 export async function createLainClient(config: LainClientConfig): Promise<LainAdapter> {
-  const timeoutMs = config.timeoutMs ?? 20_000;
+  const timeoutMs = config.timeoutMs ?? 30_000;
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
   const adapter = new RealLainAdapter(config, 'unknown');

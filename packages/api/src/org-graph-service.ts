@@ -60,7 +60,7 @@ export function createOrgGraphService(deps: {
       const lainRepoIds = new Set(repos.map((r) => deriveLainRepoId(r)));
 
       const build = async (): Promise<OrgGraph> => {
-        const client = await getClient({ lainUrl, apiVersion: '1', timeoutMs: 20_000 });
+        const client = await getClient({ lainUrl, apiVersion: '1', timeoutMs: 30_000 });
         return annotateRepos(toOrgGraph(await buildEndpointTopology(client)), lainRepoIds);
       };
       const key = `${ws.id}|${lainUrl}|live`;

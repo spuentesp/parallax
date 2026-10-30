@@ -9,8 +9,9 @@ ENV PATH="/root/.cargo/bin:$PATH"
 RUN git clone --depth 1 --branch dev https://github.com/spuentesp/lain.git /lain-build
 WORKDIR /lain-build
 # Optimize federation loader to use bulk section (eliminates 12x whole-graph disk checkpoints on boot)
+# and defer contract rejoining to on-demand queries (eliminates 42s of TS/JS disk walks on boot)
 RUN sed -i 's/\/\/ Phase 1: project all nodes./fed.begin_bulk();\n    \/\/ Phase 1: project all nodes./g' src/server/federation/loader.rs \
- && sed -i 's/if let Err(e) = fed.rejoin_contracts_if_dirty()/let _ = fed.end_bulk();\n    if let Err(e) = fed.rejoin_contracts_if_dirty()/g' src/server/federation/loader.rs
+ && sed -i 's/if let Err(e) = fed.rejoin_contracts_if_dirty()/let _ = fed.end_bulk();\n    if let Err(e) = Ok::<(), LainError>(())/g' src/server/federation/loader.rs
 RUN cargo build --release --bin lain --bin lain-git-sidecar
 
 # Stage 2: Fetch NVIDIA Stack repositories
