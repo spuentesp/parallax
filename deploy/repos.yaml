@@ -1,4 +1,4 @@
-data_dir: /data/lain-federation
+data_dir: .lain/federation
 max_concurrent_indexers: 2
 repos:
   # Cluster A (OpenShell RPC Stack)

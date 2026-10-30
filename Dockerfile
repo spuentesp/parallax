@@ -8,7 +8,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --de
 ENV PATH="/root/.cargo/bin:$PATH"
 RUN git clone --depth 1 --branch dev https://github.com/spuentesp/lain.git /lain-build
 WORKDIR /lain-build
-RUN cargo build --release --bin lain
+RUN cargo build --release --bin lain --bin lain-git-sidecar
 
 # Stage 2: Fetch NVIDIA Stack repositories
 FROM alpine/git AS repos-fetcher
@@ -36,6 +36,8 @@ WORKDIR /app
 
 # Copy Lain binary and NVIDIA repos
 COPY --from=lain-builder /lain-build/target/release/lain /usr/local/bin/lain
+COPY --from=lain-builder /lain-build/target/release/lain-git-sidecar /usr/local/bin/lain-git-sidecar
+ENV LAIN_GIT_SIDECAR_BIN=/usr/local/bin/lain-git-sidecar
 COPY --from=repos-fetcher /repos /repos
 
 # Copy Parallax code and federation configs
@@ -47,10 +49,7 @@ RUN pnpm install --frozen-lockfile \
  && pnpm --filter @parallax/web build
 
 # Pre-index Lain federation cache so on-demand wakeups have warm cache immediately
-RUN mkdir -p /var/cache/lain-federation \
- && sed -i 's|data_dir: .*|data_dir: /var/cache/lain-federation|' /repos/repos.yaml \
- && (cd /repos && /usr/local/bin/lain reindex --config /repos/repos.yaml || true) \
- && sed -i 's|data_dir: .*|data_dir: /data/lain-federation|' /repos/repos.yaml
+RUN cd /repos && /usr/local/bin/lain reindex --config /repos/repos.yaml || true
 
 ENV NODE_ENV=production \
     PORT=8080 \

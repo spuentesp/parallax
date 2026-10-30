@@ -5,13 +5,7 @@ echo "=========================================="
 echo "  Parallax All-in-One Cloud Entrypoint"
 echo "=========================================="
 
-mkdir -p /var/log /data/lain-federation
-
-# If persistent cache does not exist on /data, initialize from pre-baked image cache if available
-if [ ! -f "/data/lain-federation/federated_graph.bin" ] && [ -d "/var/cache/lain-federation" ]; then
-  echo "==> Initializing persistent Lain cache from image cache..."
-  cp -a /var/cache/lain-federation/* /data/lain-federation/ || true
-fi
+mkdir -p /var/log
 
 # 1. Start Lain federation server if binary and config exist
 if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
@@ -23,7 +17,7 @@ if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
 
   echo "==> Waiting for Lain MCP endpoint to become responsive..."
   READY=0
-  for i in $(seq 1 45); do
+  for i in $(seq 1 180); do
     if node -e "fetch('http://127.0.0.1:9999/mcp').then(r => process.exit(0)).catch(() => process.exit(1))" 2>/dev/null; then
       echo "    Lain federation server is ready on port 9999!"
       READY=1
@@ -33,7 +27,7 @@ if [ -x "/usr/local/bin/lain" ] && [ -f "/repos/repos.yaml" ]; then
   done
 
   if [ "$READY" -eq 0 ]; then
-    echo "Warning: Lain did not respond within 45s. Log output:"
+    echo "Warning: Lain did not respond within 180s. Log output:"
     cat /var/log/lain.log || true
   fi
 else
