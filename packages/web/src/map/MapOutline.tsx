@@ -1,6 +1,6 @@
 // MapOutline — el árbol del mapa. Misma proyección que el lienzo (lo que está
-// abierto en uno está abierto en el otro): repo → servicio → endpoint, con
-// tipo de contrato, número de hijos y un "+N más" cuando el servidor recortó.
+// abierto en uno está abierto en el otro): repo → Interfaces → servicio →
+// endpoint, con tipo de contrato, número de hijos y un "+N más" al recortar.
 // Teclado: ↑/↓ mover, → abrir, ← cerrar o subir al padre, Enter seleccionar.
 
 import type { MapViewResponse, ProjectedNode } from '@parallax/shared/org-map';

@@ -8,6 +8,7 @@ import {
   buildEndpointTopology,
   endpointNodeId,
   groupNodeId,
+  interfacesNodeId,
   serviceNodeId,
 } from '../src/topology.js';
 
@@ -69,7 +70,14 @@ const fake = {
 const api = serviceNodeId('api');
 const web = serviceNodeId('web');
 const group = groupNodeId('api', 'gql-query');
-const open = new Set(['repo:api', 'repo:web', api, group]);
+const open = new Set([
+  'repo:api',
+  'repo:web',
+  interfacesNodeId('api'),
+  interfacesNodeId('web'),
+  api,
+  group,
+]);
 
 describe('projection — crowded groups', async () => {
   const graph = toOrgGraph(await buildEndpointTopology(fake));
@@ -97,10 +105,10 @@ describe('projection — crowded groups', async () => {
     expect(p.edges.filter((e) => e.kind === 'consumes')).toHaveLength(N);
   });
 
-  it('collapsed, nothing changes: the relation is still service to service', () => {
+  it('collapsed Interfaces retain the relation between their services', () => {
     const p = projectOrgGraph(graph, new Set(['repo:api', 'repo:web']));
     expect(p.edges.filter((e) => e.kind === 'consumes').map((e) => [e.source, e.target])).toEqual([
-      [web, api],
+      [interfacesNodeId('web'), interfacesNodeId('api')],
     ]);
   });
 });

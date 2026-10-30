@@ -5,6 +5,7 @@ import {
   contractKind,
   endpointNodeId,
   groupNodeId,
+  interfacesNodeId,
   resolveServiceForPath,
   serviceNodeId,
 } from '../src/topology.js';
@@ -128,12 +129,17 @@ describe('buildEndpointTopology', () => {
     expect(servedBy?.target).toBe(serviceNodeId('orders'));
   });
 
-  it('nests services under their repo and endpoints under their service', async () => {
+  it('nests services under Interfaces, separately from the repo code', async () => {
     const t = await buildEndpointTopology(fake);
     const byId = new Map(t.nodes.map((n) => [n.id, n]));
-    expect(byId.get(serviceNodeId('shipping'))?.parent).toBe('repo:platform');
-    expect(byId.get(serviceNodeId('orders'))?.parent).toBe('repo:orders');
-    // endpoint → grupo de su tipo → servicio → repo
+    expect(byId.get(interfacesNodeId('platform'))).toMatchObject({
+      label: 'Interfaces',
+      kind: 'group',
+      parent: 'repo:platform',
+      meta: { repo: 'platform', role: 'interfaces' },
+    });
+    expect(byId.get(serviceNodeId('shipping'))?.parent).toBe(interfacesNodeId('platform'));
+    expect(byId.get(serviceNodeId('orders'))?.parent).toBe(interfacesNodeId('orders'));
     const ep = byId.get(endpointNodeId('http:GET /api/orders/{}', 'orders'));
     expect(ep?.parent).toBe(groupNodeId('orders', 'http'));
     expect(byId.get(groupNodeId('orders', 'http'))).toMatchObject({
@@ -145,7 +151,7 @@ describe('buildEndpointTopology', () => {
 
   it('counts the contracts in each group, so the map can say it without opening it', async () => {
     const t = await buildEndpointTopology(fake);
-    const groups = t.nodes.filter((n) => n.kind === 'group');
+    const groups = t.nodes.filter((n) => n.kind === 'group' && n.meta?.group !== undefined);
     expect(groups.length).toBeGreaterThan(0);
     for (const g of groups) {
       const children = t.nodes.filter((n) => n.parent === g.id).length;

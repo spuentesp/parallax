@@ -19,7 +19,9 @@
     "cytoscape": "^3.34.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.30.6",
+    "remark-gfm": "^4.0.1",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

@@ -13,6 +13,7 @@ import type * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMapSearch, useOrgMap, useRefreshMap, useWhoami } from '../api/hooks.js';
+import { useMediaQuery } from '../components/useMediaQuery.js';
 import { readExpanded, writeExpanded, writeMapSearch } from '../nav/mapState.js';
 import { readStored, writeStored } from '../nav/storage.js';
 import { TracePanel } from '../trace/TracePanel.js';
@@ -98,7 +99,11 @@ export function MapExplorer({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(
     () => new Set(readExpanded(workspaceId) ?? []),
   );
-  const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen());
+  const wideOutline = useMediaQuery('(min-width: 1100px)');
+  const [outlineOpen, setOutlineOpen] = useState(() => readOutlineOpen() && wideOutline);
+  useEffect(() => {
+    if (!wideOutline) setOutlineOpen(false);
+  }, [wideOutline]);
   const [legendOpen, setLegendOpen] = useState(false);
   const [looseOpen, setLooseOpen] = useState(false);
   // El contrato cuyo trazado de punta a punta está abierto (un panel ancho sobre el mapa).
@@ -143,8 +148,8 @@ export function MapExplorer({
     [setParams],
   );
 
-  // Al abrir, los repos se muestran con sus servicios dentro: tres cajas
-  // cerradas no cuentan nada. Una sola vez, y sólo si no hay foco ni demasiados.
+  // Al abrir, los repos muestran sus dos puertas: Interfaces y Code. Una sola
+  // vez, y sólo si no hay foco ni demasiados.
   const autoOpened = useRef(false);
 
   useEffect(() => {
@@ -433,7 +438,10 @@ export function MapExplorer({
                           {selNode.label}
                         </span>
                         <span className="rounded px-1 text-[10px] uppercase font-medium bg-bg border border-border text-muted">
-                          {selNode.contract ?? KIND_LABEL[selNode.kind]}
+                          {selNode.contract ??
+                            (selNode.meta.role === 'interfaces'
+                              ? 'Interfaces'
+                              : KIND_LABEL[selNode.kind])}
                         </span>
                       </div>
                       <button
@@ -685,26 +693,28 @@ function Toolbar(props: {
     return () => clearInterval(t);
   }, []);
 
-  // Botón de estado: encendido = el filtro está puesto.
+  const [filtersOpen, setFiltersOpen] = useState(props.hasFilters);
   const seg = (active: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-md px-2 py-[3px] text-xs transition-colors ${
-      active ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-bg hover:text-fg'
+    `inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+      active ? 'bg-accent-soft text-accent font-medium' : 'text-muted hover:bg-bg hover:text-fg'
     }`;
   const prov = filters.provenance;
+  const filterCount = [filters.contract, filters.provenance, filters.minConfidence].filter(
+    (value) => value !== undefined,
+  ).length;
   const setProv = (p: Provenance | undefined) =>
     setParam({ prov: p ?? null, ...(p === 'deterministic' ? { minc: null } : {}) });
 
   return (
-    <div className="border-b border-border px-3 py-2" data-testid="map-toolbar">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        {/* Qué se ve */}
+    <div className="relative z-30 border-b border-border px-3 py-2" data-testid="map-toolbar">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={props.onToggleOutline}
             aria-pressed={props.outlineOpen}
             title={props.outlineOpen ? 'Hide the structure list' : 'Show the structure list'}
-            className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+            className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
               props.outlineOpen
                 ? 'border-border bg-surface text-fg'
                 : 'border-transparent text-muted hover:bg-surface hover:text-fg'
@@ -717,7 +727,7 @@ function Toolbar(props: {
             onClick={props.onToggleLoose}
             aria-pressed={props.looseOpen}
             title="Calls the engine could not bind, and what each one is"
-            className={`rounded-lg border px-2 py-1 text-xs transition-colors ${
+            className={`h-8 rounded-lg border px-2.5 text-xs transition-colors ${
               props.looseOpen
                 ? 'border-border bg-surface text-fg'
                 : 'border-transparent text-muted hover:bg-surface hover:text-fg'
@@ -728,103 +738,123 @@ function Toolbar(props: {
         </div>
 
         <Divider />
-
         <SearchBox workspaceId={props.workspaceId} onPick={props.onSelect} />
 
-        <Divider />
-
-        {/* De dónde viene cada relación */}
-        <div className="flex items-center gap-2">
-          <Caption>Provenance</Caption>
-          <div className="flex items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5">
-            <button
-              type="button"
-              aria-pressed={!prov}
-              className={seg(!prov)}
-              onClick={() => setProv(undefined)}
-            >
-              all
-            </button>
-            <button
-              type="button"
-              aria-pressed={prov === 'deterministic'}
-              className={seg(prov === 'deterministic')}
-              onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
-            >
-              <EdgeSwatch provenance="deterministic" width={16} />
-              deterministic
-            </button>
-            <button
-              type="button"
-              aria-pressed={prov === 'inferred'}
-              className={seg(prov === 'inferred')}
-              onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
-            >
-              <EdgeSwatch provenance="inferred" width={16} />
-              inferred
-            </button>
-          </div>
-
-          {prov !== 'deterministic' && (
-            <label className="flex items-center gap-1.5 text-xs text-muted">
-              Min confidence
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.1}
-                value={filters.minConfidence ?? 0}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setParam({ minc: v === 0 ? null : String(v) });
-                }}
-                aria-label="Minimum confidence of inferred relations"
-                className="w-20 accent-[var(--color-accent)]"
-              />
-              <span className="tabular-nums w-7">{(filters.minConfidence ?? 0).toFixed(1)}</span>
-            </label>
-          )}
-        </div>
-
-        <Divider />
-
-        {/* Sobre qué contratos */}
-        <div className="flex items-center gap-2">
-          <Caption>Contract</Caption>
-          <div className="flex items-center gap-1">
-            {CONTRACTS.map((c) => {
-              const on = filters.contract === c;
-              return (
-                <button
-                  key={c}
-                  type="button"
-                  aria-pressed={on}
-                  className={`rounded-md px-1.5 py-[3px] font-mono text-[11px] transition-colors ${
-                    on
-                      ? 'bg-accent text-accent-fg'
-                      : 'border border-transparent text-muted hover:bg-surface hover:text-fg'
-                  }`}
-                  onClick={() => setParam({ contract: on ? null : c })}
-                >
-                  {c}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {props.hasFilters && (
-          <button
-            type="button"
-            className="text-xs text-accent hover:underline"
-            onClick={() => setParam({ contract: null, prov: null, minc: null })}
+        <details
+          className="relative"
+          open={filtersOpen}
+          onToggle={(event) => setFiltersOpen(event.currentTarget.open)}
+        >
+          <summary
+            className={`flex h-8 cursor-pointer list-none items-center gap-2 rounded-lg border px-2.5 text-xs transition-colors [&::-webkit-details-marker]:hidden ${
+              props.hasFilters
+                ? 'border-accent/30 bg-accent-soft text-accent'
+                : 'border-border text-muted hover:bg-surface hover:text-fg'
+            }`}
           >
-            clear filters
-          </button>
-        )}
+            Filters
+            {filterCount > 0 && (
+              <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] tabular-nums">
+                {filterCount}
+              </span>
+            )}
+            <span aria-hidden="true" className={filtersOpen ? 'rotate-180' : ''}>
+              ⌄
+            </span>
+          </summary>
+          <div className="absolute right-0 top-full mt-2 w-[38rem] max-w-[calc(100vw-2rem)] space-y-4 rounded-xl border border-border bg-surface p-4 shadow-xl sm:left-1/2 sm:right-auto sm:-translate-x-1/2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Caption>Provenance</Caption>
+              <div className="flex items-center gap-0.5 rounded-lg border border-border bg-surface p-0.5">
+                <button
+                  type="button"
+                  aria-pressed={!prov}
+                  className={seg(!prov)}
+                  onClick={() => setProv(undefined)}
+                >
+                  all
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={prov === 'deterministic'}
+                  className={seg(prov === 'deterministic')}
+                  onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
+                >
+                  <EdgeSwatch provenance="deterministic" width={16} />
+                  deterministic
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={prov === 'inferred'}
+                  className={seg(prov === 'inferred')}
+                  onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
+                >
+                  <EdgeSwatch provenance="inferred" width={16} />
+                  inferred
+                </button>
+              </div>
+
+              {prov !== 'deterministic' && (
+                <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted">
+                  Min confidence
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    value={filters.minConfidence ?? 0}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setParam({ minc: v === 0 ? null : String(v) });
+                    }}
+                    aria-label="Minimum confidence of inferred relations"
+                    className="w-20 accent-[var(--color-accent)]"
+                  />
+                  <span className="w-7 tabular-nums">
+                    {(filters.minConfidence ?? 0).toFixed(1)}
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+              <Caption>Contract</Caption>
+              <div className="flex flex-wrap items-center gap-1">
+                {CONTRACTS.map((c) => {
+                  const on = filters.contract === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      aria-pressed={on}
+                      className={`rounded-md px-2 py-1 font-mono text-[11px] transition-colors ${
+                        on
+                          ? 'bg-accent-soft text-accent font-medium'
+                          : 'border border-transparent text-muted hover:bg-surface hover:text-fg'
+                      }`}
+                      onClick={() => setParam({ contract: on ? null : c })}
+                    >
+                      {c}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {props.hasFilters && (
+              <button
+                type="button"
+                className="text-xs text-accent hover:underline"
+                onClick={() => setParam({ contract: null, prov: null, minc: null })}
+              >
+                clear filters
+              </button>
+            )}
+          </div>
+        </details>
         {props.loading && <span className="text-xs text-muted">loading…</span>}
 
-        <div className="ml-auto flex items-center gap-2.5 text-xs text-muted">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2.5 text-xs text-muted">
           {totals && (
             <span className="tabular-nums" data-testid="map-totals">
               {totals.shownNodes} of {totals.nodes} nodes · {totals.edges} relations
@@ -850,7 +880,7 @@ function Toolbar(props: {
                 ? 'Read-only access cannot rebuild the graph'
                 : 'Rebuild the graph from LAIN'
             }
-            className="rounded-md border border-border px-2 py-0.5 transition-colors hover:bg-surface disabled:opacity-60"
+            className="h-8 rounded-lg border border-border px-2.5 transition-colors hover:bg-surface disabled:opacity-60"
           >
             {props.refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -892,7 +922,7 @@ function SearchBox({
   const results = useMapSearch(workspaceId, debounced).data?.results ?? [];
 
   return (
-    <div className="relative w-[17rem]">
+    <div className="relative min-w-[12rem] max-w-[20rem] flex-1">
       <input
         type="search"
         value={text}
@@ -904,7 +934,7 @@ function SearchBox({
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         placeholder="Search repos, services…"
         aria-label="Search the map"
-        className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
+        className="h-8 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none transition-colors placeholder:text-muted/70 focus:border-accent"
       />
       {open && debounced.trim().length >= 2 && (
         <ul className="absolute z-20 mt-1 w-full max-h-72 overflow-auto rounded-lg border border-border bg-surface shadow-lg">
@@ -924,7 +954,9 @@ function SearchBox({
                 >
                   <KindIcon kind={r.kind} />
                   <span className="truncate">{r.label}</span>
-                  <span className="ml-auto text-[10px] text-muted">{KIND_LABEL[r.kind]}</span>
+                  <span className="ml-auto text-[10px] text-muted">
+                    {r.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[r.kind]}
+                  </span>
                 </button>
               </li>
             ))
@@ -1005,7 +1037,7 @@ function CanvasControls({
   onToggleLegend: () => void;
 }): React.ReactElement {
   const btn =
-    'grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-fg';
+    'grid h-8 w-8 place-items-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-fg';
   return (
     <div className="absolute bottom-3 left-3 z-20 flex items-end gap-2">
       <div className="flex items-center gap-0.5 rounded-xl border border-border bg-surface/95 p-1 shadow-sm backdrop-blur">

@@ -16,6 +16,7 @@ import {
   buildEndpointTopology,
   endpointNodeId,
   groupNodeId,
+  interfacesNodeId,
   serviceNodeId,
 } from '../src/topology.js';
 
@@ -117,6 +118,7 @@ const getOrder = endpointNodeId(GET_ORDER, 'orders');
 
 const httpGroup = groupNodeId('orders', 'http');
 const topicGroup = groupNodeId('orders', 'topic');
+const ordersInterfaces = interfacesNodeId('orders');
 
 describe('toOrgGraph — procedencia', () => {
   it('marks static bindings deterministic and heuristic ones inferred with confidence', () => {
@@ -176,21 +178,25 @@ describe('projectOrgGraph — niveles y agregación', () => {
 
   it('expands lazily: children appear only under expanded parents', () => {
     const one = projectOrgGraph(graph, new Set(['repo:orders']));
-    expect(one.nodes.some((n) => n.id === orders)).toBe(true);
-    expect(one.nodes.some((n) => n.id === getOrder)).toBe(false);
-    // Servicio abierto: se ven sus GRUPOS (tipos de contrato), no cientos de endpoints.
-    const two = projectOrgGraph(graph, new Set(['repo:orders', orders]));
-    expect(two.nodes.some((n) => n.id === httpGroup)).toBe(true);
+    expect(one.nodes.some((n) => n.id === ordersInterfaces)).toBe(true);
+    expect(one.nodes.some((n) => n.id === orders)).toBe(false);
+    const two = projectOrgGraph(graph, new Set(['repo:orders', ordersInterfaces]));
+    expect(two.nodes.some((n) => n.id === orders)).toBe(true);
     expect(two.nodes.some((n) => n.id === getOrder)).toBe(false);
-    const three = projectOrgGraph(graph, new Set(['repo:orders', orders, httpGroup]));
-    expect(three.nodes.some((n) => n.id === getOrder)).toBe(true);
-    // Un expandido sin su ancestro abierto no aparece.
-    const orphan = projectOrgGraph(graph, new Set([orders]));
+    const three = projectOrgGraph(graph, new Set(['repo:orders', ordersInterfaces, orders]));
+    expect(three.nodes.some((n) => n.id === httpGroup)).toBe(true);
+    expect(three.nodes.some((n) => n.id === getOrder)).toBe(false);
+    const four = projectOrgGraph(
+      graph,
+      new Set(['repo:orders', ordersInterfaces, orders, httpGroup]),
+    );
+    expect(four.nodes.some((n) => n.id === getOrder)).toBe(true);
+    const orphan = projectOrgGraph(graph, new Set([ordersInterfaces, orders]));
     expect(orphan.nodes.some((n) => n.id === getOrder)).toBe(false);
   });
 
   it('lifts edges to endpoint level once visible, and drops containment self-edges', () => {
-    const p = projectOrgGraph(graph, new Set(['repo:orders', orders, httpGroup]));
+    const p = projectOrgGraph(graph, new Set(['repo:orders', ordersInterfaces, orders, httpGroup]));
     expect(p.edges.some((e) => e.source === 'repo:billing' && e.target === getOrder)).toBe(true);
     expect(p.edges.some((e) => e.kind === 'servedBy')).toBe(false);
   });
@@ -204,11 +210,14 @@ describe('projectOrgGraph — niveles y agregación', () => {
 describe('projectOrgGraph — tope de hijos', () => {
   const open = new Set([
     'repo:orders',
+    ordersInterfaces,
     orders,
     httpGroup,
     topicGroup,
     'repo:billing',
+    interfacesNodeId('billing'),
     'repo:analytics',
+    interfacesNodeId('analytics'),
   ]);
   const listOrders = endpointNodeId(LIST_ORDERS, 'orders');
   const created = endpointNodeId(CREATED, 'orders');
@@ -318,7 +327,7 @@ describe('describeNode — "quién consume este endpoint"', () => {
     expect([...byPeer.keys()].sort()).toEqual([billing, reports].sort());
     expect(byPeer.get(billing)?.provenance).toBe('deterministic');
     expect(byPeer.get(reports)?.provenance).toBe('inferred');
-    expect(d?.path.map((n) => n.id)).toEqual([httpGroup, orders, 'repo:orders']);
+    expect(d?.path.map((n) => n.id)).toEqual([httpGroup, orders, ordersInterfaces, 'repo:orders']);
   });
 
   it('for a service aggregates consumers across all its endpoints', () => {

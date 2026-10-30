@@ -5,8 +5,8 @@ import { useCurrentOrg } from '../nav/currentOrg.js';
 
 type OrgSummary = { id: string; name?: string };
 
-// El workspace actual, siempre visible y en el mismo lugar: una pastilla con su
-// inicial y nombre, que lleva a la lista. Compacta: el espacio es del mapa.
+// El workspace actual, siempre visible y en el mismo lugar: un avatar compacto
+// lleva a la lista y deja el nombre completo en el tooltip y la accesibilidad.
 export function OrgSwitcher(): React.ReactElement {
   const { orgId, loading } = useCurrentOrg();
   const { data } = useOrgs();
@@ -19,16 +19,24 @@ export function OrgSwitcher(): React.ReactElement {
     : loading
       ? 'Loading…'
       : 'No workspace yet';
+  const initials = name
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 
   return (
     <Link
       to="/orgs"
       title={orgId ? `${name} — all workspaces` : 'Create a workspace'}
       aria-label={orgId ? `All workspaces (current: ${name})` : 'Create a workspace'}
-      className="block rounded-lg border border-border bg-bg px-1 py-1.5 text-center hover:border-accent transition-colors"
+      className="mx-auto grid h-10 w-10 place-items-center rounded-xl border border-border bg-bg text-xs font-semibold text-accent transition-colors hover:border-accent hover:bg-accent-soft"
     >
-      <span className="block text-[9px] uppercase tracking-wide text-muted">Workspace</span>
-      <span className="block truncate text-[11px] font-medium">{name}</span>
+      <span aria-hidden="true">{initials}</span>
+      <span className="sr-only">Workspace</span>
+      <span className="sr-only">{name}</span>
     </Link>
   );
 }

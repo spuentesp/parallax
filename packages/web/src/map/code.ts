@@ -1,6 +1,6 @@
-// Capa de código del mapa: dentro de un repo abierto aparece "Code", y de ahí
-// archivos/módulos → símbolos, pedidos a LAIN al abrir cada nodo (los
-// endpoints, servicios y relaciones siguen viniendo de la proyección del
+// Capa de código del mapa: dentro de un repo abierto aparece "Code", hermano
+// de "Interfaces", y de ahí archivos/módulos → símbolos, pedidos a LAIN al
+// abrir cada nodo (los contratos y relaciones vienen de la proyección del
 // servidor). Esto es sólo la fusión, en funciones puras: qué nodos aparecen,
 // con qué padre y cuáles se pueden abrir.
 //

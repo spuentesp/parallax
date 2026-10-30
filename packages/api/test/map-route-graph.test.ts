@@ -99,13 +99,17 @@ describe('map routes — con grafo', () => {
     const all = (await view({ expand: [] })).json() as View;
     const repo = all.nodes[0]?.id as string;
     const opened = (await view({ expand: [repo] })).json() as View;
-    const child = opened.nodes.find((n) => n.id !== repo && n.kind === 'service')?.id as string;
+    const interfaces = opened.nodes.find((n) => n.kind === 'group')?.id as string;
+    const services = (await view({ expand: [repo, interfaces] })).json() as View;
+    const child = services.nodes.find((n) => n.kind === 'service')?.id as string;
     const f = (await view({ focus: child, hops: 1 })).json() as View;
     expect(f.focus?.seed).toBe(child);
     expect(f.nodes.some((n) => n.id === child)).toBe(true);
     const pinned = (await view({ pin: [child] })).json() as View;
     expect(pinned.nodes.some((n) => n.id === child)).toBe(true);
-    const limited = (await view({ expand: [repo], limits: { [repo]: 1 } })).json() as View;
+    const limited = (
+      await view({ expand: [repo, interfaces], limits: { [interfaces]: 1 } })
+    ).json() as View;
     expect(limited.nodes.filter((n) => n.kind === 'service').length).toBeLessThanOrEqual(1);
   });
 

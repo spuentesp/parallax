@@ -174,6 +174,7 @@ describe('MapExplorer', () => {
     renderExplorer();
     await screen.findByTestId('map-outline');
 
+    fireEvent.click(screen.getByText('Filters'));
     fireEvent.click(screen.getByRole('button', { name: /inferred/ }));
     await waitFor(() => expect(requests.at(-1)?.filters?.provenance).toBe('inferred'));
 

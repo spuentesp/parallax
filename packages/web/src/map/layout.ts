@@ -29,9 +29,9 @@ export const PAD = 16;
 export const LABEL_H = 20;
 
 // Ancho medio de un carácter según la fuente del rótulo: el lienzo dibuja
-// Space Grotesk a 12px para repos y servicios, y JetBrains Mono a 11px para
+// Space Grotesk a 13px para repos y servicios, y JetBrains Mono a 12px para
 // contratos y código.
-const CHAR_W = { proportional: 6.6, mono: 6.7 } as const;
+const CHAR_W = { proportional: 7.2, mono: 7.3 } as const;
 
 /** Tamaño de una hoja según su rótulo (el lienzo trunca con puntos suspensivos). */
 export function measure(label: string, kind: ProjectedNode['kind']): Size {

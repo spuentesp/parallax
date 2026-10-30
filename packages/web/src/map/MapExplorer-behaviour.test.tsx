@@ -64,7 +64,12 @@ function mount(url = '/') {
   return router;
 }
 const search = (r: ReturnType<typeof mount>) => new URLSearchParams(r.state.location.search);
-const toolbar = async () => within(await screen.findByTestId('map-toolbar'));
+const toolbar = async () => {
+  const bar = within(await screen.findByTestId('map-toolbar'));
+  const toggle = bar.getByText('Filters');
+  if (!toggle.closest('details')?.hasAttribute('open')) fireEvent.click(toggle);
+  return bar;
+};
 
 describe('filtersFromParams', () => {
   it('reads contract, provenance and a numeric confidence; ignores junk', () => {

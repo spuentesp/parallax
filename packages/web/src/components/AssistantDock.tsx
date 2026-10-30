@@ -21,6 +21,7 @@ import {
 import { TourBar, TourSetup } from '../onboarding/TourBar.js';
 import { useOnboarding } from '../onboarding/useOnboarding.js';
 import { type ChatMessage, ChatPanel, summarizeVerdicts } from './ChatPanel.js';
+import { useMediaQuery } from './useMediaQuery.js';
 
 // El asistente ("Ask the architecture") es UNO para toda la app: se monta en el
 // hub del org y en el detalle del workspace, así el mapa nunca aparece sin él.
@@ -32,19 +33,23 @@ export function AssistantDock({
   docked = false,
 }: {
   workspaceId: string;
-  /** En el mapa el asistente va pegado a la derecha y abierto; en el resto, flota y empieza cerrado. */
+  /** En pantallas anchas va pegado a la derecha; en las demás, se abre como overlay. */
   docked?: boolean;
 }): React.ReactElement {
   const orgId = workspaceId;
   const [params, setParams] = useSearchParams();
   const ask = useAsk(orgId);
   const qc = useQueryClient();
+  const wideDock = useMediaQuery('(min-width: 1280px)');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Abierto/cerrado por separado: ocultarlo en el mapa no lo abre sobre otra sección.
-  const [openDocked, setOpenDocked] = useState(true);
+  const [openDocked, setOpenDocked] = useState(wideDock);
   const [openFloating, setOpenFloating] = useState(false);
   const chatOpen = docked ? openDocked : openFloating;
   const setChatOpen = docked ? setOpenDocked : setOpenFloating;
+  useEffect(() => {
+    if (docked) setOpenDocked(wideDock);
+  }, [docked, wideDock]);
 
   // La conversación vive en el servidor y en la URL (?conv=): recargar la página
   // o abrir el enlace recupera el hilo.
@@ -254,18 +259,32 @@ export function AssistantDock({
 
   if (docked) {
     return chatOpen ? (
-      <aside
-        className="w-[25rem] max-w-[40vw] shrink-0 h-full border-l border-border"
-        aria-label="Assistant"
-      >
-        {panel}
-      </aside>
+      <>
+        {!wideDock && (
+          <button
+            type="button"
+            aria-label="Dismiss assistant"
+            className="fixed inset-0 z-40 cursor-default bg-black/30"
+            onClick={() => setChatOpen(false)}
+          />
+        )}
+        <aside
+          className={
+            wideDock
+              ? 'h-full w-[22rem] shrink-0 border-l border-border'
+              : 'fixed inset-y-0 right-0 z-50 h-full w-[22rem] max-w-[calc(100vw-2rem)] border-l border-border shadow-2xl'
+          }
+          aria-label="Assistant"
+        >
+          {panel}
+        </aside>
+      </>
     ) : (
       <button
         type="button"
         onClick={() => setChatOpen(true)}
         aria-label="Ask the architecture"
-        className="shrink-0 w-9 h-full border-l border-border bg-surface text-xs text-accent hover:bg-bg [writing-mode:vertical-rl] py-4"
+        className="h-full w-9 shrink-0 border-l border-border bg-surface py-4 text-xs text-accent [writing-mode:vertical-rl] hover:bg-bg"
       >
         Ask the architecture
       </button>

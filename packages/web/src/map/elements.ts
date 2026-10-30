@@ -124,7 +124,12 @@ export function toCyElements(
     out.push({
       group: 'nodes',
       data,
-      classes: [n.kind, n.expanded ? 'expanded' : '', data.collapsible ? 'collapsible' : '']
+      classes: [
+        n.kind,
+        n.meta.role === 'interfaces' ? 'interfaces' : '',
+        n.expanded ? 'expanded' : '',
+        data.collapsible ? 'collapsible' : '',
+      ]
         .filter(Boolean)
         .join(' '),
     });

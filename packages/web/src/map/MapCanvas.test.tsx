@@ -259,6 +259,7 @@ describe('buildStyle', () => {
       'node.repo',
       'node.service',
       'node.group',
+      'node.interfaces',
       'node.endpoint',
       'node.code',
       'node.file',

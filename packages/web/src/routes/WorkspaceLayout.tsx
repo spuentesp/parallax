@@ -4,7 +4,7 @@ import { AssistantDock } from '../components/AssistantDock.js';
 
 // Todo lo de un workspace (mapa, repos, contratos, evaluaciones) cuelga de aquí.
 // El asistente se monta UNA vez (el hilo sobrevive al cambiar de sección): en el
-// mapa va pegado a la derecha y abierto, porque grafo y chat son lo principal;
+// mapa va pegado a la derecha en pantallas anchas y se superpone en las demás;
 // en el resto de secciones flota.
 export function WorkspaceLayout(): React.ReactElement {
   const { orgId } = useParams();

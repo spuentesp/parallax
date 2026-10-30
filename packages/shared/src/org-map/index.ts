@@ -5,9 +5,9 @@
 /** deterministic = binding estático / relación estructural; inferred = heurístico. */
 export type Provenance = 'deterministic' | 'inferred';
 /**
- * repo / service / endpoint vienen del análisis de contratos. `code` es la
- * puerta al grafo de código de un repo; `file` (contenedores: archivo, módulo,
- * paquete) y `symbol` (funciones, clases, rutas…) se piden al vuelo a LAIN.
+ * repo / service / endpoint vienen del análisis de contratos; `group` cubre
+ * tanto Interfaces como los grupos de contratos. `code` es la puerta al grafo
+ * de código de un repo; `file` (archivo, módulo, paquete) y `symbol` se piden a LAIN.
  */
 export type OrgNodeKind = 'repo' | 'service' | 'group' | 'endpoint' | 'code' | 'file' | 'symbol';
 export type OrgEdgeKind = 'consumes' | 'servedBy';

@@ -80,7 +80,7 @@ export function buildBriefing(graph: OrgGraph): Briefing {
       name: r.label,
       lainRepoId: typeof r.meta.lainRepoId === 'string' ? r.meta.lainRepoId : null,
       services: graph.nodes
-        .filter((s) => s.kind === 'service' && s.parent === r.id)
+        .filter((s) => s.kind === 'service' && ancestorsOf(s.id, byId).includes(r.id))
         .map((s) => {
           const groups = graph.nodes
             .filter((g) => g.kind === 'group' && g.parent === s.id)

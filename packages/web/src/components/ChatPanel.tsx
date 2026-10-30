@@ -9,6 +9,7 @@ import type {
   RoadmapDto,
 } from '../api/hooks.js';
 import { RoadmapView } from '../trace/RoadmapView.js';
+import { MarkdownMessage } from './MarkdownMessage.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -166,14 +167,30 @@ export function ChatPanel({
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.length === 0 && !topSlot && (
-          <div className="text-center text-sm py-8 text-muted">
+          <div className="mx-auto max-w-xs py-6 text-center text-sm text-muted">
             <div>Ask something like:</div>
-            <div className="italic mt-1">“Who consumes the orders API?”</div>
+            <div className="mt-3 space-y-2">
+              {[
+                'Who consumes the orders API?',
+                'Which services are most connected?',
+                'Where are the loose ends?',
+              ].map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  disabled={loading}
+                  onClick={() => onSend(prompt)}
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-left text-xs text-fg transition-colors hover:border-accent hover:text-accent disabled:opacity-50"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
             {onStartTour && (
               <button
                 type="button"
                 onClick={onStartTour}
-                className="mt-4 rounded-lg bg-accent px-3 py-1.5 text-xs text-accent-fg"
+                className="mt-4 rounded-lg border border-accent/40 px-3 py-1.5 text-xs text-accent transition-colors hover:bg-accent-soft"
               >
                 New here? Take the guided tour
               </button>
@@ -187,10 +204,10 @@ export function ChatPanel({
             className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`rounded-xl px-3 py-2 text-sm max-w-[90%] space-y-2 ${
+              className={`space-y-2 rounded-xl px-3 py-2 text-sm ${
                 m.role === 'user'
-                  ? 'bg-accent text-accent-fg'
-                  : 'bg-bg text-fg border border-border'
+                  ? 'max-w-[90%] bg-accent text-accent-fg'
+                  : 'max-w-[96%] border border-border bg-bg text-fg'
               }`}
             >
               {m.label && <p className="text-xs font-semibold">{m.label}</p>}
@@ -201,6 +218,8 @@ export function ChatPanel({
                   <summary className="cursor-pointer">What I asked</summary>
                   <p className="mt-1 whitespace-pre-wrap">{m.content}</p>
                 </details>
+              ) : m.role === 'assistant' ? (
+                <MarkdownMessage content={m.content} />
               ) : (
                 <p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</p>
               )}

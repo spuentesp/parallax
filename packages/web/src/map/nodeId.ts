@@ -1,5 +1,5 @@
 // Ids de nodo del mapa (los fija packages/api/src/topology.ts):
-//   repo:<repo>   svc:<servicio>   ep:<clave del contrato>@<servicio>
+//   repo:<repo>   interfaces:<repo>   svc:<servicio>   ep:<clave>@<servicio>
 //   code:<repo_id>   sym:<repo_id>|<tipo>|<nombre>   (grafo de código, bajo demanda)
 // El resto de la UI (acciones de flujo, enlaces del agente) necesita saber a
 // qué repo/servicio pertenece lo seleccionado sin volver a pedirlo al servidor.
@@ -13,6 +13,7 @@ export interface NodeContext {
 export function nodeContext(id: string | null | undefined): NodeContext | null {
   if (!id) return null;
   if (id.startsWith('repo:')) return { kind: 'repo', name: id.slice(5) };
+  if (id.startsWith('interfaces:')) return { kind: 'repo', name: id.slice(11) };
   if (id.startsWith('svc:')) return { kind: 'service', name: id.slice(4) };
   // Código: el repo es lo que sirve de contexto (p. ej. para evaluar un PR).
   if (id.startsWith('code:')) return { kind: 'repo', name: id.slice(5) };

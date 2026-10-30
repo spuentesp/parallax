@@ -24,16 +24,16 @@ const n = (
 describe('measure — exact', () => {
   it('width = label·charWidth + 22 within [84, 230]; monospace for code and contracts', () => {
     expect(measure('a', 'service')).toEqual({ w: 84, h: 28 });
-    expect(measure('x'.repeat(20), 'service').w).toBe(154); // 20·6.6 + 22
-    expect(measure('x'.repeat(20), 'repo').w).toBe(154);
-    expect(measure('x'.repeat(20), 'endpoint').w).toBe(156); // 20·6.7 + 22
-    expect(measure('x'.repeat(20), 'file').w).toBe(156);
-    expect(measure('x'.repeat(20), 'symbol').w).toBe(156);
-    expect(measure('x'.repeat(20), 'code').w).toBe(154); // la puerta no es monoespaciada
+    expect(measure('x'.repeat(20), 'service').w).toBe(166); // 20·7.2 + 22
+    expect(measure('x'.repeat(20), 'repo').w).toBe(166);
+    expect(measure('x'.repeat(20), 'endpoint').w).toBe(168); // 20·7.3 + 22
+    expect(measure('x'.repeat(20), 'file').w).toBe(168);
+    expect(measure('x'.repeat(20), 'symbol').w).toBe(168);
+    expect(measure('x'.repeat(20), 'code').w).toBe(166); // la puerta no es monoespaciada
     expect(measure('x'.repeat(500), 'service').w).toBe(230);
     expect(measure('', 'service').w).toBe(84);
-    // Justo en los límites: 10 caracteres de ancho proporcional = 88.
-    expect(measure('x'.repeat(10), 'service').w).toBe(88);
+    // Justo en los límites: 10 caracteres de ancho proporcional = 94.
+    expect(measure('x'.repeat(10), 'service').w).toBe(94);
   });
   it('height depends on the kind', () => {
     expect(measure('a', 'repo').h).toBe(34);

@@ -145,7 +145,7 @@ function Detail({
       <div className="p-5 space-y-2">
         <div className="flex items-center gap-2 text-xs text-muted">
           <KindIcon kind={node.kind} />
-          <span>{KIND_LABEL[node.kind]}</span>
+          <span>{node.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[node.kind]}</span>
           {node.contract && (
             <span className="rounded px-1 uppercase tracking-wide bg-bg border border-border">
               {node.contract}

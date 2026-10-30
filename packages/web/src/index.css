@@ -62,7 +62,7 @@
   --color-symbol: #8b5cf6;
 
   /* Procedencia de la relación: lo probado es la línea, lo inferido el aviso. */
-  --color-deterministic: #8a97a8;
+  --color-deterministic: #64748b;
   --color-inferred: #d97706;
 
   /* Retícula del lienzo. */
@@ -97,7 +97,7 @@
   --color-code: #a78bfa;
   --color-file: #c084fc;
   --color-symbol: #c4b5fd;
-  --color-deterministic: #7c8797;
+  --color-deterministic: #8b96a5;
   --color-inferred: #f59e0b;
   --color-grid: #232a33;
 }

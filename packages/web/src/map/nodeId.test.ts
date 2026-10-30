@@ -4,6 +4,7 @@ import { nodeContext } from './nodeId.js';
 describe('nodeContext', () => {
   it('reads repo, service and endpoint ids', () => {
     expect(nodeContext('repo:orders')).toEqual({ kind: 'repo', name: 'orders' });
+    expect(nodeContext('interfaces:orders')).toEqual({ kind: 'repo', name: 'orders' });
     expect(nodeContext('svc:billing')).toEqual({ kind: 'service', name: 'billing' });
     // El servicio es lo que va tras la ÚLTIMA @: la clave del contrato puede llevar otras.
     expect(nodeContext('ep:http:GET /u/{id}@me@orders')).toEqual({

@@ -44,6 +44,12 @@ describe('ChatPanel', () => {
     expect(screen.queryByText(/ask something like/i)).toBeNull();
   });
 
+  it('sends an example question from the empty state', () => {
+    const { onSend } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Which services are most connected?' }));
+    expect(onSend).toHaveBeenCalledWith('Which services are most connected?');
+  });
+
   it('sends trimmed text on Enter and on click, then clears the box', () => {
     const { onSend } = setup();
     fireEvent.change(input(), { target: { value: '  who consumes orders?  ' } });
@@ -244,5 +250,50 @@ describe('ChatPanel', () => {
     expect(box.getByText('· 3 uses')).toBeTruthy();
     expect(box.getByText('· 1 use')).toBeTruthy();
     expect(box.getByText('engine records 1 use(s) of orders by reports')).toBeTruthy();
+  });
+
+  it('renders GitHub-flavored Markdown in assistant answers', () => {
+    setup([
+      {
+        role: 'assistant',
+        content: [
+          '## Consumers',
+          '',
+          '- **billing**',
+          '- `orders`',
+          '',
+          '| Service | Uses |',
+          '| --- | ---: |',
+          '| billing | 3 |',
+          '',
+          '[Evidence](https://example.com/evidence)',
+          '',
+          '```ts',
+          'const consumer = "billing";',
+          '```',
+        ].join('\n'),
+      },
+    ]);
+
+    expect(screen.getByRole('heading', { name: 'Consumers', level: 2 })).toBeTruthy();
+    expect(screen.getByText('billing', { selector: 'strong' })).toBeTruthy();
+    expect(screen.getByText('orders', { selector: 'code' })).toBeTruthy();
+    expect(screen.getByRole('table')).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Evidence' });
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(screen.getByText('const consumer = "billing";').closest('pre')).toBeTruthy();
+  });
+
+  it('keeps user Markdown as text and does not render raw HTML from answers', () => {
+    setup([
+      { role: 'user', content: '**not bold**' },
+      { role: 'assistant', content: 'Safe answer <img src=x onerror=alert(1)>' },
+    ]);
+
+    expect(screen.getByText('**not bold**')).toBeTruthy();
+    expect(document.querySelector('strong')).toBeNull();
+    expect(document.querySelector('img')).toBeNull();
+    expect(screen.getByText(/Safe answer/)).toBeTruthy();
   });
 });

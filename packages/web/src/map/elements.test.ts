@@ -108,6 +108,23 @@ describe('toCyElements', () => {
     expect(els.find((e) => e.data.id === 'repo:a')?.classes).toContain('expanded');
   });
 
+  it('marks the Interfaces container for its distinct canvas treatment', () => {
+    const elements = toCyElements({
+      nodes: [
+        node({
+          id: 'interfaces:a',
+          kind: 'group',
+          label: 'Interfaces',
+          meta: { role: 'interfaces' },
+          childCount: 1,
+        }),
+      ],
+      edges: [],
+      hiddenChildren: {},
+    });
+    expect(elements[0]?.classes).toContain('interfaces');
+  });
+
   it('classes edges by provenance and never emits an edge to a node that is not drawn', () => {
     const edges = els.filter((e) => e.group === 'edges');
     expect(edges.map((e) => e.data.id)).toEqual(['ok']);

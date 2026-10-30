@@ -1,8 +1,8 @@
 import type { TopologyEdge, TopologyNode, TopologyViewData } from './topology.js';
 
 // Modelo del mapa de la organización: la misma topología de contratos, pero
-// con (a) jerarquía como contención (repo ⊃ servicio ⊃ endpoint, compound
-// nodes en el cliente), (b) procedencia de cada relación y (c) proyecciones
+// con (a) jerarquía como contención (repo ⊃ Interfaces ⊃ servicio ⊃ endpoint,
+// compound nodes en el cliente), (b) procedencia de cada relación y (c) proyecciones
 // por nivel. Todo son funciones puras sobre un grafo ya construido: el motor
 // se consulta una vez (ver org-graph-cache.ts) y los filtros, la expansión y
 // el foco se calculan en memoria, sin volver a LAIN.

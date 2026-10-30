@@ -13,9 +13,9 @@ import type { LainAdapter } from './lain-adapter/types.js';
 // Eso hace que cada endpoint tenga una entrada y una salida, y que el grafo
 // se lea como flujo entre servicios.
 //
-// Además los repos son nodos contenedores colapsables: repo → servicio →
-// endpoint. Colapsar un repo oculta lo que contiene y las aristas que
-// dependen de ello.
+// Los repos separan dos navegaciones: Code (en el cliente) e Interfaces.
+// Dentro de ésta: servicio → grupo de contratos → endpoint. Colapsar un repo
+// oculta lo que contiene y las aristas que dependen de ello.
 
 export type NodeKind = 'repo' | 'service' | 'group' | 'endpoint';
 /** Sitios de llamada que se conservan por endpoint consumido. */
@@ -27,7 +27,7 @@ export interface TopologyNode {
   id: string;
   label: string;
   kind: NodeKind;
-  /** Nodo padre en la jerarquía colapsable (repo → servicio → endpoint). */
+  /** Nodo padre: repo → Interfaces → servicio → grupo → endpoint. */
   parent: string | null;
   meta?: Record<string, unknown>;
 }
@@ -80,6 +80,10 @@ export function endpointNodeId(key: string, service: string): string {
 
 export function groupNodeId(service: string, group: string): string {
   return `grp:${service}:${group}`;
+}
+
+export function interfacesNodeId(repo: string): string {
+  return `interfaces:${repo}`;
 }
 
 /** Grupo de contratos bajo un servicio: lo que el usuario entiende, no lo que el sensor emite. */
@@ -223,12 +227,27 @@ export async function buildEndpointTopology(
     return id;
   };
 
-  // Servicios: cada uno cuelga de su repo.
+  const ensureInterfaces = (repo: string | null | undefined): string | null => {
+    const repoId = ensureRepo(repo);
+    if (!repo || !repoId) return null;
+    const id = interfacesNodeId(repo);
+    if (!nodes.has(id)) {
+      nodes.set(id, {
+        id,
+        label: 'Interfaces',
+        kind: 'group',
+        parent: repoId,
+        meta: { repo, role: 'interfaces' },
+      });
+    }
+    return id;
+  };
+
   const serviceIndex = new Map<string, readonly string[]>();
   for (const s of services.items) {
     serviceRepo.set(s.service, s.repo);
     if (s.paths && s.paths.length > 0) serviceIndex.set(s.service, s.paths);
-    const parent = ensureRepo(s.repo);
+    const parent = ensureInterfaces(s.repo);
     nodes.set(serviceNodeId(s.service), {
       id: serviceNodeId(s.service),
       label: s.service,
@@ -250,7 +269,7 @@ export async function buildEndpointTopology(
 
     const ownerId = serviceNodeId(owner);
     const ownerRepo = serviceRepo.get(owner) ?? item.providers?.[0]?.repo ?? null;
-    const ownerRepoId = ensureRepo(ownerRepo);
+    const ownerRepoId = ensureInterfaces(ownerRepo);
     if (!nodes.has(ownerId)) {
       nodes.set(ownerId, {
         id: ownerId,
@@ -311,7 +330,7 @@ export async function buildEndpointTopology(
         callerRepo ??
         'unknown';
       const consumerId = serviceNodeId(consumerService);
-      const consumerRepoId = ensureRepo(callerRepo || null);
+      const consumerRepoId = ensureInterfaces(callerRepo || null);
       if (!nodes.has(consumerId)) {
         nodes.set(consumerId, {
           id: consumerId,
