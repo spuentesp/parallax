@@ -424,7 +424,7 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), timeoutMs);
   try {
-    const retries = config.maxRetries ?? 0;
+    const retries = config.maxRetries ?? (process.env.NODE_ENV === 'test' ? 0 : 10);
     const listTools = async (): Promise<string[]> => {
       let attempts = 0;
       while (true) {
