@@ -1,5 +1,5 @@
 # Stage 1: Build latest Lain from preview dev branch tip
-FROM rust:1.82-bookworm AS lain-builder
+FROM rust:latest AS lain-builder
 RUN apt-get update && apt-get install -y --no-install-recommends cmake pkg-config libssl-dev git ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch dev https://github.com/spuentesp/lain.git /lain-build
