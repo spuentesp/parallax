@@ -1,17 +1,28 @@
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
+  AssessChangeArgs,
+  AssessChangeResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
   DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainDispatchArgs,
+  ExplainDispatchResponse,
   ExplainSymbolArgs,
+  GetCallChainArgs,
   GetCallSitesArgs,
   GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
+  GetCrossRuntimeCallersArgs,
+  GetCrossRuntimeCallersResponse,
+  GetFederationHealthArgs,
+  GetFederationHealthResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
@@ -19,6 +30,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -33,6 +46,10 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  SearchCodeArgs,
+  SearchCodeResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
@@ -60,14 +77,27 @@ export interface LainAdapter {
   resolveEvidence(req: ResolveEvidenceArgs): Promise<ResolveEvidenceResponse>;
   readSource(req: ReadSourceArgs): Promise<ReadSourceResponse>;
 
+  // Batch v0.15.0 de dev (paquete contracts; el handshake las exige).
+  traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse>;
+  listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse>;
+  applyContractContext(req: ApplyContractContextArgs): Promise<ApplyContractContextResponse>;
+
   // Grafo crudo (paquete raw). El boot del client intenta loadPackage de
   // raw/arch/workspace de forma defensiva; aquí se asumen ya cargadas.
   queryGraph(req: QueryGraphArgs): Promise<QueryGraphResponse>;
   describeSchema(req: DescribeSchemaArgs): Promise<DescribeSchemaResponse>;
   loadPackage(req: LoadPackageArgs): Promise<LoadPackageResponse>;
-  // Devuelven markdown plano del motor, envuelto como {text}: no hay JSON
-  // que parsear (ni structuredContent en el envoltorio MCP).
+  // Raw con outputSchema (devuelven structuredContent además del texto).
+  searchCode(req: SearchCodeArgs): Promise<SearchCodeResponse>;
+  assessChange(req: AssessChangeArgs): Promise<AssessChangeResponse>;
+  explainDispatch(req: ExplainDispatchArgs): Promise<ExplainDispatchResponse>;
+  getCrossRuntimeCallers(req: GetCrossRuntimeCallersArgs): Promise<GetCrossRuntimeCallersResponse>;
+  // Salud de la federación (core): estado por repo con razón.
+  getFederationHealth(req: GetFederationHealthArgs): Promise<GetFederationHealthResponse>;
+  // Devuelven markdown plano del motor, envuelto como {text} (y, desde el
+  // batch v0.15.0, answer_scope vía structuredContent cuando hay outputSchema).
   getCodeSnippet(req: GetCodeSnippetArgs): Promise<LainTextResponse>;
   explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse>;
   getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse>;
+  getCallChain(req: GetCallChainArgs): Promise<LainTextResponse>;
 }

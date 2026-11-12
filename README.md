@@ -59,19 +59,33 @@ pnpm dev:web             # web on :5173 with Vite dev server proxying /api → :
 pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
-The api uses `LAIN_ADAPTER=mock` by default. Use
-[Lain v0.13.0](https://github.com/spuentesp/lain/releases/tag/v0.13.0) for the
-GraphQL provider and binding fixes, and for the indexing performance changes
-that earlier needed a local patch. Start its HTTP server with your workspace's
-`repos.yaml`; Parallax loads the `contracts` package when the server starts with
-the default core profile.
+The api uses `LAIN_ADAPTER=mock` by default. Use the **lain dev pin**
+(`origin/dev` @ `b7fd2935`, the v0.15.0 batch) for the GraphQL provider and
+binding fixes, the indexing performance and startup cache, and the
+`dynamic_target` unresolved vocabulary. A dev build reports
+`analyzer_version` `0.14.0` (`CARGO_PKG_VERSION`); Parallax does not hard-pin
+the string at boot — only `gate:graphql` does (override with
+`LAIN_EXPECTED_ANALYZER_VERSION`). Build it with:
+
+```bash
+git clone https://github.com/spuentesp/lain && cd lain && git checkout origin/dev
+cargo build --bin lain
+```
+
+Start its HTTP server with your workspace's `repos.yaml`; Parallax loads the
+`contracts` package when the server starts with the default core profile.
 
 ```bash
 lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
 The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
-is superseded: v0.13.0 includes that work, so no patch is needed.
+is superseded: dev includes that work, so no patch is needed. On upgrade,
+`FEDERATION_GRAPH_VERSION` goes 4 → 5: run `lain reindex` once per data dir
+(the server refuses the old graph with `FederationSchemaMismatch`), and
+re-prepare snapshots — `diff_contracts` refuses base/head recorded under a
+different `analyzer_version` (`analyzer_mismatch`); the assessment worker
+handles this automatically by re-preparing snapshots once.
 
 Point Parallax at that server:
 
@@ -140,7 +154,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-0.13.0 pnpm gate:graphql
+LAIN_BIN=/path/to/lain-dev-binary pnpm gate:graphql   # dev pin; expects analyzer_version 0.14.0
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the

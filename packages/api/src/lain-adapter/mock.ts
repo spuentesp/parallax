@@ -1,17 +1,28 @@
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
+  AssessChangeArgs,
+  AssessChangeResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
   DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainDispatchArgs,
+  ExplainDispatchResponse,
   ExplainSymbolArgs,
+  GetCallChainArgs,
   GetCallSitesArgs,
   GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
+  GetCrossRuntimeCallersArgs,
+  GetCrossRuntimeCallersResponse,
+  GetFederationHealthArgs,
+  GetFederationHealthResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
@@ -19,6 +30,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -33,6 +46,10 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  SearchCodeArgs,
+  SearchCodeResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
@@ -266,7 +283,20 @@ export function createLainMock(): LainAdapter {
       if (limit.count !== undefined && nodes.length > limit.count) {
         nodes = nodes.slice(0, limit.count);
       }
-      return { count: nodes.length, legacy: false, nodes };
+      // Desde 0.11 las consultas connect devuelven también edges/paths
+      // concretos (from = semilla, to = cada nodo alcanzado).
+      const connectEdge = Array.isArray(connect.edge) ? connect.edge[0] : connect.edge;
+      const edges =
+        connectEdge !== undefined
+          ? nodes.map((n) => ({
+              id: `e-seed-${n.id}`,
+              type: String(connectEdge),
+              from: `seed:${name}`,
+              to: n.id,
+            }))
+          : [];
+      const paths = edges.length > 0 ? [{ nodes, edges }] : [];
+      return { count: nodes.length, legacy: false, nodes, edges, paths };
     },
 
     async describeSchema(_req: DescribeSchemaArgs): Promise<DescribeSchemaResponse> {
@@ -330,6 +360,89 @@ export function createLainMock(): LainAdapter {
     async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {
       recordMockCall({ tool: 'get_call_sites', args: req });
       return { text: `No call sites found for '${req.symbol}' (${req.symbol} is a leaf)` };
+    },
+
+    // ---- Batch v0.15.0 de dev ----
+
+    async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
+      recordMockCall({
+        tool: 'trace_flow',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return {
+        from: req.from as unknown as Record<string, unknown>,
+        direction: req.direction ?? 'downstream',
+        seeds: [],
+        paths: [],
+        gaps: [],
+        truncated: false,
+        nodes_visited: 0,
+      };
+    },
+
+    async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
+      recordMockCall({ tool: 'list_service_refs', snapshot: req.snapshot, args: req });
+      return { items: [] };
+    },
+
+    async applyContractContext(
+      req: ApplyContractContextArgs,
+    ): Promise<ApplyContractContextResponse> {
+      recordMockCall({ tool: 'apply_contract_context', snapshot: req.snapshot, args: req });
+      return { applied: true, dry_run: req.dry_run ?? true, note: 'mock: nothing written' };
+    },
+
+    async searchCode(req: SearchCodeArgs): Promise<SearchCodeResponse> {
+      recordMockCall({
+        tool: 'search_code',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { query: req.query, mode: req.mode ?? 'lexical', results: [], count: 0 };
+    },
+
+    async assessChange(req: AssessChangeArgs): Promise<AssessChangeResponse> {
+      recordMockCall({
+        tool: 'assess_change',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { target: { symbol: req.symbol }, risk: 'low' };
+    },
+
+    async explainDispatch(req: ExplainDispatchArgs): Promise<ExplainDispatchResponse> {
+      recordMockCall({
+        tool: 'explain_dispatch',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { verdict: 'static' };
+    },
+
+    async getCrossRuntimeCallers(
+      req: GetCrossRuntimeCallersArgs,
+    ): Promise<GetCrossRuntimeCallersResponse> {
+      recordMockCall({
+        tool: 'get_cross_runtime_callers',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { target: { node_id: req.node_id } };
+    },
+
+    async getFederationHealth(_req: GetFederationHealthArgs): Promise<GetFederationHealthResponse> {
+      recordMockCall({ tool: 'get_federation_health', args: _req });
+      return { repos: [] };
+    },
+
+    async getCallChain(req: GetCallChainArgs): Promise<LainTextResponse> {
+      recordMockCall({
+        tool: 'get_call_chain',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { text: `No path from ${req.from} to ${req.to} in the mock graph` };
     },
   };
 }

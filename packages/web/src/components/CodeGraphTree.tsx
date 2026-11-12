@@ -314,21 +314,45 @@ function NodeRow({
                   {group.edge}: query failed ({group.error})
                 </p>
               ) : (
-                group.nodes.map((n) => (
-                  <div
-                    key={`${group.edge}:${n.type}:${n.name}`}
-                    className="flex items-start gap-2 py-0.5 text-xs"
-                    style={{ paddingLeft: `${2.5 + depth * 1.25}rem` }}
-                  >
-                    <span className="text-accent shrink-0">↔</span>
-                    <span className="px-1 rounded bg-bg text-muted shrink-0">{group.edge}</span>
-                    <span className="text-[11px] text-muted shrink-0">{n.type}</span>
-                    <span className="truncate font-mono">{n.name}</span>
-                  </div>
-                ))
+                group.nodes.map((n) => {
+                  // lain 0.11+ devuelve la arista concreta from→to: si está,
+                  // se rotula el par en vez de sólo el tipo de arista.
+                  const edge = group.edges?.find((e) => e.to === n.id || e.from === n.id);
+                  const pair = edge
+                    ? `${edge.from === n.id ? 'self' : edge.from} → ${edge.to === n.id ? 'self' : edge.to}`
+                    : null;
+                  return (
+                    <div
+                      key={`${group.edge}:${n.type}:${n.name}`}
+                      className="flex items-start gap-2 py-0.5 text-xs"
+                      style={{ paddingLeft: `${2.5 + depth * 1.25}rem` }}
+                    >
+                      <span className="text-accent shrink-0">↔</span>
+                      <span className="px-1 rounded bg-bg text-muted shrink-0">{group.edge}</span>
+                      <span className="text-[11px] text-muted shrink-0">{n.type}</span>
+                      <span className="truncate font-mono">{n.name}</span>
+                      {pair && (
+                        <span className="text-[10px] text-muted font-mono shrink-0">{pair}</span>
+                      )}
+                    </div>
+                  );
+                })
               )}
             </div>
           ))}
+          {entry.data.paths && entry.data.paths.length > 0 && (
+            <div style={{ paddingLeft: `${2 + depth * 1.25}rem` }}>
+              <p className="text-[11px] text-muted italic">paths (lain 0.11+):</p>
+              {entry.data.paths.map((p) => (
+                <p
+                  key={`${p.nodes.map((n) => n.id).join(',')}|${p.edges.map((e) => e.id).join(',')}`}
+                  className="text-[10px] font-mono text-muted truncate"
+                >
+                  {p.edges.map((e) => e.type).join(' → ') || `${p.nodes.length} nodes`}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -369,6 +393,12 @@ function SnippetPanel({
           <p className="text-sm text-error">Could not load snippet: {res.error}</p>
         )}
         {!snippet.loading && s?.error && <p className="text-sm text-warning">{s.error}</p>}
+        {!snippet.loading && s?.answerScope && Object.keys(s.answerScope).length > 0 && (
+          <p className="text-xs text-warning" data-testid="snippet-answer-scope">
+            engine answer_scope: {JSON.stringify(s.answerScope)} (incomplete by declaration, not by
+            silence)
+          </p>
+        )}
         {!snippet.loading && s?.text && (
           <pre className="text-xs font-mono whitespace-pre-wrap text-muted">{s.text}</pre>
         )}

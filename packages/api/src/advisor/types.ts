@@ -105,6 +105,28 @@ export interface EnvUnmappedCorrelation {
   readonly targetService?: string;
 }
 
+/** Literal URL que nombra un servicio declarado (list_service_refs, dev v0.15.0). */
+export interface ServiceRefItem {
+  readonly repo: string;
+  readonly path: string;
+  readonly line: number;
+  readonly value: string;
+  readonly host?: string;
+  readonly outcome?: { kind: string; service?: string; services?: string[] };
+  readonly usage?: string;
+  readonly linked_to_call?: boolean;
+}
+
+export interface ServiceRefsCorrelation {
+  readonly total: number;
+  readonly byOutcome: Readonly<Record<string, number>>;
+  readonly byRepo: Readonly<Record<string, number>>;
+  /** Refs de producción que el motor no pudo resolver a un servicio. */
+  readonly unresolvedProduction: readonly ServiceRefItem[];
+  /** Refs que nombran un servicio declarado y el sensor vio la llamada. */
+  readonly resolvedLinked: readonly ServiceRefItem[];
+}
+
 export interface Correlation {
   readonly unresolvedTotal: number;
   readonly byReason: Readonly<Record<string, number>>;
@@ -114,6 +136,8 @@ export interface Correlation {
   /** Llaves con más de un grupo de proveedores (el disparador de graphql_no_op). */
   readonly providerGroups: ReadonlyArray<{ key: string; groups: readonly ProviderGroup[] }>;
   readonly duplicatedKeys: readonly string[];
+  /** list_service_refs del motor dev: literales URL ↔ servicios declarados. */
+  readonly serviceRefs: ServiceRefsCorrelation;
 }
 
 // ---- propuestas --------------------------------------------------------------

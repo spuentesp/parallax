@@ -4,19 +4,30 @@
 // in the plan: a bad URL must fail fast, not on the first request).
 
 import type {
+  ApplyContractContextArgs,
+  ApplyContractContextResponse,
+  AssessChangeArgs,
+  AssessChangeResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
   DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainDispatchArgs,
+  ExplainDispatchResponse,
   ExplainSymbolArgs,
+  GetCallChainArgs,
   GetCallSitesArgs,
   GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
+  GetCrossRuntimeCallersArgs,
+  GetCrossRuntimeCallersResponse,
+  GetFederationHealthArgs,
+  GetFederationHealthResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
@@ -24,6 +35,8 @@ import type {
   LainTextResponse,
   ListContractsArgs,
   ListContractsResponse,
+  ListServiceRefsArgs,
+  ListServiceRefsResponse,
   ListServicesArgs,
   ListServicesResponse,
   ListUnresolvedArgs,
@@ -38,6 +51,10 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  SearchCodeArgs,
+  SearchCodeResponse,
+  TraceFlowArgs,
+  TraceFlowResponse,
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
@@ -165,6 +182,7 @@ export class RealLainAdapter implements LainAdapter {
           throw LainCallError.parse({
             code: 'LainUnavailable',
             message: `JSON-RPC error ${body.error.code}: ${body.error.message}`,
+            cause: body.error,
           });
         }
         const envelope = body.result as McpEnvelope | undefined;
@@ -202,7 +220,7 @@ export class RealLainAdapter implements LainAdapter {
   // Real lain wraps the payload in { _meta, content: [{ text: "<JSON>" }] }.
   // The `text` field is a JSON string with analyzer_version, api_version,
   // data, meta. We return `data` (the domain payload) plus `_meta`.
-  private parsePayload<T>(tool: string, envelope: McpEnvelope): T {
+  private parsePayload<T>(tool: string, envelope: McpEnvelope, expectedView?: string): T {
     // Prefer structuredContent (already parsed); fall back to content[0].text.
     let parsed: Record<string, unknown> | undefined;
     if (envelope.structuredContent && typeof envelope.structuredContent === 'object') {
@@ -224,9 +242,12 @@ export class RealLainAdapter implements LainAdapter {
       });
     }
     if (parsed.error !== undefined && parsed.error !== null) {
+      // `cause` conserva el error del motor (p. ej. {"code":"analyzer_mismatch"})
+      // para que el caller pueda reaccionar sin parsear el mensaje.
       throw LainCallError.parse({
         code: 'LainUnavailable',
         message: `lain returned error in envelope: ${JSON.stringify(parsed.error)}`,
+        cause: parsed.error,
       });
     }
     if (parsed.api_version !== undefined && String(parsed.api_version) !== this.apiVersion) {
@@ -240,6 +261,19 @@ export class RealLainAdapter implements LainAdapter {
     if (typeof parsed.analyzer_version === 'string' && parsed.analyzer_version.length > 0) {
       this.version = parsed.analyzer_version;
     }
+    // INV 1: el envelope hace eco de la vista atendida (`snapshot`); si difiere
+    // de la solicitada, la respuesta no puede citarse como esa vista.
+    if (
+      expectedView !== undefined &&
+      typeof parsed.snapshot === 'string' &&
+      parsed.snapshot !== expectedView
+    ) {
+      throw LainCallError.parse({
+        code: 'IncompatibleView',
+        message: `${tool} answered view "${parsed.snapshot}" but "${expectedView}" was requested`,
+        view: parsed.snapshot,
+      });
+    }
     // Return the domain payload; version metadata stays on the adapter.
     const data = parsed.data ?? parsed;
     return data as T;
@@ -247,12 +281,14 @@ export class RealLainAdapter implements LainAdapter {
 
   private async call<T>(tool: string, args: Record<string, unknown>): Promise<T> {
     const envelope = await this.request(tool, args);
-    return this.parsePayload<T>(tool, envelope);
+    const expectedView = typeof args.snapshot === 'string' ? args.snapshot : undefined;
+    return this.parsePayload<T>(tool, envelope, expectedView);
   }
 
   // Tools del paquete raw que devuelven markdown plano (get_code_snippet,
-  // explain_symbol, get_call_sites): no hay JSON que parsear, se devuelve el
-  // texto tal cual envuelto en {text}.
+  // explain_symbol, get_call_sites): se devuelve el texto tal cual envuelto en
+  // {text}. El batch v0.15.0 de dev añade structuredContent con outputSchema a
+  // algunas de ellas; de ahí se conserva answer_scope (INV 3) sin tocar el texto.
   private async callText(tool: string, args: Record<string, unknown>): Promise<LainTextResponse> {
     const envelope = await this.request(tool, args);
     const text = envelope.content?.[0]?.text;
@@ -262,7 +298,26 @@ export class RealLainAdapter implements LainAdapter {
         message: `lain returned no text payload for ${tool}`,
       });
     }
-    return { text };
+    let answerScope: Record<string, unknown> | undefined;
+    const sc = envelope.structuredContent;
+    if (sc !== null && typeof sc === 'object') {
+      const payload = (sc as Record<string, unknown>).data ?? sc;
+      const scope = (payload as Record<string, unknown>).answer_scope;
+      if (scope !== null && typeof scope === 'object') {
+        answerScope = scope as Record<string, unknown>;
+      }
+      // INV 1 también en tools de texto: el eco de vista debe coincidir.
+      const echoed = (sc as Record<string, unknown>).snapshot;
+      const expectedView = typeof args.snapshot === 'string' ? args.snapshot : undefined;
+      if (expectedView !== undefined && typeof echoed === 'string' && echoed !== expectedView) {
+        throw LainCallError.parse({
+          code: 'IncompatibleView',
+          message: `${tool} answered view "${echoed}" but "${expectedView}" was requested`,
+          view: echoed,
+        });
+      }
+    }
+    return { text, ...(answerScope !== undefined ? { answerScope } : {}) };
   }
 
   async listServices(req: ListServicesArgs): Promise<ListServicesResponse> {
@@ -298,6 +353,8 @@ export class RealLainAdapter implements LainAdapter {
       ...(req.repo ? { repo: req.repo } : {}),
       ...(req.cap !== undefined ? { cap: req.cap } : {}),
       ...(req.min_impact ? { min_impact: req.min_impact } : {}),
+      ...(req.max_hops !== undefined ? { max_hops: req.max_hops } : {}),
+      ...(req.timeout_ms !== undefined ? { timeout_ms: req.timeout_ms } : {}),
     });
   }
 
@@ -361,9 +418,9 @@ export class RealLainAdapter implements LainAdapter {
       query: req.query,
       ...(req.repo_id ? { repo_id: req.repo_id } : {}),
     });
-    // El motor omite `nodes` entero cuando count=0: se normaliza a [] sin
-    // inventar nada (un vacío sigue siendo un vacío).
-    return { ...res, nodes: res.nodes ?? [] };
+    // El motor omite `nodes`/`edges`/`paths` enteros cuando están vacíos:
+    // se normalizan a [] sin inventar nada (un vacío sigue siendo un vacío).
+    return { ...res, nodes: res.nodes ?? [], edges: res.edges ?? [], paths: res.paths ?? [] };
   }
 
   async describeSchema(req: DescribeSchemaArgs): Promise<DescribeSchemaResponse> {
@@ -397,6 +454,96 @@ export class RealLainAdapter implements LainAdapter {
     return this.callText('get_call_sites', {
       symbol: req.symbol,
       ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
+
+  // ---- Batch v0.15.0 de dev ----
+
+  async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
+    return this.call<TraceFlowResponse>('trace_flow', {
+      from: req.from as unknown as Record<string, unknown>,
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+      ...(req.direction ? { direction: req.direction } : {}),
+      ...(req.strategy ? { strategy: req.strategy } : {}),
+      ...(req.depth !== undefined ? { depth: req.depth } : {}),
+      ...(req.cap !== undefined ? { cap: req.cap } : {}),
+    });
+  }
+
+  async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
+    return this.call<ListServiceRefsResponse>('list_service_refs', {
+      snapshot: req.snapshot,
+      ...(req.repo ? { repo: req.repo } : {}),
+      ...(req.usage ? { usage: req.usage } : {}),
+      ...(req.outcome ? { outcome: req.outcome } : {}),
+      ...(req.cursor ? { cursor: req.cursor } : {}),
+      ...(req.limit !== undefined ? { limit: req.limit } : {}),
+      ...(req.suggestions !== undefined ? { suggestions: req.suggestions } : {}),
+      ...(req.min_score !== undefined ? { min_score: req.min_score } : {}),
+    });
+  }
+
+  async applyContractContext(req: ApplyContractContextArgs): Promise<ApplyContractContextResponse> {
+    return this.call<ApplyContractContextResponse>('apply_contract_context', {
+      snapshot: req.snapshot,
+      ...(req.provides ? { provides: req.provides } : {}),
+      ...(req.host_aliases ? { host_aliases: req.host_aliases } : {}),
+      ...(req.bindings ? { bindings: req.bindings } : {}),
+      ...(req.dry_run !== undefined ? { dry_run: req.dry_run } : {}),
+    });
+  }
+
+  async searchCode(req: SearchCodeArgs): Promise<SearchCodeResponse> {
+    return this.call<SearchCodeResponse>('search_code', {
+      query: req.query,
+      ...(req.mode ? { mode: req.mode } : {}),
+      ...(req.limit !== undefined ? { limit: req.limit } : {}),
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
+
+  async assessChange(req: AssessChangeArgs): Promise<AssessChangeResponse> {
+    return this.call<AssessChangeResponse>('assess_change', {
+      symbol: req.symbol,
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+      ...(req.depth ? { depth: req.depth } : {}),
+      ...(req.include_tests !== undefined ? { include_tests: req.include_tests } : {}),
+      ...(req.limit !== undefined ? { limit: req.limit } : {}),
+    });
+  }
+
+  async explainDispatch(req: ExplainDispatchArgs): Promise<ExplainDispatchResponse> {
+    return this.call<ExplainDispatchResponse>('explain_dispatch', {
+      symbol: req.symbol,
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
+
+  async getCrossRuntimeCallers(
+    req: GetCrossRuntimeCallersArgs,
+  ): Promise<GetCrossRuntimeCallersResponse> {
+    return this.call<GetCrossRuntimeCallersResponse>('get_cross_runtime_callers', {
+      node_id: req.node_id,
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+    });
+  }
+
+  async getFederationHealth(req: GetFederationHealthArgs): Promise<GetFederationHealthResponse> {
+    return this.call<GetFederationHealthResponse>('get_federation_health', {
+      ...(req as Record<string, unknown>),
+    });
+  }
+
+  async getCallChain(req: GetCallChainArgs): Promise<LainTextResponse> {
+    return this.callText('get_call_chain', {
+      from: req.from,
+      to: req.to,
+      ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
     });
   }
 }
@@ -457,6 +604,10 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
       'get_coverage',
       'resolve_evidence',
       'read_source',
+      // Batch v0.15.0 de dev: el pin exige estas tres además de las 13.
+      'trace_flow',
+      'list_service_refs',
+      'apply_contract_context',
     ];
     if (expected.some((t) => !toolNames.includes(t)) && toolNames.includes('load_package')) {
       await adapter.loadPackage({ package: 'contracts' });
@@ -469,7 +620,7 @@ export async function createLainClient(config: LainClientConfig): Promise<LainAd
         code: 'ToolSchemaMismatch',
         message: `lain tools/list is missing: ${missing.join(', ')}`,
         tool: firstMissing,
-        detail: `expected 13 contract tools, got ${toolNames.length}`,
+        detail: `expected 16 contract tools, got ${toolNames.length}`,
       });
     }
   } catch (e) {

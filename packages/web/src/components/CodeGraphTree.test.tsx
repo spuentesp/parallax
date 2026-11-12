@@ -127,6 +127,54 @@ describe('CodeGraphTree', () => {
     expect(screen.getAllByText('POST /api/orders').length).toBeGreaterThan(0);
   });
 
+  it('renders concrete from→to edges, connect paths and answer_scope when lain 0.11+/dev provides them', async () => {
+    const withEdges: CodeGraphChildrenResponse = {
+      node: { repo: 'orders', type: 'Function', name: 'main' },
+      children: [{ id: '3', name: 'main', type: 'Function', kind: 'symbol' }],
+      childrenTruncated: false,
+      communications: [
+        {
+          edge: 'CallsHttp',
+          nodes: [{ id: '2', name: 'POST /api/orders', type: 'HttpRoute', kind: 'route' }],
+          edges: [{ id: 'e1', type: 'CallsHttp', from: 'seed:main', to: '2' }],
+        },
+      ],
+      hasCommunication: true,
+      paths: [
+        {
+          nodes: [{ id: '2', name: 'POST /api/orders', type: 'HttpRoute', kind: 'route' }],
+          edges: [{ id: 'e1', type: 'CallsHttp', from: 'seed:main', to: '2' }],
+        },
+      ],
+      source: 'lain',
+    };
+    const snippetWithScope: GraphSnippetResponse = {
+      snippet: {
+        symbol: 'main',
+        repo: 'orders',
+        path: 'src/main.rs',
+        text: 'fn main() {}',
+        answerScope: { truncated: true },
+      },
+      source: 'lain',
+    };
+    render(
+      <CodeGraphTree
+        data={rootData}
+        fetchChildren={async () => withEdges}
+        fetchSnippet={async () => snippetWithScope}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('graph-node-orders|HttpRoute|POST /api/orders'));
+    await waitFor(() => expect(screen.getAllByText('CallsHttp').length).toBeGreaterThan(0));
+    // Par from→to rotulado (no sólo el tipo de arista) y sección de paths.
+    expect(screen.getByText(/seed:main → self/)).toBeTruthy();
+    expect(screen.getByText(/paths \(lain 0\.11\+\)/)).toBeTruthy();
+    // answer_scope declarado en el panel de fuente (INV 3 visible).
+    fireEvent.click(screen.getByText('source'));
+    await waitFor(() => expect(screen.getByTestId('snippet-answer-scope')).toBeTruthy());
+  });
+
   it('says "no children" for a node without contained symbols', async () => {
     const noChildren: CodeGraphChildrenResponse = {
       node: { repo: 'orders', type: 'HttpRoute', name: 'POST /api/orders' },

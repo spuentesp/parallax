@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import { FindingClass, LainView } from './enums.js';
 
-// Contra la versión fijada del motor: los *Args replican el inputSchema de
-// docs/lain-tool-schemas.json (capturado con tools/list de lain 0.9.1) y las
+// Contra el pin vigente del motor: los *Args replican el inputSchema de
+// docs/lain-tool-schemas.json (recapturado con tools/list del paquete
+// `contracts` del lain de dev; ver docs/lain-integration-notes.md) y las
 // *Response describen el campo `data` del envoltorio
 // { analyzer_version, api_version, data, meta, snapshot, view, reproducible }
-// que el LainAdapter devuelve tras parsear content[0].text.
+// que el LainAdapter devuelve tras parsear content[0].text (o structuredContent).
 //
 // Los argumentos son estrictos donde el motor declara additionalProperties:false
 // (prepare_snapshot no lo declara y además acepta configHash), para que una
@@ -236,8 +237,21 @@ export const ListContractsResponse = z.object({
 });
 export type ListContractsResponse = z.infer<typeof ListContractsResponse>;
 
+// Handler de un contrato desde el batch v0.15.0 de dev: antes era un string,
+// ahora es un objeto {repo, file, symbol} (get_contract.out.json, $defs/Handler).
+export const HandlerRef = z
+  .object({
+    repo: z.string().min(1),
+    file: z.string().min(1),
+    symbol: z.string().min(1),
+  })
+  .strict();
+export type HandlerRef = z.infer<typeof HandlerRef>;
+
 export const GetContractResponse = z.object({
-  items: z.array(z.looseObject({})),
+  // Cada item es un contrato con sus refs de evidencia; cada ref puede llevar
+  // `handlers` con la ubicación del código que atiende el endpoint.
+  items: z.array(z.looseObject({ handlers: z.array(HandlerRef).optional() })),
 });
 export type GetContractResponse = z.infer<typeof GetContractResponse>;
 
@@ -249,8 +263,31 @@ const UnresolvedScope = z
   })
   .loose();
 
+// Vocabulario de razones de list_unresolved en el motor dev (v0.15.0 batch):
+// el split `dynamic_target` (ruta seleccionada en runtime sin servicio
+// atribuible) salió de `no_route_in_service`, que queda para el caso de
+// servicio conocido con camino dinámico.
+export const UnresolvedReason = z.enum([
+  'no_route_in_service',
+  'no_match',
+  'wrapper_unconfigured',
+  'env_unmapped',
+  'env_ambiguous',
+  'rpc_stub_unknown',
+  'graphql_no_op',
+  'dynamic_url',
+  'base_unknown',
+  'dynamic_topic',
+  'external_ref',
+  'dynamic_sql',
+  'orm_dynamic_query',
+  'external_schema_ref',
+  'dynamic_target',
+]);
+export type UnresolvedReason = z.infer<typeof UnresolvedReason>;
+
 export const ListUnresolvedResponse = z.object({
-  items: z.array(z.looseObject({})),
+  items: z.array(z.looseObject({ reason: UnresolvedReason.optional() })),
   ambiguous: z.array(z.looseObject({})),
   scope: UnresolvedScope,
 });
@@ -297,6 +334,10 @@ export const DiffContractsArgs = z
     repo: z.string().min(1).optional(),
     cap: z.number().int().min(1).max(500).optional(),
     min_impact: FindingClass.optional(),
+    // Del motor dev (v0.15.0 batch): profundidad máxima de los caminos de
+    // impacto y timeout cooperativo del análisis (diff_contracts.in.json).
+    max_hops: z.number().int().min(1).max(100).optional(),
+    timeout_ms: z.number().int().min(1).max(600_000).optional(),
   })
   .strict();
 export type DiffContractsArgs = z.infer<typeof DiffContractsArgs>;
@@ -329,6 +370,10 @@ export const DiffContractsResponse = z.object({
   changes: z.array(ContractChange),
   compatible_changes: z.number().int().nonnegative().optional(),
   coverage: Coverage.optional(),
+  // Del motor dev: el análisis puede quedar incompleto por timeout; un diff
+  // truncado nunca es "sin impacto" (INV 3).
+  truncated: z.boolean().optional(),
+  truncation_reason: z.enum(['timeout']).optional(),
 });
 export type DiffContractsResponse = z.infer<typeof DiffContractsResponse>;
 
@@ -458,3 +503,164 @@ export const ReadSourceResponse = z.object({
   source: z.string().optional(),
 });
 export type ReadSourceResponse = z.infer<typeof ReadSourceResponse>;
+
+// 14. trace_flow (batch v0.15.0 de dev, paquete contracts) — un camino a través
+// del borde de contratos con provenance por salto y `gaps` explícitos (dónde
+// se corta la cadena y por qué). `snapshot` es opcional en el motor (default
+// live); Parallax siempre lo envía para fijar la vista (INV 1).
+export const TraceFlowFrom = z
+  .object({
+    endpoint: EndpointRef.optional(),
+    symbol: z.string().min(1).optional(),
+    repo_id: z.string().min(1).optional(),
+    table: z.string().min(1).optional(),
+  })
+  .refine((v) => [v.endpoint, v.symbol, v.table].filter((x) => x !== undefined).length === 1, {
+    message: 'exactly one of endpoint, symbol, table must be set',
+  });
+export type TraceFlowFrom = z.infer<typeof TraceFlowFrom>;
+
+export const TraceFlowArgs = z
+  .object({
+    snapshot: LainView.optional(),
+    from: TraceFlowFrom,
+    direction: z.enum(['downstream', 'upstream']).optional(),
+    strategy: z.enum(['breadth', 'depth']).optional(),
+    depth: z.union([z.string().min(1), z.number()]).optional(),
+    cap: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+export type TraceFlowArgs = z.infer<typeof TraceFlowArgs>;
+
+export const TraceFlowHop = z.looseObject({
+  id: z.string().min(1).optional(),
+  name: z.string().optional(),
+  node_type: z.string().optional(),
+  repo: z.string().optional(),
+  path: z.string().optional(),
+  line: z.number().int().nullable().optional(),
+  edge_type: z.string().nullable().optional(),
+});
+export type TraceFlowHop = z.infer<typeof TraceFlowHop>;
+
+export const TraceFlowPath = z.looseObject({
+  min_confidence: z.number().optional(),
+  boundary_hops: z.number().int().nonnegative().optional(),
+  hops: z.array(TraceFlowHop).default([]),
+});
+export type TraceFlowPath = z.infer<typeof TraceFlowPath>;
+
+export const TraceFlowGap = z.looseObject({
+  node: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  reason: z.string().min(1),
+});
+export type TraceFlowGap = z.infer<typeof TraceFlowGap>;
+
+export const TraceFlowResponse = z
+  .object({
+    from: z.looseObject({}),
+    direction: z.enum(['downstream', 'upstream']).optional(),
+    seeds: z.array(z.string()).default([]),
+    paths: z.array(TraceFlowPath).default([]),
+    gaps: z.array(TraceFlowGap).default([]),
+    truncated: z.boolean().optional(),
+    truncation_reasons: z.array(z.string()).optional(),
+    nodes_visited: z.number().int().nonnegative().optional(),
+    scope: Scope.optional(),
+  })
+  .loose();
+export type TraceFlowResponse = z.infer<typeof TraceFlowResponse>;
+
+// 15. list_service_refs (batch v0.15.0, paquete contracts) — literales URL que
+// nombran un servicio declarado: evidencia de objetivo, no de llamada
+// (`linked_to_call` dice si un sensor vio la llamada en esa línea). Live only.
+export const ListServiceRefsArgs = z
+  .object({
+    snapshot: z.literal('live'),
+    repo: z.string().min(1).optional(),
+    usage: z.enum(['production', 'test', 'configuration', 'documentation']).optional(),
+    outcome: z.enum(['resolved', 'ambiguous', 'unknown']).optional(),
+    cursor: Cursor.optional(),
+    limit: Limit.optional(),
+    suggestions: z.boolean().optional(),
+    min_score: z.number().min(0).max(1).optional(),
+  })
+  .strict();
+export type ListServiceRefsArgs = z.infer<typeof ListServiceRefsArgs>;
+
+export const ServiceRefOutcome = z.looseObject({
+  kind: z.enum(['resolved', 'ambiguous', 'unknown']),
+  service: z.string().optional(),
+  services: z.array(z.string()).optional(),
+});
+export type ServiceRefOutcome = z.infer<typeof ServiceRefOutcome>;
+
+export const ServiceRef = z.looseObject({
+  repo: z.string().min(1),
+  path: z.string().min(1),
+  line: z.number().int().min(1),
+  value: z.string().min(1),
+  host: z.string().optional(),
+  outcome: ServiceRefOutcome.optional(),
+  usage: z.string().optional(),
+  linked_to_call: z.boolean().optional(),
+});
+export type ServiceRef = z.infer<typeof ServiceRef>;
+
+export const ListServiceRefsResponse = z
+  .object({
+    items: z.array(ServiceRef),
+    cursor: z.string().nullable().optional(),
+    suggestions: z.array(z.looseObject({})).optional(),
+  })
+  .loose();
+export type ListServiceRefsResponse = z.infer<typeof ListServiceRefsResponse>;
+
+// 16. apply_contract_context (batch v0.15.0, paquete contracts) — aplica
+// provides/host_aliases/bindings al repos.yaml del servidor (con .bak) y los
+// sirve; dry-run por defecto. `applied` sólo es true si todo queda servido.
+export const ContractContextBinding = z
+  .object({
+    consumer: z
+      .object({
+        repo: z.string().min(1),
+        path: z.string().min(1),
+        symbol: z.string().min(1),
+        key: z.string().min(1),
+        site: z.string().min(1).optional(),
+      })
+      .strict(),
+    provider: z.looseObject({ service: z.string().min(1), key: z.string().min(1) }),
+  })
+  .loose();
+export type ContractContextBinding = z.infer<typeof ContractContextBinding>;
+
+export const ApplyContractContextArgs = z
+  .object({
+    snapshot: z.literal('live'),
+    provides: z
+      .array(z.looseObject({ service: z.string().min(1), key: z.string().min(1) }))
+      .optional(),
+    host_aliases: z.array(z.looseObject({})).optional(),
+    bindings: z.array(ContractContextBinding).optional(),
+    dry_run: z.boolean().optional(),
+  })
+  .strict();
+export type ApplyContractContextArgs = z.infer<typeof ApplyContractContextArgs>;
+
+export const ApplyContractContextResponse = z
+  .object({
+    applied: z.boolean(),
+    dry_run: z.boolean().optional(),
+    config_path: z.string().optional(),
+    added: z.array(z.looseObject({})).optional(),
+    added_host_aliases: z.array(z.looseObject({})).optional(),
+    added_bindings: z.array(z.looseObject({})).optional(),
+    yaml: z.string().optional(),
+    backup: z.string().optional(),
+    note: z.string().optional(),
+  })
+  .loose();
+export type ApplyContractContextResponse = z.infer<typeof ApplyContractContextResponse>;

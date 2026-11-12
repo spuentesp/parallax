@@ -28,6 +28,9 @@ const CONTRACT_TOOLS = [
   'get_coverage',
   'resolve_evidence',
   'read_source',
+  'trace_flow',
+  'list_service_refs',
+  'apply_contract_context',
 ].map((name) => ({ name }));
 
 function bootMocks(fetchSpy: ReturnType<typeof vi.spyOn>): void {

@@ -34,6 +34,7 @@ import {
   TemplateMatch,
   TraceImpactArgs,
   TraceImpactResponse,
+  UnresolvedReason,
 } from '../src/lain/tools.js';
 
 const DELETE = Symbol('delete');
@@ -453,6 +454,70 @@ describe('enum schemas used on their own', () => {
 
   it('rejects an unknown binding reason', () => {
     expect(CheckBindingReason.safeParse('made_up').success).toBe(false);
+  });
+
+  // Vocabulario de list_unresolved del motor dev (v0.15.0 batch): incluye el
+  // split dynamic_target que salió de no_route_in_service.
+  it.each([
+    'no_route_in_service',
+    'no_match',
+    'wrapper_unconfigured',
+    'env_unmapped',
+    'env_ambiguous',
+    'rpc_stub_unknown',
+    'graphql_no_op',
+    'dynamic_url',
+    'base_unknown',
+    'dynamic_topic',
+    'external_ref',
+    'dynamic_sql',
+    'orm_dynamic_query',
+    'external_schema_ref',
+    'dynamic_target',
+  ])('UnresolvedReason accepts %s', (reason) => {
+    expect(UnresolvedReason.safeParse(reason).success).toBe(true);
+  });
+
+  it('rejects an unknown unresolved reason', () => {
+    expect(UnresolvedReason.safeParse('made_up').success).toBe(false);
+  });
+});
+
+describe('motor dev (v0.15.0 batch) response shapes', () => {
+  it('GetContractResponse accepts handler refs {repo, file, symbol}', () => {
+    const response = {
+      items: [
+        {
+          endpoint: { service: 'orders', key: 'http:GET /api/orders' },
+          providers: [{ repo: 'orders', path: 'src/main.rs' }],
+          handlers: [{ repo: 'orders', file: 'src/main.rs', symbol: 'get_orders' }],
+        },
+      ],
+    };
+    expect(GetContractResponse.safeParse(response).success).toBe(true);
+  });
+
+  it('GetContractResponse rejects a handler without symbol', () => {
+    const response = {
+      items: [{ handlers: [{ repo: 'orders', file: 'src/main.rs' }] }],
+    };
+    expect(GetContractResponse.safeParse(response).success).toBe(false);
+  });
+
+  it('DiffContractsResponse accepts a truncated diff with its reason', () => {
+    const response = {
+      changes: [],
+      compatible_changes: 0,
+      coverage: { complete: false },
+      truncated: true,
+      truncation_reason: 'timeout',
+    };
+    expect(DiffContractsResponse.safeParse(response).success).toBe(true);
+  });
+
+  it('DiffContractsResponse rejects a truncation_reason outside the enum', () => {
+    const response = { changes: [], truncated: true, truncation_reason: 'cap' };
+    expect(DiffContractsResponse.safeParse(response).success).toBe(false);
   });
 });
 

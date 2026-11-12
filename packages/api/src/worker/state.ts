@@ -15,10 +15,12 @@ export const AssessmentStatus = z.enum([
 export type AssessmentStatus = z.infer<typeof AssessmentStatus>;
 
 // Allowed transitions (P INV 5: READY only after persisting).
+// ANALYZING → SNAPSHOTTING existe para re-preparar snapshots cuando el motor
+// los rechaza por analyzer_mismatch (upgrade de lain entre runs).
 export const TRANSITIONS: Record<AssessmentStatus, AssessmentStatus[]> = {
   QUEUED: ['SNAPSHOTTING', 'CANCELLED', 'FAILED'],
   SNAPSHOTTING: ['ANALYZING', 'FAILED', 'CANCELLED'],
-  ANALYZING: ['EXPLAINING', 'PARTIAL', 'FAILED', 'CANCELLED'],
+  ANALYZING: ['EXPLAINING', 'PARTIAL', 'SNAPSHOTTING', 'FAILED', 'CANCELLED'],
   EXPLAINING: ['READY', 'PARTIAL', 'FAILED', 'CANCELLED'],
   READY: [],
   PARTIAL: [],

@@ -67,9 +67,25 @@ export interface GraphRootResult {
   repos: CodeGraphRepoRoot[];
 }
 
+/** Arista concreta devuelta por query_graph connect desde lain 0.11 (from/to = ids de nodo). */
+export interface CodeGraphEdge {
+  id: string;
+  type: string;
+  from: string;
+  to: string;
+}
+
+/** Camino multi-hop (nodes + edges) devuelto por connect en lain 0.11+. */
+export interface CodeGraphPath {
+  nodes: CodeGraphNode[];
+  edges: CodeGraphEdge[];
+}
+
 export interface CodeGraphCommGroup {
   edge: string;
   nodes: CodeGraphNode[];
+  /** Aristas concretas from→to que produjo esta consulta connect (0.11+). */
+  edges?: CodeGraphEdge[];
   error?: string;
 }
 
@@ -86,6 +102,8 @@ export interface GraphChildrenResult {
   /** Vecinos agrupados por arista; vacío (no ausente) = sin comunicación. */
   communications: CodeGraphCommGroup[];
   hasCommunication: boolean;
+  /** Caminos multi-hop devueltos por las consultas connect (0.11+); vacío si el motor no los dio. */
+  paths?: CodeGraphPath[];
 }
 
 export interface SymbolSnippetResult {
@@ -94,6 +112,8 @@ export interface SymbolSnippetResult {
   path: string | null;
   text: string | null;
   error?: string;
+  /** answer_scope del motor dev (incompletitud declarada de explain_symbol/get_code_snippet). */
+  answerScope?: Record<string, unknown> | undefined;
 }
 
 const CONTAINER_TYPES = new Set(['File', 'Namespace', 'Module', 'Package']);
@@ -207,6 +227,10 @@ export async function buildGraphChildren(
   const children = containsRes.nodes
     .map(toCodeNode)
     .filter((n) => !(n.type === ref.type && n.name === ref.name));
+  const allPaths: CodeGraphPath[] = containsRes.paths.map((p) => ({
+    nodes: p.nodes.map(toCodeNode),
+    edges: p.edges.map((e) => ({ id: e.id, type: e.type, from: e.from, to: e.to })),
+  }));
 
   const communications: CodeGraphCommGroup[] = [];
   for (const edge of COMM_EDGE_TYPES) {
@@ -222,8 +246,17 @@ export async function buildGraphChildren(
       const nodes = res.nodes
         .map(toCodeNode)
         .filter((n) => !(n.type === ref.type && n.name === ref.name));
-      if (nodes.length > 0) {
-        communications.push({ edge, nodes });
+      // lain 0.11+ devuelve las aristas concretas del connect: se conservan
+      // para rotular pares from→to sin inventarlas.
+      const edges = res.edges.map((e) => ({ id: e.id, type: e.type, from: e.from, to: e.to }));
+      for (const p of res.paths) {
+        allPaths.push({
+          nodes: p.nodes.map(toCodeNode),
+          edges: p.edges.map((e) => ({ id: e.id, type: e.type, from: e.from, to: e.to })),
+        });
+      }
+      if (nodes.length > 0 || edges.length > 0) {
+        communications.push({ edge, nodes, ...(edges.length > 0 ? { edges } : {}) });
       }
     } catch (e) {
       // Una arista que el motor rechaza (p. ej. Imports sin indexar) queda
@@ -243,6 +276,7 @@ export async function buildGraphChildren(
     childrenTruncated: containsRes.nodes.length >= childrenLimit,
     communications,
     hasCommunication,
+    ...(allPaths.length > 0 ? { paths: allPaths } : {}),
   };
 }
 
@@ -258,9 +292,11 @@ export async function resolveSymbolSnippet(
 ): Promise<SymbolSnippetResult> {
   let path: string | null = null;
   let explainText = '';
+  let answerScope: Record<string, unknown> | undefined;
   try {
     const explained = await adapter.explainSymbol({ symbol, repo_id: repo });
     explainText = explained.text;
+    answerScope = explained.answerScope;
     const m = /\*\*Path:\*\*\s*(.+)/.exec(explained.text);
     path = m?.[1]?.trim() ?? null;
   } catch (e) {
@@ -287,7 +323,15 @@ export async function resolveSymbolSnippet(
       repo_id: repo,
       context_lines: contextLines,
     });
-    return { symbol, repo, path, text: snippet.text };
+    return {
+      symbol,
+      repo,
+      path,
+      text: snippet.text,
+      ...((snippet.answerScope ?? answerScope)
+        ? { answerScope: snippet.answerScope ?? answerScope }
+        : {}),
+    };
   } catch (e) {
     // El path existe en el grafo pero el índice no puede abrirlo: se dice.
     return {
@@ -295,6 +339,7 @@ export async function resolveSymbolSnippet(
       repo,
       path,
       text: explainText || null,
+      ...(answerScope ? { answerScope } : {}),
       error: e instanceof Error ? e.message : 'get_code_snippet failed',
     };
   }

@@ -116,6 +116,21 @@ describe('buildGraphChildren (mock engine)', () => {
     expect(callsHttp?.nodes[0]?.type).toBe('HttpRoute');
   });
 
+  it('returns the concrete edges and multi-hop paths that connect yields (lain 0.11+)', async () => {
+    const res = await buildGraphChildren(createLainMock(), {
+      repo: 'orders',
+      type: 'Function',
+      name: 'create_order',
+    });
+    const uses = res.communications.find((g) => g.edge === 'Uses');
+    // Aristas concretas from→to, no sólo el tipo de arista.
+    expect(uses?.edges).toHaveLength(1);
+    expect(uses?.edges?.[0]).toMatchObject({ type: 'Uses', to: 'n-struct-create' });
+    // Paths devueltos por las consultas connect.
+    expect(res.paths?.length).toBeGreaterThan(0);
+    expect(res.paths?.[0]?.edges[0]?.type).toBeDefined();
+  });
+
   it('reports honestly when a leaf has no communication edges', async () => {
     // El mock no conoce a `main` en las aristas de comunicación: todas vacías.
     const res = await buildGraphChildren(createLainMock(), {

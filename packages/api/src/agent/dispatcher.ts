@@ -14,8 +14,12 @@
 //    de detalle más estrecha ofrecida; los unknowns no se esconden (INV 3).
 
 import {
+  AssessChangeArgs,
+  ExplainDispatchArgs,
+  GetCallChainArgs,
   GetContractArgs,
   GetCoverageArgs,
+  GetCrossRuntimeCallersArgs,
   GetServiceArgs,
   type LainView,
   ListContractsArgs,
@@ -23,6 +27,8 @@ import {
   ListUnresolvedArgs,
   ReadSourceArgs,
   ResolveEvidenceArgs,
+  SearchCodeArgs,
+  TraceFlowArgs,
   TraceImpactArgs,
 } from '@parallax/shared/lain';
 import { z } from 'zod';
@@ -35,10 +41,18 @@ export const DISPATCHER_TOOLS = [
   'list_contracts',
   'get_contract',
   'trace_impact',
+  // Batch v0.15.0 de lain dev: flujo a través del borde de contratos con gaps.
+  'trace_flow',
   'resolve_evidence',
   'read_source',
   'list_unresolved',
   'get_coverage',
+  // Raw (paquete raw): búsqueda de código y análisis de símbolos del grafo.
+  'search_code',
+  'get_call_chain',
+  'get_cross_runtime_callers',
+  'assess_change',
+  'explain_dispatch',
 ] as const;
 
 export type DispatcherTool = (typeof DISPATCHER_TOOLS)[number];
@@ -51,16 +65,24 @@ export type DispatchErrorCode =
   | 'engine_error';
 
 // Schemas del modelo SIN el campo `snapshot`: la vista la fija el análisis.
+// Las tools raw aceptan snapshot aunque su inputSchema no lo enumere; aquí se
+// omite para que el modelo no elija vista.
 const ModelArgsSchemas = {
   list_services: ListServicesArgs.omit({ snapshot: true }),
   get_service: GetServiceArgs.omit({ snapshot: true }),
   list_contracts: ListContractsArgs.omit({ snapshot: true }),
   get_contract: GetContractArgs.omit({ snapshot: true }),
   trace_impact: TraceImpactArgs.omit({ snapshot: true }),
+  trace_flow: TraceFlowArgs.omit({ snapshot: true }),
   resolve_evidence: ResolveEvidenceArgs.omit({ snapshot: true }),
   read_source: ReadSourceArgs.omit({ snapshot: true }),
   list_unresolved: ListUnresolvedArgs.omit({ snapshot: true }),
   get_coverage: GetCoverageArgs.omit({ snapshot: true }),
+  search_code: SearchCodeArgs.omit({ snapshot: true }),
+  get_call_chain: GetCallChainArgs.omit({ snapshot: true }),
+  get_cross_runtime_callers: GetCrossRuntimeCallersArgs.omit({ snapshot: true }),
+  assess_change: AssessChangeArgs.omit({ snapshot: true }),
+  explain_dispatch: ExplainDispatchArgs.omit({ snapshot: true }),
 } as const;
 
 const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
@@ -81,6 +103,18 @@ const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
     'Unresolved inbound calls in the view — what the engine could NOT bind. Paginated; unknowns live here.',
   get_coverage:
     'What the view reviewed and what it could not: coverage.complete and scope (reviewed/unreviewed).',
+  trace_flow:
+    'One ranked path across the contract boundary from an endpoint/symbol/table, with per-hop provenance and explicit gaps (where the chain stops and why). Use to explain a finding end to end.',
+  search_code:
+    'Find code by name, intent or pattern in the fixed view (lexical by default; semantic needs a loaded model and may fall back). Returns matches with locations.',
+  get_call_chain:
+    'The exact call path between two symbols (from caller to callee) inside one repo. Text answer.',
+  get_cross_runtime_callers:
+    'All protocol-level callers of a node id: HTTP routes, gRPC services, GraphQL resolvers.',
+  assess_change:
+    'Pre-edit impact of a symbol: direct/transitive/heuristic/untested dependents, co-change partners and a one-line risk verdict.',
+  explain_dispatch:
+    'Single verdict on how a symbol dispatches: static callers, heuristic edges, runtime edges, co-change partners. Use when an empty blast radius might mean the graph cannot see the call.',
 };
 
 export interface DispatchTruncation {
@@ -293,6 +327,18 @@ export class LainDispatcher {
         return this.lain.getContract({ ...(args as object), snapshot } as never);
       case 'trace_impact':
         return this.lain.traceImpact({ ...(args as object), snapshot } as never);
+      case 'trace_flow':
+        return this.lain.traceFlow({ ...(args as object), snapshot } as never);
+      case 'search_code':
+        return this.lain.searchCode({ ...(args as object), snapshot } as never);
+      case 'get_call_chain':
+        return this.lain.getCallChain({ ...(args as object), snapshot } as never);
+      case 'get_cross_runtime_callers':
+        return this.lain.getCrossRuntimeCallers({ ...(args as object), snapshot } as never);
+      case 'assess_change':
+        return this.lain.assessChange({ ...(args as object), snapshot } as never);
+      case 'explain_dispatch':
+        return this.lain.explainDispatch({ ...(args as object), snapshot } as never);
       case 'resolve_evidence':
         return this.lain.resolveEvidence({ ...(args as object), snapshot } as never);
       case 'read_source':
@@ -312,9 +358,16 @@ export class LainDispatcher {
     tool: DispatcherTool,
     args: Record<string, unknown>,
   ): Promise<string | null> {
+    // trace_flow trae el servicio anidado en from.endpoint.service; las raw
+    // usan repo_id. Todo servicio/repo referenciado debe pertenecer al catálogo.
+    const from = args.from as { endpoint?: { service?: unknown }; repo_id?: unknown } | undefined;
+    const nestedService = from?.endpoint?.service;
+    const repoId = args.repo_id ?? from?.repo_id;
     const needsCatalog =
       'service' in args ||
       'repo' in args ||
+      'repo_id' in args ||
+      nestedService !== undefined ||
       tool === 'resolve_evidence' ||
       tool === 'list_services';
     if (!needsCatalog) return null;
@@ -322,11 +375,12 @@ export class LainDispatcher {
     const catalog = this.catalog;
     const catalogNote = this.catalogError ? ` (catalog unavailable: ${this.catalogError})` : '';
 
-    const service = args.service;
+    const service = typeof args.service === 'string' ? args.service : nestedService;
     if (typeof service === 'string' && catalog && !catalog.services.has(service)) {
       return `service "${service}" is outside the analyzed view. Known services: ${[...catalog.services].join(', ')}${catalogNote}`;
     }
-    const repo = args.repo;
+    const repo =
+      typeof args.repo === 'string' ? args.repo : typeof repoId === 'string' ? repoId : undefined;
     if (typeof repo === 'string' && catalog && !catalog.repos.has(repo)) {
       return `repo "${repo}" is outside the analyzed view. Known repos: ${[...catalog.repos].join(', ')}${catalogNote}`;
     }

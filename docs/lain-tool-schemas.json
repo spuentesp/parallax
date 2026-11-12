@@ -1,13 +1,13 @@
 {
   "list_services": {
-    "description": "Every service in the federation with its repo, paths, endpoint count and consumer counts. Works on `live` and named snapshots (\u00a712).",
+    "description": "Every service in the federation with its repo, paths, endpoint count and consumer counts. Works on `live` and named snapshots (§12).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `list_services`. On `live` only \u2014 PR 16 scope; PR 11/13 will route the value through the snapshot manager.",
+      "description": "Input for `list_services`. On `live` only — PR 16 scope; PR 11/13 will route the value through the snapshot manager.",
       "properties": {
         "cursor": {
-          "description": "Opaque paging cursor (base64url of `{v:1, after, q}`). Reused with different args \u2192 `cursor_mismatch`.",
+          "description": "Opaque paging cursor (base64url of `{v:1, after, q}`). Reused with different args → `cursor_mismatch`.",
           "type": "string"
         },
         "limit": {
@@ -36,18 +36,18 @@
     }
   },
   "get_service": {
-    "description": "Consumers of one service: endpoints, calling code, fields used, and the `used_by` walk that explains why each caller runs (\u00a710.9).",
+    "description": "Consumers of one service: endpoints, calling code, fields used, and the `used_by` walk that explains why each caller runs (§10.9).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `get_service`. Live only \u2014 PR 11/13 surfaces named snapshots.",
+      "description": "Input for `get_service`. Live only — PR 11/13 surfaces named snapshots.",
       "properties": {
         "cursor": {
           "description": "Opaque paging cursor.",
           "type": "string"
         },
         "depth": {
-          "description": "Max depth for the `used_by` walk (\u00a710.9). Default 4, max 8.",
+          "description": "Max depth for the `used_by` walk (§10.9). Default 4, max 8.",
           "maximum": 8,
           "minimum": 1,
           "type": "integer"
@@ -78,25 +78,25 @@
     }
   },
   "prepare_snapshot": {
-    "description": "Pin every repo to a commit, index once, reuse the result. Same inputs after ref resolution produce the same id (\u00a78.4); `from` derives a snapshot from an existing base (\u00a711).",
+    "description": "Pin every repo to a commit, index once, reuse the result. Same inputs after ref resolution produce the same id (§8.4); `from` derives a snapshot from an existing base (§11).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `prepare_snapshot`. Same inputs after ref resolution produce the same snapshot id (\u00a78.4) \u2014 `prepare_snapshot` is idempotent.",
+      "description": "Input for `prepare_snapshot`. Same inputs after ref resolution produce the same snapshot id (§8.4) — `prepare_snapshot` is idempotent.",
       "properties": {
         "exclude": {
-          "description": "Repos to exclude from the snapshot (\u00a78.4).",
+          "description": "Repos to exclude from the snapshot (§8.4).",
           "items": {
             "type": "string"
           },
           "type": "array"
         },
         "from": {
-          "description": "Snapshot id to derive from (\u00a711). Derived snapshots inherit `join_config` and the un-overridden commits; they do NOT inherit failure. Mutually exclusive with `max_base_age_s`.",
+          "description": "Snapshot id to derive from (§11). Derived snapshots inherit `join_config` and the un-overridden commits; they do NOT inherit failure. Mutually exclusive with `max_base_age_s`.",
           "type": "string"
         },
         "max_base_age_s": {
-          "description": "Reuse the newest `ready` record younger than this age for any repo not in `repos`. Only valid without `from` (\u00a711).",
+          "description": "Reuse the newest `ready` record younger than this age for any repo not in `repos`. Only valid without `from` (§11).",
           "minimum": 1,
           "type": "integer"
         },
@@ -108,7 +108,7 @@
           "type": "object"
         },
         "wait_ms": {
-          "description": "Maximum time to wait for `ready`/`failed`. Defaults to 5,000 ms; capped at 60,000 ms (\u00a710.5).",
+          "description": "Maximum time to wait for `ready`/`failed`. Defaults to 5,000 ms; capped at 60,000 ms (§10.5).",
           "maximum": 60000,
           "minimum": 0,
           "type": "integer"
@@ -119,18 +119,18 @@
     }
   },
   "get_snapshot": {
-    "description": "Read a snapshot's current state. The `snapshot` argument is required; same shape as `prepare_snapshot` returns. On `live` returns a readiness-shaped answer (\u00a78.7).",
+    "description": "Read a snapshot's current state. The `snapshot` argument is required; same shape as `prepare_snapshot` returns. On `live` returns a readiness-shaped answer (§8.7).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `get_snapshot`. Reads the on-disk record and refreshes `last_access_unix` per \u00a78.4.",
+      "description": "Input for `get_snapshot`. Reads the on-disk record and refreshes `last_access_unix` per §8.4.",
       "properties": {
         "snapshot": {
           "description": "Snapshot id (`snap_` + 16 hex). Same shape as `prepare_snapshot` returns.",
           "type": "string"
         },
         "wait_ms": {
-          "description": "Maximum time to wait for a non-terminal state. Defaults to 5,000 ms; capped at 60,000 ms (\u00a710.5).",
+          "description": "Maximum time to wait for a non-terminal state. Defaults to 5,000 ms; capped at 60,000 ms (§10.5).",
           "maximum": 60000,
           "minimum": 0,
           "type": "integer"
@@ -193,7 +193,7 @@
     }
   },
   "get_contract": {
-    "description": "Providers, schema fields, and bound consumers for one endpoint (\u00a712).",
+    "description": "Providers, schema fields, and bound consumers for one endpoint (§12).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -221,7 +221,7 @@
     }
   },
   "list_unresolved": {
-    "description": "Every ambiguous and unresolved consumer with the candidate endpoints that could match (\u00a79.7).",
+    "description": "Every ambiguous and unresolved consumer with the candidate endpoints that could match (§9.7).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -253,11 +253,11 @@
     }
   },
   "check_binding": {
-    "description": "Validate a proposed consumer\u2192endpoint link and emit the YAML for `repos.yaml#bindings` (\u00a712). Pure; creates nothing.",
+    "description": "Validate a proposed consumer→endpoint link and emit the YAML for `repos.yaml#bindings` (§12). Pure; creates nothing.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `check_binding`. Validates a proposed consumer\u2192endpoint link and emits its `bindings_entry` YAML for `repos.yaml`.",
+      "description": "Input for `check_binding`. Validates a proposed consumer→endpoint link and emits its `bindings_entry` YAML for `repos.yaml`.",
       "properties": {
         "consumer": {
           "description": "Consumer GlobalId.",
@@ -292,7 +292,7 @@
     }
   },
   "diff_contracts": {
-    "description": "Provider and consumer changes between two snapshots, classified, with impact paths and coverage (\u00a712). `live` is not allowed as base/head.",
+    "description": "Provider and consumer changes between two snapshots, classified, with impact paths and coverage (§12). `live` is not allowed as base/head.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -311,6 +311,12 @@
           "description": "Snapshot id (`snap_<hex>`); must be `ready`. `live` is invalid (`invalid_argument`, `live_not_supported`).",
           "type": "string"
         },
+        "max_hops": {
+          "description": "Maximum impact path depth (default 10). Paths that reach the depth limit are marked truncated.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
         "min_impact": {
           "enum": [
             "NoKnownImpact",
@@ -324,6 +330,12 @@
         },
         "service": {
           "type": "string"
+        },
+        "timeout_ms": {
+          "description": "Cooperative timeout in milliseconds (server default: LAIN_DIFF_TIMEOUT_MS; cap: LAIN_DIFF_TIMEOUT_MAX_MS, at most 600000). Individual snapshot hydration, git diff and graph traversal operations cannot be interrupted; incomplete results are marked truncated.",
+          "maximum": 600000,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
@@ -335,7 +347,7 @@
     }
   },
   "trace_impact": {
-    "description": "Impact paths from an endpoint, field, or symbol (\u00a75.2 + \u00a712). Exactly one of endpoint/field/symbol is required.",
+    "description": "Impact paths from an endpoint, field, or symbol (§5.2 + §12). Exactly one of endpoint/field/symbol is required.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -416,7 +428,7 @@
     }
   },
   "get_coverage": {
-    "description": "What the view saw and what it could not resolve (\u00a79.7). With an `endpoint`, `complete` reflects the could-match gate.",
+    "description": "What the view saw and what it could not resolve (§9.7). With an `endpoint`, `complete` reflects the could-match gate.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -445,7 +457,7 @@
     }
   },
   "resolve_evidence": {
-    "description": "Check refs exist at their commit; return context. Bad refs are `exists: false` with a reason, never an error (\u00a712).",
+    "description": "Check refs exist at their commit; return context. Bad refs are `exists: false` with a reason, never an error (§12).",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
@@ -476,11 +488,11 @@
     }
   },
   "read_source": {
-    "description": "A bounded line range of a file at a view's commit (\u00a710.7). Refuses secrets and binaries; reads snapshot content from the mirror's git2 blob.",
+    "description": "A bounded line range of a file at a view's commit (§10.7). Refuses secrets and binaries; reads snapshot content from the mirror's git2 blob.",
     "inputSchema": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "additionalProperties": false,
-      "description": "Input for `read_source`. Reads a bounded line range from a file the view's index walked. The \u00a710.7 safety rules apply.",
+      "description": "Input for `read_source`. Reads a bounded line range from a file the view's index walked. The §10.7 safety rules apply.",
       "properties": {
         "end": {
           "minimum": 0,

@@ -11,6 +11,8 @@ import type {
   Correlation,
   EnvUnmappedCorrelation,
   ProviderGroup,
+  ServiceRefItem,
+  ServiceRefsCorrelation,
   UnresolvedItem,
 } from './types.js';
 
@@ -21,6 +23,7 @@ const MAX_PAGES = 200;
 export interface CorrelationEngine {
   listUnresolved: LainAdapter['listUnresolved'];
   listContracts: LainAdapter['listContracts'];
+  listServiceRefs: LainAdapter['listServiceRefs'];
 }
 
 export interface DecodedGlobalId {
@@ -156,6 +159,7 @@ export function correlate(
   signals: readonly AdvisorSignal[],
   unresolved: readonly UnresolvedItem[],
   contracts: readonly ContractItem[],
+  serviceRefs?: ServiceRefsCorrelation,
 ): Correlation {
   const byReason: Record<string, number> = {};
   const byRepoReason: Record<string, Record<string, number>> = {};
@@ -251,5 +255,63 @@ export function correlate(
     envUnmapped,
     providerGroups,
     duplicatedKeys,
+    serviceRefs: serviceRefs ?? {
+      total: 0,
+      byOutcome: {},
+      byRepo: {},
+      unresolvedProduction: [],
+      resolvedLinked: [],
+    },
+  };
+}
+
+// list_service_refs (batch v0.15.0 de dev): literales URL que nombran un
+// servicio declarado. Es live-only, así que la correlación la hace sobre la
+// vista live aunque el análisis vaya sobre un snapshot.
+export type { ServiceRefItem } from './types.js';
+
+export async function fetchAllServiceRefs(
+  engine: CorrelationEngine,
+  args: { repo?: string } = {},
+): Promise<ServiceRefItem[]> {
+  const items: ServiceRefItem[] = [];
+  let cursor: string | undefined;
+  let pages = 0;
+  do {
+    const page = await engine.listServiceRefs({
+      snapshot: 'live',
+      ...(args.repo ? { repo: args.repo } : {}),
+      ...(cursor ? { cursor } : {}),
+      limit: PAGE_LIMIT,
+    });
+    items.push(...(page.items as unknown as ServiceRefItem[]));
+    cursor = page.cursor ?? undefined;
+    pages++;
+    if (pages > MAX_PAGES) {
+      throw new Error(`list_service_refs no se agotó en ${MAX_PAGES} páginas`);
+    }
+  } while (cursor);
+  return items;
+}
+
+/** Resumen de list_service_refs para el reporte del advisor. */
+export function correlateServiceRefs(refs: readonly ServiceRefItem[]): ServiceRefsCorrelation {
+  const byOutcome: Record<string, number> = {};
+  const byRepo: Record<string, number> = {};
+  const unresolvedProduction: ServiceRefItem[] = [];
+  const resolvedLinked: ServiceRefItem[] = [];
+  for (const r of refs) {
+    const kind = r.outcome?.kind ?? 'unknown';
+    byOutcome[kind] = (byOutcome[kind] ?? 0) + 1;
+    byRepo[r.repo] = (byRepo[r.repo] ?? 0) + 1;
+    if (r.usage === 'production' && kind !== 'resolved') unresolvedProduction.push(r);
+    if (kind === 'resolved' && r.linked_to_call === true) resolvedLinked.push(r);
+  }
+  return {
+    total: refs.length,
+    byOutcome,
+    byRepo,
+    unresolvedProduction,
+    resolvedLinked,
   };
 }

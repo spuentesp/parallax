@@ -18,7 +18,16 @@ export interface MockCall {
     | 'load_package'
     | 'get_code_snippet'
     | 'explain_symbol'
-    | 'get_call_sites';
+    | 'get_call_sites'
+    | 'trace_flow'
+    | 'list_service_refs'
+    | 'apply_contract_context'
+    | 'search_code'
+    | 'assess_change'
+    | 'explain_dispatch'
+    | 'get_cross_runtime_callers'
+    | 'get_federation_health'
+    | 'get_call_chain';
   readonly args: unknown;
   readonly snapshot?: string;
   readonly at: number;
