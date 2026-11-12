@@ -7,8 +7,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
-import { NemotronProvider } from '../agent/nemotron.js';
-import { investigatorSettings } from '../config.js';
+import { investigatorModel } from '../agent/model.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { buildEndpointTopology, type TopologyViewData } from '../topology.js';
 
@@ -43,11 +42,32 @@ const QueryResponse = z.object({
       toolCallsUsed: z.number(),
       modelMsUsed: z.number(),
       exhausted: z.boolean(),
+      cutShort: z.boolean(),
     })
     .nullable(),
   tool_calls: z.array(z.unknown()),
   model: z.string().nullable(),
+  // Afirmaciones tipadas con el veredicto del motor. Una contradicha no cambia
+  // explanation_status: se señala aquí y en el resumen.
+  claims: z.array(z.unknown()),
+  claims_summary: z.object({
+    total: z.number(),
+    verified: z.number(),
+    contradicted: z.number(),
+    unverifiable: z.number(),
+    supported: z.number(),
+    unsupported: z.number(),
+  }),
 });
+
+const NO_CLAIMS = {
+  total: 0,
+  verified: 0,
+  contradicted: 0,
+  unverifiable: 0,
+  supported: 0,
+  unsupported: 0,
+};
 
 const EMPTY_TOPOLOGY: TopologyViewData = { nodes: [], edges: [] };
 
@@ -76,13 +96,13 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
         // Un LAIN caído no impide responder con explanation_status de fallo.
       }
 
-      const token = app.config.nemotronToken;
-      if (!token) {
+      const model = investigatorModel(app.config);
+      if (!model) {
         // Fallo visible, no un silencio: la explicación no existe y el motivo
         // queda en el estado (INV: nunca fingir que el modelo explicó).
         return {
           answer:
-            'Nemotron no está configurado (NEMOTRON_TOKEN/NEBIUS_TOKEN): no hay explicación del modelo. El análisis estructural del workspace sigue disponible en topology.',
+            'Nemotron no está configurado (NEBIUS_TOKEN): no hay explicación del modelo. El análisis estructural del workspace sigue disponible en topology.',
           explanation_status: 'failed:no_model_configured',
           topology,
           evidence: [],
@@ -90,35 +110,25 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           budget: null,
           tool_calls: [],
           model: null,
+          claims: [],
+          claims_summary: NO_CLAIMS,
         };
       }
-
-      const settings = investigatorSettings(app.config);
-      const nemotron = new NemotronProvider({
-        baseUrl: settings.baseUrl,
-        apiKey: token,
-        plannerModel: settings.plannerModel,
-        workerModel: settings.workerModel,
-        timeoutMs: Math.min(60_000, settings.maxModelMs),
-      });
 
       const result = await investigate({
         question,
         lain,
-        model: nemotron,
+        model: model.provider,
         view: 'live',
-        budget: {
-          maxToolCalls: settings.maxToolCalls,
-          maxModelMs: settings.maxModelMs,
-        },
-        endpointLabel: settings.baseUrl,
+        budget: model.budget,
+        endpointLabel: model.settings.baseUrl,
       });
 
       // Serialización INV 2: la prosa del modelo no toca datos del motor; el
       // payload queda listo para auditoría (modelo, endpoint, prompt_version).
       const payload = serializeExplanation(result, {
         question,
-        endpointLabel: settings.baseUrl,
+        endpointLabel: model.settings.baseUrl,
       });
       req.log.info(
         {
@@ -144,9 +154,12 @@ export const queryRoutes: FastifyPluginAsync = async (app) => {
           toolCallsUsed: result.budget.toolCallsUsed,
           modelMsUsed: result.budget.modelMsUsed,
           exhausted: result.budget.exhausted,
+          cutShort: result.budget.cutShort,
         },
         tool_calls: result.toolCallLog,
         model: result.effectiveModel,
+        claims: result.claims,
+        claims_summary: result.claimsSummary,
       };
     },
   );

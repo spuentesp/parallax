@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type ChatCompleter,
+  cleanRef,
   detectClassificationConflicts,
   extractCitationRefs,
   investigate,
@@ -136,7 +137,7 @@ describe('investigate loop', () => {
     expect(result.explanationStatus).toBe('available');
     expect(result.citations.accepted).toEqual([EVID]);
     expect(result.effectiveModel).toBe('fake/nemotron');
-    expect(result.promptVersion).toBe('parallax-investigator-v1');
+    expect(result.promptVersion).toBe('parallax-investigator-v4');
     // LAIN fue llamado con la vista fijada (live por defecto).
     expect(getLainMockCalls().some((c) => c.tool === 'get_service' && c.snapshot === 'live')).toBe(
       true,
@@ -191,7 +192,10 @@ describe('investigate loop', () => {
   });
 
   it('fails the explanation when every citation is invented', async () => {
-    const model = new ScriptedModel([resp({ content: 'Todo Verified [ev:fake:made-up:1].' })]);
+    const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: 'Todo Verified [ev:fake:made-up:1].' }),
+    ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
     expect(result.citations.accepted).toHaveLength(0);
@@ -199,7 +203,10 @@ describe('investigate loop', () => {
   });
 
   it('fails the explanation when the answer carries no citations', async () => {
-    const model = new ScriptedModel([resp({ content: 'Sin citas.' })]);
+    const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: 'Sin citas.' }),
+    ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_missing');
   });
@@ -264,10 +271,34 @@ describe('investigate loop', () => {
       }),
       resp({ content: `Ok [ev:${EVID}].` }),
     ]);
-    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      retryDelayMs: 0,
+    });
     expect(result.explanationStatus).toBe('available');
     expect(result.modelLog.some((m) => m.retry && m.finishReason === 'rate_limited')).toBe(true);
     expect(result.errors.some((e) => e.includes('429'))).toBe(true);
+  });
+
+  it('also retries a provider overload (HTTP 529) once instead of failing the run', async () => {
+    const model = new ScriptedModel([
+      new Error('Nemotron HTTP 529: {"detail":"System is overloaded"}'),
+      resp({
+        toolCalls: [toolCall('call_1', 'get_service', { service: 'orders' })],
+        finishReason: 'tool_calls',
+      }),
+      resp({ content: `Ok [ev:${EVID}].` }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      retryDelayMs: 0,
+    });
+    expect(result.explanationStatus).toBe('available');
+    expect(result.modelLog.some((m) => m.retry)).toBe(true);
   });
 
   it('gives up after repeated model errors with a visible failed status', async () => {
@@ -328,6 +359,7 @@ describe('INV 2 — engine fields stay engine fields', () => {
 
   it('serializeExplanation keeps engine classes verbatim and model fields separate', async () => {
     const model = new ScriptedModel([
+      resp({ toolCalls: [toolCall('c0', 'list_services', {})], finishReason: 'tool_calls' }),
       resp({
         content: `El endpoint http:GET /api/orders/{} queda Verified [ev:${EVID}].`,
       }),
@@ -351,8 +383,8 @@ describe('INV 2 — engine fields stay engine fields', () => {
     expect(payload.engine_finding_classes.every((f) => f.class === 'NeedsInvestigation')).toBe(
       true,
     );
-    expect(payload.prompt_version).toBe('parallax-investigator-v1');
-    expect(payload.tool_calls).toHaveLength(0);
+    expect(payload.prompt_version).toBe('parallax-investigator-v4');
+    expect(payload.tool_calls).toHaveLength(1);
   });
 });
 
@@ -371,6 +403,23 @@ describe('citations helpers', () => {
       'billing:HttpRoute:src/main.py:GET /invoices/{invoice_id}:51',
     ]);
     expect(refs).toContain('billing:HttpRoute:src/main.py:GET /invoices/{invoice_id}:51');
+  });
+
+  it('unwraps angle brackets and full-width brackets around a cited id', () => {
+    const id = 'saleor-dashboard:Function:src/a.ts:graphql-call%3Aquery%3Ashop:3';
+    expect(extractCitationRefs(`x [ev:<${id}>】 y`)).toEqual([id]);
+    expect(extractCitationRefs(`x (ev: <${id}>)`)).toEqual([id]);
+  });
+
+  it('cleanRef reduces an id as the model wrote it to the id itself', () => {
+    expect(cleanRef('[ev:a:b:1]')).toBe('a:b:1');
+    expect(cleanRef('<a:b:1>】')).toBe('a:b:1');
+    expect(cleanRef('  `ev: a:b:1`.')).toBe('a:b:1');
+    expect(cleanRef('q:3')).toBe('q:3');
+  });
+
+  it('keeps a literal placeholder as a visible rejection, not a citation', () => {
+    expect(extractCitationRefs('x [ev:<id>]')).toEqual(['id']);
   });
 
   it('acepta un id entregado citado sin marcador alguno', () => {
@@ -399,6 +448,269 @@ describe('citations helpers', () => {
     );
     // La frase que nombra la clave usa NeedsInvestigation (la del motor): sin conflicto.
     expect(conflicts).toHaveLength(0);
+  });
+});
+
+describe('answering without evidence', () => {
+  it('sends a model that answers before reading anything back to the tools, once', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      resp({ content: 'From the map I can tell: it is fine.' }),
+      resp({ toolCalls: [toolCall('c1', 'list_services', {})], finishReason: 'tool_calls' }),
+      resp({ content: `Verified [ev:${EVID}]` }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(3);
+    // El modelo vio el aviso antes de su tercera respuesta.
+    const seen = model.calls[2]?.messages ?? [];
+    expect(
+      seen.some(
+        (m) => typeof m.content === 'string' && m.content.includes('without using any tool'),
+      ),
+    ).toBe(true);
+    expect(result.budget.toolCallsUsed).toBe(1);
+  });
+
+  it('does not loop: a second tool-less answer is kept and judged by the citation check', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      resp({ content: 'no tools 1' }),
+      resp({ content: 'no tools 2' }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(2);
+    expect(result.answer).toBe('no tools 2');
+    expect(result.explanationStatus).toBe('failed:citations_missing');
+  });
+});
+
+function submit(id: string, args: unknown): NemotronResponse {
+  return resp({ toolCalls: [toolCall(id, 'submit_answer', args)], finishReason: 'tool_calls' });
+}
+const readOrders = () =>
+  resp({
+    toolCalls: [toolCall('c_read', 'get_service', { service: 'orders' })],
+    finishReason: 'tool_calls',
+  });
+
+describe('submit_answer and engine-verified claims', () => {
+  it('supports a correct absence with no code anchor, and keeps the prose verbatim', async () => {
+    resetLainMock();
+    const prose = 'reports does not consume billing.';
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'reports', provider: 'billing', polarity: 'absent' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.explanationStatus).toBe('available');
+    expect(result.answer).toBe(prose);
+    expect(result.citations.accepted).toEqual([]);
+    expect(result.claims[0]?.verdict).toBe('verified');
+    expect(result.claimsSummary).toMatchObject({ total: 1, verified: 1, contradicted: 0 });
+    expect(result.toolCallLog.some((t) => t.tool === 'submit_answer' && t.ok)).toBe(true);
+  });
+
+  it('points at a contradicted claim without failing or editing the answer', async () => {
+    resetLainMock();
+    const prose = `orders consumes billing [ev:${EVID}]`;
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    // La cita de la prosa es válida: el estado no cambia por la afirmación contradicha.
+    expect(result.explanationStatus).toBe('available');
+    expect(result.answer).toBe(prose);
+    expect(result.claimsSummary.contradicted).toBe(1);
+    expect(result.claims[0]?.verdict).toBe('contradicted');
+    expect(result.claims[0]?.engine?.uses).toBe(0);
+  });
+
+  it('counts a supported note claim as support even when the prose has no citation', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: 'prose without markers',
+        claims: [{ kind: 'note', text: 'orders has a consumer', evidence: [EVID] }],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.claims[0]?.verdict).toBe('supported');
+    expect(result.explanationStatus).toBe('available');
+  });
+
+  it('fails when the only note claim cites evidence the backend never delivered', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: 'prose',
+        claims: [{ kind: 'note', text: 'x', evidence: ['orders:Function:src/fake.rs:nope:1'] }],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.claims[0]?.verdict).toBe('unsupported');
+    expect(result.explanationStatus).toBe('failed:citations_unresolved');
+  });
+
+  it('does not let a contradicted claim stand in for support', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: 'orders consumes billing',
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.explanationStatus).toBe('failed:citations_unresolved');
+    expect(result.claimsSummary.contradicted).toBe(1);
+  });
+
+  it('returns a schema error to the model and lets it resubmit', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', { claims: [] }),
+      submit('s2', {
+        answer: 'ok',
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.explanationStatus).toBe('available');
+    const seen = JSON.stringify(model.calls[2]?.messages);
+    expect(seen).toContain('invalid arguments for submit_answer');
+    expect(result.toolCallLog.filter((t) => t.tool === 'submit_answer').map((t) => t.ok)).toEqual([
+      false,
+      true,
+    ]);
+  });
+
+  it('sends back a submission made before any read, once', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      submit('s1', { answer: 'from the map' }),
+      readOrders(),
+      submit('s2', { answer: `done [ev:${EVID}]` }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(3);
+    expect(JSON.stringify(model.calls[1]?.messages)).toContain('without using any tool');
+    expect(result.explanationStatus).toBe('available');
+  });
+
+  it('ignores other calls made in the same turn as the submission', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({
+        toolCalls: [
+          toolCall('x1', 'list_services', {}),
+          toolCall('s1', 'submit_answer', { answer: 'early' }),
+        ],
+        finishReason: 'tool_calls',
+      }),
+      submit('s2', { answer: `final [ev:${EVID}]` }),
+    ]);
+    // La primera entrega no tiene evidencia nueva que la sostenga (sin citas ni
+    // afirmaciones) pero sí hubo lectura: se acepta tal cual y termina.
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.answer).toBe('early');
+    expect(result.explanationStatus).toBe('failed:citations_missing');
+    expect(model.calls).toHaveLength(2);
+  });
+
+  it('mints a receipt per answered read and accepts it as a citation only if it exists', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: `empty by q:1 [ev:q:1] and invented [ev:q:99] and anchor [ev:${EVID}]`,
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(result.receipts.map((r) => r.id)).toEqual(['q:1']);
+    expect(result.citedReceipts).toEqual(['q:1']);
+    expect(result.citations.accepted).toEqual([EVID]);
+    expect(result.citations.rejected).toEqual([
+      { ref: 'q:99', reason: 'not_delivered_by_backend' },
+    ]);
+    // El modelo ve el id del recibo en el resultado de la herramienta.
+    const toolMsg = model.calls[1]?.messages.find((m) => m.role === 'tool');
+    expect(JSON.parse(String(toolMsg?.content))).toMatchObject({ ok: true, receipt: 'q:1' });
+  });
+
+  it('exposes the claims and receipts in the serialized explanation', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: 'x',
+        claims: [
+          { kind: 'relation', consumer: 'reports', provider: 'billing', polarity: 'absent' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    const payload = serializeExplanation(result, { question: 'q' });
+    expect(payload.claims).toHaveLength(1);
+    expect(payload.claims_summary.verified).toBe(1);
+    expect(payload.receipts).toHaveLength(1);
+  });
+});
+
+describe('empty or unreadable service catalog', () => {
+  it('says why instead of a silent no_answer, and spends no model time', async () => {
+    const base = createLainMock();
+    const model = new ScriptedModel([resp({ content: 'should never be asked' })]);
+    const result = await investigate({
+      question: 'q',
+      lain: {
+        ...base,
+        async listServices(req) {
+          return { ...(await base.listServices(req)), items: [] };
+        },
+      },
+      model,
+    });
+    expect(result.explanationStatus).toBe('failed:empty_service_catalog');
+    expect(result.answer).toBeNull();
+    expect(result.errors.some((e) => e.includes('services'))).toBe(true);
+    expect(model.calls).toHaveLength(0);
+  });
+
+  it('reports an unreadable catalog as unavailable, with the cause', async () => {
+    const base = createLainMock();
+    const model = new ScriptedModel([resp({ content: 'x' })]);
+    const result = await investigate({
+      question: 'q',
+      lain: {
+        ...base,
+        async listServices() {
+          throw new Error('connection refused');
+        },
+      },
+      model,
+    });
+    expect(result.explanationStatus).toBe('failed:catalog_unavailable');
+    expect(result.errors.join(' ')).toContain('connection refused');
+    expect(model.calls).toHaveLength(0);
   });
 });
 

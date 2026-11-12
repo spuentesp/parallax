@@ -98,7 +98,7 @@ async function main(): Promise<void> {
   for (const suffix of ['', '-wal', '-shm']) rmSync(`${DB_PATH}${suffix}`, { force: true });
   mkdirSync(join(tmpdir()), { recursive: true });
 
-  // Sin NEMOTRON_TOKEN / API key: el informe estructural no depende de un modelo.
+  // Sin NEBIUS_TOKEN / API key: el informe estructural no depende de un modelo.
   const app = await buildApp({
     port: 0,
     databasePath: DB_PATH,
@@ -108,7 +108,7 @@ async function main(): Promise<void> {
     authTokens: [{ token: 'g2', orgId: ORG, scopes: ['read', 'write', 'publish'] }],
     webBundlePath: join(tmpdir(), 'parallax-g2-web'),
   });
-  check('el arranque no requiere nemotronToken', app.config.nemotronToken === undefined);
+  check('el arranque no requiere nebiusToken', app.config.nebiusToken === undefined);
 
   // Workspace con los 4 repos del fixture, fijados a sus SHAs base.
   await app.db

@@ -144,6 +144,9 @@ export function Assessment(): React.ReactElement {
               {report.explanation.revision ?? '—'}
             </span>
           </div>
+          {report.explanation.narrative ? (
+            <div className="mt-3 whitespace-pre-wrap text-sm">{report.explanation.narrative}</div>
+          ) : null}
           <p className="text-xs text-muted mt-2">
             La explicación del modelo no modifica los findings del analizador. Una explicación no
             puede promover NeedsInvestigation a Verified.
