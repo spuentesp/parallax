@@ -308,7 +308,12 @@ export async function buildGraphChildren(
         .filter((n) => !(n.type === ref.type && n.name === ref.name));
       // lain 0.11+ devuelve las aristas concretas del connect: se conservan
       // para rotular pares from→to sin inventarlas.
-      const edges = (res.edges ?? []).map((e) => ({ id: e.id, type: e.type, from: e.from, to: e.to }));
+      const edges = (res.edges ?? []).map((e) => ({
+        id: e.id,
+        type: e.type,
+        from: e.from,
+        to: e.to,
+      }));
       for (const p of res.paths ?? []) {
         allPaths.push({
           nodes: p.nodes.map(toCodeNode),

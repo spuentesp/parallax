@@ -44,8 +44,8 @@ describe('Lain dev (v0.15.0 batch) native tool contracts', () => {
     });
     expect(parsed.dry_run).toBeUndefined();
     expect(ApplyContractContextArgs.safeParse({}).success).toBe(false);
-    expect(
-      ApplyContractContextArgs.safeParse({ snapshot: 'snap_abc', provides: [] }).success,
-    ).toBe(false);
+    expect(ApplyContractContextArgs.safeParse({ snapshot: 'snap_abc', provides: [] }).success).toBe(
+      false,
+    );
   });
 });
