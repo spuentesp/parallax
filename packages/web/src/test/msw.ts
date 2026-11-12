@@ -44,6 +44,17 @@ export const sampleReport = {
 };
 
 export const handlers = [
+  // Por defecto el servidor de pruebas NO ofrece el flujo: la interfaz cae a /api/query.
+  http.post('/api/query/stream', () => new HttpResponse(null, { status: 404 })),
+  http.post('/api/workspaces/:id/trace/stream', () => new HttpResponse(null, { status: 404 })),
+  http.get('/api/workspaces/:id/docs', () => HttpResponse.json({ source: 'lain', docs: [] })),
+  http.get('/api/conversations', () => HttpResponse.json({ conversations: [] })),
+  http.get('/api/conversations/:id', () =>
+    HttpResponse.json({ code: 'NotFound', detail: 'conversation not found' }, { status: 404 }),
+  ),
+  http.get('/api/whoami', () =>
+    HttpResponse.json({ orgId: 'acme', scopes: ['read', 'write'], readOnly: false }),
+  ),
   http.get('/api/orgs', () => HttpResponse.json({ orgs: [{ id: 'acme', name: 'Acme Corp' }] })),
   http.get('/api/assessments', () => HttpResponse.json({ assessments: [] })),
   http.get('/api/assessments/:id', ({ params }) =>
@@ -59,12 +70,31 @@ export const handlers = [
     }),
   ),
   http.get('/api/workspaces/:id/repos', () => HttpResponse.json({ repos: [] })),
+  http.get('/api/workspaces/:id/repos/status', () =>
+    HttpResponse.json({ source: 'unconfigured', repos: [], untracked: [] }),
+  ),
   http.get('/api/workspaces/:id/topology', () =>
     HttpResponse.json({ topology: { nodes: [], edges: [] }, source: 'mock' }),
   ),
   http.get('/api/workspaces/:id/graph', () => HttpResponse.json({ roots: [] })),
   http.get('/api/workspaces/:id/graph/children', () => HttpResponse.json({ children: [] })),
   http.get('/api/workspaces/:id/graph/snippet', () => HttpResponse.json({ text: null })),
+  http.post('/api/workspaces/:id/map/view', () =>
+    HttpResponse.json({
+      nodes: [],
+      edges: [],
+      hiddenChildren: {},
+      focus: null,
+      unknownExpand: [],
+      meta: { source: 'unconfigured' },
+    }),
+  ),
+  http.get('/api/workspaces/:id/map/node', () =>
+    HttpResponse.json({ detail: null, meta: { source: 'unconfigured' } }),
+  ),
+  http.get('/api/workspaces/:id/map/search', () =>
+    HttpResponse.json({ results: [], meta: { source: 'unconfigured' } }),
+  ),
   http.post('/api/workspaces/:id/evidence', () => HttpResponse.json({ items: [], source: 'mock' })),
 ];
 

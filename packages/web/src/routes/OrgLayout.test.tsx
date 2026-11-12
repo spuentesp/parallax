@@ -1,82 +1,173 @@
-import { cleanup, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OrgLayout, SAMPLE_TOPOLOGY } from './OrgLayout.js';
-import { Service } from './Service.js';
+import type { MapViewResponse, ProjectedNode } from '@parallax/shared/org-map';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
+import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { afterEach, describe, expect, it } from 'vitest';
+import { routes } from '../router.js';
+import { server } from '../test/msw.js';
+import { renderWithQuery } from '../test/render.js';
 
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
+afterEach(cleanup);
+
+const svc = (name: string): ProjectedNode => ({
+  id: `svc:${name}`,
+  label: name,
+  kind: 'service',
+  parent: null,
+  meta: {},
+  childCount: 0,
+  expanded: false,
 });
 
-function renderHub(initialEntry = '/orgs/acme') {
-  return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path="/orgs/:orgId" element={<OrgLayout />}>
-          <Route path="probe" element={<p>panel-slot</p>} />
-          <Route path="services/:serviceId" element={<Service />} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+function serveMap(nodes: ProjectedNode[]) {
+  server.use(
+    http.post('/api/workspaces/:id/map/view', async ({ request }) => {
+      const body = (await request.json()) as { focus?: string };
+      // Como el servidor: un foco que existe en el mapa vuelve como foco.
+      const known = nodes.some((n) => n.id === body.focus);
+      const view: MapViewResponse = {
+        nodes,
+        edges: [],
+        hiddenChildren: {},
+        focus: known && body.focus ? { seed: body.focus, ids: [body.focus] } : null,
+        unknownExpand: [],
+        totals: { nodes: nodes.length, edges: 0, shownNodes: nodes.length, shownEdges: 0 },
+        meta: { source: 'lain', generatedAt: Date.now() },
+      };
+      return HttpResponse.json(view);
+    }),
   );
 }
 
+function renderHub(url = '/orgs/acme') {
+  const router = createMemoryRouter(routes, { initialEntries: [url] });
+  renderWithQuery(<RouterProvider router={router} />);
+  return router;
+}
+
 describe('OrgLayout hub', () => {
-  it('shows the org heading, topology and chat on one screen', () => {
+  it('shows the org, the contextual action and the real map on one screen', async () => {
+    serveMap([svc('orders'), svc('billing')]);
     renderHub();
-    expect(screen.getByRole('heading', { name: /acme/i })).toBeTruthy();
-    expect(screen.getByText(/service topology/i)).toBeTruthy();
-    expect(SAMPLE_TOPOLOGY.nodes.length).toBeGreaterThan(0);
+    const outline = await screen.findByTestId('map-outline');
+    expect(within(outline).getByText('orders')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /evaluate pr/i })).toBeTruthy();
+    expect(
+      screen.queryByRole('link', { name: /configure workspace|view assessments/i }),
+    ).toBeNull();
   });
 
-  it('renders nested routes in the panel slot', () => {
-    renderHub('/orgs/acme/probe');
-    expect(screen.getByText('panel-slot')).toBeTruthy();
+  it('says the workspace has no LAIN instead of drawing sample data', async () => {
+    renderHub(); // el handler por defecto responde "unconfigured"
+    expect((await screen.findByTestId('map-notice')).textContent).toMatch(/no LAIN server/i);
+    expect(screen.queryByTestId('map-outline')).toBeNull();
   });
 
-  it('shows the empty-state CTA when the topology has no data', () => {
-    render(
-      <MemoryRouter initialEntries={['/orgs/acme']}>
-        <Routes>
-          <Route path="/orgs/:orgId" element={<OrgLayout emptyTopology />}>
-            <Route path="probe" element={<p>panel-slot</p>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
+  it('flow actions carry the node selected in the map into the evaluation form', async () => {
+    serveMap([svc('orders')]);
+    renderHub('/orgs/acme?sel=svc:orders');
+    const evaluate = await screen.findByRole('link', { name: /evaluate pr/i });
+    expect(evaluate.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
+  });
+
+  it('keeps the old service URL alive: it lands on the hub with that service in focus', async () => {
+    serveMap([svc('orders')]);
+    const router = renderHub('/orgs/acme/services/orders');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs/acme'));
+    const q = new URLSearchParams(router.state.location.search);
+    expect(q.get('sel')).toBe('svc:orders');
+    expect(q.get('focus')).toBe('svc:orders');
+  });
+});
+
+describe('OrgLayout assistant', () => {
+  const answer = (map_focus: unknown) =>
+    server.use(
+      http.post('/api/query', () =>
+        HttpResponse.json({
+          answer: 'billing consumes orders.',
+          explanation_status: 'complete',
+          claims_summary: {
+            total: 2,
+            verified: 1,
+            contradicted: 1,
+            unverifiable: 0,
+            supported: 0,
+            unsupported: 0,
+          },
+          map_focus,
+        }),
+      ),
     );
-    expect(screen.getByText(/no topology yet/i)).toBeTruthy();
-    // El CTA vive tanto en el empty state como en la barra de flujo.
-    expect(screen.getAllByRole('link', { name: /configurar workspace/i }).length).toBeGreaterThan(
-      0,
+  const ask = async (text: string) => {
+    fireEvent.change(screen.getByLabelText(/ask about your architecture/i), {
+      target: { value: text },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  };
+
+  it('sends the question to the investigator with the org and shows the engine verdicts', async () => {
+    let body: unknown;
+    server.use(
+      http.post('/api/query', async ({ request }) => {
+        body = await request.json();
+        return HttpResponse.json({
+          answer: 'billing consumes orders.',
+          explanation_status: 'complete',
+          claims_summary: {
+            total: 2,
+            verified: 1,
+            contradicted: 1,
+            unverifiable: 0,
+            supported: 0,
+            unsupported: 0,
+          },
+          map_focus: null,
+        });
+      }),
     );
-  });
-  it('keeps the graph mounted while the panel slot is active', () => {
-    renderHub('/orgs/acme/probe');
-    expect(screen.getByText('panel-slot')).toBeTruthy();
-    expect(screen.getByText(/service topology/i)).toBeTruthy();
-  });
-
-  it('rejects unknown service ids with a recoverable message', () => {
-    renderHub('/orgs/acme/services/does-not-exist');
-    expect(screen.getByText(/servicio no encontrado/i)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /cerrar/i })).toBeTruthy();
+    renderHub();
+    await ask('who consumes orders?');
+    expect(await screen.findByText('billing consumes orders.')).toBeTruthy();
+    expect(body).toEqual({ question: 'who consumes orders?', orgId: 'acme' });
+    expect(screen.getByTestId('claims-summary').textContent).toMatch(/1 verified · 1 contradicted/);
+    // Sin recibo del motor no hay a dónde llevar al usuario.
+    expect(screen.queryByRole('button', { name: /show on map/i })).toBeNull();
   });
 
-  it('flow actions carry the selected node context into the evaluation form', () => {
-    renderHub('/orgs/acme?node=orders');
-    const evaluar = screen.getByRole('link', { name: /evaluar pr/i });
-    expect(evaluar.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
+  it('"Show on map" leaves the map pointing at the subgraph the engine backed', async () => {
+    answer({
+      seed: 'svc:orders',
+      ids: ['svc:orders', 'svc:billing'],
+      relations: [
+        {
+          consumer: 'billing',
+          provider: 'orders',
+          polarity: 'present',
+          uses: 3,
+          endpoints: [],
+          complete: true,
+        },
+      ],
+      query: '?tab=map&focus=svc%3Aorders&hops=1&sel=svc%3Aorders',
+    });
+    serveMap([svc('orders'), svc('billing')]);
+    const router = renderHub();
+    await ask('who consumes orders?');
+    fireEvent.click(await screen.findByRole('button', { name: /show on map · 2 nodes/i }));
+    await waitFor(() => {
+      const q = new URLSearchParams(router.state.location.search);
+      expect(q.get('focus')).toBe('svc:orders');
+      expect(q.get('sel')).toBe('svc:orders');
+    });
+    // El mapa recibe el foco: aparece la etiqueta de foco sobre el lienzo.
+    expect(await screen.findByText('Focus')).toBeTruthy();
   });
 
-  it('shows a recoverable notice for unknown ?node values', () => {
-    renderHub('/orgs/acme?node=bogus');
-    expect(screen.getByText(/nodo no encontrado/i)).toBeTruthy();
-  });
-
-  it('the open panel wins over a divergent ?node context', () => {
-    renderHub('/orgs/acme/services/orders?node=billing');
-    const evaluar = screen.getByRole('link', { name: /evaluar pr/i });
-    expect(evaluar.getAttribute('href')).toBe('/orgs/acme/assessments?repo=orders');
+  it('reports a failed question instead of staying silent', async () => {
+    server.use(http.post('/api/query', () => HttpResponse.json({ code: 'Boom' }, { status: 500 })));
+    renderHub();
+    await ask('anything');
+    expect(await screen.findByText(/could not be answered/i)).toBeTruthy();
   });
 });

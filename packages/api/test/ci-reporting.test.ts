@@ -11,8 +11,9 @@ import type { FastifyBaseLogger } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as schema from '../src/db/schema.js';
 import { GitHubWriter } from '../src/github/status.js';
-import { handlePullRequest } from '../src/routes/ci.js';
+import { handlePullRequest, resumePrReports } from '../src/routes/ci.js';
 import { buildApp } from '../src/server.js';
+import { createAssessment } from '../src/services/assessments.js';
 
 const SECRET = 'whsec-test';
 const BASE = 'a'.repeat(40);
@@ -39,6 +40,8 @@ function prFor(overrides: { owner?: string; repo?: string; action?: string } = {
     baseSha: BASE,
     headSha: HEAD,
     isFork: false,
+    isDraft: false,
+    baseChanged: false,
   };
 }
 
@@ -83,6 +86,14 @@ function recordingLog(): { log: FastifyBaseLogger; lines: Logged[] } {
     debug: () => undefined,
   } as unknown as FastifyBaseLogger;
   return { log, lines };
+}
+
+async function untilAsync(check: () => Promise<boolean>, ms = 10_000): Promise<void> {
+  const start = Date.now();
+  while (!(await check())) {
+    if (Date.now() - start > ms) throw new Error('timed out waiting for condition');
+    await new Promise((r) => setTimeout(r, 25));
+  }
 }
 
 async function until(check: () => boolean, ms = 10_000): Promise<void> {
@@ -330,7 +341,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       method: 'PUT',
       url: `/api/workspaces/${wsId}/ci`,
       headers: AUTH,
-      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
     });
   });
 
@@ -346,10 +357,13 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     analyzerVersion: app.lain.analyzerVersion,
     writer,
     publicUrl: 'https://parallax.example',
+    retryDelaysMs: [],
     log,
   });
 
   const statusPosts = () => recorded.filter((r) => r.url.includes('/statuses/'));
+  const finalPosts = () =>
+    recorded.filter((r) => r.url.includes('/issues/') && r.url.endsWith('/comments'));
 
   it('evaluates an acme/shop PR whose owner differs only in case', async () => {
     const { log } = recordingLog();
@@ -379,7 +393,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(lines.find((l) => l.level === 'warn')?.msg).toBe(
       'no write token: result not reported to GitHub',
     );
-    expect(statusPosts()).toHaveLength(0);
+    expect(finalPosts()).toHaveLength(0);
   });
 
   it('logs an error, not a warning, when GitHub rejects the write', async () => {
@@ -392,11 +406,12 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     await handlePullRequest(deps(log, writer), prFor());
     await until(() => lines.some((l) => l.level === 'error'));
     const err = lines.find((l) => l.level === 'error');
-    expect(err?.msg).toBe('failed to report assessment to GitHub');
-    expect(lines.filter((l) => l.level === 'warn')).toHaveLength(0);
+    expect(err?.msg).toBe(
+      'failed to report assessment to GitHub; it stays pending and is retried at next start',
+    );
   });
 
-  it('posts the cancelled assessment as pending, with the report link', async () => {
+  it('posts the cancelled assessment with the report link', async () => {
     const { log, lines } = recordingLog();
     const writer = new GitHubWriter({
       token: 'write-token',
@@ -406,15 +421,9 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     const [row] = await app.db.select().from(schema.assessment);
     expect(row).toBeDefined();
     await app.assessmentWorker.transition(row?.id ?? '', 'CANCELLED');
-    await until(() => statusPosts().length === 1);
-    const sent = statusPosts()[0]?.body as {
-      state: string;
-      description: string;
-      target_url: string;
-    };
-    expect(sent.target_url).toBe(
-      `https://parallax.example/app/orgs/${wsId}/assessments/${row?.id}`,
-    );
+    await until(() => finalPosts().length === 1);
+    const sent = finalPosts()[0]?.body as { body: string };
+    expect(sent.body).toContain(`https://parallax.example/app/orgs/${wsId}/assessments/${row?.id}`);
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
@@ -441,6 +450,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     analyzerVersion: app.lain.analyzerVersion,
     writer,
     publicUrl: 'https://parallax.example',
+    retryDelaysMs: [],
     log,
   });
 
@@ -456,6 +466,52 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
       apiBase: `http://127.0.0.1:${String((gh.address() as AddressInfo).port)}`,
     });
 
+  it('keeps the report in Parallax and makes no GitHub write when comments are disabled', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${wsId}/ci`,
+      headers: AUTH,
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: false },
+    });
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, null, worker), prFor());
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'CANCELLED');
+    await untilAsync(
+      async () => (await app.db.select().from(schema.prReport))[0]?.reportedAt != null,
+    );
+    expect(recorded.filter((entry) => entry.method === 'POST')).toHaveLength(0);
+  });
+
+  it('creates a PR-specific assessment and repairs a missing report on redelivery', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    const body = { repo: 'shop', base: BASE, head: HEAD, orgId: wsId };
+    const manual = await createAssessment({
+      db: app.db,
+      worker,
+      body,
+      analyzerVersion: app.lain.analyzerVersion,
+    });
+    const pr = await createAssessment({
+      db: app.db,
+      worker,
+      body,
+      analyzerVersion: app.lain.analyzerVersion,
+      pr: { owner: 'acme', repo: 'shop', number: 4, repoId: 'shop', name: 'shop' },
+    });
+    expect(pr.assessment.id).not.toBe(manual.assessment.id);
+    expect(await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor())).toBe(0);
+    const reports = await app.db.select().from(schema.prReport);
+    expect(reports.map((row) => row.assessmentId)).toEqual([pr.assessment.id]);
+    await app.assessmentWorker.transition(pr.assessment.id, 'CANCELLED');
+    await until(() => finalPosts().length === 1);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    await new Promise((r) => setTimeout(r, 100));
+    expect(finalPosts()).toHaveLength(1);
+  });
+
   it('stays silent through non-terminal states and reports once the assessment is terminal', async () => {
     const { log, lines } = recordingLog();
     const worker = parkedWorker(async () => undefined);
@@ -464,42 +520,41 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
     await app.assessmentWorker.transition(id, 'ANALYZING');
     await new Promise((r) => setTimeout(r, 100));
-    expect(statusPosts()).toHaveLength(0);
+    expect(finalPosts()).toHaveLength(0);
     await app.assessmentWorker.transition(id, 'PARTIAL');
-    await until(() => statusPosts().length === 1);
-    expect(statusPosts()[0]?.body).toMatchObject({ state: 'pending' });
+    await until(() => finalPosts().length === 1);
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Coverage: incomplete',
+    );
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
-  it('reports a failed assessment as error with the exact text', async () => {
+  it('reports a failed assessment in the advisory comment', async () => {
     const { log, lines } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
     const id = await onlyAssessmentId();
     await app.assessmentWorker.transition(id, 'FAILED', { error: 'engine down' });
-    await until(() => statusPosts().length === 1);
-    expect(statusPosts()[0]?.body).toMatchObject({
-      state: 'error',
-      description: 'Parallax assessment failed; no result.',
-      context: 'parallax/assessment',
-    });
+    await until(() => finalPosts().length === 1);
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Assessment: FAILED',
+    );
     expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
   });
 
-  it('reports a cancelled assessment as pending, never as success', async () => {
+  it('reports a cancelled assessment in the advisory comment', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
     const id = await onlyAssessmentId();
     await app.assessmentWorker.transition(id, 'CANCELLED');
-    await until(() => statusPosts().length === 1);
-    expect(statusPosts()[0]?.body).toMatchObject({
-      state: 'pending',
-      description: 'No result conclusive: coverage is incomplete',
-    });
+    await until(() => finalPosts().length === 1);
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Assessment: CANCELLED',
+    );
   });
 
-  it('reports a ready assessment that has no coverage record as pending', async () => {
+  it('reports missing coverage in the advisory comment', async () => {
     const { log } = recordingLog();
     const worker = parkedWorker(async () => undefined);
     await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
@@ -508,8 +563,10 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     await app.assessmentWorker.transition(id, 'ANALYZING');
     await app.assessmentWorker.transition(id, 'EXPLAINING');
     await app.assessmentWorker.transition(id, 'READY');
-    await until(() => statusPosts().length === 1);
-    expect(statusPosts()[0]?.body).toMatchObject({ state: 'pending' });
+    await until(() => finalPosts().length === 1);
+    expect((finalPosts()[0]?.body as { body: string } | undefined)?.body).toContain(
+      'Coverage: incomplete',
+    );
   });
 
   it('logs a failed run with the assessment id and the error', async () => {
@@ -556,7 +613,7 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     expect(lines.find((l) => l.level === 'warn')?.obj).toEqual({ assessment: id });
   });
 
-  it('names the assessment in the error when GitHub rejects the status', async () => {
+  it('names the assessment in the error when GitHub rejects the comment', async () => {
     ghStatus = 403;
     const { log, lines } = recordingLog();
     const worker = parkedWorker(async () => undefined);
@@ -567,6 +624,131 @@ describe('handlePullRequest reporting', { timeout: 30_000 }, () => {
     await app.assessmentWorker.transition(id, 'PARTIAL');
     await until(() => lines.some((l) => l.level === 'error'));
     expect(lines.find((l) => l.level === 'error')?.obj).toMatchObject({ assessment: id });
+  });
+
+  it('does not publish a commit status while analysis is running or after completion', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor());
+    expect(statusPosts()).toHaveLength(0);
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'CANCELLED');
+    await until(() => finalPosts().length === 1);
+    expect(statusPosts()).toHaveLength(0);
+  });
+
+  it('retries a transient GitHub failure and marks the report as published', async () => {
+    ghStatus = 500;
+    const { log, lines } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(
+      { ...parkedDeps(log, writerFor(), worker), retryDelaysMs: [30, 30] },
+      prFor(),
+    );
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await app.assessmentWorker.transition(id, 'PARTIAL');
+    await until(() => finalPosts().length >= 1);
+    ghStatus = 201;
+    await until(() => finalPosts().length >= 2);
+    await untilAsync(async () => {
+      const [row] = await app.db.select().from(schema.prReport);
+      return row?.reportedAt != null;
+    });
+    expect(
+      lines.some((l) => l.level === 'warn' && l.msg === 'GitHub report failed; will retry'),
+    ).toBe(true);
+  });
+
+  it('a report that never got through stays pending and the next start publishes it once', async () => {
+    ghStatus = 500;
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor()); // sin reintentos
+    const id = await onlyAssessmentId();
+    await app.assessmentWorker.transition(id, 'SNAPSHOTTING');
+    await app.assessmentWorker.transition(id, 'ANALYZING');
+    await app.assessmentWorker.transition(id, 'PARTIAL');
+    await until(() => finalPosts().length === 1);
+    await new Promise((r) => setTimeout(r, 50));
+    const [pending] = await app.db.select().from(schema.prReport);
+    expect(pending?.reportedAt).toBeNull();
+
+    // "Siguiente arranque": GitHub ya responde y se retoma lo pendiente.
+    ghStatus = 201;
+    expect(await resumePrReports(parkedDeps(log, writerFor(), worker))).toBe(1);
+    await until(() => finalPosts().length === 2);
+    await untilAsync(async () => {
+      const [row] = await app.db.select().from(schema.prReport);
+      return row?.reportedAt != null;
+    });
+    // Ya publicado: otro arranque no lo vuelve a publicar.
+    expect(await resumePrReports(parkedDeps(log, writerFor(), worker))).toBe(0);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(finalPosts()).toHaveLength(2);
+  });
+
+  it('does not evaluate a draft, evaluates it once it is ready, and re-evaluates an edited base', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    const d = parkedDeps(log, writerFor(), worker);
+    expect(await handlePullRequest(d, { ...prFor(), isDraft: true })).toBe(0);
+    expect(await handlePullRequest(d, { ...prFor({ action: 'synchronize' }), isDraft: true })).toBe(
+      0,
+    );
+    expect(await handlePullRequest(d, { ...prFor({ action: 'edited' }) })).toBe(0); // sin cambio de base
+    expect(await handlePullRequest(d, { ...prFor({ action: 'edited' }), baseChanged: true })).toBe(
+      1,
+    );
+  });
+
+  it('a draft that becomes ready is evaluated', async () => {
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    expect(
+      await handlePullRequest(
+        parkedDeps(log, writerFor(), worker),
+        prFor({ action: 'ready_for_review' }),
+      ),
+    ).toBe(1);
+  });
+
+  it('two workspaces sharing a repo each get their own evaluation and their own advisory comments', async () => {
+    const second = await app.inject({
+      method: 'POST',
+      url: '/api/workspaces',
+      headers: AUTH,
+      payload: { name: 'storefront-team' },
+    });
+    const ws2 = second.json().workspace.id as string;
+    await app.db.insert(schema.repo).values({
+      id: 'shop2',
+      workspaceId: ws2,
+      uri: 'https://github.com/acme/shop.git',
+      createdAt: Date.now(),
+    });
+    await app.inject({
+      method: 'PUT',
+      url: `/api/workspaces/${ws2}/ci`,
+      headers: AUTH,
+      payload: { mode: 'on-open-and-update', baseBranch: null, reportComments: true },
+    });
+    const { log } = recordingLog();
+    const worker = parkedWorker(async () => undefined);
+    expect(await handlePullRequest(parkedDeps(log, writerFor(), worker), prFor())).toBe(2);
+    const assessments = await app.db.select().from(schema.assessment);
+    for (const assessment of assessments)
+      await app.assessmentWorker.transition(assessment.id, 'CANCELLED');
+    await until(() => finalPosts().length === 2);
+    const comments = finalPosts().map((post) => (post.body as { body: string }).body);
+    expect(comments.some((body) => body.includes('Parallax advisory — shop'))).toBe(true);
+    expect(comments.some((body) => body.includes('Parallax advisory — storefront-team'))).toBe(
+      true,
+    );
+    expect(statusPosts()).toHaveLength(0);
+    const orgs = (await app.db.select().from(schema.assessment)).map((a) => a.orgId).sort();
+    expect(orgs).toEqual([wsId, ws2].sort());
   });
 });
 

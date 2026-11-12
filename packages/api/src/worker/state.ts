@@ -70,6 +70,15 @@ export interface DigestInput {
   readonly configHash?: string | null;
   readonly analyzerVersion: string;
   readonly policyVersion?: string;
+  /** El workspace dueño de la evaluación (ver computeInputDigest). */
+  readonly orgId?: string;
+  /** PR identity changes the analysis: it supplies the files for code impact. */
+  readonly pr?: {
+    readonly owner: string;
+    readonly repo: string;
+    readonly number: number;
+    readonly provider?: 'github' | 'gitlab';
+  };
 }
 
 // JSON canónico: claves ordenadas recursivamente, sin dependencia del orden de
@@ -97,6 +106,16 @@ export function computeInputDigest(input: DigestInput): string {
     configHash: input.configHash ?? null,
     analyzerVersion: input.analyzerVersion,
     policyVersion: input.policyVersion ?? PARALLAX_POLICY_VERSION,
+    // El workspace entra en la identidad: dos workspaces con el mismo repo en los mismos commits
+    // son evaluaciones distintas (su LAIN, su informe, su estado en GitHub). Sin esto, la segunda
+    // recibía la evaluación de la primera y nunca se publicaba la suya.
+    orgId: input.orgId,
+    pr: input.pr && {
+      owner: input.pr.owner.toLowerCase(),
+      repo: input.pr.repo.toLowerCase(),
+      number: input.pr.number,
+      ...(input.pr.provider === 'gitlab' ? { provider: 'gitlab' } : {}),
+    },
   });
   return `sha256_${createHash('sha256').update(canonical).digest('hex')}`;
 }

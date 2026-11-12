@@ -1,0 +1,1383 @@
+{
+  "version": 2,
+  "claims": [],
+  "agents": [
+    {
+      "name": "claude-code-63481-localhost",
+      "kind": "other",
+      "last_seen": 1792531440.6071959
+    },
+    {
+      "name": "claude-code-2470174-localhost",
+      "kind": "other",
+      "last_seen": 1792642800.1480434
+    },
+    {
+      "name": "claude-code-1564929-localhost",
+      "kind": "other",
+      "last_seen": 1793044622.6536217
+    }
+  ],
+  "posts": [],
+  "audit": [
+    {
+      "ts": 1792462091.5064197,
+      "agent": "claude-code-63481-localhost",
+      "action": "register",
+      "purpose": "other"
+    },
+    {
+      "ts": 1792462091.5064197,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462091.6827543,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462100.013004,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.tsx"
+    },
+    {
+      "ts": 1792462100.1017249,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.tsx"
+    },
+    {
+      "ts": 1792462102.5996587,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462102.6811855,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462103.6288207,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462103.6981595,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462104.5377042,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462104.6529896,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792462142.3986921,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462142.4900668,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462150.175255,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462150.330837,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462152.1454098,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462152.3101878,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462153.140574,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462153.225233,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-bounds.test.ts"
+    },
+    {
+      "ts": 1792462171.1275918,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/test/worker-state.test.ts"
+    },
+    {
+      "ts": 1792462171.4187298,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/test/worker-state.test.ts"
+    },
+    {
+      "ts": 1792462182.1888697,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792462182.7371447,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792462260.0532281,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/mcp/test/index.test.ts"
+    },
+    {
+      "ts": 1792462260.1797092,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/mcp/test/index.test.ts"
+    },
+    {
+      "ts": 1792462592.3835235,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792462592.4873335,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792464254.7288685,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792464254.8532915,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792464273.6024275,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/test/worker-state.test.ts"
+    },
+    {
+      "ts": 1792464273.6859443,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/test/worker-state.test.ts"
+    },
+    {
+      "ts": 1792464349.6852958,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792464349.9766448,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792465161.5320091,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/worker/state.ts"
+    },
+    {
+      "ts": 1792465162.3635807,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/worker/state.ts"
+    },
+    {
+      "ts": 1792465162.5597801,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.tsx"
+    },
+    {
+      "ts": 1792465162.7576792,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.tsx"
+    },
+    {
+      "ts": 1792465176.751056,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792465176.9213881,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792465189.8561444,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792465190.0043285,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792465897.5143301,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792465897.6094522,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/shared/test/lain-tool-contracts.test.ts"
+    },
+    {
+      "ts": 1792465898.2062705,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792465898.2729192,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/web/src/routes/Workspaces.test.tsx"
+    },
+    {
+      "ts": 1792465910.9446445,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792465911.014933,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "mutation-allowlist.json"
+    },
+    {
+      "ts": 1792467900.9637542,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792467901.0545552,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792467908.357207,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792467908.4331324,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792468024.145654,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1792468024.22365,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1792468026.5862782,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1792468026.6620932,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1792469112.5835824,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792469112.6702867,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792469120.5395527,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469120.6299884,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469121.4938674,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469121.5605962,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469128.0775173,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469128.1517744,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/test/repo-policy.test.ts"
+    },
+    {
+      "ts": 1792469181.802231,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/plugins/assessment-worker.ts"
+    },
+    {
+      "ts": 1792469182.0250103,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/plugins/assessment-worker.ts"
+    },
+    {
+      "ts": 1792469184.5085747,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/plugins/assessment-worker.ts"
+    },
+    {
+      "ts": 1792469184.5908928,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/plugins/assessment-worker.ts"
+    },
+    {
+      "ts": 1792469190.9989905,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792469191.094143,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475111.4842086,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475111.588946,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475116.7395105,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475116.8121684,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475130.7901788,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475130.87085,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475134.1116939,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475134.1835732,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792475142.7146828,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/test/mutation-batches.test.ts"
+    },
+    {
+      "ts": 1792475142.7994616,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/test/mutation-batches.test.ts"
+    },
+    {
+      "ts": 1792528423.5473711,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792528423.7825124,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/mutation-gate.ts"
+    },
+    {
+      "ts": 1792528429.118949,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/test/mutation-ranges.test.ts"
+    },
+    {
+      "ts": 1792528429.2196653,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/test/mutation-ranges.test.ts"
+    },
+    {
+      "ts": 1792528445.6227424,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792528445.7427235,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792528682.860391,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792528683.1234176,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/gates/src/cli/mutation-gate.ts"
+    },
+    {
+      "ts": 1792530371.1583405,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "docs/superpowers/specs/2026-10-20-pr-evaluation-design.md"
+    },
+    {
+      "ts": 1792530371.2646642,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "docs/superpowers/specs/2026-10-20-pr-evaluation-design.md"
+    },
+    {
+      "ts": 1792530374.1890864,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "docs/superpowers/specs/2026-10-20-pr-evaluation-design.md"
+    },
+    {
+      "ts": 1792530374.278764,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "docs/superpowers/specs/2026-10-20-pr-evaluation-design.md"
+    },
+    {
+      "ts": 1792530435.606382,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530435.879619,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530438.0733314,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530438.5538368,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530442.7560441,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530442.8731492,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530446.0994976,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530446.2136252,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530447.8857265,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530448.003274,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/github/reader.ts"
+    },
+    {
+      "ts": 1792530452.1807253,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530452.4680805,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530454.1541398,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530454.25275,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530464.5740604,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530464.8403986,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530466.4824343,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530466.5848544,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530470.59063,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530470.6984677,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530472.3110635,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530472.408862,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530473.9305096,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530474.024707,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530490.5252526,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-prs.test.ts"
+    },
+    {
+      "ts": 1792530490.6153624,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-prs.test.ts"
+    },
+    {
+      "ts": 1792530500.4736,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530500.5751526,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "packages/api/src/routes/workspaces.ts"
+    },
+    {
+      "ts": 1792530839.9198005,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530840.0871499,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530842.179146,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530842.2785404,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792530853.7277696,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/status.ts"
+    },
+    {
+      "ts": 1792530853.8314097,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/status.ts"
+    },
+    {
+      "ts": 1792530866.1633503,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/webhook.ts"
+    },
+    {
+      "ts": 1792530866.2653701,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/webhook.ts"
+    },
+    {
+      "ts": 1792530879.904828,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792530880.015798,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792530889.7059743,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/server.ts"
+    },
+    {
+      "ts": 1792530889.7884026,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/server.ts"
+    },
+    {
+      "ts": 1792530891.354826,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/server.ts"
+    },
+    {
+      "ts": 1792530891.4478846,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/server.ts"
+    },
+    {
+      "ts": 1792530903.4648206,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/status.ts"
+    },
+    {
+      "ts": 1792530903.5466433,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/status.ts"
+    },
+    {
+      "ts": 1792530928.4402528,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1792530928.5571551,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1792530946.7750742,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792530946.8729928,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792530981.7359476,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792530981.8212464,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792530987.0921755,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792530987.1789477,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792531029.8516364,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/api/hooks.ts"
+    },
+    {
+      "ts": 1792531029.954559,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/api/hooks.ts"
+    },
+    {
+      "ts": 1792531036.7252622,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/api/client.ts"
+    },
+    {
+      "ts": 1792531036.7989156,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/api/client.ts"
+    },
+    {
+      "ts": 1792531045.9449477,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/OpenPrPicker.tsx"
+    },
+    {
+      "ts": 1792531046.042967,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/OpenPrPicker.tsx"
+    },
+    {
+      "ts": 1792531051.6055145,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.tsx"
+    },
+    {
+      "ts": 1792531051.7027283,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.tsx"
+    },
+    {
+      "ts": 1792531055.8846157,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/routes/Assessments.tsx"
+    },
+    {
+      "ts": 1792531055.9823816,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/routes/Assessments.tsx"
+    },
+    {
+      "ts": 1792531056.3693767,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/routes/Assessments.tsx"
+    },
+    {
+      "ts": 1792531056.4558177,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/routes/Assessments.tsx"
+    },
+    {
+      "ts": 1792531066.1884668,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/OpenPrPicker.test.tsx"
+    },
+    {
+      "ts": 1792531066.3022463,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/OpenPrPicker.test.tsx"
+    },
+    {
+      "ts": 1792531070.8697507,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531070.9553363,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531080.1440961,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531080.2411292,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531080.830281,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531080.9221687,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/web/src/components/CiSettingsPanel.test.tsx"
+    },
+    {
+      "ts": 1792531097.6183484,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792531097.7075455,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792531098.1637883,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792531098.242491,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci.test.ts"
+    },
+    {
+      "ts": 1792531115.913523,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1792531116.0231013,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1792531366.524045,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531366.6190712,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531369.3770497,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531369.4701147,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531371.136827,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531371.2189422,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/config.ts"
+    },
+    {
+      "ts": 1792531377.759635,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/webhook.ts"
+    },
+    {
+      "ts": 1792531377.8494868,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/github/webhook.ts"
+    },
+    {
+      "ts": 1792531405.542694,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792531405.6899884,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1792531422.2035174,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531422.3231244,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531436.612434,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531436.6991405,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531437.2061188,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531437.3098161,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531440.5078356,
+      "agent": "claude-code-63481-localhost",
+      "action": "claim",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792531440.6071959,
+      "agent": "claude-code-63481-localhost",
+      "action": "release",
+      "path": "/data/agents/orca/parallax-feat/packages/api/test/routes-ci-durable.test.ts"
+    },
+    {
+      "ts": 1792615930.4286337,
+      "agent": "claude-code-2470174-localhost",
+      "action": "register",
+      "purpose": "other"
+    },
+    {
+      "ts": 1792615930.4286337,
+      "agent": "claude-code-2470174-localhost",
+      "action": "claim",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792615930.543253,
+      "agent": "claude-code-2470174-localhost",
+      "action": "release",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792615932.260307,
+      "agent": "claude-code-2470174-localhost",
+      "action": "claim",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792615932.3467534,
+      "agent": "claude-code-2470174-localhost",
+      "action": "release",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792617272.0588782,
+      "agent": "claude-code-2470174-localhost",
+      "action": "claim",
+      "path": "packages/api/scripts/smoke.ts"
+    },
+    {
+      "ts": 1792617272.1653256,
+      "agent": "claude-code-2470174-localhost",
+      "action": "release",
+      "path": "packages/api/scripts/smoke.ts"
+    },
+    {
+      "ts": 1792618012.880912,
+      "agent": "claude-code-2470174-localhost",
+      "action": "claim",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792618012.9939013,
+      "agent": "claude-code-2470174-localhost",
+      "action": "release",
+      "path": "docs/release-readiness.md"
+    },
+    {
+      "ts": 1792642799.8874285,
+      "agent": "claude-code-2470174-localhost",
+      "action": "claim",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1792642800.1480434,
+      "agent": "claude-code-2470174-localhost",
+      "action": "release",
+      "path": "packages/api/test/advisor.test.ts"
+    },
+    {
+      "ts": 1793040633.5570793,
+      "agent": "claude-code-1564929-localhost",
+      "action": "register",
+      "purpose": "other"
+    },
+    {
+      "ts": 1793040633.5570793,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "ts": 1793040633.736345,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "ts": 1793040634.3944957,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "docs/testing/red-team-protocol.md"
+    },
+    {
+      "ts": 1793040634.651362,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "docs/testing/red-team-protocol.md"
+    },
+    {
+      "ts": 1793040634.7675421,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "README.md"
+    },
+    {
+      "ts": 1793040634.877001,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "README.md"
+    },
+    {
+      "ts": 1793044007.4387505,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044007.6053038,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044012.677431,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044012.7491205,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044018.7541964,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044018.8567717,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044477.9330065,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044478.0834403,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044478.9189491,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044479.00212,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044499.7511356,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044499.9347012,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044502.1397197,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044502.2110932,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044508.0154862,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044508.0991259,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/test/github-status.test.ts"
+    },
+    {
+      "ts": 1793044603.2791364,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1793044603.439951,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/src/routes/ci.ts"
+    },
+    {
+      "ts": 1793044622.4507623,
+      "agent": "claude-code-1564929-localhost",
+      "action": "claim",
+      "path": "packages/api/src/plugins/error-handler.ts"
+    },
+    {
+      "ts": 1793044622.6536217,
+      "agent": "claude-code-1564929-localhost",
+      "action": "release",
+      "path": "packages/api/src/plugins/error-handler.ts"
+    }
+  ],
+  "post_seq": 0,
+  "board": {
+    "epoch": 222,
+    "by_path": [],
+    "claims_count": 0,
+    "open_posts": 0,
+    "posts_count": 0,
+    "agents_count": 3
+  }
+}

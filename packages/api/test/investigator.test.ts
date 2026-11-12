@@ -137,7 +137,7 @@ describe('investigate loop', () => {
     expect(result.explanationStatus).toBe('available');
     expect(result.citations.accepted).toEqual([EVID]);
     expect(result.effectiveModel).toBe('fake/nemotron');
-    expect(result.promptVersion).toBe('parallax-investigator-v4');
+    expect(result.promptVersion).toBe('parallax-investigator-v10');
     // LAIN fue llamado con la vista fijada (live por defecto).
     expect(getLainMockCalls().some((c) => c.tool === 'get_service' && c.snapshot === 'live')).toBe(
       true,
@@ -215,11 +215,13 @@ describe('investigate loop', () => {
     resetLainMock();
     // Modelo que sólo pide herramientas: se corta en el presupuesto.
     const model = new ScriptedModel(
-      Array.from({ length: 10 }, (_, i) =>
-        resp({
-          toolCalls: [toolCall(`call_${i}`, 'list_services', {})],
-          finishReason: 'tool_calls',
-        }),
+      // Lecturas distintas: la misma llamada repetida se rechaza como duplicada.
+      ['list_services', 'list_contracts', 'list_unresolved', 'get_coverage', 'list_services'].map(
+        (tool, i) =>
+          resp({
+            toolCalls: [toolCall(`call_${i}`, tool, i === 4 ? { repo: 'billing' } : {})],
+            finishReason: 'tool_calls',
+          }),
       ),
     );
     const result = await investigate({
@@ -383,7 +385,7 @@ describe('INV 2 — engine fields stay engine fields', () => {
     expect(payload.engine_finding_classes.every((f) => f.class === 'NeedsInvestigation')).toBe(
       true,
     );
-    expect(payload.prompt_version).toBe('parallax-investigator-v4');
+    expect(payload.prompt_version).toBe('parallax-investigator-v10');
     expect(payload.tool_calls).toHaveLength(1);
   });
 });
@@ -515,12 +517,46 @@ describe('submit_answer and engine-verified claims', () => {
     expect(result.toolCallLog.some((t) => t.tool === 'submit_answer' && t.ok)).toBe(true);
   });
 
+  it('sends a contradicted claim back once and accepts the answer when the model fixes it', async () => {
+    resetLainMock();
+    const prose = `orders consumes billing [ev:${EVID}]`;
+    const model = new ScriptedModel([
+      readOrders(),
+      submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+      submit('s2', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    // El modelo recibe el motivo de la contradicción y puede corregirla.
+    expect(JSON.stringify(model.calls[2]?.messages)).toContain('claims_contradicted');
+    expect(result.explanationStatus).toBe('available');
+    expect(result.answer).toBe(prose);
+    expect(result.claims[0]?.verdict).toBe('verified');
+    // Un solo rebote: no se le pide una tercera entrega.
+    expect(model.calls).toHaveLength(3);
+  });
+
   it('points at a contradicted claim without failing or editing the answer', async () => {
     resetLainMock();
     const prose = `orders consumes billing [ev:${EVID}]`;
     const model = new ScriptedModel([
       readOrders(),
       submit('s1', {
+        answer: prose,
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
+      submit('s2', {
         answer: prose,
         claims: [
           { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
@@ -564,7 +600,7 @@ describe('submit_answer and engine-verified claims', () => {
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
   });
 
-  it('does not let a contradicted claim stand in for support', async () => {
+  it('does not let a contradicted claim stand in for support, not even after the bounce', async () => {
     resetLainMock();
     const model = new ScriptedModel([
       readOrders(),
@@ -574,10 +610,18 @@ describe('submit_answer and engine-verified claims', () => {
           { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
         ],
       }),
+      submit('s2', {
+        answer: 'orders consumes billing',
+        claims: [
+          { kind: 'relation', consumer: 'orders', provider: 'billing', polarity: 'present' },
+        ],
+      }),
     ]);
     const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
     expect(result.explanationStatus).toBe('failed:citations_unresolved');
     expect(result.claimsSummary.contradicted).toBe(1);
+    // El rebote happened una vez: la segunda entrega se acepta tal cual.
+    expect(model.calls).toHaveLength(3);
   });
 
   it('returns a schema error to the model and lets it resubmit', async () => {
@@ -721,5 +765,205 @@ describe('P08 — explanation status honesty', () => {
     expect(result.explanationStatus).toBe('failed:model_error');
     expect(result.answer).toBeNull();
     expect(result.errors).toContain('Nemotron HTTP 500: boom');
+  });
+});
+
+describe('closing in prose after reading from the engine', () => {
+  it('asks once for a submit_answer, then verifies the claims the model delivers', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: 'billing consumes orders.' }),
+      submit('s1', {
+        answer: 'billing consumes orders.',
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(model.calls).toHaveLength(3);
+    // El historial es el mismo array que sigue creciendo: se busca el aviso, no "el último".
+    const nudges = (model.calls[2]?.messages ?? []).filter(
+      (m) =>
+        m.role === 'user' && String(m.content).startsWith('Now finish by calling submit_answer'),
+    );
+    expect(nudges).toHaveLength(1);
+    expect(result.claimsSummary).toMatchObject({ total: 1, verified: 1 });
+    expect(result.answer).toBe('billing consumes orders.');
+  });
+
+  it('asks only once: a model that insists on prose is accepted, with no claims', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: 'first prose' }),
+      resp({ content: 'second prose' }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(model.calls).toHaveLength(3);
+    expect(result.answer).toBe('second prose');
+    expect(result.claimsSummary.total).toBe(0);
+  });
+
+  it('does not nudge a model that already submitted, or an empty reply', async () => {
+    resetLainMock();
+    const done = new ScriptedModel([readOrders(), submit('s1', { answer: 'x', claims: [] })]);
+    await investigate({ question: 'q', lain: lainWithAnchors(), model: done, nudgeSubmit: true });
+    expect(done.calls).toHaveLength(2);
+    resetLainMock();
+    const empty = new ScriptedModel([readOrders(), resp({ content: null })]);
+    const r = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model: empty,
+      nudgeSubmit: true,
+    });
+    expect(empty.calls).toHaveLength(2);
+    expect(r.answer).toBe('');
+  });
+
+  it('without the option the prose is accepted as before', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([readOrders(), resp({ content: 'just prose' })]);
+    const result = await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(model.calls).toHaveLength(2);
+    expect(result.answer).toBe('just prose');
+  });
+
+  it('a reply that was cut off mid-call gets a "shorter" request, not a generic one', async () => {
+    resetLainMock();
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({
+        content:
+          '<tool_call>\n<function=submit_answer>\n<parameter=answer>\nThree services consume',
+        finishReason: 'length',
+      }),
+      submit('s1', {
+        answer: 'short answer',
+        claims: [
+          { kind: 'relation', consumer: 'billing', provider: 'orders', polarity: 'present' },
+        ],
+      }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    const asked = (model.calls[2]?.messages ?? [])
+      .filter((m) => m.role === 'user')
+      .map((m) => String(m.content));
+    expect(asked.some((t) => /cut off.*SHORT/.test(t))).toBe(true);
+    // El XML a medio escribir no se devuelve al modelo como si fuera su respuesta.
+    const echoed = (model.calls[2]?.messages ?? [])
+      .filter((m) => m.role === 'assistant')
+      .map((m) => String(m.content));
+    expect(echoed.some((t) => t.includes('<tool_call>'))).toBe(false);
+    expect(result.answer).toBe('short answer');
+    expect(result.claimsSummary.verified).toBe(1);
+  });
+
+  it('if the model keeps failing, the user never reads raw tool-call markup', async () => {
+    resetLainMock();
+    const cut =
+      '<tool_call>\n<function=submit_answer>\n<parameter=answer>\n## Consumers\n\nThree services';
+    const model = new ScriptedModel([
+      readOrders(),
+      resp({ content: cut, finishReason: 'length' }),
+      resp({ content: cut, finishReason: 'length' }),
+    ]);
+    const result = await investigate({
+      question: 'q',
+      lain: lainWithAnchors(),
+      model,
+      nudgeSubmit: true,
+    });
+    expect(result.answer).toBe('## Consumers\n\nThree services');
+  });
+});
+
+describe('answer length budget', () => {
+  const capture = () => {
+    const seen: Array<number | undefined> = [];
+    const model: ChatCompleter = {
+      async complete(_m, o) {
+        seen.push((o as { maxTokens?: number } | undefined)?.maxTokens);
+        return resp({ content: 'done' });
+      },
+    };
+    return { model, seen };
+  };
+
+  it('asks the model for 4096 tokens per turn by default, double the old 2048', async () => {
+    resetLainMock();
+    const { model, seen } = capture();
+    await investigate({ question: 'q', lain: lainWithAnchors(), model });
+    expect(seen[0]).toBe(4096);
+  });
+
+  it('uses the configured limit when given', async () => {
+    resetLainMock();
+    const { model, seen } = capture();
+    await investigate({ question: 'q', lain: lainWithAnchors(), model, maxTokens: 8192 });
+    expect(seen[0]).toBe(8192);
+  });
+});
+
+describe('ambiguous contract names', () => {
+  it('the candidates are handed to the model: it does not pick one silently', async () => {
+    resetLainMock();
+    const seen: ChatMessage[][] = [];
+    const model: ChatCompleter = {
+      async complete(m) {
+        seen.push(structuredClone(m));
+        return resp({ content: 'done' });
+      },
+    };
+    await investigate({
+      question: 'trace products end to end',
+      lain: lainWithAnchors(),
+      model,
+      contractCandidates: [
+        { key: 'graphql:query:products', service: 'api' },
+        { key: 'graphql:mutation:products', service: 'api' },
+      ],
+    });
+    const first = seen[0]?.find((m) => m.role === 'user')?.content ?? '';
+    expect(first).toMatch(/matches more than one contract/);
+    expect(first).toContain('graphql:query:products (service api)');
+    expect(first).toContain('graphql:mutation:products (service api)');
+    expect(first).toMatch(/do not pick one silently/);
+  });
+
+  it('with a single candidate nothing is said about ambiguity', async () => {
+    resetLainMock();
+    const seen: ChatMessage[][] = [];
+    const model: ChatCompleter = {
+      async complete(m) {
+        seen.push(structuredClone(m));
+        return resp({ content: 'done' });
+      },
+    };
+    await investigate({
+      question: 'trace products end to end',
+      lain: lainWithAnchors(),
+      model,
+      contractCandidates: [{ key: 'graphql:query:products', service: 'api' }],
+    });
+    const first = seen[0]?.find((m) => m.role === 'user')?.content ?? '';
+    expect(first).not.toMatch(/matches more than one contract/);
   });
 });

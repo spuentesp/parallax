@@ -61,7 +61,9 @@ import {
   s2AddCurrency,
   services,
 } from '@parallax/shared/test/lain-fixtures';
+import type { CodeTool } from '../agent/code-tools.js';
 import { LainCallError } from './errors.js';
+import type { ProductCodeTool } from './product-tools.js';
 import { getLainMockCalls, recordMockCall, resetLainMock } from './record.js';
 import type { LainAdapter } from './types.js';
 
@@ -370,14 +372,16 @@ export function createLainMock(): LainAdapter {
         ...(req.snapshot ? { snapshot: req.snapshot } : {}),
         args: req,
       });
+      const seed = req.from.endpoint?.key ?? req.from.symbol ?? req.from.table ?? '';
       return {
         from: req.from as unknown as Record<string, unknown>,
-        direction: req.direction ?? 'downstream',
-        seeds: [],
+        direction: req.direction ?? (req.from.table ? 'upstream' : 'downstream'),
+        seeds: [seed],
         paths: [],
-        gaps: [],
+        gaps: [{ node: seed, name: seed, kind: 'no_handler', reason: 'no path in mock graph' }],
         truncated: false,
-        nodes_visited: 0,
+        nodes_visited: 1,
+        ...(req.strategy === 'depth' ? { strategy: 'depth' as const } : {}),
       };
     },
 
@@ -443,6 +447,14 @@ export function createLainMock(): LainAdapter {
         args: req,
       });
       return { text: `No path from ${req.from} to ${req.to} in the mock graph` };
+    },
+
+    async codeTool(
+      tool: CodeTool | ProductCodeTool,
+      args: Record<string, unknown>,
+    ): Promise<LainTextResponse> {
+      recordMockCall({ tool, args });
+      return { text: `## ${tool}\n\n(mock) ${JSON.stringify(args)}` };
     },
   };
 }

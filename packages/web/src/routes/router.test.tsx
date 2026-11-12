@@ -16,14 +16,51 @@ function renderAt(initialEntry: string) {
 }
 
 describe('route table', () => {
-  it('sends / to the org picker', () => {
-    renderAt('/');
-    expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
+  it('sends / to the list when there is no workspace yet', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: ['/'] });
+    renderWithQuery(<RouterProvider router={router} />);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs'));
+    expect(await screen.findByRole('heading', { name: /^workspaces$/i })).toBeTruthy();
   });
 
-  it('sends unknown routes to the org picker', () => {
-    renderAt('/nope/nothing');
-    expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
+  it('sends / straight to the map of the only workspace, keeping the query (a judge link keeps its token)', async () => {
+    server.use(
+      http.get('/api/workspaces', () =>
+        HttpResponse.json({
+          workspaces: [
+            { id: 'ws1', name: 'W', description: '', repoCount: 1, repos: [], lainUrl: null },
+          ],
+        }),
+      ),
+    );
+    const router = createMemoryRouter(routes, { initialEntries: ['/?x=1'] });
+    renderWithQuery(<RouterProvider router={router} />);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs/ws1'));
+    expect(router.state.location.search).toBe('?x=1');
+  });
+
+  it('sends unknown routes the same way as /', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: ['/nope/nothing'] });
+    renderWithQuery(<RouterProvider router={router} />);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs'));
+  });
+
+  it('old workspace links redirect to the one workspace area, keeping the other parameters', async () => {
+    const cases: Array<[string, string, string]> = [
+      ['/workspaces', '/orgs', ''],
+      ['/workspaces/ws1', '/orgs/ws1', ''],
+      ['/workspaces/ws1?tab=map&focus=svc:a', '/orgs/ws1', '?focus=svc%3Aa'],
+      ['/workspaces/ws1?tab=repos', '/orgs/ws1/repos', ''],
+      ['/workspaces/ws1?tab=contracts&view=1', '/orgs/ws1/contracts', '?view=1'],
+      ['/workspaces/ws1?tab=graph', '/orgs/ws1', ''],
+    ];
+    for (const [from, path, search] of cases) {
+      const router = createMemoryRouter(routes, { initialEntries: [from] });
+      renderWithQuery(<RouterProvider router={router} />);
+      await waitFor(() => expect(router.state.location.pathname, from).toBe(path));
+      expect(router.state.location.search, from).toBe(search);
+      cleanup();
+    }
   });
 
   it('keeps org context on unknown subpaths', async () => {
@@ -34,9 +71,10 @@ describe('route table', () => {
     });
   });
 
-  it('keeps /assessments working via redirect to the org picker', () => {
-    renderAt('/assessments');
-    expect(screen.getByRole('heading', { name: /organizations/i })).toBeTruthy();
+  it('keeps /assessments working via redirect to the workspace list', async () => {
+    const router = createMemoryRouter(routes, { initialEntries: ['/assessments'] });
+    renderWithQuery(<RouterProvider router={router} />);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs'));
   });
 
   it('redirects /assessments/:id to the org-scoped report once the record loads', async () => {

@@ -3,7 +3,7 @@
 // corte declarado.
 
 import { describe, expect, it } from 'vitest';
-import { createDispatcher, DISPATCHER_TOOLS, summarizeConsumers } from '../src/agent/dispatcher.js';
+import { ALL_TOOLS, createDispatcher, summarizeConsumers } from '../src/agent/dispatcher.js';
 import type { ToolCall } from '../src/agent/nemotron.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import { getLainMockCalls, resetLainMock } from '../src/lain-adapter/record.js';
@@ -17,7 +17,10 @@ describe('LainDispatcher', () => {
   it('exposes only read tools and never a snapshot parameter', () => {
     const d = createDispatcher({ lain: createLainMock(), view: 'live' });
     const specs = d.toolSpecs();
-    expect(specs.map((s) => s.function.name).sort()).toEqual([...DISPATCHER_TOOLS].sort());
+    // web_search sólo existe cuando se configura la búsqueda web (Tavily).
+    expect(specs.map((s) => s.function.name).sort()).toEqual(
+      ALL_TOOLS.filter((t) => t !== 'web_search').sort(),
+    );
     // P07: no se amplían permisos — ninguna tool de escritura/publicación.
     const names = specs.map((s) => s.function.name);
     expect(names).not.toContain('publish');
@@ -32,12 +35,13 @@ describe('LainDispatcher', () => {
     resetLainMock();
     const d = createDispatcher({ lain: createLainMock(), view: 'snap_abc123' });
     const names = d.toolSpecs().map((s) => s.function.name);
+    // assess_change queda fuera a propósito: es product-only (PR review), el
+    // modelo del investigador no la ve (ver product-tools.ts).
     for (const t of [
       'trace_flow',
       'search_code',
       'get_call_chain',
       'get_cross_runtime_callers',
-      'assess_change',
       'explain_dispatch',
     ]) {
       expect(names).toContain(t);
@@ -48,7 +52,10 @@ describe('LainDispatcher', () => {
     expect(r2.ok).toBe(true);
     const calls = getLainMockCalls();
     expect(calls.find((c) => c.tool === 'trace_flow')?.snapshot).toBe('snap_abc123');
-    expect(calls.find((c) => c.tool === 'search_code')?.snapshot).toBe('snap_abc123');
+    // Las tools de código van por codeTool y no llevan snapshot: el código no
+    // depende de la vista de contratos.
+    expect(calls.find((c) => c.tool === 'search_code')).toBeTruthy();
+    expect(calls.find((c) => c.tool === 'search_code')?.snapshot).toBeUndefined();
   });
 
   it('executes a valid call and injects the fixed view', async () => {
@@ -80,7 +87,9 @@ describe('LainDispatcher', () => {
       expect(r.message).toContain('list_services');
     }
     // Las specs ofrecidas no cambian tras el rechazo.
-    expect(d.toolSpecs().map((s) => s.function.name)).toEqual([...DISPATCHER_TOOLS]);
+    expect(d.toolSpecs().map((s) => s.function.name)).toEqual(
+      ALL_TOOLS.filter((t) => t !== 'web_search'),
+    );
   });
 
   it('rejects invalid schema before touching LAIN', async () => {
@@ -124,8 +133,8 @@ describe('LainDispatcher', () => {
     };
     const d = createDispatcher({ lain: spy, view: 'live', maxToolCalls: 2 });
     expect((await d.execute(call('t1', 'list_services', {}))).ok).toBe(true);
-    expect((await d.execute(call('t2', 'list_services', {}))).ok).toBe(true);
-    const r3 = await d.execute(call('t3', 'list_services', {}));
+    expect((await d.execute(call('t2', 'list_contracts', {}))).ok).toBe(true);
+    const r3 = await d.execute(call('t3', 'list_unresolved', {}));
     expect(r3.ok).toBe(false);
     if (!r3.ok) expect(r3.code).toBe('budget_exhausted');
     // El catálogo de arranque no gasta presupuesto; sólo las llamadas del modelo.
@@ -135,7 +144,7 @@ describe('LainDispatcher', () => {
       exhausted: true,
       cutShort: true,
     });
-    expect(lainCalls).toBe(3); // 1 catálogo + 2 del modelo
+    expect(lainCalls).toBe(2); // 1 catálogo + 1 list_services del modelo (la otra lectura fue list_contracts)
   });
 
   it('only flags the research as cut short once a read was actually refused', async () => {
@@ -191,6 +200,51 @@ describe('LainDispatcher', () => {
       expect(r.truncated?.hint).toContain('narrower');
       // El corte se declara; no se presenta el resultado como completo.
       expect((r.data as { cut_declared?: unknown }).cut_declared ?? r.truncated).toBeTruthy();
+    }
+  });
+
+  it('a text result is cut by lines and says which lines are left', async () => {
+    const base = createLainMock();
+    const body = Array.from(
+      { length: 400 },
+      (_, i) => `   ${100 + i}: line ${i} ${'x'.repeat(40)}`,
+    );
+    const withText: LainAdapter = {
+      ...base,
+      async codeTool() {
+        return { text: `File: x\nShowing lines 100-499\n\n${body.join('\n')}` };
+      },
+    };
+    const d = createDispatcher({ lain: withText, view: 'live', maxResultChars: 2000 });
+    const r = await d.execute(call('t1', 'get_code_snippet', { repo: 'orders', path: 'a.py' }));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // El resultado conserva su forma: el modelo lee texto, no un JSON roto.
+    const data = r.data as { text: string };
+    expect(typeof data.text).toBe('string');
+    expect(data.text).toContain('line 0');
+    // Y el pie dice el rango que se ve y el que queda.
+    expect(data.text).toMatch(/\[truncated: showing lines 100-\d+ of 499\./);
+    expect(data.text).toMatch(/lines \d+-499 were not shown/);
+    expect(data.text).toMatch(/read_source\(repo, path, start, end\)/);
+    // Los números del corte son exactos, no una estimación.
+    expect(r.truncated?.lines?.kept).toBeGreaterThan(0);
+    expect(r.truncated?.lines?.total).toBe(403);
+    expect(r.truncated?.lines?.shownFrom).toBe(100);
+    expect(r.truncated?.lines?.remainingTo).toBe(499);
+  });
+
+  it('the duplicate refusal names the receipt of the first call', async () => {
+    const d = createDispatcher({ lain: createLainMock(), view: 'live', maxToolCalls: 5 });
+    const first = await d.execute(call('a', 'search_code', { query: 'checkout' }));
+    const again = await d.execute(call('b', 'search_code', { query: 'checkout' }));
+    expect(first.ok).toBe(true);
+    expect(again).toMatchObject({ ok: false, code: 'duplicate_call' });
+    if (first.ok && !again.ok) {
+      // El recibo de la primera es el que se puede citar: el modelo no tiene
+      // que volver a pagar la lectura.
+      expect(again.message).toContain(first.receipt);
+      expect(d.hasReceipt(first.receipt)).toBe(true);
     }
   });
 

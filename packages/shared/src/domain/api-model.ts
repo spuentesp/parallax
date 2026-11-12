@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { CodeImpactSchema } from './code-impact.js';
 
 // Contrato único entre superficies: estos schemas son la fuente de verdad de
 // los modelos que la API sirve y el web consume. Los tipos de
@@ -76,6 +77,8 @@ export const AssessmentReportSchema = z.object({
   manifest: z.unknown(),
   findings: z.array(AssessmentFindingSchema),
   engine: z.unknown(),
+  /** Impacto de código del PR (símbolos tocados y su alcance); ausente si no se pudo medir. */
+  codeImpact: CodeImpactSchema.nullable().optional(),
   coverage: PresentedCoverageSchema,
   evidence: z.array(ReportEvidenceSchema),
   explanation: z.object({

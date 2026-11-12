@@ -190,7 +190,7 @@ describe('buildMcpServer', () => {
 });
 
 describe('buildMcpServer (tool contract)', () => {
-  it('registers four tools with the documented descriptions and input schemas', async () => {
+  it('registers eight tools with the documented descriptions and input schemas', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
     const byName = new Map(tools.map((t) => [t.name, t]));
@@ -198,7 +198,11 @@ describe('buildMcpServer (tool contract)', () => {
       'parallax_assess_pr',
       'parallax_explore',
       'parallax_get_assessment',
+      'parallax_get_call_chain',
       'parallax_get_evidence',
+      'parallax_list_service_refs',
+      'parallax_step_call_stack',
+      'parallax_trace_flow',
     ]);
     expect(byName.get('parallax_explore')?.description).toBe(
       'Explore an organization: list services, get a service with its consumers.',
@@ -212,6 +216,31 @@ describe('buildMcpServer (tool contract)', () => {
     expect(byName.get('parallax_get_evidence')?.description).toBe(
       'Read evidence (lands in subproject 3).',
     );
+    expect(byName.get('parallax_step_call_stack')?.description).toBe(
+      'Traverse the call stack on demand for a function or class. Returns definition file:line, outgoing calls (what it calls), and incoming callers (who calls it).',
+    );
+    expect(byName.get('parallax_get_call_chain')?.description).toBe(
+      'Find the call path between two symbols within a repo (from -> to).',
+    );
+
+    const step = byName.get('parallax_step_call_stack')?.inputSchema as {
+      properties: Record<string, Record<string, unknown>>;
+      required: string[];
+    };
+    expect(step.required).toEqual(['workspaceId', 'repo', 'symbol']);
+    expect(step.properties.workspaceId).toMatchObject({ minLength: 1 });
+    expect(step.properties.repo).toMatchObject({ minLength: 1 });
+    expect(step.properties.symbol).toMatchObject({ minLength: 1 });
+
+    const chain = byName.get('parallax_get_call_chain')?.inputSchema as {
+      properties: Record<string, Record<string, unknown>>;
+      required: string[];
+    };
+    expect(chain.required).toEqual(['workspaceId', 'repo', 'from', 'to']);
+    expect(chain.properties.workspaceId).toMatchObject({ minLength: 1 });
+    expect(chain.properties.repo).toMatchObject({ minLength: 1 });
+    expect(chain.properties.from).toMatchObject({ minLength: 1 });
+    expect(chain.properties.to).toMatchObject({ minLength: 1 });
 
     const explore = byName.get('parallax_explore')?.inputSchema as {
       properties: Record<string, Record<string, unknown>>;
@@ -306,6 +335,108 @@ describe('buildMcpServer (tool contract)', () => {
     expect(res.isError).toBe(true);
     expect(textOf(res as { content: Array<{ type: string; text?: string }> })).toBe(
       'api 500: {"boom":true}',
+    );
+  });
+
+  it('parallax_step_call_stack queries symbol-context endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { symbol: 'foo', callers: [], callees: [] }));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_step_call_stack',
+      arguments: { workspaceId: 'ws_1', repo: 'backend', symbol: 'foo' },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/graph/symbol-context?repo=backend&symbol=foo',
+      expect.anything(),
+    );
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual({
+      symbol: 'foo',
+      callers: [],
+      callees: [],
+    });
+  });
+
+  it('parallax_get_call_chain queries call-chain endpoint', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, { found: true, chain: ['a', 'b'] }));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_get_call_chain',
+      arguments: { workspaceId: 'ws_1', repo: 'backend', from: 'a', to: 'b' },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/graph/call-chain?repo=backend&from=a&to=b',
+      expect.anything(),
+    );
+    expect(res.isError).toBeFalsy();
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual({
+      found: true,
+      chain: ['a', 'b'],
+    });
+  });
+
+  it('parallax_list_service_refs forwards filters and returns structured data', async () => {
+    const payload = { items: [{ service: 'orders', outcome: { kind: 'resolved' } }], scope: {} };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, payload));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_list_service_refs',
+      arguments: {
+        workspaceId: 'ws_1',
+        outcome: 'resolved',
+        suggestions: true,
+        min_score: 0.7,
+        limit: 10,
+      },
+    });
+    const [url] = fetchSpy.mock.calls[0] as [string];
+    expect(url).toBe(
+      'http://api/api/workspaces/ws_1/service-refs?snapshot=live&outcome=resolved&limit=10&suggestions=true&min_score=0.7',
+    );
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual(payload);
+  });
+
+  it('parallax_trace_flow posts the native flow request and returns structured data', async () => {
+    const payload = { paths: [], gaps: [], strategy: 'depth', truncated: false };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(200, payload));
+    const client = await connect();
+    const res = await client.callTool({
+      name: 'parallax_trace_flow',
+      arguments: {
+        workspaceId: 'ws_1',
+        from: { endpoint: { key: 'graphql:query:products', service: 'api' } },
+        direction: 'downstream',
+        strategy: 'depth',
+        depth: 8,
+        cap: 2,
+      },
+    });
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api/api/workspaces/ws_1/trace/flow',
+      expect.anything(),
+    );
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      from: { endpoint: { key: 'graphql:query:products', service: 'api' } },
+      direction: 'downstream',
+      strategy: 'depth',
+      depth: 8,
+      cap: 2,
+      snapshot: 'live',
+    });
+    expect(res.isError).toBeFalsy();
+    expect(res.structuredContent).toEqual(payload);
+    expect(JSON.parse(textOf(res as { content: Array<{ type: string; text?: string }> }))).toEqual(
+      payload,
     );
   });
 });

@@ -1,0 +1,30 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:SG;src:url("file:///home/sebastian/repos/work/parallax/packages/web/node_modules/@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2");font-weight:300 700}
+@font-face{font-family:JB;src:url("file:///home/sebastian/repos/work/parallax/packages/web/node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2");font-weight:100 800}
+:root{--bg:#0d0d0d;--fg:#fafafa;--muted:#8a8a8a;--accent:#6a9a1f;--line:#ffffff0d;--a:#2e2e2e;--b:#1f1f1f;--top:#454545}
+.light{--bg:#fafafa;--fg:#111;--muted:#6b6b6b;--accent:#4d7c0f;--line:#0000000d;--a:#1a1a1a;--b:#0d0d0d;--top:#333}
+*{margin:0;box-sizing:border-box}
+body{width:1500px;height:1000px;background:var(--bg);position:relative;overflow:hidden;font-family:SG}
+body.transparent{background:transparent}
+.grid{position:absolute;inset:0;background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:50px 50px;mask-image:radial-gradient(ellipse 65% 70% at 50% 50%,#000 20%,transparent 78%)}
+.glow{position:absolute;left:350px;top:140px;width:800px;height:720px;background:radial-gradient(closest-side,#76b90026,transparent)}
+.lock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;text-align:center}
+svg{width:360px;height:360px;flex:none;filter:drop-shadow(0 10px 24px #0006)}
+.name{font-weight:600;font-size:172px;letter-spacing:-0.035em;color:var(--fg);line-height:1}
+.tag{font-family:JB;font-size:26px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted);margin-top:26px;font-weight:500;padding-left:.34em}
+.tag b{color:var(--accent);font-weight:600}
+.bar{width:44px;height:3px;background:var(--accent);margin:18px 0 0 4px;border-radius:2px}
+.t{padding-left:0}
+</style></head><body class="MODE"><div class="grid"></div><div class="glow"></div>
+<div class="lock">
+<svg viewBox="0 0 100 100" aria-hidden="true">
+<path d="M 10 55 L 50 75 L 50 83 L 10 63 Z" fill="var(--a)"/><path d="M 50 75 L 90 55 L 90 63 L 50 83 Z" fill="var(--b)"/><path d="M 50 35 L 90 55 L 50 75 L 10 55 Z" fill="var(--a)"/>
+<path d="M 10 40 L 50 60 L 50 68 L 10 48 Z" fill="var(--a)"/><path d="M 50 60 L 90 40 L 90 48 L 50 68 Z" fill="var(--b)"/><path d="M 50 20 L 90 40 L 50 60 L 10 40 Z" fill="var(--top)"/>
+<path d="M 30 63 L 50 73 L 70 63" fill="none" stroke="#6b6b6b" stroke-width="2.5" stroke-dasharray="4 2" stroke-linejoin="round"/>
+<path d="M 30 30 L 30 63" fill="none" stroke="#76b900" stroke-width="2.5" stroke-dasharray="4 2"/>
+<path d="M 50 20 L 70 30 L 50 40 L 30 30 Z" fill="none" stroke="#76b900" stroke-width="2.5" stroke-linejoin="round"/>
+<circle cx="50" cy="73" r="3.5" fill="#6b6b6b"/><circle cx="70" cy="63" r="3.5" fill="#6b6b6b"/>
+<circle cx="30" cy="63" r="3.5" fill="#76b900"/><circle cx="30" cy="30" r="3.5" fill="#76b900"/><circle cx="50" cy="40" r="3.5" fill="#76b900"/><circle cx="70" cy="30" r="3.5" fill="#76b900"/><circle cx="50" cy="20" r="3.5" fill="#76b900"/>
+</svg>
+<div class="t"><div class="name">Parallax</div><div class="tag"><b>//</b> Architecture command center</div></div>
+</div></body></html>

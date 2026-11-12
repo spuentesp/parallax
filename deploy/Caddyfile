@@ -1,0 +1,11 @@
+# Automatic HTTPS for {$DOMAIN}. Tokens travel in the Authorization header, so
+# the demo must not be served over plain HTTP.
+{$DOMAIN} {
+	# The assistant streams its progress (server-sent events): compressing or
+	# buffering that stream would deliver every step at once, at the end.
+	@notsse not header Accept *text/event-stream*
+	encode @notsse gzip
+	reverse_proxy parallax:8080 {
+		flush_interval -1
+	}
+}

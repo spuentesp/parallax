@@ -63,7 +63,7 @@ describe('OpenPrPicker', () => {
       ),
     );
     renderPicker();
-    expect(await screen.findByText(/No open PRs/)).toBeTruthy();
+    expect(await screen.findByText(/No open requests/)).toBeTruthy();
   });
 
   it('reports a repo that could not be listed instead of dropping it', async () => {
@@ -101,7 +101,7 @@ describe('OpenPrPicker', () => {
       ),
     );
     renderPicker();
-    expect(await screen.findByText(/Showing the first 100 open PRs/)).toBeTruthy();
+    expect(await screen.findByText(/Some requests could not be listed/)).toBeTruthy();
   });
 
   it('says which repos are not on GitHub', async () => {
@@ -116,7 +116,7 @@ describe('OpenPrPicker', () => {
       ),
     );
     renderPicker();
-    expect(await screen.findByText(/Not on GitHub.*\.\/checkouts\/local/)).toBeTruthy();
+    expect(await screen.findByText(/Not on GitHub or GitLab.*\.\/checkouts\/local/)).toBeTruthy();
   });
 
   it('evaluates the chosen PR by its URL and opens the new report', async () => {
@@ -169,10 +169,10 @@ describe('OpenPrPicker', () => {
     );
     renderPicker();
     expect(await screen.findByText('Loading pull requests…')).toBeTruthy();
-    expect(screen.queryByText(/No open PRs/)).toBeNull();
+    expect(screen.queryByText(/No open requests/)).toBeNull();
     release();
     await waitFor(() => expect(screen.queryByText('Loading pull requests…')).toBeNull());
-    expect(await screen.findByText(/No open PRs/)).toBeTruthy();
+    expect(await screen.findByText(/No open requests/)).toBeTruthy();
   });
 
   it('does not show the empty state while loading or after a failed listing', async () => {
@@ -183,7 +183,7 @@ describe('OpenPrPicker', () => {
     );
     renderPicker();
     await waitFor(() => expect(document.querySelector('p.text-error')).not.toBeNull());
-    expect(screen.queryByText(/No open PRs/)).toBeNull();
+    expect(screen.queryByText(/No open requests/)).toBeNull();
   });
 
   it('shows the listing error as an error line', async () => {
@@ -211,7 +211,7 @@ describe('OpenPrPicker', () => {
     expect(await screen.findByText(/#3 change 3/)).toBeTruthy();
     expect(screen.queryByText(/Could not list/)).toBeNull();
     expect(screen.queryByText(/Showing the first/)).toBeNull();
-    expect(screen.queryByText(/Not on GitHub/)).toBeNull();
+    expect(screen.queryByText(/Not on GitHub or GitLab/)).toBeNull();
     expect(document.querySelectorAll('ul.text-error')).toHaveLength(0);
   });
 
@@ -316,11 +316,13 @@ describe('OpenPrPicker', () => {
     renderPicker();
     expect(
       await screen.findByText(
-        'Showing the first 100 open PRs for https://github.com/acme/one.git, https://github.com/acme/two.git; older ones are not listed.',
+        'Some requests could not be listed for https://github.com/acme/one.git, https://github.com/acme/two.git (page limit or missing commit data).',
       ),
     ).toBeTruthy();
     expect(
-      screen.getByText('Not on GitHub, so no PRs to list: ./checkouts/a, ./checkouts/b.'),
+      screen.getByText(
+        'Not on GitHub or GitLab, so no requests to list: ./checkouts/a, ./checkouts/b.',
+      ),
     ).toBeTruthy();
   });
 
@@ -332,7 +334,7 @@ describe('OpenPrPicker', () => {
     );
     renderPicker();
     expect(await screen.findByText(/#3 change 3/)).toBeTruthy();
-    expect(screen.queryByText(/No open PRs/)).toBeNull();
+    expect(screen.queryByText(/No open requests/)).toBeNull();
   });
 
   it('separates the author from the branches and the date with spaces', async () => {

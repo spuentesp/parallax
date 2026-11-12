@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./lain": "./src/lain/index.ts",
     "./domain": "./src/domain/index.ts",
+    "./org-map": "./src/org-map/index.ts",
     "./test/lain-fixtures": "./test/lain-fixtures.ts",
     "./test/prop-arbitraries": "./test/prop/arbitraries.ts"
   },

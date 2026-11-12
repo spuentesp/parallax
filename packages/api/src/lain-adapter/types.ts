@@ -53,6 +53,8 @@ import type {
   TraceImpactArgs,
   TraceImpactResponse,
 } from '@parallax/shared/lain';
+import type { CodeTool } from '../agent/code-tools.js';
+import type { ProductCodeTool } from './product-tools.js';
 
 // Firmas alineadas con las tools reales de lain 0.9.1: todas reciben
 // `snapshot` (o `base`/`head` en diff_contracts) y los argumentos homónimos
@@ -100,4 +102,9 @@ export interface LainAdapter {
   explainSymbol(req: ExplainSymbolArgs): Promise<LainTextResponse>;
   getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse>;
   getCallChain(req: GetCallChainArgs): Promise<LainTextResponse>;
+  /** Herramienta de código de LAIN de la lista permitida (sólo lectura), markdown plano. */
+  codeTool(
+    tool: CodeTool | ProductCodeTool,
+    args: Record<string, unknown>,
+  ): Promise<LainTextResponse>;
 }

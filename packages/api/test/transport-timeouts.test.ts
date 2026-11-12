@@ -31,7 +31,7 @@ describe('transport body deadlines', () => {
                   },
             ),
           );
-        }, 1_000);
+        }, 3_000);
         timers.push(timer);
         res.on('close', () => clearTimeout(timer));
       });
@@ -44,7 +44,7 @@ describe('transport body deadlines', () => {
             apiKey: 'test',
             plannerModel: 'test',
             workerModel: 'test',
-            timeoutMs: 100,
+            timeoutMs: 400,
           });
           await expect(
             provider.complete([{ role: 'user', content: 'hello' }]),
@@ -54,7 +54,7 @@ describe('transport body deadlines', () => {
             {
               lainUrl: url,
               apiVersion: '1',
-              timeoutMs: 100,
+              timeoutMs: 400,
               maxRetries: 0,
             },
             '0.11.0',

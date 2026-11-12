@@ -1,0 +1,187 @@
+# Onboarding: conversation memory, orientation and knowledge sources — plan
+
+**Date:** 2026-10-28
+**Status:** approved scope: the **technical** onboarding (phases 1–3) for the hackathon deadline (Oct 30, 10:00 PT). Phase 4 (knowledge sources) is design only, built only if time remains. The people side of onboarding (owners, conventions, how we work) is out of scope.
+**Scope:** `packages/api` (conversations, briefing, knowledge interface), `packages/web` (thread, orientation screen), `packages/shared` (DTOs).
+
+## 1. Why
+
+The product is *the brain over a deterministic engine*: Lain knows what the code does; Parallax lets a person explore it, ask about it, and verify every answer. Two gaps stop that from working for the case that matters most — **a new engineer who must change something that spans repos**:
+
+1. **No orientation.** The user lands on a map. The model is told what the workspace contains (the "workspace map" block in its prompt) but the *person* is not.
+2. **No memory.** Each question is independent: "and the dashboard?" means nothing. A newbie works by narrowing — general → specific — and needs the thread.
+
+Longer term, an organization's knowledge is not only code: wikis, ADRs, runbooks. That knowledge must be usable **without weakening the one property that makes Parallax trustworthy** (facts come from the engine, not the model).
+
+## 2. What onboarding is, and the use case that drives it
+
+Onboarding is not Q&A about code. It is getting a new engineer from "I know nothing" to "I can make my first change without breaking someone else". Q&A is the mechanism; the product is a **guided path**:
+
+| Stage | What the user gets | Built from |
+|---|---|---|
+| 1. Orient | the system on one screen: what exists, how big, how divided | deterministic briefing |
+| 2. Capabilities | which repos/services implement checkout, orders… | map grouped by contracts and names, labelled heuristic |
+| 3. Interfaces | the contracts everyone depends on, hubs, consumers | graph + provenance |
+| 4. Walk a flow | one request traced across repos, narrated | engine path; Nemotron narrates; every hop verified |
+| 5. Your task | "add a delivery note to checkout" → touchpoints (repos, endpoints, files), consumers, risks, a checklist | impact tracing + unindexed / inferred-only gaps |
+| 6. Check yourself | questions the engine can grade ("which repo consumes X?") | graph-generated, engine-adjudicated |
+| 7. Take it with you | exportable notes of everything verified | the conversation ledger |
+
+**For the deadline:** stages 1, 4, 5 are the demo; 3 comes with the briefing; 2 only if quick; **6 and 7 are the first things cut**.
+
+**Grounding:** stages 1, 3, 4, 5 and the coverage part of 6 come from the engine and are verifiable. Stage 2 is partly heuristic (no domain/team concept). Ownership, conventions, how to run/test and *why* decisions were made are not in the code — they need knowledge sources (phase 4) and would be labelled "documented", never "verified".
+
+**Driving scenario (Saleor: API, dashboard, storefront):** *"I'm new. I need to add a delivery note to checkout, and it crosses repos."* The path above must run on the live workspace, follow-ups must work without restating context, every relation claimed must be engine-verified, and stage 5 must name the repos **and files** involved and what could break.
+
+## 3. Phase 1 — Conversation memory (target: ~½ day)
+
+### Model
+New tables (migration `drizzle/0003_conversations.sql`, mirrored in `db/schema.ts`):
+
+- `conversation(id, owner, workspace_id, title, created_at, updated_at)`
+- `turn(id, conversation_id, seq, question, answer, status, claims_json, evidence_json, focus_json, model, created_at)` with `UNIQUE(conversation_id, seq)`
+
+`owner` is a **hash of the access token** (never the token). One token = one person's threads. Guidance for the demo: one token per judge, not one shared token.
+
+### API
+- `POST /api/query` gains optional `conversationId`. Absent → a new conversation is created and its id returned. Present → must belong to the caller (`owner`) and workspace, else 404 (not 403: don't confirm existence).
+- `GET /api/conversations?workspaceId=` (mine), `GET /api/conversations/:id` (turns), `DELETE /api/conversations/:id`.
+- Read-only tokens may converse (it is the demo); they cannot touch anything else.
+- Limits: `QUERY_RATE_LIMIT_PER_HOUR` already applies; add max turns per conversation (default 50) and max conversations per owner (default 100), oldest evicted.
+
+### What the model sees
+The investigator receives `history`, inserted between the system prompt and the new question:
+
+- **Last N turns verbatim** (N = 4): question + final answer.
+- **Verified facts ledger**: the relation claims the engine *verified or contradicted* in earlier turns, as short lines (`saleor-dashboard → saleor-api: verified, 593 uses`). This is the part that makes follow-ups cheap and consistent, and it is engine output, not model prose.
+- **Older turns** collapsed into one short summary line each (question + one-sentence outcome), generated deterministically from stored claims, **not** by the model (no extra model call, no drift).
+- Hard cap on history tokens; drop oldest first. The workspace-map block is still injected every turn.
+
+Memory never relaxes verification: every turn's claims are re-adjudicated by the engine; the ledger is context, not evidence, and the prompt says so.
+
+### Web
+- The hub assistant becomes a **thread** (loaded from the server, survives reload), with "New conversation" and a list of mine.
+- Each answer keeps its engine verdicts and "Show on map".
+- Follow-up chips under an answer (deterministic: next-hop questions such as "what else does X depend on?").
+
+### Tests (AGENTS.md rules apply: real write path, mock only at the process edge)
+- Turn written by `POST /api/query`, read back by `GET /api/conversations/:id` (write-then-read).
+- Isolation: another token cannot read, continue or delete a conversation (404).
+- History assembly is a pure function: ordering, truncation, ledger lines, token cap; the scripted model receives exactly the expected messages.
+- A contradicted claim from turn 1 appears in the ledger as contradicted, not as a fact.
+
+## 4. Phase 2 — Orientation (target: a few hours)
+
+A **deterministic briefing**, no model, from the cached map graph (`GET /api/workspaces/:id/map/briefing`):
+
+- Repos with the services they contain, endpoint counts, contract kinds.
+- Cross-repo relationships summarized (`dashboard → api ×593 deterministic; dashboard → storefront ×8 inferred`).
+- The "hubs": most-consumed services/endpoints.
+- What is **not** known: unreviewed repos, repos configured but not indexed, inferred-only links. (INV 3: a gap is shown, never zero.)
+- Freshness (`generatedAt`, stale).
+
+UI: first thing shown in the assistant and a "Briefing" panel on the map. Below it, **starter questions generated from the graph** (templates over real names: "Who consumes `<hub>`?", "What does `<repo>` depend on?", "What would break if `<top endpoint>` changed?"). Clicking one asks it.
+
+Optional (only if time remains): a single Nemotron call that turns the *same* briefing into two readable sentences per repo, clearly labelled as generated, never replacing the deterministic text.
+
+Tests: briefing built from a real topology (fake engine at the transport edge); every number traceable to the graph; unindexed repos appear under "not known".
+
+## 5. Phase 3 — The onboarding path (target: with the deployment dry run)
+
+- A path state (`orient → flow → task`, optional `capabilities`) stored with the conversation: which stage, what was seen, the user's task statement.
+- Each stage = a deterministic scaffold (what to look at on the map, which question to ask next) + a Nemotron-written explanation whose relation claims are engine-verified.
+- **Walk a flow:** pick an entry point (a storefront operation), follow engine consumers/`trace_impact` hop by hop; the model narrates; the UI highlights each hop on the map in order.
+- **Your task:** the user states the change; the investigator returns touchpoints with `file:line` evidence ids (rendered as "View source" links), the consumers on other repos, and a risk list (inferred-only links, unindexed repos). If it cannot name a file, it says so.
+- Run the whole path live, record real answers, fix gaps that appear (this is how the text-tool-call and truncation bugs were found).
+- Output: the video script (docs/hackathon/video-script.md) and a regression test replaying the path against a scripted model + fixture engine.
+
+## 6. Phase 4 — Knowledge sources, RAG and a knowledge graph (design only for now)
+
+**Principle:** documentation is *context*, code facts are *evidence*. They are labelled differently everywhere.
+
+| | Observed (engine) | Documented (knowledge source) |
+|---|---|---|
+| Origin | static analysis of the code | wiki page, ADR, runbook, README |
+| Verification | engine adjudicates every claim | none — shown with source and link |
+| UI label | solid / "verified" | "documented · <source>" with a link |
+| Can contradict the other? | yes — and that is a feature ("docs say A, code shows B") | |
+
+**Interface** (defined now so connectors are plug-ins; no ingestion built before the deadline):
+
+```ts
+interface KnowledgeSource {
+  id: string;                       // "saleor-docs"
+  search(query: string, opts: { limit: number }): Promise<KnowledgeHit[]>;
+}
+interface KnowledgeHit { title: string; url: string; snippet: string; score: number; sourceId: string; updatedAt?: number }
+```
+
+The investigator gets one extra read tool, `search_docs`, whose results are marked `documented` and cannot be used as the anchor of a relation claim (only the engine can verify those).
+
+**Retrieval:** SQLite **FTS5** (BM25) over chunked pages first — no vector DB, no new service. Embeddings (Token Factory) only if search quality needs them.
+
+**Knowledge graph:** grows from the ids we already have. Nodes = engine nodes (repo/service/endpoint/symbol) + document entities; edges = `documents` links created by exact name match (service names, endpoint keys, repo names), each carrying its provenance (`engine` | `doc-match` | `inferred`). Same solid/dashed visual language: doc-match links are dashed until a human confirms.
+
+**Candidate first connectors:** a docs folder in a repo (markdown), a GitHub wiki, Confluence/Notion export. Choose by what the first design partner actually uses.
+
+## 7. Local vs remote
+
+- **Hackathon: one hosted instance, multiuser by token.** Required (a demo URL), simplest to operate. Conversations are per token; no accounts.
+- **Self-hostable by design:** the same image runs privately. Every dependency is a URL (`LAIN_URL`, `NEMOTRON_BASE_URL`), so an organization can run Lain and its own Nemotron inside its network. SQLite file = all state (workspaces, conversations); backup is a file copy.
+- **Privacy note to state plainly:** with the hosted model, code *metadata and snippets the tools return* are sent to Token Factory. Raw repositories are not uploaded; Lain runs next to the code.
+- Out of scope: desktop app, SSO, per-user accounts/roles, multi-tenant isolation beyond token-scoped conversations.
+
+## 8. Schedule against the deadline (Oct 30, 10:00 PT = 14:00 GMT-3)
+
+| Block | Work | Done when |
+|---|---|---|
+| A | Phase 1 backend: tables, `conversationId`, history assembly, isolation tests | six-step ladder keeps context across turns via API |
+| B | Phase 1 web: thread, new/list conversations | thread survives reload |
+| C | Phase 2 briefing + starter questions | first screen orients a newcomer |
+| D | Phase 3: run the ladder live, fix gaps, record numbers | script validated end to end |
+| E | **Deployment dry run on the Nebius VM** (runbook) | judge link works, Nemotron answers, rate limit on |
+| F | Video recording, Devpost text, feedback section | submitted |
+
+Blocks E and F are **reserved**: if A–D slip, cut C's optional model summary and D's polish, not E/F.
+
+## 9. Risks
+
+- **Model variance.** Answers differ run to run (one run contradicted 2 claims). Mitigation: verdicts are visible per claim; the ladder is rehearsed; prompt/tool fixes found by running it for real.
+- **History bloat / drift.** Mitigation: ledger from engine output, deterministic summaries, hard token cap.
+- **Shared judge token** → shared threads. Mitigation: one token per judge; document it in the testing instructions.
+- **Deployment untested.** The Docker image/compose were not run in the dev environment; the dry run (E) is mandatory.
+- **Lain dependency.** The demo needs Lain 0.13.0 and an indexed Saleor next to Parallax (cold index ≈ 2 min on a dev machine).
+
+## 10. Out of scope (stated so it is not promised)
+
+Cross-org activity digests ("what changed this week"), team/ownership metadata, doc ingestion, vector search, write-back to Lain's configuration, accounts and roles.
+
+
+## 11. Revision 2026-10-28 (evening): onboarding as a long, guided dialog
+
+Phase 3 above sketched seven stages. After walking through what a newcomer actually needs, the path becomes **fourteen chapters** of one conversation. A newcomer is not trying to learn the code, they are trying to stop being afraid of it: where things are, how they connect, what is safe to touch, how this team works.
+
+| # | Newcomer's question | What is shown | Source |
+|---|---|---|---|
+| 1 | What is this and how big? | repos, languages, purpose, entry points | engine: `understand_repository`, `list_entry_points` |
+| 2 | What are the main concepts? | domain words, where defined, naming conventions | code index + name matching (labelled) |
+| 3 | What are the doors? | public API by kind (queries, mutations, subscriptions, tasks, webhooks) and who uses each | contract groups (built) |
+| 4 | Follow one request end to end | storefront action → operation → resolver → domain → side effects → tasks, hop by hop on the map | `get_call_chain`, `get_cross_runtime_callers`, `trace_impact` |
+| 5 | Where does the real logic live? | layering, the few central symbols | `find_anchors`, architecture tools |
+| 6 | What does the data look like? | models, tables, relations | table contracts (partial) |
+| 7 | What breaks if I change X? | blast radius, untested dependents, co-change | `get_blast_radius`, `find_untested_functions`, `get_coupling_radar` |
+| 8 | Where do I hook in? | plugins, webhooks, apps | contracts + code search |
+| 9 | How do we work here? | run/test, conventions, owners, PR flow | **files in the repos** (README, CONTRIBUTING, CODEOWNERS, docs/), labelled *documented* |
+| 10 | What is risky or messy? | loose ends, dead code, hubs, weakly tested areas | classifier (built), `find_dead_code` |
+| 11 | Why is it like this? | recent history of a file, who changes it | git tools (design only) |
+| 12 | Your task | the closest existing feature to copy, touchpoints with verified `file:line`, tests to write, risks | all of the above |
+| 13 | Check yourself | engine-graded questions | engine |
+| 14 | Take it with you | notes: glossary, task map, reading list | verified-facts ledger |
+
+**Form.** The assistant leads and asks back: first the role and the task, then it branches (frontend starts at the storefront side, backend at the API). Each chapter has one rhythm: the question, a grounded answer with locations and the map lighting up, one plain-language "so what", and a nudge to the next step. Progress lives with the conversation (resume later). Free questions are allowed between chapters.
+
+**Every statement carries its origin:** *verified* (the engine read it), *documented* (a repo file said it), *inferred* (name match or heuristic), *suggested* (model advice).
+
+**Honest gaps.** The "why" (decisions, history) needs git and ADRs. The data model is only partly visible to the engine. Team context (who to ask, unwritten rules) is not in code; only `CODEOWNERS` and CONTRIBUTING can point at it, if the repo has them.
+
+**Deadline cut.** Build 1, 3, 4, 7, 9 and 12 (mostly assembled from tools already verified against the live engine). 4 and 12 are the demo. 1 and 3 need no model.

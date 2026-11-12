@@ -1,0 +1,31 @@
+# Parallax demo: the app behind automatic HTTPS (Caddy).
+# Lain runs on the host (or another VM) and is reached via LAIN_URL.
+services:
+  parallax:
+    build: ..
+    env_file: .env
+    environment:
+      LAIN_ADAPTER: real
+      PARALLAX_MCP_TRANSPORT: http-sse
+    volumes:
+      - parallax-data:/data
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    depends_on: [parallax]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env (a DNS name pointing at this host)}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    restart: unless-stopped
+
+volumes:
+  parallax-data:
+  caddy-data:

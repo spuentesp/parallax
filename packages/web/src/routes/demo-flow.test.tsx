@@ -1,53 +1,55 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import type { MapViewResponse, ProjectedNode } from '@parallax/shared/org-map';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { HttpResponse, http } from 'msw';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { routes } from '../router.js';
+import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-});
-
-// reagraph pinta WebGL; el nodo se vuelve un botón que dispara el mismo
-// onNodeClick, para recorrer el hop completo: clic → onSelect → panel.
-vi.mock('reagraph', () => ({
-  darkTheme: {},
-  GraphCanvas: ({ onNodeClick }: { onNodeClick: (n: { id: string | number }) => void }) => (
-    <button type="button" onClick={() => onNodeClick({ id: 'orders' })}>
-      fake-node
-    </button>
-  ),
-}));
+afterEach(cleanup);
 
 // Sin mocks internos (regla AGENTS.md #2): el flujo pasa por los hooks y el
 // cliente HTTP reales, y la red la sirve MSW (ver src/test/msw.ts).
 
-function renderAt(initialEntry: string) {
-  const router = createMemoryRouter(routes, { initialEntries: [initialEntry] });
-  return { router, ...renderWithQuery(<RouterProvider router={router} />) };
-}
+const orders: ProjectedNode = {
+  id: 'svc:orders',
+  label: 'orders',
+  kind: 'service',
+  parent: null,
+  meta: {},
+  childCount: 0,
+  expanded: false,
+};
 
 describe('demo flow: one connected command center', () => {
-  it('hub → service panel → close keeps the graph; Evaluar PR carries the repo context', async () => {
-    const { router } = renderAt('/orgs/acme');
-    const topologyHeading = screen.getByText(/service topology/i);
+  it('hub → select a service on the map → Evaluate PR arrives with the repo preloaded', async () => {
+    server.use(
+      http.post('/api/workspaces/:id/map/view', () =>
+        HttpResponse.json({
+          nodes: [orders],
+          edges: [],
+          hiddenChildren: {},
+          focus: null,
+          unknownExpand: [],
+          meta: { source: 'lain', generatedAt: Date.now() },
+        } satisfies MapViewResponse),
+      ),
+    );
+    const router = createMemoryRouter(routes, { initialEntries: ['/orgs/acme'] });
+    renderWithQuery(<RouterProvider router={router} />);
 
-    // 1. El clic de nodo (hop completo: onNodeClick → onSelect → navigate)
-    //    abre el panel de servicio SOBRE un grafo que no se desmonta.
-    fireEvent.click(screen.getByRole('button', { name: 'fake-node' }));
-    expect(await screen.findByRole('heading', { name: /service orders/i })).toBeTruthy();
-    expect(screen.getByText(/service topology/i)).toBe(topologyHeading);
-
-    // 2. Cerrar el panel vuelve al hub CON el contexto del nodo intacto.
-    fireEvent.click(screen.getByRole('button', { name: /cerrar/i }));
+    // 1. Seleccionar en el árbol del mapa deja el contexto en la URL.
+    const outline = await screen.findByTestId('map-outline');
+    fireEvent.click(within(outline).getByText('orders'));
+    expect(new URLSearchParams(router.state.location.search).get('sel')).toBe('svc:orders');
     expect(router.state.location.pathname).toBe('/orgs/acme');
-    expect(router.state.location.search).toBe('?node=orders');
-    expect(screen.getByText(/service topology/i)).toBe(topologyHeading);
 
-    // 3. Evaluar PR lleva al formulario con el repo precargado.
-    fireEvent.click(screen.getByRole('link', { name: /evaluar pr/i }));
+    // 2. La acción de flujo hereda lo seleccionado.
+    fireEvent.click(await screen.findByRole('link', { name: /evaluate pr/i }));
     expect(router.state.location.pathname).toBe('/orgs/acme/assessments');
+
+    // 3. El formulario llega con el repo precargado.
     expect(((await screen.findByLabelText(/repo/i)) as HTMLInputElement).value).toBe('orders');
   });
 });

@@ -1,7 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { TraceFlowInput } from '@parallax/shared/domain';
+import { ListServiceRefsArgs } from '@parallax/shared/lain';
 import { z } from 'zod';
 import { type ApiClient, ApiEndpointNotImplemented } from './api-client.js';
+
+const ServiceRefsInput = ListServiceRefsArgs.extend({
+  workspaceId: z.string().min(1),
+  snapshot: z.literal('live').default('live'),
+});
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
@@ -123,6 +130,109 @@ export function buildMcpServer(api: ApiClient): McpServer {
         ],
         isError: true,
       };
+    },
+  );
+
+  server.tool(
+    'parallax_step_call_stack',
+    'Traverse the call stack on demand for a function or class. Returns definition file:line, outgoing calls (what it calls), and incoming callers (who calls it).',
+    {
+      workspaceId: z.string().min(1),
+      repo: z.string().min(1),
+      symbol: z.string().min(1),
+    },
+    async (args) => {
+      try {
+        const qs = new URLSearchParams({ repo: args.repo, symbol: args.symbol });
+        const data = await api.get(
+          `/api/workspaces/${args.workspaceId}/graph/symbol-context?${qs}`,
+        );
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'parallax_get_call_chain',
+    'Find the call path between two symbols within a repo (from -> to).',
+    {
+      workspaceId: z.string().min(1),
+      repo: z.string().min(1),
+      from: z.string().min(1),
+      to: z.string().min(1),
+    },
+    async (args) => {
+      try {
+        const qs = new URLSearchParams({ repo: args.repo, from: args.from, to: args.to });
+        const data = await api.get(`/api/workspaces/${args.workspaceId}/graph/call-chain?${qs}`);
+        return { content: [{ type: 'text' as const, text: JSON.stringify(data) }] };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'parallax_list_service_refs',
+    'List service URL and host references discovered by Lain, including resolution outcomes and optional route suggestions.',
+    ServiceRefsInput.shape,
+    async ({ workspaceId, ...query }) => {
+      try {
+        const params = new URLSearchParams();
+        for (const [key, value] of Object.entries(query)) {
+          if (value !== undefined) params.set(key, String(value));
+        }
+        const data = await api.get(`/api/workspaces/${workspaceId}/service-refs?${params}`);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+          structuredContent: data as Record<string, unknown>,
+        };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
+    },
+  );
+
+  server.tool(
+    'parallax_trace_flow',
+    'Trace an endpoint, symbol, or table across contract boundaries using Lain, with breadth or depth traversal.',
+    TraceFlowInput.shape,
+    async ({ workspaceId, ...body }) => {
+      try {
+        const data = await api.post(`/api/workspaces/${workspaceId}/trace/flow`, body);
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+          structuredContent: data as Record<string, unknown>,
+        };
+      } catch (e) {
+        if (e instanceof ApiEndpointNotImplemented) {
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(e.body) }],
+            isError: true,
+          };
+        }
+        throw e;
+      }
     },
   );
 

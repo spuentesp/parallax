@@ -2,6 +2,8 @@ import type { LainView } from '@parallax/shared/lain';
 import fp from 'fastify-plugin';
 import { investigate, serializeExplanation } from '../agent/investigator.js';
 import { investigatorModel } from '../agent/model.js';
+import { githubReaderFor } from '../github/reader.js';
+import { gitlabReaderFor } from '../gitlab/reader.js';
 import { createWorkspaceLainResolver } from '../lain-adapter/workspace.js';
 import { AssessmentWorker, type AssessmentWorkerDeps } from '../worker/assessment-worker.js';
 
@@ -47,6 +49,8 @@ export default fp(
             model: model.provider,
             view: args.viewId,
             budget: model.budget,
+            maxTokens: model.settings.maxTokens,
+            ...(model.settings.thinking !== undefined ? { thinking: model.settings.thinking } : {}),
             engineFindings: args.engineFindings,
             // Los hallazgos del motor entran en el contexto y se explican por id.
             pr: {
@@ -71,9 +75,23 @@ export default fp(
 
     const worker = new AssessmentWorker(fastify.db, {
       getLain,
+      // Sólo lectura: los archivos y diffs del PR para la revisión de código.
+      github: githubReaderFor(fastify.config),
+      gitlab: gitlabReaderFor(fastify.config),
       ...(explain ? { explain } : {}),
     });
     fastify.decorate('assessmentWorker', worker);
+    // INV 5: lo que un reinicio dejó a medias se reanuda. En segundo plano: una evaluación puede
+    // tardar minutos y el servidor no debe esperar para atender peticiones.
+    fastify.addHook('onReady', async () => {
+      void worker.recover().then(
+        (ids) => {
+          if (ids.length > 0)
+            fastify.log.info({ resumed: ids.length }, 'resumed interrupted assessments');
+        },
+        (err: unknown) => fastify.log.error({ err }, 'could not resume interrupted assessments'),
+      );
+    });
 
     // Los runs se lanzan fuera del request (§5 devuelve el id de inmediato).
     // Antes de cerrar la conexión hay que drenarlos o se escribiría sobre una

@@ -1,3 +1,6 @@
+import type { CodeTool } from '../agent/code-tools.js';
+import type { ProductCodeTool } from './product-tools.js';
+
 export interface MockCall {
   readonly tool:
     | 'list_services'
@@ -27,7 +30,9 @@ export interface MockCall {
     | 'explain_dispatch'
     | 'get_cross_runtime_callers'
     | 'get_federation_health'
-    | 'get_call_chain';
+    | 'get_call_chain'
+    | CodeTool
+    | ProductCodeTool;
   readonly args: unknown;
   readonly snapshot?: string;
   readonly at: number;

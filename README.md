@@ -1,4 +1,9 @@
-# Parallax
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/logo/banner-dark.png">
+    <img src="design/logo/banner-light.png" alt="Parallax — architecture command center" width="100%">
+  </picture>
+</p>
 
 > Architectural intelligence center built on [lain](https://github.com/spuentesp/lain).
 > Submitted to the [Nebius x NVIDIA Global AI Hackathon](https://nebiusglobalaihackathon.devpost.com/) — Coding and Agentic Engineering track.
@@ -11,7 +16,7 @@ Parallax turns an organization's multi-repo service topology into a navigable co
 - **PR impact assessment** that compares snapshots base vs. head, with findings classified by the motor (`Verified | NeedsInvestigation | NoKnownImpact`).
 - **Investigator powered by NVIDIA Nemotron** (via Nebius Token Factory): tool-calling loop with budget, persists explanations with revision, never promotes the motor's classification.
 - **MCP server** for AI agents (Claude Code, Codex, Cursor). Both stdio (local) and HTTP/SSE (remote) transports.
-- **Web SPA** served by the same api at `/app/*`.
+- **Web SPA** served by the same api at `/`.
 
 ## Architecture
 
@@ -50,6 +55,22 @@ corepack enable          # if pnpm is not installed
 pnpm install
 cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ```
+
+## Install on a machine (one command)
+
+`install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
+Lain built from the **`dev` branch** of [lain](https://github.com/spuentesp/lain),
+the Saleor demo repos, the engine as a service, the HTTPS front end (Caddy),
+and a `deploy/.env` with generated tokens.
+
+```bash
+sudo ./install.sh --domain demo.example.com --nebius-token ntb_...
+```
+
+It prints the admin link and the read-only link when it finishes. The engine is
+built from source, so the first run takes 15–40 minutes. `deploy/RUNBOOK.md`
+describes the same stack by hand; `parallax-stack {status|logs|restart}` drives
+it afterwards.
 
 ## Run (dev mode)
 
@@ -92,6 +113,66 @@ Point Parallax at that server:
 ```bash
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
 ```
+
+Verify the native 0.13 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
+
+```bash
+LAIN_URL=http://localhost:9999/mcp pnpm demo:lain
+```
+
+For resource-constrained installs, `install.sh` passes `LAIN_DISABLE_LSP`, `LAIN_LSP_LEAN`, and the per-repo `LAIN_INDEX_TIMEOUT` to the Lain service. `LAIN_INDEX_TIMEOUT_SEC` is only the installer's separate readiness wait. See `docs/lain-tooling-inventory.md` for fidelity tradeoffs and supported route sensors.
+
+## Judging and testing
+
+**Live demo and access.** The demo URL and a read-only access link are in the
+"testing instructions" of the Devpost submission. The link looks like
+`https://<demo-host>/orgs/ws_saleor?token=<read-only-token>`: it signs you in,
+removes the token from the address bar, and opens the architecture map of
+[Saleor](https://github.com/saleor/saleor) (an open-source multi-repo
+e-commerce platform: API, dashboard, storefront). Without the link the app asks
+for an access token. The token is **read-only**: you can explore the map and ask
+questions, but you cannot rebuild the graph or change workspaces.
+
+**Three-minute tour**
+
+1. **Map.** Repos open into services, services into endpoints, repos into their
+   code (files, functions). Nothing is loaded until you open it. *Solid* lines are
+   deterministic relationships (proven by the static analysis); *dashed* lines are
+   inferred ones, fainter the less sure the engine is. Use the filters to look at
+   only one of them, or one contract kind.
+2. **Inspector.** Click an endpoint: "Consumed by" lists the services that use it,
+   across repos, with how sure the engine is of each link. Click "View source" on
+   a function or file.
+3. **Ask.** Open *Ask the architecture* and try *"Which services consume the
+   checkout API, and from which repos?"*. Nemotron (served on Nebius Token
+   Factory) investigates with the engine's tools. Every relationship it claims is
+   re-checked by the engine; the answer shows how many were verified, and
+   *Show on map* jumps to exactly the subgraph the engine backs.
+4. **Assess a PR.** *Assessments* shows the impact report of a pull request on
+   the other repos that consume what it changes.
+
+**Configuring repositories (no model involved).** In a workspace, the
+*Repositories* tab shows each configured repository and whether Lain has it
+indexed (`Indexed · <commit>`, `Not reviewed`, or `Not in LAIN`), lists
+repositories Lain indexed that the workspace does not have, lets you add and
+remove repositories, edit the Lain server, and shows a ready-to-use `repos.yaml`
+for Lain. The architecture tree itself is built deterministically from what Lain
+indexed. Adding a repository in Parallax does not make Lain index it: add it to
+Lain's `repos.yaml` and re-index, then use *Re-check status*.
+
+**What it does and does not claim.** A relationship shown as deterministic is
+backed by the analysis; a claim the model makes that the engine cannot confirm is
+flagged, never silently kept. The map reflects the repositories configured in the
+workspace: it does not know about code that was not indexed, and it has no notion
+of team ownership. There is no cross-org "what happened this week" digest yet; PR
+impact is assessed one PR at a time.
+
+**Run it yourself.** See [Setup](#setup) and [Run (dev mode)](#run-dev-mode).
+The map needs a Lain server with your repositories indexed (see the Lain section
+above); `packages/api/scripts/seed-workspaces.ts` seeds the Saleor and Online
+Boutique demo workspaces. Set `NEBIUS_TOKEN` to enable the Nemotron investigator;
+without it the structural analysis still works and the investigator reports
+`failed:no_model_configured`.
 
 ## Use of Nemotron and Token Factory
 

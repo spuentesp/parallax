@@ -1,4 +1,4 @@
-// jsdom does not provide canvas or ResizeObserver; reagraph/three.js need both.
+// jsdom does not provide canvas or ResizeObserver; cytoscape needs both.
 // Mock the minimum surface so components can initialize in tests.
 
 /* biome-ignore-all lint/suspicious/noExplicitAny: test-only mock */
@@ -6,38 +6,23 @@
 
 import { afterAll, beforeEach } from 'vitest';
 
+// Contexto 2D inerte: cualquier método de dibujo (arcTo, bezierCurveTo,
+// setLineDash…) es un no-op, y sólo los que devuelven datos tienen forma. Una
+// lista fija se queda corta en cuanto el lienzo dibuja una forma nueva.
 if (typeof HTMLCanvasElement !== 'undefined') {
-  (HTMLCanvasElement.prototype as any).getContext = () => ({
-    fillRect: () => {},
-    clearRect: () => {},
+  const data = {
     getImageData: (_x: number, _y: number, w: number, h: number) => ({
       data: new Uint8ClampedArray(w * h * 4),
       width: w,
       height: h,
       colorSpace: 'srgb',
     }),
-    putImageData: () => {},
     createImageData: (w: number, h: number) => ({
       data: new Uint8ClampedArray(w * h * 4),
       width: w,
       height: h,
       colorSpace: 'srgb',
     }),
-    setTransform: () => {},
-    drawImage: () => {},
-    save: () => {},
-    fillText: () => {},
-    restore: () => {},
-    beginPath: () => {},
-    moveTo: () => {},
-    lineTo: () => {},
-    closePath: () => {},
-    stroke: () => {},
-    translate: () => {},
-    scale: () => {},
-    rotate: () => {},
-    arc: () => {},
-    fill: () => {},
     measureText: () => ({
       width: 0,
       actualBoundingBoxAscent: 0,
@@ -47,10 +32,23 @@ if (typeof HTMLCanvasElement !== 'undefined') {
       fontBoundingBoxAscent: 0,
       fontBoundingBoxDescent: 0,
     }),
-    transform: () => {},
-    rect: () => {},
-    clip: () => {},
-  });
+    createLinearGradient: () => ({ addColorStop: () => {} }),
+    createRadialGradient: () => ({ addColorStop: () => {} }),
+    createPattern: () => ({}),
+    getLineDash: () => [],
+    isPointInPath: () => false,
+  } as Record<string, unknown>;
+  (HTMLCanvasElement.prototype as any).getContext = () => {
+    const props: Record<string, unknown> = {};
+    return new Proxy(props, {
+      get: (target, key: string) =>
+        key in data ? data[key] : key in target ? target[key] : () => {},
+      set: (target, key: string, value) => {
+        target[key] = value;
+        return true;
+      },
+    });
+  };
 }
 
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -79,3 +77,11 @@ import { server } from './msw.js';
 server.listen({ onUnhandledRequest: 'error' });
 beforeEach(() => server.resetHandlers());
 afterAll(() => server.close());
+
+// La memoria de navegación (último workspace, mapa, hilo) no debe pasar de un test a otro.
+import { afterEach } from 'vitest';
+
+afterEach(() => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+});

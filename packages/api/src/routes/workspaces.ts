@@ -1,5 +1,5 @@
 import type { LainView } from '@parallax/shared/lain';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { runAdvisor } from '../advisor/index.js';
@@ -7,12 +7,22 @@ import {
   buildGraphChildren,
   buildGraphRoot,
   deriveLainRepoId,
+  resolveCallChain,
+  resolvePathSnippet,
+  resolveSymbolContext,
   resolveSymbolSnippet,
 } from '../code-graph.js';
 import * as schema from '../db/schema.js';
-import { GitHubReader, type OpenPrItem, PrUrlError, parseGithubRepoUri } from '../github/reader.js';
+import {
+  githubReaderFor,
+  type OpenPrItem,
+  PrUrlError,
+  parseGithubRepoUri,
+} from '../github/reader.js';
+import { gitlabReaderFor, parseGitLabRepoUri } from '../gitlab/reader.js';
 import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
+import { lainConfigYaml, repoStatuses } from '../repo-status.js';
 import { buildEndpointTopology } from '../topology.js';
 
 const WorkspaceInput = z.object({
@@ -37,10 +47,8 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     if (!ws) return reply.code(404).send({ error: 'workspace not found' });
 
     const repos = await app.db.select().from(schema.repo).where(eq(schema.repo.workspaceId, id));
-    const reader = new GitHubReader({
-      ...(app.config.githubApiBase ? { apiBase: app.config.githubApiBase } : {}),
-      ...(app.config.githubReadToken ? { token: app.config.githubReadToken } : {}),
-    });
+    const reader = githubReaderFor(app.config);
+    const gitlab = gitlabReaderFor(app.config);
     const prs: Array<OpenPrItem & { repo: string }> = [];
     const skipped: Array<{ repo: string; reason: string }> = [];
     const errors: Array<{ repo: string; code: string; message: string }> = [];
@@ -48,17 +56,25 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
 
     for (const r of repos) {
       const gh = parseGithubRepoUri(r.uri);
-      if (!gh) {
+      const gl = parseGitLabRepoUri(r.uri, app.config.gitlabHost);
+      if (!gh && !gl) {
         skipped.push({ repo: r.uri, reason: 'not_github' });
         continue;
       }
       try {
-        const listing = await reader.listOpenPrs(gh.owner, gh.repo);
+        const listing = gh
+          ? await reader.listOpenPrs(gh.owner, gh.repo)
+          : await gitlab.listOpenPrs(gl?.owner ?? '', gl?.repo ?? '');
         prs.push(...listing.items.map((pr) => ({ ...pr, repo: r.uri })));
         if (listing.truncated) truncated.push(r.uri);
       } catch (err) {
-        if (!(err instanceof PrUrlError)) throw err;
-        errors.push({ repo: r.uri, code: err.code, message: err.message });
+        // Un fallo en un repo individual (red, autenticación, etc.) se aísla por repo
+        // y no tumba el endpoint completo para el resto de repositorios.
+        errors.push({
+          repo: r.uri,
+          code: err instanceof PrUrlError ? err.code : 'http_error',
+          message: err instanceof Error ? err.message : 'could not list pull requests',
+        });
       }
     }
 
@@ -139,22 +155,40 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         body: RepoInput,
       },
     },
-    async (req) => {
+    async (req, reply) => {
+      const workspaceId = (req.params as { id: string }).id;
       const { uri, sha, local } = req.body as { uri: string; sha?: string; local?: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, workspaceId))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const dup = await app.db
+        .select()
+        .from(schema.repo)
+        .where(and(eq(schema.repo.workspaceId, workspaceId), eq(schema.repo.uri, uri)))
+        .limit(1);
+      if (dup[0]) {
+        return reply
+          .code(409)
+          .send({ code: 'Conflict', detail: `repo '${uri}' is already in this workspace` });
+      }
       const id = `repo_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
       await app.db.insert(schema.repo).values({
         id,
-        workspaceId: (req.params as { id: string }).id,
+        workspaceId,
         uri,
         sha: sha ?? null,
         local: local ?? null,
         createdAt: Date.now(),
       });
-      return { repo: { id, workspaceId: (req.params as { id: string }).id, uri, sha, local } };
+      app.orgGraphs.invalidate(workspaceId);
+      return { repo: { id, workspaceId, uri, sha: sha ?? null, local: local ?? null } };
     },
   );
 
-  // Remove repo
+  // Remove repo (sólo si pertenece a ESTE workspace)
   app.delete(
     '/api/workspaces/:id/repos/:repoId',
     {
@@ -163,11 +197,135 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         params: z.object({ id: z.string().min(1), repoId: z.string().min(1) }),
       },
     },
-    async (req) => {
-      await app.db
-        .delete(schema.repo)
-        .where(eq(schema.repo.id, (req.params as { repoId: string }).repoId));
+    async (req, reply) => {
+      const { id, repoId } = req.params as { id: string; repoId: string };
+      const found = await app.db
+        .select()
+        .from(schema.repo)
+        .where(and(eq(schema.repo.id, repoId), eq(schema.repo.workspaceId, id)))
+        .limit(1);
+      if (!found[0])
+        return reply
+          .code(404)
+          .send({ code: 'NotFound', detail: 'repo not found in this workspace' });
+      await app.db.delete(schema.repo).where(eq(schema.repo.id, repoId));
+      app.orgGraphs.invalidate(id);
       return { deleted: true };
+    },
+  );
+
+  // Editar nombre, descripción o servidor LAIN del workspace.
+  app.patch(
+    '/api/workspaces/:id',
+    {
+      config: { scopes: ['write'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        body: z.object({
+          name: z.string().min(1).optional(),
+          description: z.string().nullable().optional(),
+          lainUrl: z.string().url().nullable().optional(),
+        }),
+      },
+    },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      const body = req.body as {
+        name?: string;
+        description?: string | null;
+        lainUrl?: string | null;
+      };
+      const patch: Partial<typeof schema.workspace.$inferInsert> = {};
+      if (body.name !== undefined) patch.name = body.name;
+      if (body.description !== undefined) patch.description = body.description;
+      if (body.lainUrl !== undefined) patch.lainUrl = body.lainUrl;
+      const found = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, id))
+        .limit(1);
+      if (!found[0])
+        return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      if (Object.keys(patch).length > 0) {
+        await app.db.update(schema.workspace).set(patch).where(eq(schema.workspace.id, id));
+      }
+      app.orgGraphs.invalidate(id);
+      const [after] = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, id))
+        .limit(1);
+      return { workspace: after };
+    },
+  );
+
+  // Borrar un workspace con sus repos y su configuración de CI.
+  app.delete(
+    '/api/workspaces/:id',
+    {
+      config: { scopes: ['write'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req, reply) => {
+      const id = (req.params as { id: string }).id;
+      const found = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, id))
+        .limit(1);
+      if (!found[0])
+        return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      await app.db.delete(schema.repo).where(eq(schema.repo.workspaceId, id));
+      await app.db.delete(schema.workspaceCi).where(eq(schema.workspaceCi.workspaceId, id));
+      await app.db.delete(schema.workspace).where(eq(schema.workspace.id, id));
+      app.orgGraphs.invalidate(id);
+      return { deleted: true };
+    },
+  );
+
+  // Cada repo configurado frente a lo que LAIN tiene indexado (sin modelo).
+  app.get(
+    '/api/workspaces/:id/repos/status',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req) => {
+      const id = (req.params as { id: string }).id;
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, id))
+        .limit(1);
+      if (!ws[0]) return { source: 'none' as const, repos: [], untracked: [] };
+      const configured = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, id));
+      const asConfigured = configured.map((r) => ({
+        id: r.id,
+        uri: r.uri,
+        sha: r.sha,
+        local: r.local,
+      }));
+      // Sin respuesta de LAIN nada se puede dar por indexado.
+      const noLain = repoStatuses(asConfigured, { reviewed: [], unreviewed: [] });
+      if (!ws[0].lainUrl) return { source: 'unconfigured' as const, ...noLain };
+      try {
+        const client = await app.lainClientFor({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const services = await client.listServices({ snapshot: 'live' });
+        return { source: 'lain' as const, ...repoStatuses(asConfigured, services.scope) };
+      } catch (e) {
+        return {
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+          ...noLain,
+        };
+      }
     },
   );
 
@@ -190,29 +348,8 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         .from(schema.repo)
         .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
 
-      // Generate repos.yaml content for LAIN
-      const lines = [
-        `data_dir: /var/parallax/lain-data/${(req.params as { id: string }).id}`,
-        '',
-        'repos:',
-      ];
-      for (const repo of repos) {
-        lines.push(`  - id: ${repo.id}`);
-        lines.push(`    source:`);
-        lines.push(`      type: workspace_dir`);
-        lines.push(`      path: ${repo.local ?? repo.uri}`);
-      }
-      lines.push('');
-      lines.push('services:');
-      // Service definitions would be inferred from LAIN analysis
-      // For now, list repos as services
-      for (const repo of repos) {
-        lines.push(`  - name: ${repo.id}`);
-        lines.push(`    repo: ${repo.id}`);
-      }
-
       return {
-        config: lines.join('\n'),
+        config: lainConfigYaml((req.params as { id: string }).id, repos),
         workspace: { id: ws[0].id, name: ws[0].name, repoCount: repos.length },
       };
     },
@@ -250,7 +387,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -350,7 +487,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
@@ -395,9 +532,15 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
     '/api/workspaces/:id/graph',
     {
       config: { scopes: ['read'] },
-      schema: { params: z.object({ id: z.string().min(1) }) },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        // `repo` limita la raíz a un repo (el mapa abre el código repo a repo).
+        querystring: z
+          .object({ repo: z.string().min(1).optional(), all: z.string().optional() })
+          .loose(),
+      },
     },
-    async (req) => {
+    async (req, reply) => {
       const ws = await app.db
         .select()
         .from(schema.workspace)
@@ -415,15 +558,24 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
         });
         // repo_id de LAIN se deriva del checkout local (orders, saleor, …),
         // no del id interno del workspace.
-        const repoIds = repos.map((r) => deriveLainRepoId(r));
-        const graph = await buildGraphRoot(client, repoIds);
+        const all = repos.map((r) => deriveLainRepoId(r));
+        const only = (req.query as { repo?: string }).repo;
+        const showAll = (req.query as { all?: string }).all === '1';
+        if (only !== undefined && !all.includes(only)) {
+          return reply
+            .code(400)
+            .send({ code: 'BadRequest', detail: `repo '${only}' is not part of this workspace` });
+        }
+        const graph = await buildGraphRoot(client, only === undefined ? all : [only], undefined, {
+          all: showAll,
+        });
         return { graph, source: 'lain' as const, lainUrl: ws[0].lainUrl, workspace };
       } catch (e) {
         return {
@@ -450,12 +602,18 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
             repo: z.string().min(1),
             type: z.string().min(1),
             name: z.string().min(1),
+            all: z.string().optional(),
           })
           .loose(),
       },
     },
     async (req, reply) => {
-      const { repo, type, name } = req.query as { repo: string; type: string; name: string };
+      const { repo, type, name, all } = req.query as {
+        repo: string;
+        type: string;
+        name: string;
+        all?: string;
+      };
       const ws = await app.db
         .select()
         .from(schema.workspace)
@@ -479,12 +637,12 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
         });
-        const result = await buildGraphChildren(client, { repo, type, name });
+        const result = await buildGraphChildren(client, { repo, type, name }, { all: all === '1' });
         return { ...result, source: 'lain' as const };
       } catch (e) {
         return {
@@ -499,6 +657,71 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
   // Fuente de un símbolo vía explain_symbol (aporta el path) + get_code_snippet.
   app.get(
     '/api/workspaces/:id/graph/snippet',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            // Un símbolo (explain_symbol) o un path (get_code_snippet).
+            symbol: z.string().min(1).optional(),
+            path: z.string().min(1).optional(),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, symbol, path } = req.query as { repo: string; symbol?: string; path?: string };
+      if ((symbol === undefined) === (path === undefined)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: 'give exactly one of `symbol` or `path`' });
+      }
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { snippet: null, source: 'unconfigured' as const };
+      }
+
+      try {
+        const client = await app.lainClientFor({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const snippet =
+          path !== undefined
+            ? await resolvePathSnippet(client, repo, path)
+            : await resolveSymbolSnippet(client, repo, symbol as string);
+        return { snippet, source: 'lain' as const };
+      } catch (e) {
+        return {
+          snippet: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
+  // Contexto de un símbolo en el call stack: definición, llamadas salientes y llamadas entrantes.
+  app.get(
+    '/api/workspaces/:id/graph/symbol-context',
     {
       config: { scopes: ['read'] },
       schema: {
@@ -530,20 +753,74 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
       }
       if (!ws[0].lainUrl) {
-        return { snippet: null, source: 'unconfigured' as const };
+        return { context: null, source: 'unconfigured' as const };
       }
-
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 20_000,
         });
-        const snippet = await resolveSymbolSnippet(client, repo, symbol);
-        return { snippet, source: 'lain' as const };
+        const context = await resolveSymbolContext(client, repo, symbol);
+        return { context, source: 'lain' as const };
       } catch (e) {
         return {
-          snippet: null,
+          context: null,
+          source: 'error' as const,
+          error: isLainCallError(e) ? e.message : 'lain unreachable',
+        };
+      }
+    },
+  );
+
+  // Cadena de llamadas entre dos símbolos: ruta exacta dentro del repo.
+  app.get(
+    '/api/workspaces/:id/graph/call-chain',
+    {
+      config: { scopes: ['read'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        querystring: z
+          .object({
+            repo: z.string().min(1),
+            from: z.string().min(1),
+            to: z.string().min(1),
+          })
+          .loose(),
+      },
+    },
+    async (req, reply) => {
+      const { repo, from, to } = req.query as { repo: string; from: string; to: string };
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      const allowed = new Set(repos.map((r) => deriveLainRepoId(r)));
+      if (!allowed.has(repo)) {
+        return reply
+          .code(400)
+          .send({ code: 'BadRequest', detail: `repo '${repo}' is not part of this workspace` });
+      }
+      if (!ws[0].lainUrl) {
+        return { chain: null, source: 'unconfigured' as const };
+      }
+      try {
+        const client = await app.lainClientFor({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 20_000,
+        });
+        const chain = await resolveCallChain(client, repo, from, to);
+        return { chain, source: 'lain' as const };
+      } catch (e) {
+        return {
+          chain: null,
           source: 'error' as const,
           error: isLainCallError(e) ? e.message : 'lain unreachable',
         };
@@ -599,7 +876,7 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         .map((r) => `${r.id}: sin checkout local (repo.local); el escaneo lo omite`);
 
       try {
-        const client = await getLainClient({
+        const client = await app.lainClientFor({
           lainUrl: ws[0].lainUrl,
           apiVersion: '1',
           timeoutMs: 60_000,

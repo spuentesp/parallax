@@ -1,60 +1,72 @@
 import type * as React from 'react';
 import { useEffect, useState } from 'react';
 
-// Design tokens for the org dev tool aesthetic (Linear/Vercel style).
-export const THEME = {
-  light: {
-    bg: '#fafafa',
-    surface: '#ffffff',
-    fg: '#171717',
-    muted: '#737373',
-    border: '#e5e5e5',
-    accent: '#2563eb',
-    accentHover: '#1d4ed8',
-    success: '#16a34a',
-    warning: '#d97706',
-    error: '#dc2626',
-  },
-  dark: {
-    bg: '#0a0a0a',
-    surface: '#171717',
-    fg: '#fafafa',
-    muted: '#a3a3a3',
-    border: '#262626',
-    accent: '#3b82f6',
-    accentHover: '#60a5fa',
-    success: '#22c55e',
-    warning: '#f59e0b',
-    error: '#ef4444',
-  },
-} as const;
+// El tema vive en la clase `dark` de <html>; los colores salen de los tokens de
+// index.css. Este módulo sólo decide si esa clase está puesta — la paleta no
+// se duplica aquí: una segunda copia de los mismos hex se desincroniza sola.
+const KEY = 'parallax.theme';
+
+function readStored(): boolean | null {
+  try {
+    const v = localStorage.getItem(KEY);
+    if (v === 'dark') return true;
+    if (v === 'light') return false;
+  } catch {
+    // sin almacenamiento: el tema dura lo que dure la pestaña
+  }
+  return null;
+}
+
+function store(dark: boolean): void {
+  try {
+    localStorage.setItem(KEY, dark ? 'dark' : 'light');
+  } catch {
+    // nada que hacer: el tema sigue funcionando en memoria
+  }
+}
 
 export function useTheme() {
-  const [dark, setDark] = useState(true);
+  // Oscuro por defecto; si el usuario eligió, manda su elección.
+  const [dark, setDark] = useState(() => readStored() ?? true);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
+    store(dark);
   }, [dark]);
   return { dark, toggle: () => setDark((d) => !d) };
 }
 
-export function ThemeToggle(): React.ReactElement {
+export function ThemeToggle({ compact = false }: { compact?: boolean }): React.ReactElement {
   const { dark, toggle } = useTheme();
   return (
     <button
       type="button"
       onClick={toggle}
       aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      style={{
-        background: 'transparent',
-        border: `1px solid ${dark ? '#262626' : '#e5e5e5'}`,
-        borderRadius: 6,
-        padding: '6px 10px',
-        color: dark ? '#a3a3a3' : '#737373',
-        cursor: 'pointer',
-        fontSize: 13,
-      }}
+      title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
+      className={`flex items-center justify-center gap-2 rounded-lg text-xs text-muted hover:bg-bg hover:text-fg transition-colors ${
+        compact ? 'h-8 w-8' : 'border border-border px-3 py-1.5'
+      }`}
     >
-      {dark ? '☀️' : '🌙'}
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        {dark ? (
+          <>
+            <circle cx="8" cy="8" r="3" />
+            <path d="M8 1.5v1.5M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M12.6 3.4l-1 1M4.4 11.6l-1 1" />
+          </>
+        ) : (
+          <path d="M13 9.5A5.5 5.5 0 116.5 3a4.5 4.5 0 006.5 6.5z" />
+        )}
+      </svg>
+      {compact ? null : dark ? 'Light' : 'Dark'}
     </button>
   );
 }

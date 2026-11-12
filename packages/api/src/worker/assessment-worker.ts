@@ -3,13 +3,16 @@
 // interrumpidos tras un reinicio en lugar de fallarlos.
 
 import { createHash } from 'node:crypto';
-import type { AssessmentId, OrgId } from '@parallax/shared/domain';
+import type { AssessmentId, CodeImpact, OrgId } from '@parallax/shared/domain';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { type LainCoverage, presentCoverage } from '../coverage.js';
 import * as schema from '../db/schema.js';
+import type { GitHubReader } from '../github/reader.js';
+import type { GitLabReader } from '../gitlab/reader.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
+import { reviewCodeImpact } from '../pr-review/code-impact.js';
 
 import {
   type AssessmentEvent,
@@ -27,9 +30,12 @@ type Db = BetterSQLite3Database<typeof schema>;
 
 const SNAPSHOT_WAIT_MS = 60_000;
 const SNAPSHOT_POLL_MS = 200;
-// Trazamos impacto sólo para los hallazgos principales: el resto queda como
-// hallazgo del motor sin traza, visible en el informe.
-const MAX_TRACE_TARGETS = 3;
+// Trazamos impacto sólo para los primeros cambios de contrato: el resto queda como hallazgo del
+// motor sin traza, y ESO SE DECLARA como hueco de cobertura (antes se cortaba en silencio y un
+// PR con diez cambios salía "cobertura completa" con tres trazas).
+const MAX_TRACE_TARGETS = 8;
+// Proveedores de los que se recogen anclas de evidencia.
+const MAX_EVIDENCE_SERVICES = 3;
 const MAX_EVIDENCE_ROWS = 12;
 
 export interface ResolvedManifest {
@@ -40,6 +46,22 @@ export interface ResolvedManifest {
   configHash: string | null;
   /** Snapshot ids de LAIN, escritos tras SNAPSHOTTING (§5). */
   snapshots?: { base: string; head: string };
+  /**
+   * El PR que originó la evaluación (si lo hubo). Con esto el worker puede leer sus archivos
+   * y diffs de GitHub, también tras un reinicio. Su identidad forma parte del digest.
+   */
+  pr?: PrManifestRef;
+}
+
+export interface PrManifestRef {
+  provider?: 'github' | 'gitlab';
+  owner: string;
+  repo: string;
+  number: number;
+  /** El id del repo en el motor de código (LAIN). */
+  repoId: string;
+  /** El nombre del repo en el workspace (el del manifiesto). */
+  name: string;
 }
 
 export interface ResolvedAssessmentRequest {
@@ -50,7 +72,10 @@ export interface ResolvedAssessmentRequest {
 export interface CreateResult {
   assessment: AssessmentRecord;
   created: boolean; // false = idempotent hit (P INV 4)
+  reportCreated?: boolean;
 }
+
+export type PrReportIntent = Omit<typeof schema.prReport.$inferInsert, 'assessmentId'>;
 
 export interface AssessmentWorkerDeps {
   /**
@@ -80,6 +105,9 @@ export interface AssessmentWorkerDeps {
       summary?: string | undefined;
     };
   }) => Promise<ExplainOutcome>;
+  /** Lector de GitHub (sólo lectura) para los archivos y diffs del PR. Sin él no hay revisión de código. */
+  github?: Pick<GitHubReader, 'listFilesAtCommits'>;
+  gitlab?: Pick<GitLabReader, 'listFilesAtCommits'>;
   /** Reloj inyectable (DST): por defecto Date.now. */
   now?: () => number;
   /** Sleep inyectable (DST): por defecto setTimeout real. */
@@ -123,6 +151,8 @@ export class AssessmentWorker {
   private readonly getLain: ((orgId: string) => Promise<LainAdapter | undefined>) | undefined;
   private readonly explain: AssessmentWorkerDeps['explain'];
   private readonly now: () => number;
+  private readonly github: AssessmentWorkerDeps['github'];
+  private readonly gitlab: AssessmentWorkerDeps['gitlab'];
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly lainByOrg = new Map<string, LainAdapter>();
   private readonly eventListeners = new Map<string, Set<(e: AssessmentEvent) => void>>();
@@ -132,6 +162,8 @@ export class AssessmentWorker {
     this.db = db;
     this.getLain = deps?.getLain;
     this.explain = deps?.explain;
+    this.github = deps?.github;
+    this.gitlab = deps?.gitlab;
     this.now = deps?.now ?? Date.now;
     this.sleep = deps?.sleep ?? sleep;
   }
@@ -148,7 +180,7 @@ export class AssessmentWorker {
 
   // P INV 4: mismo manifiesto resuelto → misma evaluación, nunca un segundo
   // trabajo activo. El digest no contiene nada derivado del modelo (§4).
-  async create(input: ResolvedAssessmentRequest): Promise<CreateResult> {
+  async create(input: ResolvedAssessmentRequest, report?: PrReportIntent): Promise<CreateResult> {
     // La versión del motor entra en el digest (§4), así que hay que resolver el
     // LAIN del workspace antes de calcularlo.
     const adapter = await this.lainFor(input.orgId);
@@ -160,6 +192,8 @@ export class AssessmentWorker {
       configHash: input.manifest.configHash,
       analyzerVersion: adapter?.analyzerVersion ?? 'unknown',
       policyVersion: PARALLAX_POLICY_VERSION,
+      orgId: input.orgId,
+      ...(input.manifest.pr ? { pr: input.manifest.pr } : {}),
     });
     const existing = await this.db
       .select()
@@ -167,23 +201,38 @@ export class AssessmentWorker {
       .where(eq(schema.assessment.inputDigest, digest))
       .limit(1);
     if (existing[0]) {
-      return { assessment: this.toRecord(existing[0]), created: false };
+      const inserted = report
+        ? this.db
+            .insert(schema.prReport)
+            .values({ ...report, assessmentId: existing[0].id })
+            .onConflictDoNothing()
+            .run().changes > 0
+        : false;
+      return { assessment: this.toRecord(existing[0]), created: false, reportCreated: inserted };
     }
 
     const id = `a_${this.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
     try {
-      await this.db.insert(schema.assessment).values({
-        id,
-        orgId: input.orgId,
-        inputDigest: digest,
-        status: 'QUEUED',
-        baseId: null,
-        headId: null,
-        manifestJson: JSON.stringify(input.manifest),
-        engineJson: null,
-        coverageJson: null,
-        createdAt: this.now(),
-        completedAt: null,
+      this.db.transaction((tx) => {
+        tx.insert(schema.assessment)
+          .values({
+            id,
+            orgId: input.orgId,
+            inputDigest: digest,
+            status: 'QUEUED',
+            baseId: null,
+            headId: null,
+            manifestJson: JSON.stringify(input.manifest),
+            engineJson: null,
+            coverageJson: null,
+            createdAt: this.now(),
+            completedAt: null,
+          })
+          .run();
+        if (report)
+          tx.insert(schema.prReport)
+            .values({ ...report, assessmentId: id })
+            .run();
       });
     } catch {
       // Carrera con otra creación del mismo digest: gana la fila existente.
@@ -192,7 +241,16 @@ export class AssessmentWorker {
         .from(schema.assessment)
         .where(eq(schema.assessment.inputDigest, digest))
         .limit(1);
-      if (raced[0]) return { assessment: this.toRecord(raced[0]), created: false };
+      if (raced[0]) {
+        const inserted = report
+          ? this.db
+              .insert(schema.prReport)
+              .values({ ...report, assessmentId: raced[0].id })
+              .onConflictDoNothing()
+              .run().changes > 0
+          : false;
+        return { assessment: this.toRecord(raced[0]), created: false, reportCreated: inserted };
+      }
       throw new Error(`failed to insert assessment for digest ${digest}`);
     }
 
@@ -209,7 +267,7 @@ export class AssessmentWorker {
       payload: { status: 'QUEUED', inputDigest: digest },
       createdAt: this.now(),
     });
-    return { assessment: record, created: true };
+    return { assessment: record, created: true, reportCreated: !!report };
   }
 
   async get(id: string): Promise<AssessmentRecord | null> {
@@ -467,12 +525,16 @@ export class AssessmentWorker {
       const changes = diff.changes as Array<Record<string, unknown>>;
       // Un cambio del lado consumidor ya trae sus caminos en el diff, y su
       // endpoint no es de ese servicio: no se traza aparte.
-      const traceTargets = changes
-        .filter((c) => {
-          const endpoint = c.endpoint as { key?: string; service?: string } | undefined;
-          return endpoint?.key != null && endpoint.service != null && c.side !== 'consumer';
-        })
-        .slice(0, MAX_TRACE_TARGETS);
+      const traceable = changes.filter((c) => {
+        const endpoint = c.endpoint as { key?: string; service?: string } | undefined;
+        return endpoint?.key != null && endpoint.service != null && c.side !== 'consumer';
+      });
+      const traceTargets = traceable.slice(0, MAX_TRACE_TARGETS);
+      if (traceable.length > traceTargets.length) {
+        gaps.push(
+          `trace_impact skipped for ${traceable.length - traceTargets.length} of ${traceable.length} changed contracts (limit ${MAX_TRACE_TARGETS}): their impact is not traced`,
+        );
+      }
 
       const traces: Array<{ from: unknown; result: unknown }> = [];
       for (const change of traceTargets) {
@@ -502,6 +564,10 @@ export class AssessmentWorker {
       await this.db.delete(schema.evidence).where(eq(schema.evidence.assessmentId, id));
       const harvested = await this.harvestEvidence(id, head, traceTargets, manifest, gaps);
 
+      // Impacto de CÓDIGO del PR: qué símbolos toca y a cuánto alcanzan. Un fallo aquí es un hueco
+      // declarado, nunca un fallo de la evaluación: el informe de contratos sale igual.
+      const codeImpact = await this.stepCodeImpact(id, manifest, gaps);
+
       const scope = coverageRaw.scope;
       for (const entry of scope?.unreviewed ?? []) {
         const repo =
@@ -526,6 +592,7 @@ export class AssessmentWorker {
         traces,
         coverageRaw,
         evidenceCount: harvested,
+        codeImpact,
       });
 
       const next = await this.transition(id, 'EXPLAINING', { engineJson, coverageJson });
@@ -554,6 +621,49 @@ export class AssessmentWorker {
       }
       await this.endStep(id, 'analyze', attempt, 'failed', null);
       return this.fail(rec, `analysis failed: ${message}`);
+    }
+  }
+
+  // CODE_IMPACT: los archivos y diffs del PR → símbolos tocados → su alcance en el índice de
+  // código. Paso propio (jobStep `code_impact`) para que se vea que corrió. Sólo si la evaluación
+  // viene de un PR y hay lector de GitHub; si no, no hay nada que revisar y no se finge.
+  private async stepCodeImpact(
+    id: string,
+    manifest: ResolvedManifest,
+    gaps: string[],
+  ): Promise<CodeImpact | null> {
+    const pr = manifest.pr;
+    if (!pr) return null;
+    const current = await this.get(id);
+    const lain = current ? await this.lainFor(current.orgId) : undefined;
+    if (!lain) return null;
+    const attempt = await this.beginStep(id, 'code_impact');
+    try {
+      const reader = pr.provider === 'gitlab' ? this.gitlab : this.github;
+      if (!reader) throw new Error(`no ${pr.provider ?? 'github'} reader configured`);
+      const baseSha = manifest.base.repos[pr.name];
+      if (!baseSha) throw new Error(`the manifest has no base commit for ${pr.name}`);
+      const headSha = manifest.head.repos[pr.name];
+      if (!headSha) throw new Error(`the manifest has no head commit for ${pr.name}`);
+      const { files, truncated } = await reader.listFilesAtCommits(
+        { owner: pr.owner, repo: pr.repo, number: pr.number },
+        baseSha,
+        headSha,
+      );
+      const impact = await reviewCodeImpact({
+        lain,
+        repoId: pr.repoId,
+        repoName: pr.name,
+        files,
+        baseSha,
+        filesTruncated: truncated,
+      });
+      await this.endStep(id, 'code_impact', attempt, 'done', sha256Hex(JSON.stringify(impact)));
+      return impact;
+    } catch (e) {
+      gaps.push(`code impact failed: ${describeError(e)}`);
+      await this.endStep(id, 'code_impact', attempt, 'failed', null);
+      return null;
     }
   }
 
@@ -657,7 +767,7 @@ export class AssessmentWorker {
           })
           .filter((s): s is string => s != null),
       ),
-    ].slice(0, MAX_TRACE_TARGETS);
+    ].slice(0, MAX_EVIDENCE_SERVICES);
 
     let inserted = 0;
     for (const service of services) {
