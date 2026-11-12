@@ -55,6 +55,24 @@ describe('cap bounds (1..500)', () => {
   });
 });
 
+describe('diff bounds del motor dev (max_hops 1..100, timeout_ms 1..600000)', () => {
+  it.each([1, 100])('DiffContractsArgs accepts max_hops %i', (max_hops) => {
+    expect(DiffContractsArgs.safeParse({ base: snap, head: snap, max_hops }).success).toBe(true);
+  });
+
+  it.each([0, 101])('DiffContractsArgs rejects max_hops %i', (max_hops) => {
+    expect(DiffContractsArgs.safeParse({ base: snap, head: snap, max_hops }).success).toBe(false);
+  });
+
+  it.each([1, 600_000])('DiffContractsArgs accepts timeout_ms %i', (timeout_ms) => {
+    expect(DiffContractsArgs.safeParse({ base: snap, head: snap, timeout_ms }).success).toBe(true);
+  });
+
+  it.each([0, 600_001])('DiffContractsArgs rejects timeout_ms %i', (timeout_ms) => {
+    expect(DiffContractsArgs.safeParse({ base: snap, head: snap, timeout_ms }).success).toBe(false);
+  });
+});
+
 describe('wait_ms and max_base_age_s bounds', () => {
   it.each([0, 60000])('PrepareSnapshotArgs accepts wait_ms %i', (wait_ms) => {
     expect(PrepareSnapshotArgs.safeParse({ wait_ms }).success).toBe(true);

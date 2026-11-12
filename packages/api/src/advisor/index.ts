@@ -14,8 +14,10 @@ import type { LainAdapter } from '../lain-adapter/types.js';
 import {
   type CorrelationEngine,
   correlate,
+  correlateServiceRefs,
   decodeGlobalId,
   fetchAllContracts,
+  fetchAllServiceRefs,
   fetchAllUnresolved,
 } from './correlate.js';
 import {
@@ -77,7 +79,9 @@ export async function runAdvisor(
     unresolved.push(...(await fetchAllUnresolved(engine, { snapshot, repo: repo.id })));
   }
   const contracts = await fetchAllContracts(engine, { snapshot });
-  const correlation = correlate(findings, unresolved, contracts);
+  // list_service_refs es live-only en el motor: se consulta aparte sobre live.
+  const serviceRefs = correlateServiceRefs(await fetchAllServiceRefs(engine));
+  const correlation = correlate(findings, unresolved, contracts, serviceRefs);
 
   // 3a. provides_graphql: SDL copiado + señales de consumo en el mismo repo.
   const providesGraphql = buildProvidesGraphqlProposals(findings, services);
@@ -160,6 +164,7 @@ export async function runAdvisor(
     `señales escaneadas en ${String(repos.length)} repos sin respetar .gitignore`,
     `list_unresolved agotado: ${String(correlation.unresolvedTotal)} ítems (graphql_no_op=${String(correlation.graphqlNoOp.total)}, correlacionados=${String(correlation.graphqlNoOp.matchedToSignals)})`,
     `${String(correlation.duplicatedKeys.length)} llaves GraphQL con más de un grupo de proveedores (disparador de graphql_no_op)`,
+    `list_service_refs (live): ${String(serviceRefs.total)} literales URL — outcomes=${JSON.stringify(serviceRefs.byOutcome)}, resueltos+llamada=${String(serviceRefs.resolvedLinked.length)}, producción sin resolver=${String(serviceRefs.unresolvedProduction.length)}`,
     capability.detail,
   ];
   if (envNoGap.length > 0) {
@@ -186,7 +191,12 @@ export async function runAdvisor(
   };
 }
 
-export { correlate, decodeGlobalId, derivedKeyFromNodeName } from './correlate.js';
+export {
+  correlate,
+  correlateServiceRefs,
+  decodeGlobalId,
+  derivedKeyFromNodeName,
+} from './correlate.js';
 export { parseGraphqlDocument, scanRepo } from './scan.js';
 export type { AdvisorRepoInput, AdvisorReport, AdvisorSignal, SignalKind } from './types.js';
 export { emitAdvisorYaml, emitBindingsYaml, emitServicesYaml } from './yaml.js';

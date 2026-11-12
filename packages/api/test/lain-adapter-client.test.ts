@@ -53,6 +53,9 @@ describe('LainAdapter real client', () => {
       'get_coverage',
       'resolve_evidence',
       'read_source',
+      'trace_flow',
+      'list_service_refs',
+      'apply_contract_context',
     ].map((name) => ({ name }));
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { tools } }), {
@@ -147,6 +150,9 @@ const contractTools = [
   'get_coverage',
   'resolve_evidence',
   'read_source',
+  'trace_flow',
+  'list_service_refs',
+  'apply_contract_context',
 ];
 
 function coreTransport(
@@ -313,5 +319,74 @@ describe('Lain handshake boundary cases', () => {
       code: 'LainUnavailable',
       message: expect.stringContaining('not_ready'),
     });
+  });
+
+  it('rejects a view echo that differs from the requested snapshot (INV 1)', async () => {
+    // El envelope dev hace eco de la vista atendida en `snapshot`.
+    const echoSnapshot = (snapshot: string) =>
+      new RealLainAdapter(
+        {
+          lainUrl: 'http://lain.test/mcp',
+          apiVersion: '1',
+          fetchImpl: async () =>
+            Response.json({
+              jsonrpc: '2.0',
+              id: 1,
+              result: {
+                structuredContent: {
+                  api_version: 1,
+                  analyzer_version: '0.14.0',
+                  snapshot,
+                  data: {
+                    items: [],
+                    scope: { configured_only: true, reviewed: [], unreviewed: [] },
+                  },
+                },
+              },
+            }),
+        },
+        '0.14.0',
+      );
+    const adapter = echoSnapshot('live');
+    await expect(adapter.listServices({ snapshot: 'snap_abc123' })).rejects.toMatchObject({
+      code: 'IncompatibleView',
+      view: 'live',
+      message: expect.stringContaining('snap_abc123'),
+    });
+    // Eco coincidente: la respuesta vale para la vista pedida.
+    const ok = await echoSnapshot('live').listServices({ snapshot: 'live' });
+    expect(ok.items).toEqual([]);
+  });
+
+  it('keeps answer_scope from structuredContent on text tools', async () => {
+    const adapter = new RealLainAdapter(
+      {
+        lainUrl: 'http://lain.test/mcp',
+        apiVersion: '1',
+        fetchImpl: async () =>
+          Response.json({
+            jsonrpc: '2.0',
+            id: 1,
+            result: {
+              content: [{ type: 'text', text: '# call sites' }],
+              structuredContent: {
+                api_version: 1,
+                analyzer_version: '0.14.0',
+                data: {
+                  target: {},
+                  sites: [],
+                  count: 0,
+                  ambiguous: [],
+                  answer_scope: { truncated: true },
+                },
+              },
+            },
+          }),
+      },
+      '0.14.0',
+    );
+    const res = await adapter.getCallSites({ symbol: 'main' });
+    expect(res.text).toBe('# call sites');
+    expect(res.answerScope).toEqual({ truncated: true });
   });
 });

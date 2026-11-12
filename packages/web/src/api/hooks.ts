@@ -263,9 +263,23 @@ export interface GraphRootResponse {
   workspace?: { id: string; name: string; repoCount: number };
 }
 
+export interface CodeGraphEdge {
+  id: string;
+  type: string;
+  from: string;
+  to: string;
+}
+
+export interface CodeGraphPath {
+  nodes: CodeGraphNode[];
+  edges: CodeGraphEdge[];
+}
+
 export interface CodeGraphCommGroup {
   edge: string;
   nodes: CodeGraphNode[];
+  /** Aristas concretas from→to devueltas por connect (lain 0.11+). */
+  edges?: CodeGraphEdge[];
   error?: string;
 }
 
@@ -277,6 +291,8 @@ export interface CodeGraphChildrenResponse {
   childrenHidden?: number;
   communications?: CodeGraphCommGroup[];
   hasCommunication?: boolean;
+  /** Caminos multi-hop devueltos por connect (lain 0.11+). */
+  paths?: CodeGraphPath[];
   source?: 'lain' | 'unconfigured' | 'error';
   error?: string;
 }
@@ -288,6 +304,8 @@ export interface GraphSnippetResponse {
     path: string | null;
     text: string | null;
     error?: string;
+    /** answer_scope del motor dev: incompletitud declarada de la fuente. */
+    answerScope?: Record<string, unknown>;
   } | null;
   source: 'lain' | 'unconfigured' | 'error';
   error?: string;

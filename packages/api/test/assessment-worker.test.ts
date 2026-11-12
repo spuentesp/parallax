@@ -7,7 +7,9 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../src/db/migrate.js';
 import * as schema from '../src/db/schema.js';
+import { LainCallError } from '../src/lain-adapter/errors.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
+import type { LainAdapter } from '../src/lain-adapter/types.js';
 import { getAssessmentReport } from '../src/services/assessments.js';
 import {
   AssessmentWorker,
@@ -314,6 +316,79 @@ describe('AssessmentWorker', () => {
     expect(canTransition('QUEUED', 'READY')).toBe(false);
     expect(canTransition('READY', 'ANALYZING')).toBe(false);
     expect(canTransition('ANALYZING', 'FAILED')).toBe(true);
+    // Upgrade de lain: ANALYZING puede volver a SNAPSHOTTING para re-preparar.
+    expect(canTransition('ANALYZING', 'SNAPSHOTTING')).toBe(true);
+  });
+
+  it('re-prepares snapshots once when diff_contracts reports analyzer_mismatch', async () => {
+    const base = createLainMock();
+    let diffCalls = 0;
+    let prepareCalls = 0;
+    const adapter: LainAdapter = {
+      ...base,
+      prepareSnapshot: async (req) => {
+        prepareCalls++;
+        return base.prepareSnapshot(req);
+      },
+      diffContracts: async (req) => {
+        diffCalls++;
+        if (diffCalls === 1) {
+          // lain dev rechaza snapshots grabados bajo otra versión del analizador.
+          throw LainCallError.parse({
+            code: 'LainUnavailable',
+            message: 'lain returned error in envelope: {"code":"analyzer_mismatch"}',
+            cause: { code: 'analyzer_mismatch', message: 'snapshot analyzer versions differ' },
+          });
+        }
+        return base.diffContracts(req);
+      },
+    };
+    const w = new AssessmentWorker(db, { getLain: async () => adapter });
+    const { assessment } = await w.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
+    const final = await w.run(assessment.id);
+    expect(['READY', 'PARTIAL']).toContain(final.status);
+    expect(diffCalls).toBe(2);
+    // base + head re-preparados tras el mismatch: 2 preparaciones iniciales + 2 del reintento.
+    expect(prepareCalls).toBe(4);
+    expect(final.baseId).toMatch(/^snap_/);
+    expect(final.engineJson).toBeTruthy();
+  });
+
+  it('surfaces a truncated diff as a declared gap, never as "no findings" (INV 3)', async () => {
+    const base = createLainMock();
+    const adapter: LainAdapter = {
+      ...base,
+      diffContracts: async (req) => ({
+        ...(await base.diffContracts(req)),
+        truncated: true,
+        truncation_reason: 'timeout' as const,
+      }),
+    };
+    const w = new AssessmentWorker(db, { getLain: async () => adapter });
+    const { assessment } = await w.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
+    const final = await w.run(assessment.id);
+    expect(['READY', 'PARTIAL']).toContain(final.status);
+    const coverage = JSON.parse(final.coverageJson ?? '{}') as { missing?: string[] };
+    expect(coverage.missing?.some((m) => m.includes('diff_contracts truncated'))).toBe(true);
+  });
+
+  it('a persistent analyzer_mismatch fails the assessment instead of looping', async () => {
+    const base = createLainMock();
+    const adapter: LainAdapter = {
+      ...base,
+      diffContracts: async () => {
+        throw LainCallError.parse({
+          code: 'LainUnavailable',
+          message: 'lain returned error in envelope: {"code":"analyzer_mismatch"}',
+          cause: { code: 'analyzer_mismatch', message: 'snapshot analyzer versions differ' },
+        });
+      },
+    };
+    const w = new AssessmentWorker(db, { getLain: async () => adapter });
+    const { assessment } = await w.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
+    const final = await w.run(assessment.id);
+    expect(final.status).toBe('FAILED');
+    expect(final.engineJson).toContain('analyzer_mismatch');
   });
 
   it('computeInputDigest is deterministic, SHA-256 and model-free', () => {

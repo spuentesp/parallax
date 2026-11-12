@@ -5,7 +5,10 @@ import { ListServiceRefsArgs } from '@parallax/shared/lain';
 import { z } from 'zod';
 import { type ApiClient, ApiEndpointNotImplemented } from './api-client.js';
 
-const ServiceRefsInput = ListServiceRefsArgs.extend({ workspaceId: z.string().min(1) });
+const ServiceRefsInput = ListServiceRefsArgs.extend({
+  workspaceId: z.string().min(1),
+  snapshot: z.literal('live').default('live'),
+});
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';

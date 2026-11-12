@@ -20,6 +20,7 @@ import {
   parseGithubRepoUri,
 } from '../github/reader.js';
 import { gitlabReaderFor, parseGitLabRepoUri } from '../gitlab/reader.js';
+import { getLainClient } from '../lain-adapter/client.js';
 import { isLainCallError } from '../lain-adapter/errors.js';
 import { lainConfigYaml, repoStatuses } from '../repo-status.js';
 import { buildEndpointTopology } from '../topology.js';
@@ -896,6 +897,94 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
           ? e.message
           : `advisor failed: ${e instanceof Error ? e.message : String(e)}`;
         return { advisor: null, source: 'error' as const, error: detail, workspace };
+      }
+    },
+  );
+
+  // Aplica las propuestas de binding aplicables vía apply_contract_context del
+  // motor dev (escribe el repos.yaml del servidor con .bak y lo sirve; dry-run
+  // por defecto). Snapshot siempre live: la tool del motor es live-only.
+  app.post(
+    '/api/workspaces/:id/advisor/apply',
+    {
+      config: { scopes: ['write'] },
+      schema: {
+        params: z.object({ id: z.string().min(1) }),
+        body: z.object({ dryRun: z.boolean().optional() }).loose(),
+      },
+    },
+    async (req, reply) => {
+      const ws = await app.db
+        .select()
+        .from(schema.workspace)
+        .where(eq(schema.workspace.id, (req.params as { id: string }).id))
+        .limit(1);
+      if (!ws[0]) return reply.code(404).send({ code: 'NotFound', detail: 'workspace not found' });
+      const repos = await app.db
+        .select()
+        .from(schema.repo)
+        .where(eq(schema.repo.workspaceId, (req.params as { id: string }).id));
+      if (!ws[0].lainUrl) {
+        return reply.code(400).send({
+          code: 'BadRequest',
+          detail: 'workspace has no lainUrl configured',
+        });
+      }
+      const body = req.body as { dryRun?: boolean };
+      const dryRun = body.dryRun ?? true;
+      const scanRepos = repos
+        .map((r) => ({ id: r.id, root: r.local }))
+        .filter(
+          (r): r is { id: string; root: string } => typeof r.root === 'string' && r.root !== '',
+        );
+      try {
+        const client = await getLainClient({
+          lainUrl: ws[0].lainUrl,
+          apiVersion: '1',
+          timeoutMs: 60_000,
+        });
+        const report = await runAdvisor(client, scanRepos, 'live');
+        const applicable = report.proposals.bindings.filter((b) => b.status === 'applicable');
+        if (applicable.length === 0) {
+          return reply.code(400).send({
+            code: 'BadRequest',
+            detail: 'no applicable binding proposals to apply',
+            proposals: report.proposals.bindings.map((b) => ({
+              status: b.status,
+              reason: b.reason,
+            })),
+          });
+        }
+        const bindings = applicable.map((b) => ({
+          consumer: {
+            repo: b.consumer.repo,
+            path: b.consumer.path,
+            symbol: b.consumer.symbol,
+            key: b.consumer.key,
+            ...(b.consumerId ? { site: b.consumerId } : {}),
+          },
+          provider: { service: b.provider.service, key: b.provider.key },
+        }));
+        const result = await client.applyContractContext({
+          snapshot: 'live',
+          bindings,
+          dry_run: dryRun,
+        });
+        return {
+          applied: result.applied,
+          dryRun,
+          configPath: result.config_path ?? null,
+          backup: result.backup ?? null,
+          addedBindings: result.added_bindings ?? [],
+          note: result.note ?? null,
+          bindingsApplied: bindings.length,
+          source: 'lain' as const,
+        };
+      } catch (e) {
+        const detail = isLainCallError(e)
+          ? e.message
+          : `apply failed: ${e instanceof Error ? e.message : String(e)}`;
+        return reply.code(502).send({ code: 'LainError', detail });
       }
     },
   );

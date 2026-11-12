@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   correlate,
+  correlateServiceRefs,
   decodeGlobalId,
   derivedKeyFromNodeName,
   fetchAllContracts,
@@ -214,6 +215,36 @@ describe('paginación obligatoria', () => {
       'graphql:query:shop',
       'graphql:query:product',
     ]);
+  });
+});
+
+describe('correlateServiceRefs (list_service_refs, dev v0.15.0)', () => {
+  it('summarizes by outcome and flags unresolved production refs', () => {
+    const c = correlateServiceRefs([
+      {
+        repo: 'storefront',
+        path: 'src/api.ts',
+        line: 10,
+        value: 'https://saleor-api/graphql',
+        outcome: { kind: 'resolved', service: 'saleor-api' },
+        usage: 'production',
+        linked_to_call: true,
+      },
+      {
+        repo: 'storefront',
+        path: 'src/dev.ts',
+        line: 3,
+        value: 'http://localhost:9999',
+        outcome: { kind: 'unknown' },
+        usage: 'production',
+      },
+    ]);
+    expect(c.total).toBe(2);
+    expect(c.byOutcome).toEqual({ resolved: 1, unknown: 1 });
+    expect(c.byRepo).toEqual({ storefront: 2 });
+    expect(c.resolvedLinked).toHaveLength(1);
+    expect(c.unresolvedProduction).toHaveLength(1);
+    expect(c.unresolvedProduction[0]?.value).toBe('http://localhost:9999');
   });
 });
 
@@ -431,6 +462,7 @@ function fakeEngine(opts: {
         items: contracts,
         scope: { configured_only: true, reviewed: [], unreviewed: [] },
       }) as never,
+    listServiceRefs: async () => ({ items: [] }) as never,
     checkBinding: opts.checkBinding,
   };
 }

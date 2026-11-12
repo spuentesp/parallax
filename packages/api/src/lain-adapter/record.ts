@@ -13,9 +13,6 @@ export interface MockCall {
     | 'check_binding'
     | 'diff_contracts'
     | 'trace_impact'
-    | 'trace_flow'
-    | 'apply_contract_context'
-    | 'list_service_refs'
     | 'get_coverage'
     | 'resolve_evidence'
     | 'read_source'
@@ -25,6 +22,15 @@ export interface MockCall {
     | 'get_code_snippet'
     | 'explain_symbol'
     | 'get_call_sites'
+    | 'trace_flow'
+    | 'list_service_refs'
+    | 'apply_contract_context'
+    | 'search_code'
+    | 'assess_change'
+    | 'explain_dispatch'
+    | 'get_cross_runtime_callers'
+    | 'get_federation_health'
+    | 'get_call_chain'
     | CodeTool
     | ProductCodeTool;
   readonly args: unknown;
