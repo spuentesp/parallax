@@ -969,7 +969,10 @@ function Toolbar(props: {
     setParam({ prov: p ?? null, ...(p === 'deterministic' ? { minc: null } : {}) });
 
   return (
-    <div className="relative z-30 border-b border-border px-4 py-2.5" data-testid="map-toolbar">
+    <div
+      className="@container relative z-30 border-b border-border px-4 py-2.5"
+      data-testid="map-toolbar"
+    >
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5">
         <nav
           aria-label="Map level"
@@ -1025,108 +1028,112 @@ function Toolbar(props: {
           ))}
         </fieldset>
 
-        <fieldset
-          className="m-0 flex overflow-hidden rounded-[10px] border border-border-strong p-0 text-[13px]"
-          aria-label="Lens"
-        >
-          {[
-            {
-              label: 'Structure',
-              on: props.outlineOpen,
-              click: props.onToggleOutline,
-              title: props.outlineOpen ? 'Hide the structure list' : 'Show the structure list',
-            },
-            {
-              label: 'Loose ends',
-              on: props.looseOpen,
-              click: props.onToggleLoose,
-              title: 'Calls the engine could not bind, and what each one is',
-            },
-            {
-              label: 'Contracts',
-              on: false,
-              click: props.onOpenContracts,
-              title: 'The same dependencies as a filterable contracts list',
-            },
-            {
-              label: 'Coverage',
-              on: false,
-              click: props.onOpenCoverage,
-              title: 'What the engine could not resolve, and index health per repo',
-            },
-          ].map((b) => (
+        {/* Lente, detalle y procedencia: en un panel ancho fluyen y se parten en filas; en
+            uno estrecho forman UNA tira desplazable en vez de apilarse en tres filas. */}
+        <div className="flex min-w-0 items-center gap-x-5 gap-y-2.5 @3xl:flex-wrap @max-3xl:w-full @max-3xl:overflow-x-auto @max-3xl:pb-1 @max-3xl:pr-8 @max-3xl:[mask-image:linear-gradient(to_right,#000_calc(100%-2rem),transparent)] [&>fieldset]:shrink-0">
+          <fieldset
+            className="m-0 flex overflow-hidden rounded-[10px] border border-border-strong p-0 text-[13px]"
+            aria-label="Lens"
+          >
+            {[
+              {
+                label: 'Structure',
+                on: props.outlineOpen,
+                click: props.onToggleOutline,
+                title: props.outlineOpen ? 'Hide the structure list' : 'Show the structure list',
+              },
+              {
+                label: 'Loose ends',
+                on: props.looseOpen,
+                click: props.onToggleLoose,
+                title: 'Calls the engine could not bind, and what each one is',
+              },
+              {
+                label: 'Contracts',
+                on: false,
+                click: props.onOpenContracts,
+                title: 'The same dependencies as a filterable contracts list',
+              },
+              {
+                label: 'Coverage',
+                on: false,
+                click: props.onOpenCoverage,
+                title: 'What the engine could not resolve, and index health per repo',
+              },
+            ].map((b) => (
+              <button
+                key={b.label}
+                type="button"
+                aria-pressed={b.label === 'Contracts' || b.label === 'Coverage' ? undefined : b.on}
+                onClick={b.click}
+                title={b.title}
+                className={`px-3.5 py-1.5 transition-colors ${
+                  b.on
+                    ? 'bg-accent-soft font-medium text-accent'
+                    : 'bg-surface text-muted hover:text-fg'
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+          </fieldset>
+
+          <fieldset
+            className="m-0 flex items-center gap-1.5 border-0 p-0 text-xs text-muted"
+            aria-label="Detail level"
+          >
+            <span>Detail</span>
+            {(['repos', 'services', 'endpoints'] as const).map((l) => (
+              <button
+                key={l}
+                type="button"
+                aria-pressed={props.detail === l}
+                onClick={() => props.onDetail(l)}
+                className={`rounded-full border px-2.5 py-1 transition-colors ${
+                  props.detail === l
+                    ? 'border-accent bg-accent-soft text-accent'
+                    : 'border-border-strong text-muted hover:text-fg'
+                }`}
+              >
+                {DETAIL_LABEL[l]}
+              </button>
+            ))}
+          </fieldset>
+
+          <fieldset
+            className="m-0 flex items-center gap-1.5 border-0 p-0 text-xs"
+            aria-label="Provenance"
+          >
             <button
-              key={b.label}
               type="button"
-              aria-pressed={b.label === 'Contracts' || b.label === 'Coverage' ? undefined : b.on}
-              onClick={b.click}
-              title={b.title}
-              className={`px-3.5 py-1.5 transition-colors ${
-                b.on
-                  ? 'bg-accent-soft font-medium text-accent'
-                  : 'bg-surface text-muted hover:text-fg'
+              aria-pressed={prov !== 'inferred'}
+              title="Relations the engine proved by static analysis"
+              onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+                prov !== 'inferred'
+                  ? 'border-deterministic bg-surface text-fg'
+                  : 'border-border-strong text-muted'
               }`}
             >
-              {b.label}
+              <EdgeSwatch provenance="deterministic" width={14} />
+              Proven
             </button>
-          ))}
-        </fieldset>
-
-        <fieldset
-          className="m-0 flex items-center gap-1.5 border-0 p-0 text-xs text-muted"
-          aria-label="Detail level"
-        >
-          <span>Detail</span>
-          {(['repos', 'services', 'endpoints'] as const).map((l) => (
             <button
-              key={l}
               type="button"
-              aria-pressed={props.detail === l}
-              onClick={() => props.onDetail(l)}
-              className={`rounded-full border px-2.5 py-1 transition-colors ${
-                props.detail === l
-                  ? 'border-accent bg-accent-soft text-accent'
-                  : 'border-border-strong text-muted hover:text-fg'
+              aria-pressed={prov !== 'deterministic'}
+              title="Relations bound by a heuristic, with a confidence score"
+              onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+                prov !== 'deterministic'
+                  ? 'border-inferred bg-surface text-warning'
+                  : 'border-border-strong text-muted'
               }`}
             >
-              {DETAIL_LABEL[l]}
+              <EdgeSwatch provenance="inferred" width={14} />
+              Inferred{props.inferredCount > 0 ? ` ${props.inferredCount}` : ''}
             </button>
-          ))}
-        </fieldset>
-
-        <fieldset
-          className="m-0 flex items-center gap-1.5 border-0 p-0 text-xs"
-          aria-label="Provenance"
-        >
-          <button
-            type="button"
-            aria-pressed={prov !== 'inferred'}
-            title="Relations the engine proved by static analysis"
-            onClick={() => setProv(prov === 'inferred' ? undefined : 'inferred')}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
-              prov !== 'inferred'
-                ? 'border-deterministic bg-surface text-fg'
-                : 'border-border-strong text-muted'
-            }`}
-          >
-            <EdgeSwatch provenance="deterministic" width={14} />
-            Proven
-          </button>
-          <button
-            type="button"
-            aria-pressed={prov !== 'deterministic'}
-            title="Relations bound by a heuristic, with a confidence score"
-            onClick={() => setProv(prov === 'deterministic' ? undefined : 'deterministic')}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
-              prov !== 'deterministic'
-                ? 'border-inferred bg-surface text-warning'
-                : 'border-border-strong text-muted'
-            }`}
-          >
-            <EdgeSwatch provenance="inferred" width={14} />
-            Inferred{props.inferredCount > 0 ? ` ${props.inferredCount}` : ''}
-          </button>
-        </fieldset>
+          </fieldset>
+        </div>
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
