@@ -1263,3 +1263,23 @@ export function useCoverageBreakdown(workspaceId: string | undefined) {
     staleTime: 60_000,
   });
 }
+
+// ── Registro de cobertura del motor: hosts externos y contratos sin esquema ──
+
+export interface CoverageLedgerDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  complete: boolean | null;
+  external: Array<{ host: string; calls: number }>;
+  schemalessEndpoints: number;
+  staleBindings: number;
+}
+
+export function useCoverageLedger(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['coverage-ledger', workspaceId],
+    queryFn: () => client.get<CoverageLedgerDto>(`/api/workspaces/${workspaceId}/coverage/ledger`),
+    enabled: workspaceId != null,
+    staleTime: 60_000,
+  });
+}

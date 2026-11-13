@@ -246,3 +246,58 @@ describe('Coverage breakdown', () => {
     expect(screen.queryByTestId('coverage-breakdown')).toBeNull();
   });
 });
+
+describe('Coverage: what the engine already accounts for', () => {
+  const serve = (ledger: Record<string, unknown>) => {
+    server.use(
+      http.get('/api/workspaces/:id/loose-ends', () =>
+        HttpResponse.json({
+          source: 'lain',
+          generatedAt: 1,
+          items: [],
+          summary: { total: 0, byCategory: {}, pendingCases: 0 },
+          run: { state: 'idle', done: 0, total: 0 },
+        }),
+      ),
+      http.get('/api/workspaces/:id/repos/status', () =>
+        HttpResponse.json({ source: 'lain', repos: [], untracked: [] }),
+      ),
+      http.get('/api/workspaces/:id/coverage/ledger', () => HttpResponse.json(ledger)),
+    );
+    const router = createMemoryRouter(routes, { initialEntries: ['/orgs/acme/coverage'] });
+    renderWithQuery(<RouterProvider router={router} />);
+  };
+
+  it('lists the external hosts with their call counts and explains the variable-host limit', async () => {
+    serve({
+      source: 'lain',
+      complete: false,
+      external: [
+        { host: 'collector.test', calls: 7 },
+        { host: 'example.com', calls: 1 },
+      ],
+      schemalessEndpoints: 2,
+      staleBindings: 0,
+    });
+    const box = within(await screen.findByTestId('coverage-accounted'));
+    expect(box.getByText('collector.test')).toBeTruthy();
+    expect(box.getByText('· 7')).toBeTruthy();
+    expect(box.getByText(/not counted as unresolved/)).toBeTruthy();
+    expect(box.getByText(/stays unresolved/)).toBeTruthy();
+    expect(box.getByText(/endpoints have no schema/).textContent).toMatch(
+      /2 endpoints have no schema/,
+    );
+  });
+
+  it('shows nothing when the engine has nothing to report, or cannot answer', async () => {
+    serve({
+      source: 'lain',
+      complete: true,
+      external: [],
+      schemalessEndpoints: 0,
+      staleBindings: 0,
+    });
+    await screen.findByRole('heading', { name: 'Coverage and loose ends' });
+    expect(screen.queryByTestId('coverage-accounted')).toBeNull();
+  });
+});

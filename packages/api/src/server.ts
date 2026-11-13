@@ -19,6 +19,7 @@ import { contractDetailRoutes } from './routes/contract-detail.js';
 import { contractRoutes } from './routes/contracts.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { coverageBreakdownRoutes } from './routes/coverage-breakdown.js';
+import { coverageLedgerRoutes } from './routes/coverage-ledger.js';
 import { docsRoutes } from './routes/docs.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
@@ -73,6 +74,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(symbolLinksRoutes);
   await app.register(recommendationsRoutes);
   await app.register(coverageBreakdownRoutes);
+  await app.register(coverageLedgerRoutes);
   await app.register(implementationRoutes);
   await app.register(docsRoutes);
   await app.register(officialDocsRoutes);

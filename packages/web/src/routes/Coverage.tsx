@@ -6,6 +6,7 @@ import {
   type LooseEndDto,
   useCheckBinding,
   useCoverageBreakdown,
+  useCoverageLedger,
   useLooseEnds,
   useRepoStatus,
 } from '../api/hooks.js';
@@ -30,6 +31,7 @@ export function Coverage(): React.ReactElement {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [klass, setKlass] = useState<CoverageClassId | null>(null);
   const breakdown = useCoverageBreakdown(orgId);
+  const ledger = useCoverageLedger(orgId).data;
   const byKey = breakdown.data?.byKey ?? {};
 
   const report = loose.data;
@@ -93,6 +95,8 @@ export function Coverage(): React.ReactElement {
         selected={klass}
         onSelect={(c) => setKlass(c === klass ? null : c)}
       />
+
+      <Accounted ledger={ledger} />
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-label="Loose ends" className="rounded-xl border border-border bg-surface">
@@ -575,6 +579,54 @@ function Breakdown({
           </li>
         ))}
       </ul>
+    </section>
+  );
+}
+
+// Lo que el motor YA contabiliza y no necesita resolverse: las llamadas a hosts externos
+// (fuera de la federación) no cuentan como sin resolver, y se muestran para que se vea
+// qué se dio por externo. Los endpoints sin esquema son un límite aparte: de ellos no se
+// puede mostrar qué campos lee cada consumidor.
+function Accounted({
+  ledger,
+}: {
+  ledger: ReturnType<typeof useCoverageLedger>['data'];
+}): React.ReactElement | null {
+  if (ledger?.source !== 'lain') return null;
+  if (ledger.external.length === 0 && ledger.schemalessEndpoints === 0) return null;
+  return (
+    <section
+      aria-label="Already accounted for"
+      className="rounded-xl border border-border bg-surface p-4"
+      data-testid="coverage-accounted"
+    >
+      <h2 className="text-sm font-semibold">What the engine already accounts for</h2>
+      {ledger.external.length > 0 && (
+        <div className="mt-2">
+          <p className="text-xs text-muted">
+            Calls to these hosts are classified as external (outside the workspace), so they are not
+            counted as unresolved. A host held in a variable, such as a base URL read from the
+            environment, is not seen as external and stays unresolved.
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {ledger.external.map((e) => (
+              <li
+                key={e.host}
+                className="rounded-full border border-border-strong px-2.5 py-0.5 font-mono text-xs"
+              >
+                {e.host} <span className="text-muted">· {e.calls}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {ledger.schemalessEndpoints > 0 && (
+        <p className="mt-3 text-xs text-muted">
+          <b className="tabular-nums text-fg">{ledger.schemalessEndpoints}</b> endpoint
+          {ledger.schemalessEndpoints === 1 ? ' has' : 's have'} no schema, so which fields their
+          consumers read cannot be shown for them.
+        </p>
+      )}
     </section>
   );
 }
