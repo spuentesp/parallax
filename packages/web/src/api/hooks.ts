@@ -1151,3 +1151,39 @@ export function useCheckBinding(workspaceId: string | undefined) {
       client.post<BindingCheckDto>(`/api/workspaces/${workspaceId}/bindings/check`, vars),
   });
 }
+
+// ── Un símbolo y lo que lo une al resto: co-cambio (git) y otros repos que lo alcanzan ──
+
+export interface SymbolLinksDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  symbol: string;
+  repo: string;
+  path: string | null;
+  /** Por qué no hay datos (nombre repetido, no encontrado…). */
+  note: string | null;
+  coChange: {
+    partners: Array<{ path: string; times: number }>;
+    total: number | null;
+    status: 'found' | 'none';
+  } | null;
+  crossRepo: { repositories: Array<{ repo: string; leaves: string[] }>; truncated: boolean } | null;
+  crossRepoNote: string | null;
+}
+
+export function useSymbolLinks(
+  workspaceId: string | undefined,
+  repo: string | undefined,
+  symbol: string | undefined,
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['symbol-links', workspaceId, repo, symbol],
+    queryFn: () => {
+      const qs = new URLSearchParams({ repo: repo ?? '', symbol: symbol ?? '' });
+      return client.get<SymbolLinksDto>(`/api/workspaces/${workspaceId}/graph/symbol-links?${qs}`);
+    },
+    enabled: workspaceId != null && !!repo && !!symbol && enabled,
+    staleTime: 5 * 60_000,
+  });
+}

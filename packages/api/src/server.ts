@@ -31,6 +31,7 @@ import { orgsRoutes } from './routes/orgs.js';
 import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
 import { queryRoutes } from './routes/query.js';
+import { symbolLinksRoutes } from './routes/symbol-links.js';
 import { traceRoutes } from './routes/trace.js';
 import { webRoutes } from './routes/web.js';
 import { whoamiRoutes } from './routes/whoami.js';
@@ -67,6 +68,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(looseEndsRoutes);
   await app.register(contractDetailRoutes);
   await app.register(bindingCheckRoutes);
+  await app.register(symbolLinksRoutes);
   await app.register(implementationRoutes);
   await app.register(docsRoutes);
   await app.register(officialDocsRoutes);
