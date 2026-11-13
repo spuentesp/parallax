@@ -134,8 +134,28 @@ export function MapExplorer({
   // revela hijos; abrir o cerrar a mano la suelta.
   const [detail, setDetail] = useState<DetailLevel | null>(null);
   // El contrato cuyo trazado de punta a punta está abierto (un panel ancho sobre el mapa).
-  const [trace, setTrace] = useState<{ key: string; service: string | null } | null>(null);
+  // Un enlace puede abrir el trazado directamente (?trace=<contrato>&tservice=<servicio>),
+  // p. ej. desde el detalle de un contrato. Los parámetros se retiran al leerlos: el
+  // trazado es estado de la pantalla, no de la URL, y recargar no lo reabre.
+  const [trace, setTrace] = useState<{ key: string; service: string | null } | null>(() => {
+    const key = params.get('trace');
+    return key ? { key, service: params.get('tservice') } : null;
+  });
   const [traceFanout, setTraceFanout] = useState<number>(3);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sólo al montar
+  useEffect(() => {
+    if (params.has('trace') || params.has('tservice')) {
+      setParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete('trace');
+          next.delete('tservice');
+          return next;
+        },
+        { replace: true },
+      );
+    }
+  }, []);
   const [limits, setLimits] = useState<Record<string, number>>({});
   const [activeRelations, setActiveRelations] = useState<ReadonlySet<string>>(new Set());
   // Controles del lienzo (zoom, encuadre): el lienzo es quien tiene el grafo.

@@ -137,12 +137,21 @@ export function ContractDetail(): React.ReactElement {
             {inferred > 0 ? `, ${inferred} inferred` : ''}.
           </p>
         </div>
-        <Link
-          to={`/orgs/${orgId}?ask=${ask}`}
-          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg"
-        >
-          Ask about this
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to={`/orgs/${orgId}?${new URLSearchParams({ trace: d.key, ...(d.service ? { tservice: d.service } : {}) })}`}
+            title="Follow this contract end to end on the map"
+            className="rounded-lg border border-border-strong px-3 py-1.5 text-sm hover:border-accent hover:text-accent"
+          >
+            Trace impact
+          </Link>
+          <Link
+            to={`/orgs/${orgId}?ask=${ask}`}
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg"
+          >
+            Ask about this
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

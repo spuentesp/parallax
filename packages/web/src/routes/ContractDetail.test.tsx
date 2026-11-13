@@ -94,6 +94,15 @@ describe('ContractDetail', () => {
     expect(screen.queryByRole('region', { name: 'Fields' })).toBeNull();
   });
 
+  it('"Trace impact" opens the end-to-end trace of this contract on the map', async () => {
+    mount(dto());
+    const link = await screen.findByRole('link', { name: 'Trace impact' });
+    const url = new URL(link.getAttribute('href') ?? '', 'http://x');
+    expect(url.pathname).toBe('/orgs/ws1');
+    expect(url.searchParams.get('trace')).toBe('graphql:query:exportFile');
+    expect(url.searchParams.get('tservice')).toBe('saleor');
+  });
+
   it('links to the assistant with the contract as the topic', async () => {
     mount(dto());
     const link = await screen.findByRole('link', { name: 'Ask about this' });
