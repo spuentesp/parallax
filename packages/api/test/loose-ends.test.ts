@@ -212,6 +212,42 @@ describe('collectLooseEnds — what the engine could not bind, with the code loc
     ]);
   });
 
+  it('keeps what check_binding needs: the consumer GlobalId and each candidate with its service', async () => {
+    const [e] = await collectLooseEnds(
+      fake([
+        {
+          items: [
+            {
+              reason: 'no_match',
+              url_expr: 'GET /x',
+              consumer: {
+                id: 'web:Function:src/a.ts:call:1',
+                repo: 'web',
+                path: 'src/a.ts',
+                line: 1,
+              },
+              candidates: Array.from({ length: 80 }, (_, i) => ({
+                endpoint: { key: `http:GET /e${i}`, service: 'api' },
+                reason: 'pattern',
+              })),
+            },
+          ],
+        },
+      ]),
+    );
+    expect(e?.consumerId).toBe('web:Function:src/a.ts:call:1');
+    // Se cuentan todos, pero sólo se llevan 60 al cliente (la carga queda acotada).
+    expect(e?.candidateCount).toBe(80);
+    expect(e?.candidateRefs).toHaveLength(60);
+    expect(e?.candidateRefs?.[0]).toEqual({
+      key: 'http:GET /e0',
+      service: 'api',
+      reason: 'pattern',
+    });
+    // Los tres de siempre siguen ahí para la lista corta.
+    expect(e?.candidates).toEqual(['http:GET /e0', 'http:GET /e1', 'http:GET /e2']);
+  });
+
   it("keeps the engine's facts: candidates (3 shown, all counted), target, confidence", async () => {
     const items = await collectLooseEnds(fake([{ items: [unresolved('src/a.ts', 1)] }]));
     const un = items.find((e) => e.kind === 'unresolved');

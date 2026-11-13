@@ -58,10 +58,10 @@ describe('MapOutline', () => {
     return h;
   };
 
-  it('shows the contract kind and strips the prefix from endpoint labels', () => {
+  it('strips the prefix from endpoint labels and shows no redundant contract chip on them', () => {
     setup();
     const row = screen.getByText('GET /api/orders').closest('[role=treeitem]') as HTMLElement;
-    expect(within(row).getByText('http')).toBeTruthy();
+    expect(within(row).queryByText('http')).toBeNull();
   });
 
   it('is reachable by keyboard with no selection: the first row is the tab stop', () => {

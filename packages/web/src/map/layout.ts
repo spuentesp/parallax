@@ -2,15 +2,16 @@
 //
 // Por qué no el layout de compuestos de Cytoscape (cose): con contenedores
 // abiertos de decenas de hijos produce una columna deforme y mueve todo en
-// cada apertura. Aquí el reparto es explícito y estable:
+// cada apertura. Aquí el reparto es explícito, determinista y legible:
 //
 //   1. Dentro de un contenedor abierto, los hijos van en una rejilla (las
-//      columnas se alinean): lee como una ficha, no como una nube.
-//   2. Los elementos de primer nivel (con su tamaño ya calculado) se colocan
-//      con un modelo de fuerzas — las relaciones agregadas los acercan, el
-//      tamaño los separa — y una pasada final elimina solapes.
-//   3. Es determinista y parte de las posiciones previas: abrir un nodo
-//      empuja a sus vecinos lo justo en vez de barajar todo el lienzo.
+//      columnas se alinean): lee como una ficha, no como una nube. Las
+//      interfaces (endpoints) son FILAS apiladas dentro de la caja de su
+//      servicio, como en la referencia "Contracts lens".
+//   2. Los elementos de primer nivel (las cajas de repo) se colocan en CAPAS
+//      según la dirección de las dependencias: consumidor a la izquierda,
+//      proveedor a la derecha. El flujo se lee en una pasada, de izquierda
+//      a derecha, sin marañas.
 
 import type { ProjectedNode } from '@parallax/shared/org-map';
 
@@ -26,6 +27,8 @@ export interface Point {
 /** Hueco entre celdas hermanas, relleno interior de un contenedor y alto de su rótulo. */
 export const GAP = 14;
 export const PAD = 16;
+/** Filas de interfaz por encima de este número pasan a varias columnas. */
+export const ROW_SINGLE_COLUMN = 8;
 export const LABEL_H = 20;
 
 // Ancho medio de un carácter según la fuente del rótulo: el lienzo dibuja
@@ -37,19 +40,41 @@ const CHAR_W = { proportional: 7.2, mono: 7.3 } as const;
 export function measure(label: string, kind: ProjectedNode['kind']): Size {
   // Contratos y código se leen en monoespaciada; repos y servicios son nombres.
   const mono = kind !== 'repo' && kind !== 'service' && kind !== 'group' && kind !== 'code';
+  // La puerta de código plegada es una hoja: se mide como pastilla fija, no
+  // como caja con rótulo (la caja fantasma vacía era ilegible).
+  if (kind === 'code') return { w: 96, h: 26 };
+  // Interfaz (endpoint): FILA a todo lo ancho dentro de la caja de su servicio
+  // (se estira al ancho de columna en packGrid), de DOS LÍNEAS como en la
+  // referencia "Contracts lens": tipo arriba, nombre debajo.
+  if (kind === 'endpoint') {
+    const longest = Math.max(...label.split('\n').map((l) => l.length));
+    return {
+      w: Math.round(Math.min(Math.max(longest * CHAR_W.mono + 24, 160), 320)),
+      // 44px como las filas de contrato de la referencia "Contracts lens".
+      h: 44,
+    };
+  }
+  // Servicio suelto (sin hijos visibles): caja compacta con su nombre.
+  if (kind === 'service') {
+    return {
+      w: Math.round(Math.min(Math.max(label.length * CHAR_W.proportional + 28, 120), 200)),
+      h: 30,
+    };
+  }
+  // Hojas de código (archivo, símbolo): punto + banda de rótulo debajo, con el
+  // ancho del rótulo (topado) para que las etiquetas de puntos vecinos no se
+  // solapen.
+  if (kind === 'file' || kind === 'symbol') {
+    const dot = kind === 'file' ? 16 : 12;
+    const w = Math.round(Math.min(Math.max(label.length * CHAR_W.mono + 10, dot), 110));
+    return { w, h: dot + LABEL_H };
+  }
   const w = Math.round(
     Math.min(Math.max(label.length * (mono ? CHAR_W.mono : CHAR_W.proportional) + 22, 84), 230),
   );
   return {
     w,
-    h:
-      kind === 'repo'
-        ? 34
-        : kind === 'service'
-          ? 28
-          : kind === 'group' || kind === 'code'
-            ? 26
-            : 24,
+    h: kind === 'repo' ? 34 : kind === 'group' ? 26 : 24,
   };
 }
 
@@ -59,6 +84,8 @@ export interface LayoutNode {
   /** Rótulo ya final (con "▸ N" / "(+N)"): fija el ancho de las hojas. */
   label: string;
   kind: ProjectedNode['kind'];
+  /** Fila de interfaz: se apila en una columna dentro de la caja de su servicio. */
+  row?: boolean;
 }
 export interface LayoutEdge {
   source: string;
@@ -131,6 +158,23 @@ function packGrid(kids: Tree[]): NonNullable<Tree['grid']> {
   // Relación de aspecto del contenedor: expandir en horizontal para no apilar
   // en torres verticales estrechas. Con 2+ elementos se reparten en al menos
   // 2 columnas (o 3/4 si hay más hijos), aprovechando el espacio horizontal.
+  // Las filas de interfaz (endpoints) se apilan dentro de la caja de su
+  // servicio como filas de una lista (modelo de la referencia). Con pocas
+  // filas es una columna; con muchas, varias columnas para que la caja no se
+  // convierta en una torre alta y estrecha.
+  if (sorted.length > 0 && sorted.every((k) => k.node.row) && sorted.length <= ROW_SINGLE_COLUMN) {
+    const colW = Math.max(...sorted.map((k) => k.outer.w));
+    let y = 0;
+    const cells = sorted.map((kid) => {
+      // La fila se estira a todo el ancho de la columna (referencia: filas a
+      // lo ancho de la caja del servicio).
+      kid.outer.w = colW;
+      const cell = { kid, x: 0, y };
+      y += kid.outer.h + GAP;
+      return cell;
+    });
+    return { w: colW, h: Math.max(0, y - GAP), cells };
+  }
   const idealColsByCount =
     sorted.length >= 16 ? 4 : sorted.length >= 7 ? 3 : sorted.length >= 2 ? 2 : 1;
   const rawCols = Math.round(Math.sqrt((sorted.length * avgH * 2.2) / avgW));
@@ -160,6 +204,11 @@ function packGrid(kids: Tree[]): NonNullable<Tree['grid']> {
   const cells = sorted.map((kid, i) => {
     const c = i % cols;
     const r = Math.floor(i / cols);
+    if (kid.node.row) {
+      // Fila de interfaz: ocupa todo el ancho de su columna.
+      kid.outer.w = colW[c] ?? kid.outer.w;
+      return { kid, x: colX[c] ?? 0, y: (rowY[r] ?? 0) + ((rowH[r] ?? 0) - kid.outer.h) / 2 };
+    }
     // Celda centrada en su hueco de la rejilla.
     return {
       kid,
@@ -176,7 +225,7 @@ function size(t: Tree): void {
     return;
   }
   for (const k of t.kids) size(k);
-  const grid = packGrid(t.kids);
+  const grid = t.kids.length > 0 ? packGrid(t.kids) : { w: 0, h: 0, cells: [] };
   t.grid = grid;
   t.outer = { w: grid.w + PAD * 2, h: grid.h + PAD * 2 + LABEL_H };
 }
@@ -200,95 +249,85 @@ function place(t: Tree, c: Point, out: Map<string, Point>): void {
   }
 }
 
-// ── Primer nivel: fuerzas con cajas ─────────────────────────────────────────
+// ── Primer nivel: capas según la dirección de las dependencias ──────────────
 
 interface Item {
   id: string;
+  label: string;
   w: number;
   h: number;
   x: number;
   y: number;
 }
 
-/** Hash estable → [0,1): la posición inicial de un elemento nuevo no depende del azar. */
-function unit(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return ((h >>> 0) % 100000) / 100000;
-}
+/** Separación horizontal entre columnas de capas: deja sitio a las aristas. */
+export const LAYER_GAP = 160;
 
-export const MAX_FORCE_ITEMS = 400;
-
-export function arrange(
+/**
+ * Coloca las cajas de primer nivel en columnas por rango topológico: una
+ * relación a→b pone a `a` en una columna a la izquierda de `b` (rango = camino
+ * más largo desde las fuentes). Dentro de cada columna, apiladas y centradas.
+ * Determinista: el mismo grafo siempre produce el mismo reparto, así que abrir
+ * un nodo no baraja el lienzo. Los ciclos se rompen por orden de rótulo.
+ */
+export function arrangeLayered(
   items: Item[],
-  edges: ReadonlyArray<{ a: number; b: number; weight: number }>,
-  warm: boolean,
+  pairs: ReadonlyArray<{ a: number; b: number }>,
 ): void {
   const n = items.length;
-  if (n <= 1) return;
-  if (warm) {
-    // En caliente conservamos la posición elegida por el usuario o calculada previamente,
-    // sólo empujando lo estrictamente necesario para evitar solapes si alguna caja creció.
-    removeOverlaps(items);
-    return;
+  if (n === 0) return;
+  const out = new Map<number, number[]>();
+  const indeg = new Array<number>(n).fill(0);
+  for (const p of pairs) {
+    (out.get(p.a) ?? out.set(p.a, []).get(p.a) ?? []).push(p.b);
+    indeg[p.b] = (indeg[p.b] ?? 0) + 1;
   }
-  const iterations = 320;
-  const radius = (it: Item) => 0.5 * Math.hypot(it.w, it.h);
-
-  for (let step = 0; step < iterations; step++) {
-    const alpha = 1 * (1 - step / iterations) + 0.02;
-    const fx = new Float64Array(n);
-    const fy = new Float64Array(n);
-    for (let i = 0; i < n; i++) {
-      const a = items[i] as Item;
-      fx[i] = (fx[i] ?? 0) - a.x * 0.004;
-      fy[i] = (fy[i] ?? 0) - a.y * 0.004;
-      for (let j = i + 1; j < n; j++) {
-        const b = items[j] as Item;
-        let dx = a.x - b.x;
-        let dy = a.y - b.y;
-        let d = Math.hypot(dx, dy);
-        if (d < 0.01) {
-          dx = unit(a.id) - 0.5;
-          dy = unit(b.id) - 0.5;
-          d = Math.hypot(dx, dy) || 1;
-        }
-        const reach = radius(a) + radius(b) + GAP * 2;
-        if (d > reach * 3) continue;
-        const push = (reach * reach * 0.9) / (d * d);
-        const px = (dx / d) * push;
-        const py = (dy / d) * push;
-        fx[i] = (fx[i] ?? 0) + px;
-        fy[i] = (fy[i] ?? 0) + py;
-        fx[j] = (fx[j] ?? 0) - px;
-        fy[j] = (fy[j] ?? 0) - py;
+  const rank = new Array<number>(n).fill(0);
+  const byLabel = [...items.keys()].sort((i, j) => items[i]!.label.localeCompare(items[j]!.label));
+  const done = new Array<boolean>(n).fill(false);
+  const queue = byLabel.filter((i) => (indeg[i] ?? 0) === 0);
+  for (const i of queue) done[i] = true;
+  let head = 0;
+  while (head < queue.length) {
+    const a = queue[head++] as number;
+    for (const b of out.get(a) ?? []) {
+      rank[b] = Math.max(rank[b] ?? 0, (rank[a] ?? 0) + 1);
+      indeg[b] = (indeg[b] ?? 1) - 1;
+      if (indeg[b] === 0 && !done[b]) {
+        done[b] = true;
+        queue.push(b);
       }
     }
-    for (const e of edges) {
-      const a = items[e.a] as Item;
-      const b = items[e.b] as Item;
-      const dx = b.x - a.x;
-      const dy = b.y - a.y;
-      const d = Math.hypot(dx, dy) || 1;
-      const ideal = radius(a) + radius(b) + GAP * 3;
-      const pull = (d - ideal) * 0.05 * Math.min(3, 1 + Math.log1p(e.weight));
-      const px = (dx / d) * pull;
-      const py = (dy / d) * pull;
-      fx[e.a] = (fx[e.a] ?? 0) + px;
-      fy[e.a] = (fy[e.a] ?? 0) + py;
-      fx[e.b] = (fx[e.b] ?? 0) - px;
-      fy[e.b] = (fy[e.b] ?? 0) - py;
+  }
+  // Ciclos: se asignan en orden de rótulo con el rango de sus predecesores ya
+  // colocados (o 0), para que el reparto siga siendo determinista.
+  for (const i of byLabel) {
+    if (done[i]) continue;
+    let r = 0;
+    for (const p of pairs) if (p.b === i && done[p.a]) r = Math.max(r, (rank[p.a] ?? 0) + 1);
+    rank[i] = r;
+    done[i] = true;
+  }
+  // Columnas por rango; dentro, apiladas por rótulo y centradas en vertical.
+  const cols = new Map<number, number[]>();
+  items.forEach((it, i) => {
+    const list = cols.get(rank[i] ?? 0) ?? [];
+    list.push(i);
+    cols.set(rank[i] ?? 0, list);
+  });
+  let x = 0;
+  for (const r of [...cols.keys()].sort((a, b) => a - b)) {
+    const col = (cols.get(r) ?? []).sort((i, j) => items[i]!.label.localeCompare(items[j]!.label));
+    const maxW = Math.max(...col.map((i) => items[i]!.w));
+    const totalH = col.reduce((s, i) => s + items[i]!.h, 0) + GAP * (col.length - 1);
+    let y = -totalH / 2;
+    for (const i of col) {
+      const it = items[i]!;
+      it.x = x + maxW / 2;
+      it.y = y + it.h / 2;
+      y += it.h + GAP;
     }
-    for (let i = 0; i < n; i++) {
-      const it = items[i] as Item;
-      const mx = Math.max(-40, Math.min(40, fx[i] ?? 0));
-      const my = Math.max(-40, Math.min(40, fy[i] ?? 0));
-      it.x += mx * alpha;
-      it.y += my * alpha;
-    }
+    x += maxW + LAYER_GAP;
   }
   removeOverlaps(items);
 }
@@ -320,30 +359,7 @@ export function removeOverlaps(items: Item[], passes = 80): void {
   }
 }
 
-/** Rejilla simple para cuando hay demasiados elementos para el modelo de fuerzas. */
-function gridPack(items: Item[]): void {
-  const cols = Math.ceil(Math.sqrt(items.length * 1.6));
-  let x = 0;
-  let y = 0;
-  let rowH = 0;
-  items.forEach((it, i) => {
-    if (i > 0 && i % cols === 0) {
-      x = 0;
-      y += rowH + GAP;
-      rowH = 0;
-    }
-    it.x = x + it.w / 2;
-    it.y = y + it.h / 2;
-    x += it.w + GAP;
-    rowH = Math.max(rowH, it.h);
-  });
-}
-
-export function layoutMap(
-  nodes: readonly LayoutNode[],
-  edges: readonly LayoutEdge[],
-  previous: ReadonlyMap<string, Point> = new Map(),
-): MapLayout {
+export function layoutMap(nodes: readonly LayoutNode[], edges: readonly LayoutEdge[]): MapLayout {
   const roots = buildTrees(nodes);
   for (const r of roots) size(r);
 
@@ -357,33 +373,29 @@ export function layoutMap(
 
   const items: Item[] = roots.map((r, i) => {
     index.set(r.node.id, i);
-    const prev = previous.get(r.node.id);
-    const angle = i * 2.399963 + unit(r.node.id);
-    const spread = 140 * Math.sqrt(i + 1) + Math.hypot(r.outer.w, r.outer.h) * 0.45;
     return {
       id: r.node.id,
+      label: r.node.label,
       w: r.outer.w,
       h: r.outer.h,
-      x: prev?.x ?? Math.cos(angle) * spread,
-      y: prev?.y ?? Math.sin(angle) * spread,
+      x: 0,
+      y: 0,
     };
   });
 
-  // Relaciones elevadas al primer nivel y agregadas por par.
-  const pairs = new Map<string, { a: number; b: number; weight: number }>();
+  // Relaciones elevadas al primer nivel y agregadas por par (a → b: a a la
+  // izquierda de b). El reparto en capas es determinista: no hace falta
+  // arrastrar posiciones previas.
+  const pairs = new Map<string, { a: number; b: number }>();
   for (const e of edges) {
     const a = index.get(owner.get(e.source) ?? '');
     const b = index.get(owner.get(e.target) ?? '');
     if (a === undefined || b === undefined || a === b) continue;
-    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
-    const prev = pairs.get(key);
-    if (prev) prev.weight += e.weight;
-    else pairs.set(key, { a: Math.min(a, b), b: Math.max(a, b), weight: e.weight });
+    const key = `${a}->${b}`;
+    if (!pairs.has(key)) pairs.set(key, { a, b });
   }
 
-  const warm = items.length > 0 && items.every((it) => previous.has(it.id));
-  if (items.length > MAX_FORCE_ITEMS) gridPack(items);
-  else arrange(items, [...pairs.values()], warm);
+  arrangeLayered(items, [...pairs.values()]);
 
   const leaves = new Map<string, Point>();
   const top = new Map<string, Point>();

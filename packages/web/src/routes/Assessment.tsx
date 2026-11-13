@@ -55,6 +55,8 @@ export function Assessment(): React.ReactElement {
         </div>
       </div>
 
+      <VerdictStrip report={report} orgId={orgId} />
+
       {/* Lo que cambió */}
       <section>
         <h2 className="font-semibold mb-2">
@@ -243,5 +245,55 @@ function ScopeList({
         })}
       </ul>
     </div>
+  );
+}
+
+// Resumen del veredicto (referencia "PR assessment"): el recuento es del motor,
+// por clase de hallazgo; el alcance sale de la cobertura persistida. No añade
+// juicio propio: si no hay hallazgos o cobertura, lo dice tal cual.
+function VerdictStrip({
+  report,
+  orgId,
+}: {
+  report: NonNullable<ReturnType<typeof useAssessment>['data']>['assessment'];
+  orgId: string | undefined;
+}): React.ReactElement | null {
+  if (!report) return null;
+  const count = (c: string) => report.findings.filter((f) => f.impact?.class === c).length;
+  const scope = report.coverage?.scope;
+  const reviewed = scope?.reviewed?.length ?? 0;
+  const unreviewed = scope?.unreviewed?.length ?? 0;
+  const ask = encodeURIComponent(
+    `Explain assessment ${report.id}: what changed, who is affected, and what is still unknown?`,
+  );
+  return (
+    <section
+      aria-label="Verdict"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4"
+      data-testid="verdict-strip"
+    >
+      <div className="space-y-1 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-muted">
+            {count('Verified')} verified impact · {count('NeedsInvestigation')} needs investigation
+            · {count('NoKnownImpact')} no known impact
+          </span>
+        </div>
+        <div className="text-xs text-muted">
+          {scope
+            ? `Scope: ${reviewed} of ${reviewed + unreviewed} repos reviewed, ${unreviewed} unreviewed.`
+            : 'Scope: not recorded for this report.'}{' '}
+          Compared as two contract snapshots.
+        </div>
+      </div>
+      {orgId && (
+        <Link
+          to={`/orgs/${orgId}?ask=${ask}`}
+          className="rounded-lg border border-border-strong px-3 py-1.5 text-sm text-accent hover:bg-accent-soft"
+        >
+          Ask about this PR
+        </Link>
+      )}
+    </section>
   );
 }

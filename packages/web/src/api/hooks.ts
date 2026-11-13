@@ -10,6 +10,7 @@ import type { TraceFlowResponse } from '@parallax/shared/lain';
 import type {
   MapMeta,
   MapViewResponse,
+  MatrixData,
   NodeDetail,
   OrgGraphFilters,
   OrgNode,
@@ -315,14 +316,21 @@ export function fetchGraphRoot(workspaceId: string, repo: string): Promise<Graph
   return client.get<GraphRootResponse>(`/api/workspaces/${workspaceId}/graph?${qs}`);
 }
 
-/** Fuente de un símbolo (explain_symbol) o de un archivo por su path (get_code_snippet). */
+/** Fuente de un símbolo (explain_symbol) o de un archivo por su path (get_code_snippet).
+ * `line` ancla el snippet en la línea del símbolo cuando la conocemos. */
 export function fetchGraphSnippet(
   workspaceId: string,
   repo: string,
-  target: string | { path: string },
+  target: string | { path: string; line?: number | undefined },
 ): Promise<GraphSnippetResponse> {
   const qs = new URLSearchParams(
-    typeof target === 'string' ? { repo, symbol: target } : { repo, path: target.path },
+    typeof target === 'string'
+      ? { repo, symbol: target }
+      : {
+          repo,
+          path: target.path,
+          ...(target.line !== undefined ? { line: String(target.line) } : {}),
+        },
   );
   return client.get<GraphSnippetResponse>(`/api/workspaces/${workspaceId}/graph/snippet?${qs}`);
 }
@@ -557,6 +565,19 @@ export function useOrgMap(workspaceId: string | undefined, params: MapViewParams
     // La caché del servidor decide la frescura; el cliente sólo vuelve a pedir
     // mientras el servidor dice que está reconstruyendo, para que "refreshing"
     // se resuelva solo en vez de quedarse pegado.
+    staleTime: 60_000,
+    refetchInterval: (q) => (q.state.data?.meta?.refreshing ? 3_000 : false),
+  });
+}
+
+export function useOrgMatrix(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['org-map-matrix', workspaceId],
+    queryFn: () =>
+      client.get<{ matrix: MatrixData | null; meta: MapMeta }>(
+        `/api/workspaces/${workspaceId}/map/matrix`,
+      ),
+    enabled: workspaceId != null,
     staleTime: 60_000,
     refetchInterval: (q) => (q.state.data?.meta?.refreshing ? 3_000 : false),
   });
@@ -811,6 +832,10 @@ export interface LooseEndDto {
   };
   candidates: string[];
   candidateCount: number;
+  /** GlobalId del consumidor en LAIN (lo que pide check_binding). */
+  consumerId?: string;
+  /** Candidatos con servicio, para proponer un vínculo (hasta 60). */
+  candidateRefs?: Array<{ key: string; service: string; reason: string | null }>;
   assessment: LooseAssessmentDto | null;
 }
 
@@ -1048,5 +1073,81 @@ export function useDocs(workspaceId: string | undefined, enabled = true) {
       }>(`/api/workspaces/${workspaceId}/docs`),
     enabled: workspaceId != null && enabled,
     staleTime: 10 * 60_000,
+  });
+}
+
+// ── Detalle de un contrato (get_contract de LAIN, normalizado en el servidor) ──
+
+export interface ContractSiteDto {
+  repo: string;
+  path: string;
+  line: number;
+}
+export interface ContractFieldDto {
+  name: string;
+  type: string;
+  nullable: boolean;
+  required: boolean;
+  enumValues: string[] | null;
+}
+export interface ContractConsumerDto {
+  repo: string;
+  caller: string | null;
+  site: ContractSiteDto | null;
+  match: string | null;
+  confidence: number | null;
+  bindingKind: string | null;
+  bindingSource: string | null;
+  readsComplete: boolean | null;
+  reads: Array<{
+    field: string;
+    confidence: number | null;
+    provenance: string | null;
+    site: ContractSiteDto | null;
+  }>;
+}
+export interface ContractDetailDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  key: string;
+  service: string | null;
+  kind: string;
+  providers: Array<ContractSiteDto & { symbol: string | null }>;
+  schemas: Array<{ direction: string; fields: ContractFieldDto[] }>;
+  consumers: ContractConsumerDto[];
+}
+
+export function useContractDetail(
+  workspaceId: string | undefined,
+  key: string | null,
+  service: string | null,
+) {
+  return useQuery({
+    queryKey: ['contract-detail', workspaceId, key, service],
+    queryFn: () => {
+      const qs = new URLSearchParams({ key: key ?? '', ...(service ? { service } : {}) });
+      return client.get<ContractDetailDto>(`/api/workspaces/${workspaceId}/contracts/detail?${qs}`);
+    },
+    enabled: workspaceId != null && key != null && key !== '',
+    staleTime: 60_000,
+  });
+}
+
+// ── Validar un vínculo propuesto (check_binding de LAIN; no escribe nada) ──
+
+export interface BindingCheckDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  valid: boolean;
+  reasons: string[];
+  methodMatch: boolean;
+  templateMatch: string;
+  bindingsEntry: string | null;
+}
+
+export function useCheckBinding(workspaceId: string | undefined) {
+  return useMutation({
+    mutationFn: (vars: { consumer: string; endpoint: { key: string; service: string } }) =>
+      client.post<BindingCheckDto>(`/api/workspaces/${workspaceId}/bindings/check`, vars),
   });
 }

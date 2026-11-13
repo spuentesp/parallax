@@ -306,6 +306,9 @@ export class RealLainAdapter implements LainAdapter {
       ...(req.repo ? { repo: req.repo } : {}),
       ...(req.cap !== undefined ? { cap: req.cap } : {}),
       ...(req.min_impact ? { min_impact: req.min_impact } : {}),
+      // Nuevos en lain 0.15.
+      ...(req.max_hops !== undefined ? { max_hops: req.max_hops } : {}),
+      ...(req.timeout_ms !== undefined ? { timeout_ms: req.timeout_ms } : {}),
     });
   }
 
@@ -386,6 +389,8 @@ export class RealLainAdapter implements LainAdapter {
     const res = await this.call<QueryGraphResponse>('query_graph', {
       query: req.query,
       ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+      // Desde 0.15 las lecturas crudas aceptan snapshot (live por defecto).
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
     });
     // El motor omite `nodes` entero cuando count=0: se normaliza a [] sin
     // inventar nada (un vacío sigue siendo un vacío).

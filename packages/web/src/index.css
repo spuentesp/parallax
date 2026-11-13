@@ -67,6 +67,10 @@
 
   /* Retícula del lienzo. */
   --color-grid: #d9dee5;
+
+  /* Rellenos del lienzo del mapa (referencia "Contracts lens"). */
+  --color-repo-fill: #ffffff;
+  --color-service-fill: #eef0fb;
 }
 
 .dark {
@@ -100,6 +104,8 @@
   --color-deterministic: #8b96a5;
   --color-inferred: #f59e0b;
   --color-grid: #232a33;
+  --color-repo-fill: #0f1216;
+  --color-service-fill: #141824;
 }
 
 body {

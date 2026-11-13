@@ -258,6 +258,37 @@ describe('resolveSymbolSnippet', () => {
     expect(res.text).toBeNull();
     expect(res.error).toContain('Node not found');
   });
+
+  it('forwards the symbol line to get_code_snippet so the snippet opens on the definition', async () => {
+    let seen: unknown;
+    const mock = createLainMock();
+    const spy: LainAdapter = {
+      ...mock,
+      getCodeSnippet: async (req) => {
+        seen = req;
+        return mock.getCodeSnippet(req);
+      },
+    };
+    const res = await resolveSymbolSnippet(spy, 'orders', 'create_order', 12, 152);
+    expect(res.error).toBeUndefined();
+    expect(res.path).toBe('mock/create_order.rs');
+    expect(seen).toMatchObject({ path: 'mock/create_order.rs', line: 152 });
+  });
+
+  it('omits the line when it is not known', async () => {
+    let seen: unknown;
+    const mock = createLainMock();
+    const spy: LainAdapter = {
+      ...mock,
+      getCodeSnippet: async (req) => {
+        seen = req;
+        return mock.getCodeSnippet(req);
+      },
+    };
+    await resolveSymbolSnippet(spy, 'orders', 'create_order');
+    expect(seen).toMatchObject({ path: 'mock/create_order.rs' });
+    expect(seen).not.toHaveProperty('line');
+  });
 });
 
 describe('resolvePathSnippet (mock engine)', () => {

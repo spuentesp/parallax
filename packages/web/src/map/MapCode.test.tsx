@@ -238,11 +238,20 @@ describe('MapExplorer — code layer', () => {
     expect((await screen.findByTestId('repo-no-code')).textContent).toMatch(/nothing is guessed/i);
   });
 
-  it('explains a deep link to code that has not been loaded yet', async () => {
+  it('pins a deep-linked code node onto the map instead of leaving it not loaded', async () => {
     serveMap([repo('orders', 'orders')]);
+    const calls = serveLain();
     renderExplorer('/?sel=sym:orders|Function|create_order');
-    expect((await screen.findByTestId('code-inspector-missing')).textContent).toMatch(
-      /open the repository/i,
+    // El nodo seleccionado se ancla en el lienzo (ya no queda "Not loaded") y se
+    // piden sus datos a LAIN para el inspector.
+    expect(await screen.findByTestId('code-inspector')).toBeTruthy();
+    expect(screen.queryByTestId('code-inspector-missing')).toBeNull();
+    await waitFor(() =>
+      expect(calls.children).toContainEqual({
+        repo: 'orders',
+        type: 'Function',
+        name: 'create_order',
+      }),
     );
   });
 });

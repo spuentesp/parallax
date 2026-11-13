@@ -1,6 +1,8 @@
-// Salidas REALES de LAIN 0.13 sobre Saleor (3 repos), capturadas con sonda directa el
-// 2026-10-29: los parsers se prueban contra lo que el motor contesta de verdad, no contra
-// lo que imaginamos que contesta.
+// Salidas REALES de LAIN sobre Saleor (3 repos), capturadas con sonda directa el
+// 2026-10-29 con el binario 0.13.0: los parsers se prueban contra lo que el motor
+// contesta de verdad, no contra lo que imaginamos que contesta. Verificado contra
+// 0.15.0: los formatos de texto de las tools de código se conservan (0.15 añade
+// structuredContent además del text, que es el que se parsea aquí).
 
 export const SEARCH_ORG_FILE = JSON.stringify([
   {

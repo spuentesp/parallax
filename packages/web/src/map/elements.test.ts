@@ -35,24 +35,51 @@ const edge = (over: Partial<OrgEdge> = {}): OrgEdge => ({
 });
 
 describe('edge styling encodes provenance, not decoration', () => {
-  it('deterministic edges are always fully opaque; inferred ones fade with confidence', () => {
-    expect(edgeOpacity({ provenance: 'deterministic', confidence: 1 })).toBeGreaterThan(0.85);
-    const weak = edgeOpacity({ provenance: 'inferred', confidence: 0.2 });
-    const strong = edgeOpacity({ provenance: 'inferred', confidence: 0.9 });
-    expect(weak).toBeLessThan(strong);
-    expect(strong).toBeLessThan(edgeOpacity({ provenance: 'deterministic', confidence: 1 }) + 0.05);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: 0 })).toBeGreaterThan(0.3);
+  it('deterministic edges are fully opaque; inferred ones at the reference 0.75', () => {
+    expect(edgeOpacity({ provenance: 'deterministic', confidence: 1 })).toBe(1);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 0.2 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 0.9 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 0 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 1 })).toBeLessThan(
+      edgeOpacity({ provenance: 'deterministic', confidence: 1 }),
+    );
   });
 
-  it('width grows with rolled-up relations but is capped', () => {
+  it('width grows with rolled-up relations, 1.4 → 3.5 like the reference', () => {
     expect(edgeWidth(1)).toBeLessThan(edgeWidth(8));
-    expect(edgeWidth(1_000_000)).toBeLessThanOrEqual(2.6);
+    expect(edgeWidth(1)).toBeCloseTo(1.4);
+    expect(edgeWidth(1_000_000)).toBeLessThanOrEqual(3.5);
   });
 
-  it('labels aggregates with the count and flags mixed provenance', () => {
-    expect(edgeLabel(edge())).toBe('');
-    expect(edgeLabel(edge({ count: 5, deterministicCount: 5 }))).toBe('×5');
-    expect(edgeLabel(edge({ count: 5, deterministicCount: 3, inferredCount: 2 }))).toBe('×5 (2~)');
+  it('labels every relation edge with its call-site count', () => {
+    expect(edgeLabel(edge())).toBe('1');
+    expect(edgeLabel(edge({ count: 5, deterministicCount: 5 }))).toBe('5');
+    expect(edgeLabel(edge({ count: 5, deterministicCount: 3, inferredCount: 2 }))).toBe('5');
+  });
+
+  it('labels inferred edges with "count · confidence", always (even a single call)', () => {
+    expect(
+      edgeLabel(
+        edge({
+          provenance: 'inferred',
+          confidence: 0.6,
+          count: 4,
+          inferredCount: 4,
+          deterministicCount: 0,
+        }),
+      ),
+    ).toBe('4 · 0.6');
+    expect(
+      edgeLabel(
+        edge({
+          provenance: 'inferred',
+          confidence: 0,
+          count: 1,
+          inferredCount: 1,
+          deterministicCount: 0,
+        }),
+      ),
+    ).toBe('1 · 0.0');
   });
 });
 
@@ -65,10 +92,18 @@ describe('nodeLabel', () => {
       'orders  (+40)',
     );
   });
-  it('drops the contract prefix of endpoints (the colour already says it)', () => {
+  it('endpoint rows are two-line: contract kind on top, name below (reference Contracts lens)', () => {
     expect(
       nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'http:GET /api/orders/{}' }), 0),
-    ).toBe('GET /api/orders/{}');
+    ).toBe('HTTP\nGET /api/orders/{}');
+  });
+  it('truncates a long endpoint name so the label never spills out of its row', () => {
+    const long = 'http:GET /.well-known/oauth-protected-resource/some/very/long/path';
+    const label = nodeLabel(node({ id: 'e', kind: 'endpoint', label: long }), 0);
+    const lines = label.split('\n');
+    expect(lines[0]).toBe('HTTP');
+    expect(lines[1]?.length).toBe(30);
+    expect(lines[1]?.endsWith('…')).toBe(true);
   });
 });
 
@@ -108,21 +143,30 @@ describe('toCyElements', () => {
     expect(els.find((e) => e.data.id === 'repo:a')?.classes).toContain('expanded');
   });
 
-  it('marks the Interfaces container for its distinct canvas treatment', () => {
+  it('drops the Interfaces container from the canvas: the repo box holds the structure directly', () => {
     const elements = toCyElements({
       nodes: [
+        node({ id: 'repo:a', kind: 'repo', label: 'a', childCount: 1, expanded: true }),
         node({
           id: 'interfaces:a',
           kind: 'group',
           label: 'Interfaces',
+          parent: 'repo:a',
           meta: { role: 'interfaces' },
           childCount: 1,
+          expanded: true,
         }),
+        node({ id: 'svc:a', parent: 'interfaces:a', label: 'svc' }),
       ],
       edges: [],
       hiddenChildren: {},
     });
-    expect(elements[0]?.classes).toContain('interfaces');
+    const ids = elements.filter((e) => e.group === 'nodes').map((e) => e.data.id);
+    expect(ids).not.toContain('interfaces:a');
+    const svc = elements.find((e) => e.group === 'nodes' && e.data.id === 'svc:a');
+    expect(svc && svc.group === 'nodes' && 'parent' in svc.data ? svc.data.parent : null).toBe(
+      'repo:a',
+    );
   });
 
   it('classes edges by provenance and never emits an edge to a node that is not drawn', () => {

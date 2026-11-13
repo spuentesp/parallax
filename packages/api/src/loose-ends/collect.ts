@@ -6,6 +6,7 @@ import type { LooseEnd } from './types.js';
 const PAGE = 200;
 const MAX_PAGES = 10;
 const MAX_CANDIDATES_SHOWN = 3;
+const MAX_CANDIDATE_REFS = 60;
 
 function keyOf(parts: Array<string | number | null | undefined>): string {
   return createHash('sha1')
@@ -15,6 +16,7 @@ function keyOf(parts: Array<string | number | null | undefined>): string {
 }
 
 interface Anchor {
+  id?: string;
   repo?: string;
   path?: string;
   line?: number;
@@ -50,6 +52,24 @@ export async function collectLooseEnds(
             .map((c) => c.endpoint?.key)
             .filter((k): k is string => typeof k === 'string')
         : [];
+      const candidateRefs = Array.isArray(it.candidates)
+        ? (
+            it.candidates as Array<{
+              endpoint?: { key?: string; service?: string };
+              reason?: string;
+            }>
+          ).flatMap((c) =>
+            typeof c.endpoint?.key === 'string' && typeof c.endpoint.service === 'string'
+              ? [
+                  {
+                    key: c.endpoint.key,
+                    service: c.endpoint.service,
+                    reason: typeof c.reason === 'string' ? c.reason : null,
+                  },
+                ]
+              : [],
+          )
+        : [];
       const urlExpr = typeof it.url_expr === 'string' ? it.url_expr : undefined;
       const e: LooseEnd = {
         key: keyOf(['unresolved', at.repo, at.path, at.line, String(it.reason ?? ''), urlExpr]),
@@ -67,6 +87,10 @@ export async function collectLooseEnds(
         },
         candidates: candidates.slice(0, MAX_CANDIDATES_SHOWN),
         candidateCount: candidates.length,
+        ...(typeof at.id === 'string' ? { consumerId: at.id } : {}),
+        ...(candidateRefs.length > 0
+          ? { candidateRefs: candidateRefs.slice(0, MAX_CANDIDATE_REFS) }
+          : {}),
       };
       out.set(e.key, e);
     }

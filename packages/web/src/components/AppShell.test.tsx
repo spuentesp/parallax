@@ -49,6 +49,7 @@ describe('the sidebar is the same on every screen', () => {
     '/orgs/acme/contracts',
     '/orgs/acme/assessments',
     '/orgs/acme/assessments/a_1',
+    '/orgs/acme/coverage',
     '/orgs/acme/services/orders',
     '/orgs/acme/typo',
   ];
@@ -58,7 +59,10 @@ describe('the sidebar is the same on every screen', () => {
       renderAt(url);
       expect(labelsShown(), url).toEqual(LABELS);
       // Y el recuadro del workspace actual, siempre.
-      expect(screen.getByText('Workspace'), url).toBeTruthy();
+      expect(
+        within(screen.getByRole('complementary', { name: 'Navigation' })).getByText('Workspace'),
+        url,
+      ).toBeTruthy();
       cleanup();
     }
   });
@@ -78,6 +82,7 @@ describe('the sidebar is the same on every screen', () => {
       ['/orgs/acme/contracts', 'Contracts'],
       ['/orgs/acme/assessments', 'Assessments'],
       ['/orgs/acme/assessments/a_1', 'Assessments'],
+      ['/orgs/acme/coverage', 'Coverage'],
     ];
     for (const [url, current] of cases) {
       renderAt(url);
@@ -96,6 +101,7 @@ describe('the sidebar is the same on every screen', () => {
     expect(href('Repositories')).toBe('/orgs/acme/repos');
     expect(href('Contracts')).toBe('/orgs/acme/contracts');
     expect(href('Assessments')).toBe('/orgs/acme/assessments');
+    expect(href('Coverage')).toBe('/orgs/acme/coverage');
   });
 
   it('outside a workspace page it keeps pointing at the workspace in use: the first one when none was used', async () => {

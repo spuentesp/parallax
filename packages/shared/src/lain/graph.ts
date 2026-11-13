@@ -1,7 +1,9 @@
 import { z } from 'zod';
+import { LainView } from './enums.js';
 
-// Tipos del grafo crudo de lain 0.9.1 (paquetes raw/arch): query_graph,
+// Tipos del grafo crudo de lain (paquetes raw/arch): query_graph,
 // describe_schema, get_code_snippet, explain_symbol y get_call_sites.
+// Verificados contra el binario de release v0.15.0.
 //
 // Divergencias motor ↔ docs/query-language.md de lain, verificadas en vivo
 // contra el fixture :9997:
@@ -11,6 +13,10 @@ import { z } from 'zod';
 //   - `meta` no trae `plan` (sólo exec_us y nodes_visited).
 //   - El filtro `id` de find es inerte en este build: hay que dirigir los
 //     nodos por type+name.
+//   - Desde 0.15 las tools crudas también devuelven structuredContent (el
+//     payload directo, sin envoltorio {data}); el adapter lo prefiere y cae
+//     sobre content[0].text. Aceptan `snapshot` opcional para leer snapshots
+//     nombrados en vez de `live`.
 
 /** Un op del pipeline; el motor acepta campos extra, no los modelamos en profundidad. */
 export const QueryGraphOp = z.looseObject({ op: z.string().min(1) });
@@ -25,6 +31,8 @@ export const QueryGraphArgs = z.object({
   query: QueryGraphSpec,
   // Obligatorio en modo federación (varios repos por servidor).
   repo_id: z.string().min(1).optional(),
+  // Desde 0.15: snapshot nombrado (`snap_<hex>`) o `live` (por defecto).
+  snapshot: LainView.optional(),
 });
 export type QueryGraphArgs = z.infer<typeof QueryGraphArgs>;
 

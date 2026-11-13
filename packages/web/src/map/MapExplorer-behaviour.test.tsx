@@ -138,21 +138,60 @@ describe('MapExplorer toolbar', () => {
     await waitFor(() => expect(search(r).get('contract')).toBeNull());
   });
 
-  it('provenance buttons toggle ?prov=, "all" clears it, and "deterministic" also drops the confidence floor', async () => {
+  it('the Proven / Inferred chips toggle ?prov= and hiding inferred also drops the confidence floor', async () => {
     serve();
     const r = mount('/?prov=inferred&minc=0.6');
     const bar = await toolbar();
-    expect(bar.getByRole('button', { name: /inferred/ }).getAttribute('aria-pressed')).toBe('true');
-    expect(bar.getByRole('button', { name: 'all' }).getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(bar.getByRole('button', { name: /^deterministic$/ }));
+    // Sólo lo inferido visible: "Proven" apagada, "Inferred" encendida.
+    expect(bar.getByRole('button', { name: /^Inferred/ }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(bar.getByRole('button', { name: 'Proven' }).getAttribute('aria-pressed')).toBe('false');
+    // Apagar lo inferido deja sólo lo probado y suelta el umbral de confianza.
+    fireEvent.click(bar.getByRole('button', { name: 'Proven' }));
+    await waitFor(() => expect(search(r).get('prov')).toBeNull());
+    fireEvent.click(bar.getByRole('button', { name: /^Inferred/ }));
     await waitFor(() => expect(search(r).get('prov')).toBe('deterministic'));
     expect(search(r).get('minc')).toBeNull();
-    fireEvent.click(bar.getByRole('button', { name: /^deterministic$/ }));
+    fireEvent.click(bar.getByRole('button', { name: /^Inferred/ }));
     await waitFor(() => expect(search(r).get('prov')).toBeNull());
-    fireEvent.click(bar.getByRole('button', { name: /inferred/ }));
+    fireEvent.click(bar.getByRole('button', { name: 'Proven' }));
     await waitFor(() => expect(search(r).get('prov')).toBe('inferred'));
-    fireEvent.click(bar.getByRole('button', { name: 'all' }));
-    await waitFor(() => expect(search(r).get('prov')).toBeNull());
+  });
+
+  it('the Detail pills open containers down to that level and "Repos" folds everything', async () => {
+    const posts = serve((b) => ({
+      nodes: [
+        pn('repo:a', { label: 'alpha', childCount: 1, expanded: b.expand.includes('repo:a') }),
+        ...(b.expand.includes('repo:a')
+          ? [pn('svc:a1', { kind: 'service', parent: 'repo:a', label: 'a1', childCount: 2 })]
+          : []),
+      ],
+    }));
+    mount();
+    const bar = await toolbar();
+    fireEvent.click(bar.getByRole('button', { name: 'Services' }));
+    await waitFor(() => expect(posts.at(-1)?.expand).toContain('repo:a'));
+    expect(posts.at(-1)?.expand).not.toContain('svc:a1');
+    expect(bar.getByRole('button', { name: 'Services' }).getAttribute('aria-pressed')).toBe('true');
+    // "Endpoints" sigue abriendo lo que el servidor va revelando: el servicio también.
+    fireEvent.click(bar.getByRole('button', { name: 'Endpoints' }));
+    await waitFor(() => expect(posts.at(-1)?.expand).toContain('svc:a1'));
+    expect(await screen.findAllByText('a1')).not.toHaveLength(0);
+    // La vista sin nada abierto ya está en caché: no hace falta otra petición.
+    fireEvent.click(bar.getByRole('button', { name: 'Repos' }));
+    await waitFor(() => expect(screen.queryAllByText('a1')).toHaveLength(0));
+    expect(bar.getByRole('button', { name: 'Repos' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('the breadcrumb follows the selection and its first step clears it', async () => {
+    serve();
+    const r = mount('/?sel=repo:a');
+    const crumbs = within(await screen.findByRole('navigation', { name: 'Map level' }));
+    expect(await crumbs.findByText('alpha')).toBeTruthy();
+    fireEvent.click(crumbs.getByRole('button', { name: 'Workspace' }));
+    await waitFor(() => expect(search(r).get('sel')).toBeNull());
+    expect(crumbs.queryByText('alpha')).toBeNull();
   });
 
   it('the confidence slider reads the URL, writes it, and 0 removes the parameter', async () => {
@@ -314,7 +353,14 @@ describe('MapExplorer canvas area', () => {
     expect(legend.textContent).toMatch(/Repository/);
     expect(legend.textContent).toMatch(/deterministic/);
     expect(legend.textContent).toMatch(/inferred/);
-    expect(legend.textContent).toMatch(/double-click to open/);
+    // La leyenda explica el modelo de la referencia: cajas (repo→servicio→
+    // filas de interfaz), aristas servicio→servicio con conteo, nada oculto.
+    expect(legend.textContent).toMatch(/Box = container/);
+    expect(legend.textContent).toMatch(/slate rows = interfaces/);
+    expect(legend.textContent).toMatch(/violet = code/);
+    expect(legend.textContent).toMatch(/service → service/);
+    expect(legend.textContent).toMatch(/nothing is hidden/);
+    expect(legend.textContent).toMatch(/Code ▸ chip/);
   });
 
   it('an empty projection says no nodes match and draws no canvas', async () => {
@@ -444,6 +490,145 @@ describe('MapExplorer outline wiring', () => {
     // La vista de "todo cerrado" ya estaba en caché: no hace falta volver a pedirla.
     expect(await o.findByRole('button', { name: 'Expand alpha' })).toBeTruthy();
     expect(posts.every((p) => p.expand.length <= 1)).toBe(true);
+  });
+
+  it('auto-open cascades from repos into interfaces groups and services, but never into code', async () => {
+    const posts = serve((b) => {
+      const nodes = [
+        pn('repo:a', { label: 'alpha', childCount: 2, expanded: b.expand.includes('repo:a') }),
+      ];
+      if (b.expand.includes('repo:a')) {
+        nodes.push(
+          pn('interfaces:a', {
+            kind: 'group',
+            label: 'Interfaces',
+            parent: 'repo:a',
+            childCount: 1,
+            expanded: b.expand.includes('interfaces:a'),
+          }),
+        );
+        nodes.push(
+          pn('code:a', {
+            kind: 'code',
+            label: 'Code',
+            parent: 'repo:a',
+            childCount: 0,
+            lazy: true,
+          }),
+        );
+      }
+      if (b.expand.includes('interfaces:a')) {
+        nodes.push(
+          pn('svc:a', {
+            kind: 'service',
+            label: 'a-svc',
+            parent: 'interfaces:a',
+            childCount: 2,
+            expanded: b.expand.includes('svc:a'),
+          }),
+        );
+      }
+      if (b.expand.includes('svc:a')) {
+        nodes.push(
+          pn('ep:1', {
+            kind: 'endpoint',
+            label: 'http:GET /x',
+            parent: 'svc:a',
+            childCount: 0,
+            expanded: false,
+          }),
+        );
+      }
+      return { nodes };
+    });
+    mount();
+    await waitFor(() => {
+      const last = posts.at(-1);
+      expect(last).toBeTruthy();
+      expect([...(last?.expand ?? [])].sort()).toEqual(['interfaces:a', 'repo:a', 'svc:a']);
+    });
+    // La puerta de código nunca se autoabre.
+    expect(posts.every((p) => !p.expand.some((e) => e.startsWith('code:')))).toBe(true);
+  });
+
+  it('auto-open leaves services with hundreds of children closed, and still opens small ones', async () => {
+    const posts = serve((b) => {
+      const nodes = [
+        pn('repo:a', { label: 'alpha', childCount: 2, expanded: b.expand.includes('repo:a') }),
+      ];
+      if (b.expand.includes('repo:a')) {
+        nodes.push(
+          pn('svc:small', {
+            kind: 'service',
+            label: 'small',
+            parent: 'repo:a',
+            childCount: 3,
+            expanded: b.expand.includes('svc:small'),
+          }),
+          // Como Saleor: cientos de endpoints bajo un solo servicio.
+          pn('svc:huge', {
+            kind: 'service',
+            label: 'huge',
+            parent: 'repo:a',
+            childCount: 706,
+            expanded: b.expand.includes('svc:huge'),
+          }),
+        );
+      }
+      return { nodes };
+    });
+    mount();
+    await waitFor(() => expect(posts.at(-1)?.expand).toContain('svc:small'));
+    // Se asienta: ninguna petición posterior abre el servicio enorme.
+    await new Promise((r) => setTimeout(r, 300));
+    expect(posts.every((p) => !p.expand.includes('svc:huge'))).toBe(true);
+  });
+
+  it('a manual toggle stops the auto-open cascade', async () => {
+    const posts = serve((b) => {
+      const nodes = [
+        pn('repo:a', { label: 'alpha', childCount: 1, expanded: b.expand.includes('repo:a') }),
+      ];
+      if (b.expand.includes('repo:a')) {
+        nodes.push(
+          pn('interfaces:a', {
+            kind: 'group',
+            label: 'Interfaces',
+            parent: 'repo:a',
+            childCount: 1,
+            expanded: b.expand.includes('interfaces:a'),
+          }),
+        );
+      }
+      return { nodes };
+    });
+    mount();
+    const o = within(await screen.findByTestId('map-outline'));
+    // La cascada empieza: repo:a se abre solo.
+    await waitFor(() => expect(posts.at(-1)?.expand).toContain('repo:a'));
+    // El usuario cierra el repo a mano: no se vuelve a abrir solo.
+    fireEvent.click(await o.findByRole('button', { name: 'Collapse alpha' }));
+    await waitFor(() => expect(posts.at(-1)?.expand ?? []).not.toContain('repo:a'));
+    const settled = posts.length;
+    await new Promise((r) => setTimeout(r, 150));
+    expect(posts.length).toBe(settled);
+    expect(posts.at(-1)?.expand ?? []).not.toContain('repo:a');
+  });
+
+  it('zoom controls: click zooms fast, the % readout tracks it and resets to 100%', async () => {
+    serve();
+    mount();
+    await screen.findByTestId('map-canvas');
+    const pct = () => screen.getByRole('button', { name: /Restablecer zoom/ }).textContent;
+    expect(pct()).toBe('100%');
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    await waitFor(() => expect(pct()).toBe('135%'));
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+    await waitFor(() => expect(pct()).toBe('182%'));
+    fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    await waitFor(() => expect(pct()).toBe('135%'));
+    fireEvent.click(screen.getByRole('button', { name: /Restablecer zoom/ }));
+    await waitFor(() => expect(pct()).toBe('100%'));
   });
 
   it('a leaf with no contents cannot be opened', async () => {

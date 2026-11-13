@@ -13,7 +13,9 @@ import errorHandler from './plugins/error-handler.js';
 import lainAdapterPlugin from './plugins/lain-adapter.js';
 import orgGraphPlugin from './plugins/org-graph.js';
 import { assessmentRoutes } from './routes/assessments.js';
+import { bindingCheckRoutes } from './routes/binding-check.js';
 import { ciRoutes } from './routes/ci.js';
+import { contractDetailRoutes } from './routes/contract-detail.js';
 import { contractRoutes } from './routes/contracts.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { docsRoutes } from './routes/docs.js';
@@ -63,6 +65,8 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(conversationRoutes);
   await app.register(contractRoutes);
   await app.register(looseEndsRoutes);
+  await app.register(contractDetailRoutes);
+  await app.register(bindingCheckRoutes);
   await app.register(implementationRoutes);
   await app.register(docsRoutes);
   await app.register(officialDocsRoutes);

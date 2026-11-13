@@ -4,7 +4,6 @@ import {
   type LayoutEdge,
   type LayoutNode,
   layoutMap,
-  MAX_FORCE_ITEMS,
   measure,
   type Point,
   removeOverlaps,
@@ -31,11 +30,25 @@ const overlaps = (a: ReturnType<typeof boxes>[number], b: ReturnType<typeof boxe
   a.x1 < b.x2 && b.x1 < a.x2 && a.y1 < b.y2 && b.y1 < a.y2;
 
 describe('measure', () => {
-  it('grows with the label but stays within bounds', () => {
+  it('endpoint rows are two-line (h 44) and grow with the longest line within bounds', () => {
+    expect(measure('a', 'endpoint').h).toBe(44);
+    expect(measure('a', 'endpoint').w).toBeLessThan(
+      measure('a-much-longer-endpoint-label', 'endpoint').w,
+    );
+    expect(measure('x'.repeat(500), 'endpoint').w).toBeLessThanOrEqual(320);
+    expect(measure('a', 'endpoint').w).toBeGreaterThanOrEqual(160);
+  });
+  it('a leaf service is a compact box, not a dot; code leaves stay dots with a label band', () => {
+    expect(measure('a', 'service').h).toBe(30);
     expect(measure('a', 'service').w).toBeLessThan(
       measure('a-much-longer-service-name', 'service').w,
     );
-    expect(measure('x'.repeat(500), 'endpoint').w).toBeLessThanOrEqual(230);
+    expect(measure('x'.repeat(500), 'symbol').w).toBeLessThanOrEqual(110);
+    expect(measure('a', 'symbol').h).toBeLessThan(measure('a', 'endpoint').h); // dot 32 < fila de dos líneas 44
+  });
+  it('repos grow with the label within bounds', () => {
+    expect(measure('a', 'repo').w).toBeLessThan(measure('a-much-longer-repo-name', 'repo').w);
+    expect(measure('x'.repeat(500), 'repo').w).toBeLessThanOrEqual(230);
     expect(measure('a', 'repo').w).toBeGreaterThanOrEqual(84);
   });
 });
@@ -61,15 +74,14 @@ describe('layoutMap', () => {
     expect([...a.leaves]).toEqual([...b.leaves]);
   });
 
-  it('draws linked items closer than unlinked ones', () => {
+  it('flows left→right: a consumer lands in an earlier column than its provider', () => {
     const items = [n('a'), n('b'), n('c'), n('d')];
     const l = layoutMap(items, [{ source: 'a', target: 'b', weight: 20 }]);
-    const d = (x: string, y: string) => {
-      const p = l.leaves.get(x) as Point;
-      const q = l.leaves.get(y) as Point;
-      return Math.hypot(p.x - q.x, p.y - q.y);
-    };
-    expect(d('a', 'b')).toBeLessThan(Math.max(d('a', 'c'), d('a', 'd'), d('b', 'c'), d('b', 'd')));
+    const x = (id: string) => (l.top.get(id) as Point).x;
+    expect(x('a')).toBeLessThan(x('b'));
+    // Sin relación con a, c y d comparten columna con a (apilados en vertical).
+    expect(x('c')).toBe(x('a'));
+    expect(x('d')).toBe(x('a'));
   });
 
   it('packs the children of an open container in an aligned grid, without overlaps', () => {
@@ -117,29 +129,16 @@ describe('layoutMap', () => {
     }
   });
 
-  it('opening one node moves its neighbours little (warm start from previous positions)', () => {
+  it('expanding one repo does not move the repos of earlier columns', () => {
     const before = layoutMap(repos, edges);
     const opened = repos.flatMap((r) =>
       r.id === 'repo:3' ? [r, n('svc:3', 'repo:3'), n('svc:3b', 'repo:3')] : [r],
     );
-    const after = layoutMap(opened, edges, before.top);
-    const moved = repos
-      .filter((r) => r.id !== 'repo:3')
-      .map((r) => {
-        const p = before.top.get(r.id) as Point;
-        const q = after.top.get(r.id) as Point;
-        return Math.hypot(p.x - q.x, p.y - q.y);
-      });
-    const median = [...moved].sort((a, b) => a - b)[Math.floor(moved.length / 2)] ?? 0;
-    expect(median).toBeLessThan(120);
-  });
-
-  it('falls back to a plain grid past the force-layout limit instead of hanging', () => {
-    const many = Array.from({ length: MAX_FORCE_ITEMS + 50 }, (_, i) => n(`r${i}`, null, 'repo'));
-    const t0 = Date.now();
-    const l = layoutMap(many, []);
-    expect(Date.now() - t0).toBeLessThan(2000);
-    expect(l.leaves.size).toBe(many.length);
+    const after = layoutMap(opened, edges);
+    // repo:0 es la única fuente (columna 0): su posición no cambia al crecer otra caja.
+    const p = before.top.get('repo:0') as Point;
+    const q = after.top.get('repo:0') as Point;
+    expect(Math.hypot(p.x - q.x, p.y - q.y)).toBe(0);
   });
 
   it('handles empty and single-node views', () => {
@@ -150,11 +149,80 @@ describe('layoutMap', () => {
 
 describe('removeOverlaps', () => {
   it('pushes coincident boxes at least GAP apart', () => {
-    const a = { id: 'a', w: 50, h: 20, x: 0, y: 0 };
-    const b = { id: 'b', w: 50, h: 20, x: 1, y: 0 };
+    const a = { id: 'a', label: 'a', w: 50, h: 20, x: 0, y: 0 };
+    const b = { id: 'b', label: 'b', w: 50, h: 20, x: 1, y: 0 };
     removeOverlaps([a, b]);
     const dx = Math.abs(a.x - b.x);
     const dy = Math.abs(a.y - b.y);
     expect(dx >= 50 + GAP - 0.01 || dy >= 20 + GAP - 0.01).toBe(true);
+  });
+});
+
+describe('interface rows inside the service box', () => {
+  const row = (id: string, svc: string): LayoutNode => ({
+    id,
+    parent: svc,
+    kind: 'endpoint',
+    label: `http:GET /${id}`,
+    row: true,
+  });
+
+  it('stacks endpoint rows in a single column inside the service, without overlaps', () => {
+    const nodes: LayoutNode[] = [
+      n('repo', null, 'repo'),
+      n('svc', 'repo', 'service'),
+      row('p1', 'svc'),
+      row('p2', 'svc'),
+      row('p3', 'svc'),
+    ];
+    const l = layoutMap(nodes, []);
+    const all = boxes(l);
+    for (let i = 0; i < all.length; i++) {
+      for (let j = i + 1; j < all.length; j++) {
+        expect(overlaps(all[i] as never, all[j] as never)).toBe(false);
+      }
+    }
+    // Una columna: misma x (centrada), y crecientes con GAP entre filas.
+    const pts = ['p1', 'p2', 'p3'].map((id) => l.leaves.get(id) as Point);
+    expect(pts.length).toBe(3);
+    const xs = pts.map((p) => p.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThan(1e-6);
+    const ys = pts.map((p) => p.y);
+    expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+    for (let k = 1; k < ys.length; k++) {
+      const prev = ys[k - 1] ?? 0;
+      const cur = ys[k] ?? 0;
+      expect(cur - prev).toBeGreaterThanOrEqual(44 + GAP - 0.01);
+    }
+  });
+
+  it('many rows fan out into several columns (no skyscraper box) without overlapping', () => {
+    const nodes: LayoutNode[] = [
+      n('repo', null, 'repo'),
+      n('svc', 'repo', 'service'),
+      ...Array.from({ length: 40 }, (_, i) => row(`p${i}`, 'svc')),
+    ];
+    const l = layoutMap(nodes, []);
+    const bs = boxes(l).filter((b) => b.id.startsWith('p'));
+    for (let i = 0; i < bs.length; i++) {
+      for (let j = i + 1; j < bs.length; j++) {
+        expect(overlaps(bs[i] as never, bs[j] as never)).toBe(false);
+      }
+    }
+    // Más de una columna: hay al menos dos x distintas entre las filas.
+    const xs = new Set(bs.map((b) => Math.round((l.leaves.get(b.id) as Point).x)));
+    expect(xs.size).toBeGreaterThan(1);
+  });
+
+  it('a service with only rows still lays out', () => {
+    const nodes: LayoutNode[] = [
+      n('repo', null, 'repo'),
+      n('svc', 'repo', 'service'),
+      row('p1', 'svc'),
+      row('p2', 'svc'),
+    ];
+    const l = layoutMap(nodes, []);
+    expect(l.leaves.get('p1')).toBeDefined();
+    expect(l.leaves.get('p2')).toBeDefined();
   });
 });

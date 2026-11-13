@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApplyContractContextArgs, TraceFlowArgs, TraceFlowResponse } from '../src/lain/tools.js';
 
-describe('Lain 0.13 native tool contracts', () => {
+describe('Lain 0.15 native tool contracts', () => {
   it('requires exactly one trace seed and applies native defaults', () => {
     const parsed = TraceFlowArgs.parse({ from: { symbol: 'getOrder' } });
     expect(parsed).toMatchObject({ snapshot: 'live', strategy: 'breadth' });

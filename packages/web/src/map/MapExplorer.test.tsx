@@ -141,22 +141,26 @@ function renderRouted(url: string) {
 }
 
 describe('MapExplorer', () => {
-  it('asks for the top level first, then opens the repos on its own so services show; closing one is respected', async () => {
+  it('asks for the top level first, then cascades open repos into their services so boxes are not empty; closing one is respected', async () => {
     const requests: Posted[] = [];
     serveMap(requests);
     renderExplorer();
 
     const outline = await screen.findByTestId('map-outline');
     expect(requests[0]?.expand).toEqual([]);
-    // Sin pulsar nada: los hijos de los repos llegan.
+    // Sin pulsar nada: los repos y sus servicios quedan abiertos solos.
     expect(await within(outline).findByText('orders-api')).toBeTruthy();
-    expect(requests.at(-1)?.expand).toEqual(['repo:orders', 'repo:web']);
+    await waitFor(() =>
+      expect([...(requests.at(-1)?.expand ?? [])].sort()).toEqual(
+        ['repo:orders', 'repo:web', 'svc:orders'].sort(),
+      ),
+    );
 
-    // Cerrar uno se respeta: la apertura automática es de una sola vez.
+    // Cerrar uno se respeta: la apertura automática no vuelve a meterlo.
     fireEvent.click(within(outline).getByRole('button', { name: 'Collapse orders' }));
-    await waitFor(() => expect(requests.at(-1)?.expand).toEqual(['repo:web']));
+    await waitFor(() => expect(requests.at(-1)?.expand ?? []).not.toContain('repo:orders'));
     await new Promise((r) => setTimeout(r, 100));
-    expect(requests.at(-1)?.expand).toEqual(['repo:web']);
+    expect(requests.at(-1)?.expand ?? []).not.toContain('repo:orders');
   });
 
   it('shows how much of the graph is on screen and how fresh it is', async () => {
@@ -174,15 +178,18 @@ describe('MapExplorer', () => {
     renderExplorer();
     await screen.findByTestId('map-outline');
 
-    fireEvent.click(screen.getByText('Filters'));
-    fireEvent.click(screen.getByRole('button', { name: /inferred/ }));
+    // Las pastillas de procedencia son visibilidad: apagar "Proven" deja lo inferido.
+    fireEvent.click(screen.getByRole('button', { name: 'Proven' }));
     await waitFor(() => expect(requests.at(-1)?.filters?.provenance).toBe('inferred'));
+    fireEvent.click(screen.getByText('Filters'));
 
     fireEvent.change(screen.getByLabelText(/minimum confidence/i), { target: { value: '0.6' } });
     await waitFor(() => expect(requests.at(-1)?.filters?.minConfidence).toBe(0.6));
 
     // Con "deterministic" la confianza no aplica: el control desaparece.
-    fireEvent.click(screen.getByRole('button', { name: /^deterministic$/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Proven' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Inferred/ }));
+    await waitFor(() => expect(requests.at(-1)?.filters?.provenance).toBe('deterministic'));
     await waitFor(() => expect(screen.queryByLabelText(/minimum confidence/i)).toBeNull());
   });
 

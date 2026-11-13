@@ -70,6 +70,9 @@ const OPENABLE_TYPES = new Set([
  * tiene código que navegar).
  */
 export function canOpen(n: ProjectedNode): boolean {
+  // Los clústeres de interfaces son transparentes: se abren con su grupo y no
+  // se pliegan por su cuenta.
+  if (n.meta.role === 'cluster') return false;
   return (
     n.childCount > 0 ||
     n.lazy === true ||
@@ -79,6 +82,27 @@ export function canOpen(n: ProjectedNode): boolean {
 
 export const isContainerType = (type: string): boolean => CONTAINER_TYPES.has(type);
 export const isOpenableType = (type: string): boolean => OPENABLE_TYPES.has(type);
+
+/**
+ * Rutas candidatas de tests para un archivo de implementación, por convención:
+ * `…/routes/static.py` → `…/routes/test_static.py`, espejo `src/`→`tests/`, y
+ * `tests/test_static.py` en la raíz. Se muestran como enlaces (no se anclan solos:
+ * sólo el usuario abre el que existe).
+ */
+export function candidateTestPaths(path: string): string[] {
+  const m = /^(.*\/)?([^/]+)\.([A-Za-z0-9]+)$/.exec(path);
+  if (!m) return [];
+  const dir = m[1] ?? '';
+  const stem = (m[2] ?? '').replace(/^test_/, '');
+  const ext = m[3] ?? '';
+  if (!stem) return [];
+  const out = [
+    `${dir}test_${stem}.${ext}`,
+    ...(dir.includes('/src/') ? [`${dir.replace(/\/src\//, '/tests/')}test_${stem}.${ext}`] : []),
+    `tests/test_${stem}.${ext}`,
+  ];
+  return [...new Set(out)].filter((p) => p !== path);
+}
 
 /** Extrae las rutas candidatas donde se define o implementa un endpoint */
 export function candidateEndpointPaths(node: ProjectedNode): string[] {
@@ -140,6 +164,7 @@ export function mergeCode(
   open: ReadonlySet<string>,
   state: CodeState,
   activeRelations?: ReadonlySet<string>,
+  pinnedCode?: ReadonlySet<string>,
 ): MapViewResponse {
   const extra: ProjectedNode[] = [];
   const extraById = new Map<string, ProjectedNode>();
@@ -214,6 +239,63 @@ export function mergeCode(
   const endpointsById = new Map<string, ProjectedNode>();
   for (const n of view.nodes) {
     if (n.kind === 'endpoint') endpointsById.set(n.id, n);
+  }
+
+  // Nodos de código anclados (pinned): los que implementan el endpoint
+  // seleccionado/enfocado y los que aparecen en sus hops de foco. Se proyectan
+  // aunque el repo no esté abierto en el árbol: una interfaz se entiende con su
+  // código, no sólo con su contrato.
+  const repoNodeByLainId = new Map<string, string>();
+  for (const n of view.nodes) {
+    if (n.kind === 'repo' && typeof n.meta.lainRepoId === 'string') {
+      repoNodeByLainId.set(n.meta.lainRepoId, n.id);
+    }
+  }
+  if (pinnedCode && pinnedCode.size > 0) {
+    for (const pinnedId of pinnedCode) {
+      const parsed = parseCodeId(pinnedId);
+      if (parsed?.kind !== 'node') continue;
+      const repoNodeId = repoNodeByLainId.get(parsed.repo);
+      if (!repoNodeId) continue;
+      const rootId = repoRoots.get(parsed.repo) ?? codeRootId(parsed.repo);
+      if (!seen.has(rootId)) {
+        repoRoots.set(parsed.repo, rootId);
+        const entry = state[rootId];
+        add({
+          id: rootId,
+          label: 'Code',
+          kind: 'code',
+          parent: repoNodeId,
+          meta: {
+            repo: parsed.repo,
+            ...(entry?.state === 'loading' ? { loading: true } : {}),
+            ...(entry?.state === 'error' ? { error: entry.message } : {}),
+          },
+          childCount: 0,
+          expanded: open.has(rootId),
+          lazy: true,
+        });
+      }
+      if (seen.has(pinnedId)) continue;
+      const entry = state[pinnedId];
+      add({
+        id: pinnedId,
+        label: parsed.name,
+        kind: isContainerType(parsed.type) ? 'file' : 'symbol',
+        parent: rootId,
+        contract: parsed.type,
+        meta: {
+          repo: parsed.repo,
+          type: parsed.type,
+          name: parsed.name,
+          ...(entry?.state === 'loading' ? { loading: true } : {}),
+          ...(entry?.state === 'error' ? { error: entry.message } : {}),
+        },
+        childCount: 0,
+        expanded: open.has(pinnedId),
+        ...(isOpenableType(parsed.type) ? { lazy: true } : {}),
+      });
+    }
   }
 
   // Relaciones de código proyectadas bajo demanda para los nodos activados

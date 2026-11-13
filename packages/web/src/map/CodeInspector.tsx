@@ -5,7 +5,7 @@
 import type { ProjectedNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
 import { useSymbolContext } from '../api/hooks.js';
-import { type CodeEntry, codeNodeId } from './code.js';
+import { type CodeEntry, candidateTestPaths, codeNodeId } from './code.js';
 import { KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -20,6 +20,8 @@ export interface CodeInspectorProps {
   onToggle: (id: string) => void;
   relationsActive?: boolean;
   onToggleRelations?: () => void;
+  /** Pregunta al asistente con este símbolo como tema ("Ask about this function"). */
+  onAsk?: (question: string) => void;
 }
 
 export function CodeInspector({
@@ -32,6 +34,7 @@ export function CodeInspector({
   onToggle,
   relationsActive,
   onToggleRelations,
+  onAsk,
 }: CodeInspectorProps): React.ReactElement {
   if (!node) {
     return (
@@ -62,6 +65,17 @@ export function CodeInspector({
           )}
         </div>
         <h3 className="text-sm font-semibold font-mono break-words">{node.label}</h3>
+        {onAsk && !isRoot && (
+          <button
+            type="button"
+            onClick={() =>
+              onAsk(`What does ${node.label} do, who calls it, and what breaks if it changes?`)
+            }
+            className="rounded-full border border-border-strong px-2.5 py-1 text-xs hover:border-accent hover:text-accent"
+          >
+            Ask about this {node.kind === 'symbol' ? 'function' : 'code'}
+          </button>
+        )}
         {Boolean(node.meta?.exposesEndpoint) && (
           <div className="flex items-center justify-between rounded-lg bg-accent/10 border border-accent/20 px-3 py-2 text-xs">
             <span className="text-muted">
@@ -79,6 +93,27 @@ export function CodeInspector({
             </button>
           </div>
         )}
+        {node.kind === 'file' &&
+          (() => {
+            const tests = candidateTestPaths(node.label);
+            if (tests.length === 0) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted">Tests:</span>
+                {tests.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onSelect(codeNodeId(repo, 'File', t))}
+                    className="rounded border border-border bg-bg px-1.5 py-0.5 font-mono text-[10px] text-muted hover:text-accent hover:border-accent/40"
+                    title={t}
+                  >
+                    {t.split('/').pop()}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         {trail.length > 0 && (
           <p className="text-xs text-muted break-words">
             {[...trail].reverse().map((p, i) => (

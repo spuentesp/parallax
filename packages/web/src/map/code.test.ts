@@ -2,6 +2,7 @@ import type { MapViewResponse, ProjectedNode } from '@parallax/shared/org-map';
 import { describe, expect, it } from 'vitest';
 import {
   type CodeState,
+  candidateTestPaths,
   canOpen,
   codeNodeId,
   codeRootId,
@@ -295,5 +296,90 @@ describe('mergeCode — node meta and structure', () => {
     expect(edge).toBeDefined();
     expect(edge?.kind).toBe('calls');
     expect(edge?.label).toBe('Calls');
+  });
+});
+
+describe('mergeCode — pinned code (interfaces are implemented by code)', () => {
+  const endpoint = (over: Partial<ProjectedNode> = {}): ProjectedNode => ({
+    id: 'ep:http:GET /orders@api',
+    label: 'http:GET /orders',
+    kind: 'endpoint',
+    parent: 'svc:api',
+    meta: { providers: [{ repo: 'orders', path: 'main.rs' }], definedAt: 'src/api.rs' },
+    childCount: 0,
+    expanded: false,
+    ...over,
+  });
+  // Repo NOT expanded: the pinned code must appear anyway.
+  const collapsedRepo = repoNode({ expanded: false, childCount: 0 });
+
+  it('projects a pinned file under a Code root even when the repo is collapsed', () => {
+    const file = codeNodeId('orders', 'File', 'main.rs');
+    const m = mergeCode(
+      view([collapsedRepo, endpoint()]),
+      new Set(),
+      {},
+      undefined,
+      new Set([file]),
+    );
+    const root = m.nodes.find((n) => n.id === 'code:orders');
+    expect(root?.parent).toBe('repo:orders');
+    const f = m.nodes.find((n) => n.id === file);
+    expect(f?.parent).toBe('code:orders');
+    expect(f?.kind).toBe('file');
+    expect(f?.meta).toMatchObject({ repo: 'orders', type: 'File', name: 'main.rs' });
+  });
+
+  it('links a pinned implementing file to its endpoint with a servedby "implements" edge', () => {
+    const file = codeNodeId('orders', 'File', 'main.rs');
+    const m = mergeCode(
+      view([collapsedRepo, endpoint()]),
+      new Set(),
+      {},
+      undefined,
+      new Set([file]),
+    );
+    const edge = m.edges.find((e) => e.source === 'ep:http:GET /orders@api' && e.target === file);
+    expect(edge?.kind).toBe('servedBy');
+    expect(edge?.label).toBe('implements');
+    expect(edge?.provenance).toBe('deterministic');
+    const f = m.nodes.find((n) => n.id === file);
+    expect(f?.meta?.exposesEndpoint).toEqual({
+      id: 'ep:http:GET /orders@api',
+      label: 'http:GET /orders',
+    });
+  });
+
+  it('projects pinned symbol ids from focus hops, and ignores ids of unknown repos', () => {
+    const sym = codeNodeId('orders', 'Function', 'create_order');
+    const unknown = codeNodeId('ghost', 'File', 'x.rs');
+    const m = mergeCode(
+      view([collapsedRepo, endpoint()]),
+      new Set(),
+      {},
+      undefined,
+      new Set([sym, unknown]),
+    );
+    expect(m.nodes.find((n) => n.id === sym)?.kind).toBe('symbol');
+    expect(m.nodes.some((n) => n.id === unknown)).toBe(false);
+  });
+});
+
+describe('candidateTestPaths', () => {
+  it('derives sibling, src→tests mirror and root tests/ candidates', () => {
+    expect(candidateTestPaths('packages/core/src/nat/routes/static.py')).toEqual([
+      'packages/core/src/nat/routes/test_static.py',
+      'packages/core/tests/nat/routes/test_static.py',
+      'tests/test_static.py',
+    ]);
+  });
+  it('strips a leading test_ and never returns the file itself', () => {
+    const out = candidateTestPaths('src/foo/test_bar.py');
+    expect(out).not.toContain('src/foo/test_bar.py');
+    expect(out).toContain('tests/test_bar.py');
+    expect(out.every((p) => p.includes('test_'))).toBe(true);
+  });
+  it('returns [] for paths without an extension', () => {
+    expect(candidateTestPaths('packages/core/README')).toEqual([]);
   });
 });

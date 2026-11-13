@@ -5,7 +5,9 @@ import { AppShell } from './components/AppShell.js';
 import { AuthGate } from './components/AuthGate.js';
 import { Assessment } from './routes/Assessment.js';
 import { Assessments } from './routes/Assessments.js';
+import { ContractDetail } from './routes/ContractDetail.js';
 import { Contracts } from './routes/Contracts.js';
+import { Coverage } from './routes/Coverage.js';
 import { LegacyAssessmentRedirect } from './routes/LegacyAssessmentRedirect.js';
 import { OrgLayout } from './routes/OrgLayout.js';
 import { Home, ToWorkspaceList, WorkspaceRedirect } from './routes/Redirects.js';
@@ -41,7 +43,9 @@ export const routes: RouteObject[] = [
           { index: true, element: <OrgLayout /> },
           { path: 'repos', element: <Repos /> },
           { path: 'contracts', element: <Contracts /> },
+          { path: 'contracts/detail', element: <ContractDetail /> },
           { path: 'services/:serviceId', element: <Service /> },
+          { path: 'coverage', element: <Coverage /> },
           { path: 'assessments', element: <Assessments /> },
           { path: 'assessments/:assessmentId', element: <Assessment /> },
           { path: '*', element: <OrgCatchAll /> },

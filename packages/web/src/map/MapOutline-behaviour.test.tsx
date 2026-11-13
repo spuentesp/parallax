@@ -124,9 +124,9 @@ describe('MapOutline rows', () => {
     expect(within(row('c')).getByText('main.rs')).toBeTruthy();
   });
 
-  it('shows the type/contract chip only when there is one', () => {
+  it('hides the contract chip on endpoint rows (the label already carries it); other kinds keep it', () => {
     setup();
-    expect(within(row('e1')).getByText('http')).toBeTruthy();
+    expect(within(row('e1')).queryByText('http')).toBeNull();
     expect(within(row('c')).getByText('File')).toBeTruthy();
     expect(within(row('s')).queryByText(/^(http|File)$/)).toBeNull();
   });

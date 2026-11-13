@@ -6,8 +6,16 @@
 import type { EndpointLink, NodeDetail, NodeRelation, OrgNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client.js';
-import { useImplementation, useMapNode, useWorkspace, type Workspace } from '../api/hooks.js';
+import {
+  useImplementation,
+  useLooseEnds,
+  useMapNode,
+  useRepoStatus,
+  useWorkspace,
+  type Workspace,
+} from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -16,6 +24,8 @@ export interface MapInspectorProps {
   nodeId: string | null;
   /** Datos síncronos del nodo disponibles de inmediato sin esperar a la API. */
   node?: OrgNode | null | undefined;
+  /** Detalle local para nodos que sólo existen en el cliente (clústeres `clu:`). */
+  localDetail?: NodeDetail | null | undefined;
   onSelect: (id: string) => void;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
@@ -23,22 +33,57 @@ export interface MapInspectorProps {
   onClearFocus: () => void;
   /** Abre el trazado de punta a punta de este contrato (sólo endpoints). */
   onTrace?: ((key: string, service: string | null) => void) | undefined;
+  /** Pregunta al asistente con este nodo como tema ("Ask about this"). */
+  onAsk?: ((question: string) => void) | undefined;
 }
 
 const repoName = (id: string | null): string => (id ? id.replace(/^repo:/, '') : '');
+
+/** "2 proven · 1 inferred" para las tarjetas y resúmenes de relaciones. */
+function provSplit(relations: NodeRelation[]): string {
+  const det = relations.filter((r) => r.edge.provenance === 'deterministic').length;
+  const inf = relations.length - det;
+  if (inf === 0) return det > 0 ? `${det} proven` : '';
+  if (det === 0) return `${inf} inferred`;
+  return `${det} proven · ${inf} inferred`;
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number;
+  detail?: string;
+}): React.ReactElement {
+  return (
+    <div className="rounded-lg border border-border bg-bg/60 px-2.5 py-2">
+      <div className="text-lg font-semibold tabular-nums leading-none">{value}</div>
+      <div className="text-[10px] text-muted mt-1 truncate" title={detail || label}>
+        {label}
+        {detail ? ` · ${detail}` : ''}
+      </div>
+    </div>
+  );
+}
 
 export function MapInspector({
   workspaceId,
   nodeId,
   node: fallbackNode,
+  localDetail,
   onSelect,
   onFocus,
   onToggle,
   focusing,
   onClearFocus,
   onTrace,
+  onAsk,
 }: MapInspectorProps): React.ReactElement {
-  const q = useMapNode(workspaceId, nodeId);
+  // Los clústeres (clu:…) son sintéticos del cliente: no se piden al servidor.
+  const isLocalOnly = typeof nodeId === 'string' && nodeId.startsWith('clu:');
+  const q = useMapNode(workspaceId, isLocalOnly ? null : nodeId);
   const wsQuery = useWorkspace(workspaceId);
   const workspace = wsQuery.data?.workspace;
 
@@ -54,17 +99,21 @@ export function MapInspector({
     );
   }
 
-  const detail =
-    q.data?.detail ??
-    (fallbackNode
-      ? {
-          node: fallbackNode,
-          path: [],
-          children: [],
-          consumers: [],
-          providers: [],
-        }
-      : null);
+  const detail = isLocalOnly
+    ? (localDetail ??
+      (fallbackNode
+        ? { node: fallbackNode, path: [], children: [], consumers: [], providers: [] }
+        : null))
+    : (q.data?.detail ??
+      (fallbackNode
+        ? {
+            node: fallbackNode,
+            path: [],
+            children: [],
+            consumers: [],
+            providers: [],
+          }
+        : null));
 
   if (q.isPending && !detail) return <div className="p-5 text-sm text-muted">Loading…</div>;
   if (q.isError) {
@@ -95,13 +144,14 @@ export function MapInspector({
       workspaceId={workspaceId}
       detail={detail}
       workspace={workspace}
-      loadingRelations={q.isPending}
+      loadingRelations={q.isFetching}
       onSelect={onSelect}
       onFocus={onFocus}
       onToggle={onToggle}
       focusing={focusing}
       onClearFocus={onClearFocus}
       onTrace={onTrace}
+      onAsk={onAsk}
     />
   );
 }
@@ -117,6 +167,7 @@ function Detail({
   focusing,
   onClearFocus,
   onTrace,
+  onAsk,
 }: Omit<MapInspectorProps, 'nodeId' | 'node'> & {
   detail: NodeDetail;
   workspace?: Workspace | null | undefined;
@@ -131,14 +182,21 @@ function Detail({
     (node.meta.providers as Array<{ repo?: string; path?: string; line?: number }> | undefined) ??
     [];
   const targetRepoName = node.kind === 'repo' ? node.label : repoNode?.label;
-  const wsRepo = workspace?.repos?.find(
-    (r) =>
-      r.id === node.id ||
-      (targetRepoName &&
-        (r.uri.endsWith(`/${targetRepoName}.git`) ||
-          r.uri.endsWith(`/${targetRepoName}`) ||
-          r.uri.toLowerCase().includes(targetRepoName.toLowerCase()))),
-  );
+  // Primero el repo que coincide por id o por el final exacto de su URI; sólo si
+  // no hay ninguno se cae a "contiene". Al revés, el repo "saleor" tomaba los
+  // datos de "saleor-dashboard" (su URI también contiene "saleor").
+  const wantedName = targetRepoName?.toLowerCase();
+  const wsRepo =
+    workspace?.repos?.find(
+      (r) =>
+        r.id === node.id ||
+        (wantedName !== undefined &&
+          (r.uri.toLowerCase().endsWith(`/${wantedName}.git`) ||
+            r.uri.toLowerCase().endsWith(`/${wantedName}`))),
+    ) ??
+    workspace?.repos?.find(
+      (r) => wantedName !== undefined && r.uri.toLowerCase().includes(wantedName),
+    );
 
   return (
     <div className="divide-y divide-border" data-testid="map-inspector">
@@ -205,6 +263,25 @@ function Detail({
               Trace end to end
             </button>
           )}
+          {node.kind === 'endpoint' && typeof node.meta.service === 'string' && (
+            <Link
+              to={`/orgs/${workspaceId}/contracts/detail?${new URLSearchParams({ key: node.label, service: node.meta.service })}`}
+              title="Provider, fields and who reads each one"
+              className="px-2.5 py-1 rounded-full text-xs border border-border-strong hover:border-accent hover:text-accent"
+            >
+              Contract details
+            </Link>
+          )}
+          {onAsk && (
+            <button
+              type="button"
+              onClick={() => onAsk(`Who depends on ${node.label}, and what breaks if it changes?`)}
+              title="Ask the assistant about this node"
+              className="px-2.5 py-1 rounded-full text-xs border border-border-strong hover:border-accent hover:text-accent"
+            >
+              Ask about this
+            </button>
+          )}
           {focusing && (
             <button
               type="button"
@@ -224,6 +301,33 @@ function Detail({
             </button>
           )}
         </div>
+
+        {/* Tarjetas de resumen (como la referencia de diseño): endpoints que
+            contiene, quién lo consume y de qué depende, con la procedencia. */}
+        {(node.kind === 'service' || node.kind === 'repo') && (
+          <div className="grid grid-cols-3 gap-2" data-testid="node-stat-cards">
+            <StatCard
+              label="endpoints"
+              value={
+                detail.endpointCount ?? detail.children.filter((c) => c.kind === 'endpoint').length
+              }
+            />
+            <StatCard
+              label="consumers"
+              value={detail.consumers.length}
+              detail={provSplit(detail.consumers)}
+            />
+            <StatCard
+              label="outbound"
+              value={detail.providers.length}
+              detail={provSplit(detail.providers)}
+            />
+          </div>
+        )}
+
+        {(node.kind === 'service' || node.kind === 'repo') && (
+          <ScopeNote workspaceId={workspaceId} node={node} />
+        )}
 
         {/* Datos básicos / propiedades estructuradas */}
         <div className="rounded-lg border border-border/70 bg-bg/60 p-2.5 space-y-2 text-xs">
@@ -315,7 +419,7 @@ function Detail({
             title="Consumed by"
             summary={
               detail.consumers.length > 0
-                ? `${detail.consumers.length} service${detail.consumers.length === 1 ? '' : 's'} across ${consumerRepos.size} repo${consumerRepos.size === 1 ? '' : 's'}`
+                ? `${detail.consumers.length} service${detail.consumers.length === 1 ? '' : 's'} across ${consumerRepos.size} repo${consumerRepos.size === 1 ? '' : 's'}${provSplit(detail.consumers) ? ` · ${provSplit(detail.consumers)}` : ''}`
                 : undefined
             }
             empty="No consumers found in the indexed repositories. That is not proof there are none: unresolved calls and unindexed repos are outside this map."
@@ -381,7 +485,11 @@ function Detail({
                   )}
                 </div>
                 {p.path && lainRepo && (
-                  <SourcePeek workspaceId={workspaceId} repo={lainRepo} target={{ path: p.path }} />
+                  <SourcePeek
+                    workspaceId={workspaceId}
+                    repo={lainRepo}
+                    target={{ path: p.path, line: p.line }}
+                  />
                 )}
               </div>
             );
@@ -729,13 +837,59 @@ function EndpointCallers({
                 <SourcePeek
                   workspaceId={workspaceId}
                   repo={site.repo}
-                  target={{ path: site.path }}
+                  target={{ path: site.path, line: site.line ?? undefined }}
                 />
               )}
             </li>
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Alcance del análisis (referencia "Scope"): una afirmación de "sin impacto" sólo
+ * vale si todos los repos están analizados y no hay llamadas sin resolver que
+ * apunten a este servicio. Los datos son los del propio motor (estado de repos y
+ * cabos sueltos); si no están, no se dice nada.
+ */
+function ScopeNote({
+  workspaceId,
+  node,
+}: {
+  workspaceId: string;
+  node: { kind: string; label: string };
+}): React.ReactElement | null {
+  const status = useRepoStatus(workspaceId);
+  const loose = useLooseEnds(workspaceId);
+  const repos = status.data?.repos ?? [];
+  if (status.data?.source !== 'lain' || repos.length === 0) return null;
+  const ready = repos.filter((r) => r.state === 'indexed').length;
+  const aimed =
+    node.kind === 'service' && loose.data?.source === 'lain'
+      ? loose.data.items.filter(
+          (i) => i.kind === 'unresolved' && i.detail.targetService === node.label,
+        ).length
+      : 0;
+  const complete = ready === repos.length && aimed === 0;
+  return (
+    <div
+      className={`rounded-lg border p-3 text-xs leading-relaxed ${
+        complete ? 'border-border text-muted' : 'border-warning/40 bg-warning/10 text-fg'
+      }`}
+      data-testid="scope-note"
+    >
+      <b className={complete ? '' : 'text-warning'}>
+        Scope: {ready} of {repos.length} repos analyzed.
+      </b>{' '}
+      {aimed > 0 &&
+        `${aimed} unresolved call${aimed === 1 ? '' : 's'} could match this service, so "no impact" is not claimed. `}
+      {ready < repos.length &&
+        'Unanalyzed repos are outside this map, so "no impact" is not claimed. '}
+      <Link to={`/orgs/${workspaceId}/coverage`} className="text-accent underline">
+        Open in Coverage
+      </Link>
     </div>
   );
 }

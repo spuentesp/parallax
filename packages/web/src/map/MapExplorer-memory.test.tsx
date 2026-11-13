@@ -68,7 +68,14 @@ describe('the map remembers what was open', () => {
     const first = mount();
     const outline = within(await screen.findByTestId('map-outline'));
     expect(await outline.findByText('svc:a')).toBeTruthy();
-    await waitFor(() => expect(readExpanded('ws1')).toEqual(['repo:a', 'repo:b']));
+    await waitFor(() =>
+      expect([...(readExpanded('ws1') ?? [])].sort()).toEqual([
+        'repo:a',
+        'repo:b',
+        'svc:a',
+        'svc:b',
+      ]),
+    );
     first.unmount();
 
     // El usuario cerró uno antes de irse: al volver sigue cerrado.
@@ -100,7 +107,9 @@ describe('the map remembers what was open', () => {
     const outline = within(await screen.findByTestId('map-outline'));
     expect(await outline.findByText('svc:b')).toBeTruthy(); // abrió los dos: no heredó el de "other"
     fireEvent.click(outline.getByRole('button', { name: 'Collapse repo:a' }));
-    await waitFor(() => expect(readExpanded('ws1')).toEqual(['repo:b']));
+    await waitFor(() =>
+      expect([...(readExpanded('ws1') ?? [])].sort()).toEqual(['repo:b', 'svc:a', 'svc:b']),
+    );
     expect(readExpanded('other')).toEqual(['repo:a']);
   });
 });

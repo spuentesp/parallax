@@ -78,6 +78,16 @@ describe('CodeInspector', () => {
     expect(h.onSelect).toHaveBeenCalledWith('code:orders');
   });
 
+  it('"Ask about this function" asks about the symbol, and is absent on the Code door', () => {
+    const onAsk = vi.fn();
+    setup({ onAsk });
+    fireEvent.click(screen.getByRole('button', { name: 'Ask about this function' }));
+    expect(onAsk).toHaveBeenCalledWith(expect.stringContaining('f'));
+    cleanup();
+    setup({ onAsk, node: node({ kind: 'code', label: 'Code' }) });
+    expect(screen.queryByRole('button', { name: /Ask about this/ })).toBeNull();
+  });
+
   it('Open / Close appears only for lazy nodes and toggles', () => {
     const h = setup({ node: node({ lazy: true }) });
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));

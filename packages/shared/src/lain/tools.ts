@@ -1,9 +1,10 @@
 import { z } from 'zod';
 import { FindingClass, LainView } from './enums.js';
 
-// Contra la versión fijada del motor: los *Args replican el inputSchema de
-// docs/lain-tool-schemas.json (capturado con tools/list de lain 0.9.1) y las
-// *Response describen el campo `data` del envoltorio
+// Contra la versión fijada del motor (lain 0.15.0, verificado en vivo contra
+// el binario de release v0.15.0): los *Args replican el inputSchema de
+// docs/lain-tool-schemas.json y las *Response describen el campo `data` del
+// envoltorio
 // { analyzer_version, api_version, data, meta, snapshot, view, reproducible }
 // que el LainAdapter devuelve tras parsear content[0].text.
 //
@@ -470,6 +471,10 @@ export const DiffContractsArgs = z
     repo: z.string().min(1).optional(),
     cap: z.number().int().min(1).max(500).optional(),
     min_impact: FindingClass.optional(),
+    // Nuevos en 0.15: profundidad máxima de los caminos de impacto y timeout
+    // cooperativo en ms (tope del servidor: LAIN_DIFF_TIMEOUT_MAX_MS).
+    max_hops: z.number().int().min(1).max(100).optional(),
+    timeout_ms: z.number().int().min(1).optional(),
   })
   .strict();
 export type DiffContractsArgs = z.infer<typeof DiffContractsArgs>;

@@ -43,7 +43,7 @@ import type {
   TraceImpactResponse,
 } from '@parallax/shared/lain';
 
-// Firmas alineadas con las tools reales de lain 0.13: todas reciben
+// Firmas alineadas con las tools reales de lain 0.15: todas reciben
 // `snapshot` (o `base`/`head` en diff_contracts) y los argumentos homónimos
 // del schema publicado por Lain. Las 16 del paquete contracts.
 // Las del grafo crudo (query_graph y anexas) viven en el paquete `raw`,
