@@ -60,7 +60,7 @@ function StatCard({
   return (
     <div className="rounded-lg border border-border bg-bg/60 px-2.5 py-2">
       <div className="text-lg font-semibold tabular-nums leading-none">{value}</div>
-      <div className="text-[10px] text-muted mt-1 truncate" title={detail || label}>
+      <div className="mt-1 text-[10px] leading-tight text-muted" title={detail || label}>
         {label}
         {detail ? ` · ${detail}` : ''}
       </div>
@@ -201,20 +201,22 @@ function Detail({
   return (
     <div className="divide-y divide-border" data-testid="map-inspector">
       <div className="p-5 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <KindIcon kind={node.kind} />
-          <span>{node.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[node.kind]}</span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-service px-2 py-0.5 text-[11px] text-service">
+            <KindIcon kind={node.kind} size={12} />
+            {node.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[node.kind]}
+          </span>
+          <h3
+            className={`min-w-0 text-lg font-semibold leading-tight break-words ${node.kind === 'endpoint' ? 'font-mono text-sm' : ''}`}
+          >
+            {node.label}
+          </h3>
           {node.contract && (
-            <span className="rounded px-1 uppercase tracking-wide bg-bg border border-border">
+            <span className="rounded px-1 text-[11px] uppercase tracking-wide bg-bg border border-border text-muted">
               {node.contract}
             </span>
           )}
         </div>
-        <h3
-          className={`text-base font-semibold break-words ${node.kind === 'endpoint' ? 'font-mono text-sm' : ''}`}
-        >
-          {node.label}
-        </h3>
         {node.kind === 'group' && (
           <div className="space-y-1" data-testid="group-note">
             {typeof node.meta.contracts === 'number' && (
@@ -244,13 +246,36 @@ function Detail({
           </p>
         )}
         <div className="flex flex-wrap gap-2 pt-1">
+          {onAsk && (
+            <button
+              type="button"
+              onClick={() => onAsk(`Who depends on ${node.label}, and what breaks if it changes?`)}
+              title="Ask the assistant about this node"
+              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg hover:bg-accent-hover"
+            >
+              Ask about this
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onFocus(node.id)}
-            className="px-2.5 py-1 rounded-full text-xs bg-accent text-accent-fg"
+            className={
+              onAsk
+                ? 'rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent'
+                : 'rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg hover:bg-accent-hover'
+            }
           >
             Focus neighborhood
           </button>
+          {node.kind === 'endpoint' && typeof node.meta.service === 'string' && (
+            <Link
+              to={`/orgs/${workspaceId}/contracts/detail?${new URLSearchParams({ key: node.label, service: node.meta.service })}`}
+              title="Provider, fields and who reads each one"
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent"
+            >
+              Contract details
+            </Link>
+          )}
           {node.kind === 'endpoint' && onTrace && (
             <button
               type="button"
@@ -258,35 +283,16 @@ function Detail({
                 onTrace(node.label, detail.path.find((p) => p.kind === 'service')?.label ?? null)
               }
               title="Follow the value from its data, through the API and its clients, to where it ends"
-              className="px-2.5 py-1 rounded-full text-xs border border-accent text-accent hover:bg-accent/10"
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent"
             >
               Trace end to end
-            </button>
-          )}
-          {node.kind === 'endpoint' && typeof node.meta.service === 'string' && (
-            <Link
-              to={`/orgs/${workspaceId}/contracts/detail?${new URLSearchParams({ key: node.label, service: node.meta.service })}`}
-              title="Provider, fields and who reads each one"
-              className="px-2.5 py-1 rounded-full text-xs border border-border-strong hover:border-accent hover:text-accent"
-            >
-              Contract details
-            </Link>
-          )}
-          {onAsk && (
-            <button
-              type="button"
-              onClick={() => onAsk(`Who depends on ${node.label}, and what breaks if it changes?`)}
-              title="Ask the assistant about this node"
-              className="px-2.5 py-1 rounded-full text-xs border border-border-strong hover:border-accent hover:text-accent"
-            >
-              Ask about this
             </button>
           )}
           {focusing && (
             <button
               type="button"
               onClick={onClearFocus}
-              className="px-2.5 py-1 rounded-full text-xs bg-bg text-muted hover:bg-border"
+              className="rounded-lg bg-bg px-3 py-1.5 text-xs text-muted hover:bg-border"
             >
               Clear focus
             </button>
@@ -295,7 +301,7 @@ function Detail({
             <button
               type="button"
               onClick={() => onToggle(node.id)}
-              className="px-2.5 py-1 rounded-full text-xs bg-bg text-muted hover:bg-border"
+              className="rounded-lg bg-bg px-3 py-1.5 text-xs text-muted hover:bg-border"
             >
               {detail.children.length} inside · open / close
             </button>
@@ -329,81 +335,87 @@ function Detail({
           <ScopeNote workspaceId={workspaceId} node={node} />
         )}
 
-        {/* Datos básicos / propiedades estructuradas */}
-        <div className="rounded-lg border border-border/70 bg-bg/60 p-2.5 space-y-2 text-xs">
-          <div className="flex items-center justify-between text-[11px] font-mono text-muted bg-surface/80 border border-border/50 rounded px-2 py-0.5 select-all">
-            <span className="text-[10px] uppercase font-sans text-muted/70 tracking-wider">
-              Node ID
-            </span>
-            <span className="truncate max-w-[15rem]">{node.id}</span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
-            <div>
-              <span className="text-[10px] text-muted block uppercase tracking-wide">Type</span>
-              <span className="font-medium text-fg capitalize">{node.kind}</span>
+        {/* Datos básicos / propiedades estructuradas: plegadas, la tarjeta se lee sin ellas. */}
+        <details className="group rounded-lg border border-border/70 bg-bg/60 text-xs">
+          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+            Details
+            <span className="ml-1 font-mono text-[10px]">· {node.kind}</span>
+          </summary>
+          <div className="space-y-2 border-t border-border/70 p-2.5">
+            <div className="flex items-center justify-between text-[11px] font-mono text-muted bg-surface/80 border border-border/50 rounded px-2 py-0.5 select-all">
+              <span className="text-[10px] uppercase font-sans text-muted/70 tracking-wider">
+                Node ID
+              </span>
+              <span className="truncate max-w-[15rem]">{node.id}</span>
             </div>
-            {node.contract && (
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
               <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Protocol
-                </span>
-                <span className="font-mono text-fg">{node.contract.toUpperCase()}</span>
+                <span className="text-[10px] text-muted block uppercase tracking-wide">Type</span>
+                <span className="font-medium text-fg capitalize">{node.kind}</span>
               </div>
-            )}
-            {targetRepoName && (
-              <div className="col-span-2">
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Repository
-                </span>
-                <span className="font-medium text-fg break-all">{targetRepoName}</span>
-                {wsRepo?.uri && (
-                  <span className="block text-[10px] font-mono text-muted truncate">
-                    {wsRepo.uri}
+              {node.contract && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Protocol
                   </span>
-                )}
-                {wsRepo?.sha && (
-                  <span className="block text-[10px] font-mono text-muted">
-                    Commit: {wsRepo.sha}
+                  <span className="font-mono text-fg">{node.contract.toUpperCase()}</span>
+                </div>
+              )}
+              {targetRepoName && (
+                <div className="col-span-2">
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Repository
                   </span>
-                )}
-                {wsRepo?.local && (
-                  <span className="block text-[10px] font-mono text-muted truncate">
-                    Local: {wsRepo.local}
+                  <span className="font-medium text-fg break-all">{targetRepoName}</span>
+                  {wsRepo?.uri && (
+                    <span className="block text-[10px] font-mono text-muted truncate">
+                      {wsRepo.uri}
+                    </span>
+                  )}
+                  {wsRepo?.sha && (
+                    <span className="block text-[10px] font-mono text-muted">
+                      Commit: {wsRepo.sha}
+                    </span>
+                  )}
+                  {wsRepo?.local && (
+                    <span className="block text-[10px] font-mono text-muted truncate">
+                      Local: {wsRepo.local}
+                    </span>
+                  )}
+                </div>
+              )}
+              {typeof node.meta.definedAt === 'string' && (
+                <div className="col-span-2">
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Defined at
                   </span>
-                )}
-              </div>
-            )}
-            {typeof node.meta.definedAt === 'string' && (
-              <div className="col-span-2">
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Defined at
-                </span>
-                <span className="font-mono text-fg text-[11px] break-all">
-                  {String(node.meta.definedAt)}
-                </span>
-              </div>
-            )}
-            {detail.children.length > 0 && (
-              <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Children
-                </span>
-                <span className="font-medium text-fg">{detail.children.length} elements</span>
-              </div>
-            )}
-            {(detail.consumers.length > 0 || detail.providers.length > 0) && (
-              <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Connections
-                </span>
-                <span className="font-medium text-fg">
-                  {detail.consumers.length} in · {detail.providers.length} out
-                </span>
-              </div>
-            )}
+                  <span className="font-mono text-fg text-[11px] break-all">
+                    {String(node.meta.definedAt)}
+                  </span>
+                </div>
+              )}
+              {detail.children.length > 0 && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Children
+                  </span>
+                  <span className="font-medium text-fg">{detail.children.length} elements</span>
+                </div>
+              )}
+              {(detail.consumers.length > 0 || detail.providers.length > 0) && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Connections
+                  </span>
+                  <span className="font-medium text-fg">
+                    {detail.consumers.length} in · {detail.providers.length} out
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </details>
       </div>
 
       {loadingRelations && (
@@ -555,7 +567,13 @@ function Relations({
                     <EdgeSwatch provenance={edge.provenance} width={22} />
                     <span className="text-[11px] tabular-nums text-muted">×{edge.count}</span>
                   </span>
-                  <span className="block text-[10px] text-muted">
+                  <span
+                    className={`mt-0.5 inline-block rounded-full border px-1.5 py-px text-[10px] ${
+                      edge.provenance === 'inferred'
+                        ? 'border-dashed border-inferred text-warning'
+                        : 'border-deterministic text-muted'
+                    }`}
+                  >
                     {edge.provenance === 'inferred'
                       ? `inferred · ${Math.round(edge.confidence * 100)}%`
                       : edge.inferredCount > 0
