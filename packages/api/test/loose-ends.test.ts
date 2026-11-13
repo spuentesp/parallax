@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
 import type { Case } from '../src/loose-ends/classify.js';
-import { classifyByPath, parseVerdicts } from '../src/loose-ends/classify.js';
+import { classifyByPath, classifyByRule, parseVerdicts } from '../src/loose-ends/classify.js';
 import { collectLooseEnds } from '../src/loose-ends/collect.js';
 
 describe('classifyByPath — what a path alone proves', () => {
@@ -277,5 +277,46 @@ describe('collectLooseEnds — what the engine could not bind, with the code loc
       fake([{ items: [{ reason: 'x', consumer: {} }, unresolved('src/a.ts', 1)] }]),
     );
     expect(items.filter((e) => e.kind === 'unresolved')).toHaveLength(1);
+  });
+});
+
+// Casos literales de un cluster real (OpenShell, LAIN 0.15.0): el sensor de RPC de Rust
+// tomó por llamadas a un stub métodos de la librería estándar.
+describe('classifyByRule — Rust std methods are not RPCs', () => {
+  const rpc = (urlExpr: string, over: Record<string, unknown> = {}) => ({
+    path: 'crates/openshell-server/src/grpc/mod.rs',
+    kind: 'unresolved' as const,
+    reason: 'rpc_stub_unknown',
+    detail: { method: urlExpr.split(':').pop() ?? '', urlExpr },
+    ...over,
+  });
+
+  it('`.unwrap()` read as an RPC is "not a call", with the expression as evidence', () => {
+    const a = classifyByRule(rpc('rpc-call:rust:41945:unwrap'));
+    expect(a).toMatchObject({
+      category: 'not_a_call',
+      source: 'rule',
+      evidence: 'rpc-call:rust:41945:unwrap',
+    });
+    expect(a?.reason).toMatch(/"unwrap" is a Rust Option\/Result method, not an RPC/);
+    for (const m of [
+      'expect',
+      'unwrap_or',
+      'unwrap_or_else',
+      'unwrap_or_default',
+      'unwrap_err',
+      'expect_err',
+    ]) {
+      expect(classifyByRule(rpc(`rpc-call:rust:7:${m}`))?.category, m).toBe('not_a_call');
+    }
+  });
+
+  it('a real RPC method is never swallowed by the rule', () => {
+    expect(classifyByRule(rpc('rpc-call:rust:27566:get_capabilities'))).toBeNull();
+    expect(classifyByRule(rpc('rpc-call:OpenShell:GetProviderCredentials'))).toBeNull();
+    // Mismo nombre en otro lenguaje o con otra razón: no es esta regla.
+    expect(classifyByRule(rpc('rpc-call:go:9:unwrap'))).toBeNull();
+    expect(classifyByRule(rpc('rpc-call:rust:9:unwrap', { reason: 'no_match' }))).toBeNull();
+    expect(classifyByRule(rpc('rpc-call:rust:9:unwrap', { kind: 'inferred' }))).toBeNull();
   });
 });

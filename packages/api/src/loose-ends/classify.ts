@@ -36,9 +36,30 @@ export function classifyByPath(e: Pick<LooseEnd, 'path'>): Assessment | null {
  * pedírselo al modelo. "dynamic_topic" es, por definición, un nombre de tema que
  * el motor no pudo resolver estáticamente: un destino construido en ejecución.
  */
-export function classifyByRule(e: Pick<LooseEnd, 'path' | 'kind' | 'reason'>): Assessment | null {
+/**
+ * El sensor de RPC de Rust toma por llamada a un stub métodos que son de la librería
+ * estándar: visto en un cluster real (OpenShell), 5 de sus 23 "sin candidato" eran
+ * `.unwrap()` o `.map_err()` (el resto sí eran métodos gRPC). Un método de `Option`/`Result` no es un RPC: los métodos gRPC son
+ * identificadores propios del servicio (`GetCapabilities`), nunca estos.
+ */
+const RUST_STD_NOT_RPC =
+  /^rpc-call:rust:\d+:(unwrap|expect|unwrap_or|unwrap_or_else|unwrap_or_default|unwrap_err|expect_err|map_err)$/;
+
+export function classifyByRule(
+  e: Pick<LooseEnd, 'path' | 'kind' | 'reason' | 'detail'>,
+): Assessment | null {
   const byPath = classifyByPath(e);
   if (byPath) return byPath;
+  const expr = e.detail?.urlExpr ?? '';
+  if (e.kind === 'unresolved' && e.reason === 'rpc_stub_unknown' && RUST_STD_NOT_RPC.test(expr)) {
+    const method = expr.slice(expr.lastIndexOf(':') + 1);
+    return {
+      category: 'not_a_call',
+      reason: `"${method}" is a Rust Option/Result method, not an RPC: the analyzer's RPC sensor misread it`,
+      evidence: expr,
+      source: 'rule',
+    };
+  }
   if (e.kind === 'unresolved' && e.reason === 'dynamic_topic') {
     return {
       category: 'dynamic_target',
