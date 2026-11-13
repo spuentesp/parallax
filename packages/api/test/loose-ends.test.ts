@@ -319,4 +319,19 @@ describe('classifyByRule — Rust std methods are not RPCs', () => {
     expect(classifyByRule(rpc('rpc-call:rust:9:unwrap', { reason: 'no_match' }))).toBeNull();
     expect(classifyByRule(rpc('rpc-call:rust:9:unwrap', { kind: 'inferred' }))).toBeNull();
   });
+
+  it('the standard gRPC reflection RPC is an external call, quoted as evidence', () => {
+    const a = classifyByRule(rpc('rpc-call:rust:101444:server_reflection_info'));
+    expect(a).toMatchObject({
+      category: 'external_call',
+      source: 'rule',
+      evidence: 'rpc-call:rust:101444:server_reflection_info',
+    });
+    expect(a?.reason).toMatch(/gRPC reflection/);
+    // Otros métodos gRPC reales de la misma familia de reglas no se tocan.
+    expect(classifyByRule(rpc('rpc-call:rust:5:get_draft_policy'))).toBeNull();
+    expect(
+      classifyByRule(rpc('rpc-call:rust:5:server_reflection_info', { reason: 'no_match' })),
+    ).toBeNull();
+  });
 });

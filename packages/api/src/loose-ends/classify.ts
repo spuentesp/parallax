@@ -45,12 +45,29 @@ export function classifyByPath(e: Pick<LooseEnd, 'path'>): Assessment | null {
 const RUST_STD_NOT_RPC =
   /^rpc-call:rust:\d+:(unwrap|expect|unwrap_or|unwrap_or_else|unwrap_or_default|unwrap_err|expect_err|map_err)$/;
 
+/**
+ * `ServerReflectionInfo` es el RPC estándar de gRPC reflection (`grpc.reflection.v1`):
+ * lo sirve una librería (tonic-reflection, grpcurl...), no un servicio del workspace, así
+ * que no hay contrato propio al que atarlo. Visto en OpenShell: 6 de sus 17 "sin
+ * candidato" de tipo RPC eran este.
+ */
+const GRPC_REFLECTION = /^rpc-call:[a-z]+:\d+:server_reflection_info$/i;
+
 export function classifyByRule(
   e: Pick<LooseEnd, 'path' | 'kind' | 'reason' | 'detail'>,
 ): Assessment | null {
   const byPath = classifyByPath(e);
   if (byPath) return byPath;
   const expr = e.detail?.urlExpr ?? '';
+  if (e.kind === 'unresolved' && e.reason === 'rpc_stub_unknown' && GRPC_REFLECTION.test(expr)) {
+    return {
+      category: 'external_call',
+      reason:
+        'standard gRPC reflection (grpc.reflection.v1.ServerReflection): served by a library, not by a service in this workspace',
+      evidence: expr,
+      source: 'rule',
+    };
+  }
   if (e.kind === 'unresolved' && e.reason === 'rpc_stub_unknown' && RUST_STD_NOT_RPC.test(expr)) {
     const method = expr.slice(expr.lastIndexOf(':') + 1);
     return {
