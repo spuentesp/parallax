@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { parseBindingEntry } from '../src/recommendations/binding-entry.js';
-import type { LooseEndInput } from '../src/recommendations/collect.js';
+import { isCatchAllRoute, type LooseEndInput } from '../src/recommendations/collect.js';
 import {
   parseJsonArray,
   parsePicks,
   parseRationales,
   type RecommendModel,
+  stripReasoning,
 } from '../src/recommendations/explain.js';
 import { buildRecommendations } from '../src/recommendations/service.js';
 
@@ -74,9 +75,36 @@ describe('model output is read strictly', () => {
   it('a pick must be an integer index within the candidates, otherwise it is dropped', () => {
     const sizes = new Map([['a', 3]]);
     const text = (choice: unknown) => JSON.stringify([{ id: 'a', choice }]);
-    expect(parsePicks(text(2), sizes).get('a')).toBe(2);
-    for (const bad of [3, -1, 1.5, '1', null])
-      expect(parsePicks(text(bad), sizes).has('a')).toBe(false);
+    expect(parsePicks(text(2), sizes).picks.get('a')).toBe(2);
+    for (const bad of [3, -1, 1.5, '1']) {
+      const r = parsePicks(text(bad), sizes);
+      expect(r.picks.has('a')).toBe(false);
+      expect(r.declined.has('a')).toBe(false);
+    }
+  });
+  it('an explicit null is an answer ("the code does not say"), not a missing one', () => {
+    const r = parsePicks(JSON.stringify([{ id: 'a', choice: null }]), new Map([['a', 3]]));
+    expect(r.declined.has('a')).toBe(true);
+    expect(r.picks.size).toBe(0);
+  });
+});
+
+// El modelo real (MiniMax-M3) escribe su razonamiento dentro del contenido, entre
+// <think> y </think>, y con un tope corto se corta antes de contestar.
+describe('reasoning models', () => {
+  it('drops the <think> block and keeps the answer', () => {
+    const r = stripReasoning('<think>Hmm [maybe 0?] let me see</think>\n[{"id":"a","choice":1}]');
+    expect(r).toEqual({ answer: '[{"id":"a","choice":1}]', truncated: false });
+    // Los corchetes del razonamiento no se confunden con la respuesta.
+    expect(parsePicks(r.answer, new Map([['a', 2]])).picks.get('a')).toBe(1);
+  });
+  it('a reply cut off while still reasoning has no answer, and says so', () => {
+    const r = stripReasoning('<think>We need to decide. Candidates are [0, 1]. Maybe the');
+    expect(r.truncated).toBe(true);
+    expect(r.answer).toBe('');
+  });
+  it('plain replies pass through', () => {
+    expect(stripReasoning('[{"id":"a"}]')).toEqual({ answer: '[{"id":"a"}]', truncated: false });
   });
 });
 
@@ -147,6 +175,34 @@ const fakeModel = (reply: (user: string) => string): RecommendModel & { calls: s
     },
   };
 };
+
+describe('catch-all routes', () => {
+  it('recognises a root route that fits almost any call, and nothing more specific', () => {
+    for (const k of ['http:ANY /', 'http:POST /', 'http:GET /'])
+      expect(isCatchAllRoute(k), k).toBe(true);
+    for (const k of [
+      'http:POST /feedback',
+      'http:ANY /token',
+      'graphql:query:checkout',
+      'topic:x/y',
+    ]) {
+      expect(isCatchAllRoute(k), k).toBe(false);
+    }
+  });
+  it('a recommendation whose target is a catch-all carries a caution; a specific one does not', async () => {
+    const run = (key: string) =>
+      buildRecommendations({
+        adapter: engine((_c, k) => k === key).adapter,
+        items: [
+          { ...loose({ key: 'one' }), candidateRefs: [{ key, service: 'api', reason: 'pattern' }] },
+        ],
+        model: null,
+        modelAllowed: true,
+      });
+    expect((await run('http:ANY /')).recommendations[0]?.caution).toMatch(/catch-all route/);
+    expect((await run('http:POST /feedback')).recommendations[0]?.caution).toBeNull();
+  });
+});
 
 describe('buildRecommendations', () => {
   it('recommends only what the engine accepts, and only when exactly one candidate passes', async () => {
@@ -225,6 +281,45 @@ describe('buildRecommendations', () => {
     expect(rec?.declaration).toMatchObject({ provider: { key: 'http:POST /b' } });
     expect(rec?.alternatives).toEqual([{ key: 'http:POST /a', service: 'api' }]);
     expect(rec?.basisDetail).toMatch(/the assistant picked this one/);
+  });
+
+  it('tells apart "no assistant", "the code does not say" and "no usable answer" for ambiguous sites', async () => {
+    const run = (model: RecommendModel | null) =>
+      buildRecommendations({
+        adapter: engine(() => true).adapter,
+        items: [loose({ key: 'multi' })],
+        model,
+        modelAllowed: true,
+      });
+    const why = (r: Awaited<ReturnType<typeof run>>) => r.skipped.map((x) => x.reason);
+    expect(why(await run(null))[0]).toMatch(/no assistant to choose/);
+    // Dice que no lo sabe: una respuesta válida.
+    const unsure = fakeModel((u) =>
+      u.includes('choice')
+        ? '<think>PORTAL_BASE_URL is not shown.</think>[{"id":"multi","choice":null}]'
+        : '[]',
+    );
+    expect(why(await run(unsure))[0]).toMatch(/could not tell which from the code/);
+    // Se quedó razonando: no hay respuesta, y no se presenta como "no sé".
+    const cut = fakeModel(() => '<think>We need to decide between the candidates and');
+    const r = await run(cut);
+    expect(why(r)[0]).toMatch(/gave no usable answer/);
+    expect(r.recommendations).toEqual([]);
+  });
+
+  it('chooses even when the model reasons first inside <think>', async () => {
+    const model = fakeModel((u) =>
+      u.includes('choice')
+        ? '<think>Candidates look like [0] and [1]; the code posts to /b.</think>\n[{"id":"multi","choice":1}]'
+        : '[]',
+    );
+    const r = await buildRecommendations({
+      adapter: engine(() => true).adapter,
+      items: [loose({ key: 'multi' })],
+      model,
+      modelAllowed: true,
+    });
+    expect(r.recommendations[0]?.declaration).toMatchObject({ provider: { key: 'http:POST /b' } });
   });
 
   it('a model pick outside the engine-valid candidates is discarded, never applied', async () => {

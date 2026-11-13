@@ -16,6 +16,11 @@ export interface Recommendation {
   declaration: BindingDecl;
   basis: 'engine_verified';
   basisDetail: string;
+  /**
+   * Una advertencia sobre la propuesta aun cuando el motor la acepta (p. ej. una ruta
+   * comodín que casa con casi cualquier llamada). Con advertencia no se preselecciona.
+   */
+  caution: string | null;
   /** Otros candidatos que el motor también acepta para el mismo sitio (sólo bindings). */
   alternatives: Array<{ key: string; service: string }>;
   /** Lectura del modelo sobre el código: un juicio, no un hecho del motor. */

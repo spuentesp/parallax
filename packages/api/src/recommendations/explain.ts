@@ -16,10 +16,25 @@ const BATCH = 8;
 const MAX_BATCHES = 3;
 const MAX_RATIONALE_CHARS = 240;
 const SNIPPET_CHARS = 700;
+// Algunos modelos (visto con MiniMax-M3) escriben su razonamiento en el propio contenido,
+// dentro de <think>…</think>, y sólo después la respuesta. Con un tope corto se cortan
+// antes de llegar a ella; hace falta sitio para pensar Y contestar.
+const MAX_TOKENS = 4000;
 
 const SYSTEM = `You help a maintainer declare missing links for a static-analysis engine that maps how services call each other.
 The engine has ALREADY checked every proposal you are shown: never say whether a link is valid or safe, and never invent facts that are not in the code snippet.
 Reply with JSON only, no prose and no code fences.`;
+
+/**
+ * La respuesta sin el razonamiento. `truncated` = el modelo empezó a razonar y se quedó
+ * sin espacio antes de contestar: no hay respuesta, que es distinto de "no sé".
+ */
+export function stripReasoning(content: string): { answer: string; truncated: boolean } {
+  const noBlocks = content.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const open = noBlocks.search(/<think>/i);
+  if (open >= 0) return { answer: noBlocks.slice(0, open).trim(), truncated: true };
+  return { answer: noBlocks.trim(), truncated: false };
+}
 
 /** Primer array JSON de la respuesta (el modelo a veces lo envuelve en ``` o en texto). */
 export function parseJsonArray(content: string): unknown[] | null {
@@ -50,17 +65,23 @@ export function parseRationales(content: string, ids: ReadonlySet<string>): Map<
   return out;
 }
 
-export function parsePicks(
-  content: string,
-  sizes: ReadonlyMap<string, number>,
-): Map<string, number> {
-  const out = new Map<string, number>();
+export interface Picks {
+  picks: Map<string, number>;
+  /** El modelo contestó que el código no lo aclara (`choice: null`): una respuesta válida. */
+  declined: Set<string>;
+}
+
+export function parsePicks(content: string, sizes: ReadonlyMap<string, number>): Picks {
+  const out: Picks = { picks: new Map(), declined: new Set() };
   for (const row of parseJsonArray(content) ?? []) {
     if (row === null || typeof row !== 'object') continue;
     const { id, choice } = row as { id?: unknown; choice?: unknown };
     const n = typeof id === 'string' ? sizes.get(id) : undefined;
-    if (n === undefined || typeof choice !== 'number' || !Number.isInteger(choice)) continue;
-    if (choice >= 0 && choice < n) out.set(id as string, choice);
+    if (n === undefined) continue;
+    if (choice === null) out.declined.add(id as string);
+    else if (typeof choice === 'number' && Number.isInteger(choice) && choice >= 0 && choice < n) {
+      out.picks.set(id as string, choice);
+    }
   }
   return out;
 }
@@ -82,42 +103,52 @@ async function snippetOf(
   }
 }
 
+export interface PickOutcome {
+  picks: Map<string, number>;
+  declined: Set<string>;
+  /** Casos cuyo lote no produjo una respuesta utilizable (cortada o ilegible). */
+  unanswered: Set<string>;
+}
+
+/** Casos que se le plantean al modelo por ejecución (uno por llamada). */
+const MAX_PICK_CASES = 6;
+
 export async function pickAmongValid(
   model: RecommendModel,
   adapter: Pick<LainAdapter, 'getCodeSnippet'>,
   multi: readonly MultiChoice[],
-): Promise<Map<string, number>> {
-  const picks = new Map<string, number>();
-  for (let i = 0; i < multi.length && i < BATCH * 2; i += BATCH) {
-    const batch = multi.slice(i, i + BATCH);
-    const cases = await Promise.all(
-      batch.map(async (m) => ({
-        id: m.item.key,
-        site: `${m.item.repo}:${m.item.path}${m.item.line ? `:${m.item.line}` : ''}`,
-        code: await snippetOf(adapter, m.item),
-        candidates: m.valid.map((v, idx) => `${idx}: ${v.ref.service} ${v.ref.key}`),
-      })),
-    );
-    const user = `For each case, the engine accepts ALL of the candidates below. Choose the one the code actually calls, or null when the snippet does not make it clear.
-Answer: [{"id": "<case id>", "choice": <candidate index or null>}]
+): Promise<PickOutcome> {
+  const out: PickOutcome = { picks: new Map(), declined: new Set(), unanswered: new Set() };
+  // Un caso por llamada: un modelo que razona se enreda cuando se le juntan varios
+  // sin resolver (medido: tres casos juntos agotaron 4000 tokens sin contestar).
+  const asked = multi.slice(0, MAX_PICK_CASES);
+  for (const m of multi.slice(MAX_PICK_CASES)) out.unanswered.add(m.item.key);
+  for (const m of asked) {
+    const code = await snippetOf(adapter, m.item);
+    const site = `${m.item.repo}:${m.item.path}${m.item.line ? `:${m.item.line}` : ''}`;
+    const user = `The engine accepts ALL of the candidates below for this call. Choose the one the code actually calls.
+Answer null right away when the snippet does not settle it: for example when the base URL is a variable whose value is not shown, or when several candidates fit equally well. Do not guess and do not assume anything about code you cannot see.
+Answer exactly: [{"id": "${m.item.key}", "choice": <candidate index or null>}]
 
-${cases
-  .map(
-    (c) =>
-      `id: ${c.id}\nsite: ${c.site}\ncode:\n${c.code}\ncandidates:\n${c.candidates.join('\n')}`,
-  )
-  .join('\n\n---\n\n')}`;
+site: ${site}
+code:
+${code}
+candidates:
+${m.valid.map((v, idx) => `${idx}: ${v.ref.service} ${v.ref.key}`).join('\n')}`;
     const res = await model.complete(
       [
         { role: 'system', content: SYSTEM },
         { role: 'user', content: user },
       ],
-      { model: 'planner', maxTokens: 600, thinking: false },
+      { model: 'worker', maxTokens: MAX_TOKENS, thinking: false },
     );
-    const sizes = new Map(batch.map((m) => [m.item.key, m.valid.length]));
-    for (const [id, c] of parsePicks(res.content ?? '', sizes)) picks.set(id, c);
+    const { answer } = stripReasoning(res.content ?? '');
+    const got = parsePicks(answer, new Map([[m.item.key, m.valid.length]]));
+    if (got.picks.has(m.item.key)) out.picks.set(m.item.key, got.picks.get(m.item.key) as number);
+    else if (got.declined.has(m.item.key)) out.declined.add(m.item.key);
+    else out.unanswered.add(m.item.key);
   }
-  return picks;
+  return out;
 }
 
 /** Una frase por recomendación, rotulada como lectura del modelo; sin respuesta = sin texto. */
@@ -138,7 +169,7 @@ export async function explainRecommendations(
         code: await snippetOf(adapter, r.site as NonNullable<Recommendation['site']>),
       })),
     );
-    const user = `For each proposal, write ONE sentence (max 30 words) saying what the code at that site does and why the proposed link fits it. Use only the snippet. If the snippet does not show why, use an empty string.
+    const user = `For each proposal, write ONE sentence (max 30 words) saying what the code at that site does and why the proposed link fits it. Use only the snippet. If the snippet does not show why, use an empty string. Keep your reasoning short.
 Answer: [{"id": "<case id>", "rationale": "<sentence>"}]
 
 ${cases
@@ -152,9 +183,10 @@ ${cases
         { role: 'system', content: SYSTEM },
         { role: 'user', content: user },
       ],
-      { model: 'planner', maxTokens: 900, thinking: false },
+      { model: 'worker', maxTokens: MAX_TOKENS, thinking: false },
     );
-    for (const [id, text] of parseRationales(res.content ?? '', new Set(batch.map((r) => r.id)))) {
+    const { answer } = stripReasoning(res.content ?? '');
+    for (const [id, text] of parseRationales(answer, new Set(batch.map((r) => r.id)))) {
       out.set(id, text);
     }
   }

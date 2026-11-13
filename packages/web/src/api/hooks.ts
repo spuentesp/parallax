@@ -1199,6 +1199,8 @@ export interface RecommendationDto {
   declaration: Record<string, unknown>;
   basis: 'engine_verified';
   basisDetail: string;
+  /** Advertencia aunque el motor la acepte (p. ej. una ruta comodín). */
+  caution: string | null;
   alternatives: Array<{ key: string; service: string }>;
   /** Lectura del modelo sobre el código: un juicio, no un hecho del motor. */
   rationale: string | null;

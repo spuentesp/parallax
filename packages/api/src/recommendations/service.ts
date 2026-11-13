@@ -1,6 +1,11 @@
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { bindingRecommendation, collectBindings, type LooseEndInput } from './collect.js';
-import { explainRecommendations, pickAmongValid, type RecommendModel } from './explain.js';
+import {
+  explainRecommendations,
+  type PickOutcome,
+  pickAmongValid,
+  type RecommendModel,
+} from './explain.js';
 import type { Recommendation, RecommendationsDto } from './types.js';
 
 export interface RecommendInput {
@@ -39,31 +44,43 @@ export async function buildRecommendations(
   add(bindings.skipped);
   const picked: Recommendation[] = [];
   if (bindings.multi.length > 0) {
-    let picks = new Map<string, number>();
+    let outcome: PickOutcome | null = null;
     if (model) {
       try {
-        picks = await pickAmongValid(model, input.adapter, bindings.multi);
+        outcome = await pickAmongValid(model, input.adapter, bindings.multi);
       } catch (e) {
         note = `The model could not be reached (${e instanceof Error ? e.message : 'error'}): showing only what the engine checked.`;
       }
     }
-    let unresolved = 0;
+    const left = { declined: 0, unanswered: 0, nobody: 0 };
     for (const m of bindings.multi) {
-      const choice = picks.get(m.item.key);
+      const choice = outcome?.picks.get(m.item.key);
       const chosen = choice === undefined ? undefined : m.valid[choice];
-      if (!chosen) {
-        unresolved++;
-        continue;
-      }
-      const others = m.valid.filter((_, i) => i !== choice);
-      const rec = bindingRecommendation(m.item, chosen, others, m.valid.length);
-      picked.push({
-        ...rec,
-        modelPicked: true,
-        basisDetail: `check_binding accepts it, and so do ${others.length} other candidate${others.length === 1 ? '' : 's'}; the assistant picked this one from the code`,
-      });
+      if (chosen) {
+        const others = m.valid.filter((_, i) => i !== choice);
+        const rec = bindingRecommendation(m.item, chosen, others, m.valid.length);
+        picked.push({
+          ...rec,
+          modelPicked: true,
+          basisDetail: `check_binding accepts it, and so do ${others.length} other candidate${others.length === 1 ? '' : 's'}; the assistant picked this one from the code`,
+        });
+      } else if (!outcome) left.nobody++;
+      else if (outcome.declined.has(m.item.key)) left.declined++;
+      else left.unanswered++;
     }
-    if (unresolved > 0) skipped.set('several candidates pass and none could be chosen', unresolved);
+    // Tres cosas distintas: sin quien elija, "el código no lo aclara" (una respuesta
+    // válida) y "no contestó" (cortado o ilegible). No se mezclan.
+    if (left.nobody > 0)
+      skipped.set('several candidates pass and there is no assistant to choose', left.nobody);
+    if (left.declined > 0) {
+      skipped.set(
+        'several candidates pass; the assistant could not tell which from the code',
+        left.declined,
+      );
+    }
+    if (left.unanswered > 0) {
+      skipped.set('several candidates pass; the assistant gave no usable answer', left.unanswered);
+    }
   }
 
   const recommendations: Recommendation[] = [...bindings.recommendations, ...picked];

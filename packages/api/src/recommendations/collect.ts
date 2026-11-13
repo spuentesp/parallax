@@ -26,6 +26,13 @@ export interface MultiChoice {
   valid: ValidCandidate[];
 }
 
+/**
+ * `http:ANY /`, `http:POST /`…: una ruta raíz comodín. El motor la acepta para casi
+ * cualquier llamada con ese método, así que su "valid" dice muy poco (visto: llamadas a
+ * un portal EXTERNO que casaban con `ANY /` de dos servicios internos).
+ */
+export const isCatchAllRoute = (key: string): boolean => /^http:[A-Z*]+ \/$/.test(key);
+
 const idOf = (...parts: string[]): string =>
   createHash('sha1').update(parts.join('|')).digest('hex').slice(0, 12);
 
@@ -65,6 +72,9 @@ export function bindingRecommendation(
         : alternatives.length === 0
           ? '; the only candidate that passes'
           : ''),
+    caution: isCatchAllRoute(c.ref.key)
+      ? `${c.ref.key} is a catch-all route: the engine accepts it for almost any call, so check that the code really calls ${c.ref.service} before adding it`
+      : null,
     alternatives: alternatives.map((a) => ({ key: a.ref.key, service: a.ref.service })),
     rationale: null,
     modelPicked: false,

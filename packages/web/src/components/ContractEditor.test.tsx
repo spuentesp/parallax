@@ -93,6 +93,7 @@ const binding = (over: Partial<RecommendationDto> = {}): RecommendationDto => ({
   },
   basis: 'engine_verified',
   basisDetail: 'check_binding accepts it (template exact); the only candidate that passes',
+  caution: null,
   alternatives: [],
   rationale: null,
   modelPicked: false,
@@ -141,6 +142,30 @@ describe('ContractEditor recommendations', () => {
     const box = (name: RegExp) => list.getByRole('checkbox', { name }) as HTMLInputElement;
     expect(box(/src\/a\.ts/).checked).toBe(true);
     expect(box(/src\/b\.ts/).checked).toBe(false);
+  });
+
+  it('a catch-all target carries a caution and starts unselected, so it is not added by accident', async () => {
+    serveRecs(
+      result({
+        recommendations: [
+          binding(),
+          binding({
+            id: 'r9',
+            title: 'nemoclaw:tool-gateway-broker.ts:375 → openshell http:ANY /',
+            caution:
+              'http:ANY / is a catch-all route: the engine accepts it for almost any call, so check that the code really calls openshell before adding it',
+          }),
+        ],
+      }),
+    );
+    renderWithQuery(<ContractEditor workspaceId="ws1" />);
+    suggest();
+    const list = within(await screen.findByTestId('recommendations'));
+    expect(list.getByTestId('caution').textContent).toMatch(/Check first: .*catch-all route/);
+    const box = (name: RegExp) => list.getByRole('checkbox', { name }) as HTMLInputElement;
+    expect(box(/src\/a\.ts/).checked).toBe(true);
+    expect(box(/tool-gateway-broker/).checked).toBe(false);
+    expect(screen.getByRole('button', { name: 'Add 1 selected to the context' })).toBeTruthy();
   });
 
   it('adding replaces the placeholder example, and Preview then sends exactly the chosen declaration', async () => {

@@ -85,7 +85,11 @@ function Recommendations({
   // Lo que el motor aceptó sin ayuda viene marcado; lo demás lo decide quien revisa.
   const [picked, setPicked] = useState<ReadonlySet<string>>(
     () =>
-      new Set(recs.filter((r) => r.basis === 'engine_verified' && !r.modelPicked).map((r) => r.id)),
+      new Set(
+        recs
+          .filter((r) => r.basis === 'engine_verified' && !r.modelPicked && !r.caution)
+          .map((r) => r.id),
+      ),
   );
   const toggle = (id: string) =>
     setPicked((prev) => {
@@ -117,6 +121,11 @@ function Recommendations({
                     </span>
                   </span>
                   <span className="block text-[11px] text-muted">{r.basisDetail}</span>
+                  {r.caution && (
+                    <span className="block text-[11px] text-warning" data-testid="caution">
+                      Check first: {r.caution}
+                    </span>
+                  )}
                   {r.alternatives.length > 0 && (
                     <span className="block text-[11px] text-muted">
                       The engine also accepts:{' '}
