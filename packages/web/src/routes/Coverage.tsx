@@ -1,7 +1,14 @@
 import type * as React from 'react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { type LooseEndDto, useCheckBinding, useLooseEnds, useRepoStatus } from '../api/hooks.js';
+import {
+  type CoverageClassId,
+  type LooseEndDto,
+  useCheckBinding,
+  useCoverageBreakdown,
+  useLooseEnds,
+  useRepoStatus,
+} from '../api/hooks.js';
 
 // Cobertura y cabos sueltos (referencia "Coverage and loose ends"): lo que el
 // motor no pudo resolver. Una afirmación de "sin impacto" sólo vale si esta
@@ -21,6 +28,9 @@ export function Coverage(): React.ReactElement {
   const status = useRepoStatus(orgId);
   const [reason, setReason] = useState<string | null>(null);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [klass, setKlass] = useState<CoverageClassId | null>(null);
+  const breakdown = useCoverageBreakdown(orgId);
+  const byKey = breakdown.data?.byKey ?? {};
 
   const report = loose.data;
   const items = report?.source === 'lain' ? report.items : [];
@@ -29,9 +39,11 @@ export function Coverage(): React.ReactElement {
   // El motor marca lo ambiguo con su propia razón; tener varios candidatos no lo es
   // (un topic dinámico puede casar con 80 y no por eso es ambiguo).
   const ambiguous = items.filter((i) => i.reason === 'ambiguous');
+  // Los filtros se componen: las cuentas de las razones son las de la clase elegida.
+  const inClass = unresolved.filter((i) => klass === null || byKey[i.key] === klass);
   const reasons = new Map<string, number>();
-  for (const i of unresolved) reasons.set(i.reason, (reasons.get(i.reason) ?? 0) + 1);
-  const rows = reason === null ? unresolved : unresolved.filter((i) => i.reason === reason);
+  for (const i of inClass) reasons.set(i.reason, (reasons.get(i.reason) ?? 0) + 1);
+  const rows = inClass.filter((i) => reason === null || i.reason === reason);
 
   const selected = unresolved.find((i) => i.key === selectedKey) ?? null;
   const repos = status.data?.repos ?? [];
@@ -75,6 +87,13 @@ export function Coverage(): React.ReactElement {
         <Stat value={report ? String(inferred.length) : '…'} label="bound only by heuristic" />
       </dl>
 
+      <Breakdown
+        data={breakdown.data}
+        loading={breakdown.isPending}
+        selected={klass}
+        onSelect={(c) => setKlass(c === klass ? null : c)}
+      />
+
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <section aria-label="Loose ends" className="rounded-xl border border-border bg-surface">
           <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
@@ -84,7 +103,7 @@ export function Coverage(): React.ReactElement {
               aria-label="Filter by reason"
             >
               <Chip on={reason === null} onClick={() => setReason(null)}>
-                All {unresolved.length}
+                All {inClass.length}
               </Chip>
               {[...reasons].map(([r, n]) => (
                 <Chip key={r} on={reason === r} onClick={() => setReason(reason === r ? null : r)}>
@@ -473,5 +492,89 @@ function ResolvePanel({
         </div>
       )}
     </aside>
+  );
+}
+
+const BAR: Record<CoverageClassId, string> = {
+  fixable: 'bg-success',
+  rejected: 'bg-warning',
+  no_candidate: 'bg-warning/70',
+  dynamic: 'bg-warning/50',
+  internal: 'bg-border-strong',
+  outside: 'bg-border-strong/70',
+  test_or_tooling: 'bg-border',
+  heuristic: 'bg-inferred/60',
+  unexamined: 'bg-border/60',
+};
+
+// "Qué son": el titular de sin resolver mezcla cosas distintas. Cada clase sale del
+// veredicto del motor o de la categoría del sitio, y dice si hay algo que hacer.
+function Breakdown({
+  data,
+  loading,
+  selected,
+  onSelect,
+}: {
+  data: ReturnType<typeof useCoverageBreakdown>['data'];
+  loading: boolean;
+  selected: CoverageClassId | null;
+  onSelect: (c: CoverageClassId) => void;
+}): React.ReactElement | null {
+  if (loading) return <p className="text-xs text-muted">Classifying the loose ends…</p>;
+  if (data?.source !== 'lain' || data.total === 0) return null;
+  return (
+    <section
+      aria-label="What the loose ends are"
+      className="rounded-xl border border-border bg-surface p-4"
+      data-testid="coverage-breakdown"
+    >
+      <h2 className="text-sm font-semibold">
+        {data.gaps} of {data.total} loose ends are real gaps in product code
+      </h2>
+      <p className="mt-1 text-xs text-muted">
+        The rest are tests, tooling, calls inside one service and the like: the engine reports them
+        too, but they do not hide who depends on whom.
+      </p>
+      <div className="mt-3 flex h-2 overflow-hidden rounded-full bg-bg" aria-hidden="true">
+        {data.classes.map((c) => (
+          <div
+            key={c.id}
+            className={BAR[c.id]}
+            style={{ width: `${(c.count / data.total) * 100}%` }}
+            title={`${c.count} · ${c.label}`}
+          />
+        ))}
+      </div>
+      <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+        {data.classes.map((c) => (
+          <li key={c.id}>
+            <button
+              type="button"
+              aria-pressed={selected === c.id}
+              disabled={c.id === 'heuristic'}
+              onClick={() => onSelect(c.id)}
+              title={c.hint}
+              className={`flex w-full items-start gap-2 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors disabled:cursor-default ${
+                selected === c.id
+                  ? 'border-accent bg-accent-soft'
+                  : 'border-border hover:border-border-strong'
+              }`}
+            >
+              <span
+                className={`mt-1 h-2 w-2 shrink-0 rounded-full ${BAR[c.id]}`}
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block">
+                  <b className="tabular-nums">{c.count}</b> {c.label}
+                  {c.gap && <span className="ml-1.5 text-[10px] text-warning">gap</span>}
+                </span>
+                <span className="block text-[11px] text-muted">{c.hint}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

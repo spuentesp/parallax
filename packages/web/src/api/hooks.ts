@@ -1224,3 +1224,42 @@ export function useRecommendations(workspaceId: string) {
       ),
   });
 }
+
+// ── Qué es cada cabo suelto (clasificación con el veredicto del motor) ──
+
+export type CoverageClassId =
+  | 'test_or_tooling'
+  | 'outside'
+  | 'internal'
+  | 'fixable'
+  | 'dynamic'
+  | 'no_candidate'
+  | 'rejected'
+  | 'heuristic'
+  | 'unexamined';
+
+export interface CoverageBreakdownDto {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  classes: Array<{
+    id: CoverageClassId;
+    label: string;
+    hint: string;
+    /** Cuenta como hueco real de cobertura en código de producto. */
+    gap: boolean;
+    count: number;
+  }>;
+  byKey: Record<string, CoverageClassId>;
+  total: number;
+  gaps: number;
+}
+
+export function useCoverageBreakdown(workspaceId: string | undefined) {
+  return useQuery({
+    queryKey: ['coverage-breakdown', workspaceId],
+    queryFn: () =>
+      client.get<CoverageBreakdownDto>(`/api/workspaces/${workspaceId}/coverage/breakdown`),
+    enabled: workspaceId != null,
+    staleTime: 60_000,
+  });
+}

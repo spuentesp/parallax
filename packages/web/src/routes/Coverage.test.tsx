@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -160,5 +160,89 @@ describe('Resolve this call site', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'src/z.ts:4' }));
     expect(await screen.findByText(/offered no candidate endpoints/)).toBeTruthy();
     expect(screen.queryByRole('radiogroup')).toBeNull();
+  });
+});
+
+describe('Coverage breakdown', () => {
+  const cls = (id: string, label: string, count: number, gap: boolean, hint = `${label} hint`) => ({
+    id,
+    label,
+    hint,
+    gap,
+    count,
+  });
+  const serve = (breakdown: unknown | null) => {
+    server.use(
+      http.get('/api/workspaces/:id/loose-ends', () =>
+        HttpResponse.json({
+          source: 'lain',
+          generatedAt: 1,
+          items: [item('own', 'no_match', ['x'], 1), item('lone', 'no_match', [], 0)],
+          summary: { total: 2, byCategory: {}, pendingCases: 0 },
+          run: { state: 'idle', done: 0, total: 0 },
+        }),
+      ),
+      http.get('/api/workspaces/:id/repos/status', () =>
+        HttpResponse.json({ source: 'lain', repos: [], untracked: [] }),
+      ),
+      http.get('/api/workspaces/:id/coverage/breakdown', () =>
+        breakdown === null ? new HttpResponse(null, { status: 500 }) : HttpResponse.json(breakdown),
+      ),
+    );
+    const router = createMemoryRouter(routes, { initialEntries: ['/orgs/acme/coverage'] });
+    renderWithQuery(<RouterProvider router={router} />);
+  };
+  const full = {
+    source: 'lain',
+    total: 324,
+    gaps: 45,
+    byKey: { own: 'internal', lone: 'no_candidate' },
+    classes: [
+      cls('no_candidate', 'No candidate offered', 28, true),
+      cls('internal', 'Call inside one service', 52, false),
+      cls('test_or_tooling', 'Test or tooling code', 227, false),
+      cls('heuristic', 'Bound only by a heuristic', 25, false),
+    ],
+  };
+
+  it('says how many are real gaps, and lists what the rest are with what each means', async () => {
+    serve(full);
+    const box = within(await screen.findByTestId('coverage-breakdown'));
+    expect(box.getByText('45 of 324 loose ends are real gaps in product code')).toBeTruthy();
+    expect(box.getByText('227')).toBeTruthy();
+    expect(box.getByText('Test or tooling code hint')).toBeTruthy();
+    // Sólo lo que es un hueco se marca como tal.
+    expect(box.getAllByText('gap')).toHaveLength(1);
+  });
+
+  it('clicking a class narrows the table to it, and clicking again clears it', async () => {
+    serve(full);
+    await screen.findByTestId('coverage-breakdown');
+    expect(await screen.findByText('src/own.ts:4')).toBeTruthy();
+    expect(screen.getByText('src/lone.ts:4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Call inside one service/ }));
+    expect(screen.getByText('src/own.ts:4')).toBeTruthy();
+    expect(screen.queryByText('src/lone.ts:4')).toBeNull();
+    // Los contadores de las razones siguen a la clase: 1 de 2 (antes "All 2").
+    expect(screen.getByRole('button', { name: 'All 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'no_match 1' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Call inside one service/ }));
+    expect(screen.getByText('src/lone.ts:4')).toBeTruthy();
+  });
+
+  it('the heuristic class is not a filter of this table, so it is not clickable', async () => {
+    serve(full);
+    await screen.findByTestId('coverage-breakdown');
+    expect(
+      (screen.getByRole('button', { name: /Bound only by a heuristic/ }) as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+  });
+
+  it('shows nothing when the engine cannot classify, instead of a made-up breakdown', async () => {
+    serve(null);
+    await screen.findByText('src/own.ts:4');
+    await waitFor(() => expect(screen.queryByText(/Classifying the loose ends/)).toBeNull());
+    expect(screen.queryByTestId('coverage-breakdown')).toBeNull();
   });
 });
