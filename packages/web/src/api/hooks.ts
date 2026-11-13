@@ -1187,3 +1187,38 @@ export function useSymbolLinks(
     staleTime: 5 * 60_000,
   });
 }
+
+// ── Recomendaciones para la remediación de contratos (motor + asistente) ──
+
+export interface RecommendationDto {
+  id: string;
+  kind: 'binding';
+  title: string;
+  site: { repo: string; path: string; line: number | null } | null;
+  /** La declaración exacta para `bindings` del contexto. */
+  declaration: Record<string, unknown>;
+  basis: 'engine_verified';
+  basisDetail: string;
+  alternatives: Array<{ key: string; service: string }>;
+  /** Lectura del modelo sobre el código: un juicio, no un hecho del motor. */
+  rationale: string | null;
+  modelPicked: boolean;
+}
+
+export interface RecommendationsResult {
+  source: 'lain' | 'unconfigured' | 'error';
+  error?: string;
+  recommendations: RecommendationDto[];
+  skipped: Array<{ reason: string; count: number }>;
+  model: { used: boolean; name: string | null; note: string | null };
+}
+
+export function useRecommendations(workspaceId: string) {
+  return useMutation({
+    mutationFn: () =>
+      client.post<RecommendationsResult>(
+        `/api/workspaces/${workspaceId}/contracts/recommendations`,
+        {},
+      ),
+  });
+}
