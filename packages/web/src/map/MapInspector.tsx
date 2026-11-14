@@ -886,8 +886,14 @@ function ScopeNote({
   const ready = repos.filter((r) => r.state === 'indexed').length;
   const aimed =
     node.kind === 'service' && loose.data?.source === 'lain'
-      ? loose.data.items.filter(
-          (i) => i.kind === 'unresolved' && i.detail.targetService === node.label,
+      ? // Una llamada "podría ser de este servicio" si el motor lo nombra como destino O lo
+        // ofrece entre sus candidatos. Sólo contar `targetService` se quedaba corto (en
+        // Saleor lo traían 3 de 33; 15 de 33 traían candidatos).
+        loose.data.items.filter(
+          (i) =>
+            i.kind === 'unresolved' &&
+            (i.detail.targetService === node.label ||
+              (i.candidateRefs ?? []).some((c) => c.service === node.label)),
         ).length
       : 0;
   const complete = ready === repos.length && aimed === 0;

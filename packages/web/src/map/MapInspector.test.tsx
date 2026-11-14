@@ -601,6 +601,18 @@ describe('MapInspector scope and asking', () => {
     );
   });
 
+  it('an unresolved call that merely lists this service among its candidates also blocks a "no impact" claim', async () => {
+    const viaCandidate = {
+      ...looseItem('nobody'),
+      candidateRefs: [{ key: 'http:POST /x', service: 'orders', reason: 'pattern' }],
+    };
+    serveScope(['indexed', 'indexed'], [viaCandidate, looseItem('billing')]);
+    mount();
+    const note = await screen.findByTestId('scope-note');
+    expect(note.textContent).toMatch(/1 unresolved call could match this service/);
+    expect(note.textContent).toMatch(/not claimed/);
+  });
+
   it('a complete scope is stated without the warning, and "Ask about this" asks about the node', async () => {
     serveScope(['indexed', 'indexed'], [looseItem('billing')]);
     mount();
