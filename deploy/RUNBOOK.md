@@ -27,6 +27,12 @@ mkdir -p ~/lain && cd ~/lain
 gh release download v0.15.0 -R spuentesp/lain -p 'lain-0.15.0-x86_64-unknown-linux-gnu.tar.gz' -p SHA256SUMS
 grep x86_64-unknown-linux-gnu.tar.gz$ SHA256SUMS | sha256sum -c - && tar xzf lain-0.15.0-x86_64-unknown-linux-gnu.tar.gz
 ```
+> The v0.15.0 Linux release binary is linked against glibc 2.43; on Ubuntu
+> 22.04/24.04 it fails to start (`GLIBC_2.43 not found`). Check with
+> `~/lain/lain --version`; if it fails, build the tag from source
+> (`git clone --branch v0.15.0 https://github.com/spuentesp/lain && cargo build --release --locked --bin lain`),
+> which is what `install.sh` does automatically.
+
 > Upgrading an existing data dir: 0.15.0 raises the federation graph schema
 > (v4 → v5), so run `~/lain/lain reindex --config ~/saleor/repos.yaml` once
 > after upgrading; it backs up `federated_graph.bin` to `.bak` and rebuilds.

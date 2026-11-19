@@ -61,7 +61,8 @@ cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 `install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
 the [lain](https://github.com/spuentesp/lain) **release binary** (v0.15.0,
 SHA256-verified; set `LAIN_FROM_SOURCE=1` to build a branch from source
-instead), the Saleor demo repos, the engine as a service, the HTTPS front end
+instead; if the binary needs a newer glibc than the machine has, as v0.15.0
+does on Ubuntu 22.04/24.04, the script builds the same tag from source), the Saleor demo repos, the engine as a service, the HTTPS front end
 (Caddy), and a `deploy/.env` with generated tokens.
 
 ```bash

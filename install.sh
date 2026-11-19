@@ -353,15 +353,7 @@ install_lain_binary() { # install_lain_binary <path-to-binary>
   fi
 }
 
-if [[ -n "$LAIN_BIN" ]]; then
-  [[ -x "$LAIN_BIN" ]] || die "--lain-bin $LAIN_BIN is not executable"
-  install_lain_binary "$LAIN_BIN"
-  printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
-  ok "installed the provided lain binary: $LAIN_BIN_DIR/lain"
-elif [[ $SKIP_LAIN_BUILD -eq 1 ]]; then
-  command -v lain >/dev/null 2>&1 || die "--skip-lain-build was given but lain is not on PATH"
-  ok "using the lain already on PATH: $(command -v lain)"
-elif [[ $LAIN_FROM_SOURCE -eq 1 ]]; then
+build_lain_from_source() {
   if ! command -v cargo >/dev/null 2>&1; then
     info "installing Rust (stable)"
     curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
@@ -404,6 +396,18 @@ elif [[ $LAIN_FROM_SOURCE -eq 1 ]]; then
     printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
     ok "lain $LAIN_COMMIT built and installed in $LAIN_BIN_DIR"
   fi
+}
+
+if [[ -n "$LAIN_BIN" ]]; then
+  [[ -x "$LAIN_BIN" ]] || die "--lain-bin $LAIN_BIN is not executable"
+  install_lain_binary "$LAIN_BIN"
+  printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
+  ok "installed the provided lain binary: $LAIN_BIN_DIR/lain"
+elif [[ $SKIP_LAIN_BUILD -eq 1 ]]; then
+  command -v lain >/dev/null 2>&1 || die "--skip-lain-build was given but lain is not on PATH"
+  ok "using the lain already on PATH: $(command -v lain)"
+elif [[ $LAIN_FROM_SOURCE -eq 1 ]]; then
+  build_lain_from_source
 else
   # Default: download the pinned release binary and verify its SHA256.
   if [[ -f "$LAIN_VERSION_MARKER" ]] && [[ "$(cat "$LAIN_VERSION_MARKER")" == "$LAIN_TAG" ]] \
@@ -425,8 +429,19 @@ else
     tar -xzf "$workdir/$asset" -C "$workdir"
     install_lain_binary "$workdir/lain"
     rm -rf "$workdir"
-    printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
-    ok "lain $LAIN_TAG installed in $LAIN_BIN_DIR"
+    # The release binary is linked against a recent glibc (2.43 for v0.15.0),
+    # newer than Ubuntu 22.04/24.04 ship. If it cannot start here, build the
+    # same tag from source instead of leaving a binary that cannot run.
+    if "$LAIN_BIN_DIR/lain" --version >/dev/null 2>&1; then
+      printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
+      ok "lain $LAIN_TAG installed in $LAIN_BIN_DIR"
+    else
+      warn "the lain $LAIN_TAG release binary does not run on this system: $("$LAIN_BIN_DIR/lain" --version 2>&1 | head -n1)"
+      warn "falling back to building $LAIN_TAG from source"
+      rm -f "$LAIN_BIN_DIR/lain" "$LAIN_BIN_DIR/lain-git-sidecar" "$LAIN_VERSION_MARKER"
+      LAIN_BRANCH="$LAIN_TAG"
+      build_lain_from_source
+    fi
   fi
 fi
 
