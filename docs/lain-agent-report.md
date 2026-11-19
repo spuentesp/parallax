@@ -39,6 +39,7 @@ A note on an earlier statement of mine: I had told the dashboard's owner that th
 | 11 | P3 | `target_service` is rarely set on unresolved items | "could match" counts |
 | 12 | P3 | `UnsupportedLanguage` skip lists a `.py` file as a sample | **(hypothesis: bug)** |
 | 13 | P3 | `OrmDynamicQuery` volume (5,384 in Saleor) | blind-spot reporting |
+| 14 | P2 | The Linux release binary needs glibc 2.43; it does not start on Ubuntu 22.04/24.04 | installing the release |
 
 ---
 
@@ -282,6 +283,25 @@ the reason is per-sensor and mislabelled, or the count includes files it should 
 Saleor's ledger reports **5,384** `OrmDynamicQuery` unresolved sites, against 33 loose ends. It is
 the largest blind-spot class and the dashboard's "Known blind spots" list would be dominated by it.
 Question: is that expected, and is there a way to group it (by file/app) so a UI can summarise it?
+
+---
+
+## 14. The Linux release binary does not start on Ubuntu 22.04/24.04 (P2)
+
+`lain-0.15.0-x86_64-unknown-linux-gnu.tar.gz` (checksum verified) fails on an Ubuntu 24.04.5
+container (glibc 2.39):
+
+```text
+/usr/local/bin/lain: /lib/x86_64-linux-gnu/libm.so.6: version `GLIBC_2.43' not found (required by /usr/local/bin/lain)
+```
+`objdump -T lain | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -3` shows `GLIBC_2.38`, `2.39` and
+`2.43`, so the build host's glibc is newer than any current Ubuntu LTS. The release has one Linux
+asset (`v0.14.0` also has only the `gnu` one). It runs on a host with glibc 2.44, which is how it went
+unnoticed. Parallax's `install.sh` now detects this and builds the tag from source (15-40 min).
+
+**Suggested change:** build the release on an older base (for example an Ubuntu 22.04 runner, glibc 2.35)
+or publish a static `x86_64-unknown-linux-musl` asset. **Acceptance:** `lain --version` runs in a
+stock `ubuntu:22.04` and `ubuntu:24.04` container after extracting the tarball.
 
 ---
 
