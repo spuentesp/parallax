@@ -59,16 +59,16 @@ cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ## Install on a machine (one command)
 
 `install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
-Lain built from the **`dev` branch** of [lain](https://github.com/spuentesp/lain),
-the Saleor demo repos, the engine as a service, the HTTPS front end (Caddy),
-and a `deploy/.env` with generated tokens.
+the [lain](https://github.com/spuentesp/lain) **release binary** (v0.15.0,
+SHA256-verified; set `LAIN_FROM_SOURCE=1` to build a branch from source
+instead), the Saleor demo repos, the engine as a service, the HTTPS front end
+(Caddy), and a `deploy/.env` with generated tokens.
 
 ```bash
 sudo ./install.sh --domain demo.example.com --nebius-token ntb_...
 ```
 
-It prints the admin link and the read-only link when it finishes. The engine is
-built from source, so the first run takes 15–40 minutes. `deploy/RUNBOOK.md`
+It prints the admin link and the read-only link when it finishes. `deploy/RUNBOOK.md`
 describes the same stack by hand; `parallax-stack {status|logs|restart}` drives
 it afterwards.
 
@@ -81,18 +81,18 @@ pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
 The api uses `LAIN_ADAPTER=mock` by default. Use
-[Lain v0.13.0](https://github.com/spuentesp/lain/releases/tag/v0.13.0) for the
-GraphQL provider and binding fixes, and for the indexing performance changes
-that earlier needed a local patch. Start its HTTP server with your workspace's
-`repos.yaml`; Parallax loads the `contracts` package when the server starts with
-the default core profile.
+[Lain v0.15.0](https://github.com/spuentesp/lain/releases/tag/v0.15.0) (the
+latest release) for the GraphQL provider and binding fixes, and for the
+indexing performance changes that earlier needed a local patch. Start its HTTP
+server with your workspace's `repos.yaml`; Parallax loads the `contracts`
+package when the server starts with the default core profile.
 
 ```bash
 lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
 The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
-is superseded: v0.13.0 includes that work, so no patch is needed.
+is superseded: v0.15.0 includes that work, so no patch is needed.
 
 Point Parallax at that server:
 
@@ -100,7 +100,7 @@ Point Parallax at that server:
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
 ```
 
-Verify the native 0.13 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
+Verify the native 0.15 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
 
 ```bash
 LAIN_URL=http://localhost:9999/mcp pnpm demo:lain
@@ -221,7 +221,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-0.13.0 pnpm gate:graphql
+LAIN_BIN=/path/to/lain-0.15.0 pnpm gate:graphql
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the

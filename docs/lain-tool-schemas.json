@@ -311,6 +311,12 @@
           "description": "Snapshot id (`snap_<hex>`); must be `ready`. `live` is invalid (`invalid_argument`, `live_not_supported`).",
           "type": "string"
         },
+        "max_hops": {
+          "description": "Maximum impact path depth (default 10). Paths that reach the depth limit are marked truncated.",
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
         "min_impact": {
           "enum": [
             "NoKnownImpact",
@@ -324,6 +330,12 @@
         },
         "service": {
           "type": "string"
+        },
+        "timeout_ms": {
+          "description": "Cooperative timeout in milliseconds (server default: LAIN_DIFF_TIMEOUT_MS; cap: LAIN_DIFF_TIMEOUT_MAX_MS, at most 600000). Individual snapshot hydration, git diff and graph traversal operations cannot be interrupted; incomplete results are marked truncated.",
+          "maximum": 600000,
+          "minimum": 1,
+          "type": "integer"
         }
       },
       "required": [
