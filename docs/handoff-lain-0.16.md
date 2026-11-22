@@ -72,9 +72,9 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
   and table 17 are identical). Test-file routes are still counted (100 of 250 providers sit under
   test/e2e/fixture paths), so it is not that. Find out whether 0.16.0 deduplicates or stopped
   counting something before trusting any 0.15 baseline numbers.
-- **Clean parse is not clean use.** The Zod schemas are loose; `provenance`, `ref` and `not_a_call`
-  parsed but no Parallax code reads them. `packages/api/src/coverage/breakdown.ts` and
-  `loose-ends/classify.ts` classify by the old reasons, so `not_a_call` may land in a wrong bucket.
+- **Clean parse is not clean use.** `provenance` and `ref` parse but no Parallax code reads them. The engine
+  reason `not_a_call` is now handled (`coverage/breakdown.ts` -> `outside`, `loose-ends/classify.ts` -> category
+  `not_a_call`, with tests); not yet seen on live data.
 - **The full test suites on 0.16.0:** only the probe was run, not `pnpm test` against a live server.
 
 ### Lain-side items that remain open (see `docs/lain-agent-report.md`)
