@@ -53,7 +53,8 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
    Chromium screenshots): Map (structure tree, graph with edges), Contracts (669 endpoints), Contract detail
    (`productCreate`: typed fields `ProductCreateInput!`, `[ProductError!]!`, `Product?`, who reads each), Coverage
    (3 of 3 repos ready, 32 unresolved, `not_a_call 1` chip, "221 endpoints have no schema" = 669 - 448). All render.
-   **Not done:** the Inspector side panel (needs a node click) and `gate:graphql`, which still asserts 0.15.0.
+   Inspector also checked (Playwright + Chromium against the container-served bundle, no console errors):
+   service panel shows 659 endpoints, consumers with proven bindings, and the scope note.
 2. **Reindex existing data dirs.** 0.15 → 0.16 may change the on-disk format; 0.16 reported
    "coverage ledger missing; reindex required" for repos that had no ledger yet. Not tested on a
    migrated 0.15 data dir (none was kept). `install.sh` already runs `lain reindex` when the installed
@@ -69,10 +70,28 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
 5. **VM OS: decided, Ubuntu 24.04** (runs the release binary; 22.04 would need the source build). `deploy/RUNBOOK.md`
    now says 24.04.
 
+### Tested 2026-11-22 after the first pass
+
+- **Upgrade from real 0.15 data: works.** 0.16 refuses a 0.15 data dir (`written by schema v5; this build expects
+  v7. Run lain reindex`). After `lain reindex --config ...` (2m47 on cluster A, 12 cores; old graph kept as `.bak`)
+  all 3 repos are `indexed` and the 203 contracts equal a fresh 0.16 index. The server needs a few more minutes
+  after start before `get_coverage` leaves `not_ready`; `install.sh` waits via `LAIN_INDEX_TIMEOUT_SEC`.
+  The warning text in `install.sh` still says "schema v4 -> v5"; make it version-neutral when bumping.
+- **`gate:graphql` passes on 0.16.0** (with the version assert changed; the checked-in script still asserts 0.15.0).
+- **The Dockerfile builds and runs under podman (6.1.4), the seed script and the access rules work** (no token 401,
+  read-only token 403 on writes, live Saleor data).
+- **FOUND: the container cannot reach Lain the way `install.sh` / the compose file set it up (both 0.15.0 and
+  0.16.0).** Lain answers `403` ("Host is not loopback; this server only answers localhost") to any `Host` other
+  than a loopback one (`localhost`, `127.x`, `[::1]` pass; `host.docker.internal`, bridge IPs do not). The relay
+  (socat on the bridge) forwards bytes, so the container's `Host: host.docker.internal:PORT` is rejected and the
+  API fails at boot with `lain handshake returned HTTP 403`. Verified with `curl -H 'Host: ...'` on both binaries.
+  It works with `network_mode: host` and `LAIN_URL=http://127.0.0.1:PORT/mcp`. Not yet fixed; needs a decision
+  (host networking for both services vs. making the client send a loopback Host header).
+
 ### Still unverified, in order of risk
 
 - **`install.sh` end to end on a real VM:** systemd units, the relay, Docker, Caddy, workspace
-  seeding. Only steps 1-6 ran in a container, with Docker stubbed. (The RUNBOOK says the compose
+  seeding (not run on the workstation: it installs system packages and units). Only steps 1-6 ran in a container. (The RUNBOOK says the compose
   stack was never tested either.)
 - **HTTP contracts on cluster A, 290 -> 66: explained (re-ran 0.15.0 and 0.16.0 on the same repos).** Not tests:
   the 49 test-path providers are identical in both. All 224 lost contracts are OpenShell `sdk/go` (275 providers),
