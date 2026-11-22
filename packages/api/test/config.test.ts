@@ -2,11 +2,20 @@ import { describe, expect, it } from 'vitest';
 import { investigatorSettings, loadConfig, modelEnv } from '../src/config.js';
 
 describe('loadConfig', () => {
+  it('listens on the interface given by HOST', () => {
+    const cfg = loadConfig({
+      PARALLAX_TOKENS: JSON.stringify([{ token: 't1', orgId: 'org_demo', scopes: ['read'] }]),
+      HOST: '127.0.0.1',
+    });
+    expect(cfg.host).toBe('127.0.0.1');
+  });
+
   it('applies sensible defaults when only required vars are set', () => {
     const cfg = loadConfig({
       PARALLAX_TOKENS: JSON.stringify([{ token: 't1', orgId: 'org_demo', scopes: ['read'] }]),
     });
     expect(cfg.port).toBe(8080);
+    expect(cfg.host).toBeUndefined();
     expect(cfg.databasePath).toBe('./data/parallax.db');
     expect(cfg.lainAdapter).toBe('mock');
     expect(cfg.mcpTransport).toBe('stdio');

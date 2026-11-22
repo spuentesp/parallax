@@ -4,9 +4,10 @@ import { buildApp } from './server.js';
 async function main() {
   const config = loadConfig();
   const app = await buildApp(config);
-  await app.listen({ port: config.port, host: '0.0.0.0' });
+  await app.listen({ port: config.port, host: config.host ?? '0.0.0.0' });
   app.log.info(
     {
+      host: config.host ?? '0.0.0.0',
       port: config.port,
       lainAdapter: config.lainAdapter,
       mcpTransport: config.mcpTransport,

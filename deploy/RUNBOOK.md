@@ -68,6 +68,8 @@ Run it so it survives reboots (systemd or `tmux`), listening on **localhost only
 ```
 A cold index of this workspace took **111 s** on a dev machine. Wait until it finishes before seeding.
 
+> Networking: both containers use the host network. Lain answers only loopback `Host` headers (it returns 403 for `host.docker.internal` or a bridge IP), so the app reaches it at `http://127.0.0.1:9999/mcp`. The app listens on `127.0.0.1:8080` only; Caddy (80/443) is the single public entry. Port 8080 must be free on the VM.
+
 ## 3. Configure Parallax
 ```bash
 git clone https://github.com/spuentesp/parallax.git && cd parallax/deploy
@@ -84,7 +86,7 @@ docker compose up -d --build
 ## 5. Seed the workspace
 The Saleor workspace must exist in the database, pointing at Lain:
 ```bash
-docker compose exec -e SALEOR_LAIN_URL=http://host.docker.internal:9999/mcp parallax \
+docker compose exec -e SALEOR_LAIN_URL=http://127.0.0.1:9999/mcp parallax \
   pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts
 ```
 (The seed script also creates the Online Boutique and Contracts Fixture workspaces; they will show "LAIN error" unless you run Lain for them too — delete them or ignore.)

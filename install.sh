@@ -4,14 +4,14 @@
 # Linux machine (Ubuntu/Debian).
 #
 # What it puts on the box:
-#   1. System packages: git, build toolchain (for the Rust engine), socat.
+#   1. System packages: git, build toolchain (for the Rust engine).
 #   2. Docker, if the machine has none.
 #   3. Lain — the pinned release binary (LAIN_VERSION, default v0.15.0) from
 #      the GitHub releases of spuentesp/lain. Set LAIN_FROM_SOURCE=1 to build
 #      a branch (LAIN_BRANCH) from source with cargo instead.
 #   4. The Saleor demo repos (shallow clones) + the federation config.
-#   5. The engine as a service on 127.0.0.1:9999, plus a loopback relay so
-#      the Parallax container can reach it without exposing it to the world.
+#   5. The engine as a service on 127.0.0.1:9999 (never exposed: it only answers
+#      loopback Host headers; the Parallax containers use the host network).
 #   6. deploy/.env with generated tokens, and the Parallax stack
 #      (docker compose: api + web bundle + Caddy for HTTPS).
 #   7. The demo workspace (Saleor) seeded in the database.
@@ -283,8 +283,8 @@ fi
 
 step "System packages"
 
-apt_install ca-certificates curl git build-essential pkg-config cmake libssl-dev socat
-ok "toolchain, git and socat installed"
+apt_install ca-certificates curl git build-essential pkg-config cmake libssl-dev
+ok "toolchain and git installed"
 
 # --------------------------------------------------------------------------
 # 3. Docker
@@ -317,12 +317,6 @@ if ! docker info >/dev/null 2>&1; then
   fi
 fi
 ok "Docker daemon is up"
-
-DOCKER_BRIDGE_GATEWAY="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
-if [[ -z "$DOCKER_BRIDGE_GATEWAY" ]]; then
-  die "could not read the default Docker bridge gateway (needed to reach the engine from the container)"
-fi
-ok "docker bridge gateway: $DOCKER_BRIDGE_GATEWAY"
 
 # --------------------------------------------------------------------------
 # 4. Lain: the pinned release binary by default, a source build on request
@@ -593,56 +587,14 @@ if (( SECONDS >= index_deadline )); then
   warn "check the engine log: $ENGINE_LOG"
 fi
 
-# --------------------------------------------------------------------------
-# 7. Loopback relay (container -> engine)
-# --------------------------------------------------------------------------
-
-step "Engine relay"
-
-# The engine refuses to bind a non-loopback address without API keys, and
-# Parallax does not send an Authorization header. So the engine stays on
-# 127.0.0.1 and this relay forwards the Docker bridge address to it. The
-# relay is bound to the bridge IP only: the engine is not reachable from
-# the internet.
-RELAY_UNIT="$ENGINE_UNIT_DIR/lain-relay.service"
-
-if ! command -v socat >/dev/null 2>&1; then
-  die "socat is missing (it is needed to reach the engine from the container)"
-fi
-SOCAT_BIN="$(command -v socat)"
-
-if has_systemd; then
-  mkdir -p "$ENGINE_UNIT_DIR"
-  cat > "$RELAY_UNIT" <<EOF
-[Unit]
-Description=Relay the Docker bridge to the Parallax engine on $LAIN_HOST:$LAIN_PORT
-After=docker.service lain.service
-Wants=docker.service
-
-[Service]
-Type=simple
-ExecStart=$SOCAT_BIN TCP-LISTEN:$LAIN_PORT,fork,reuseaddr,bind=$DOCKER_BRIDGE_GATEWAY TCP:$LAIN_HOST:$LAIN_PORT
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Earlier versions of this script ran a socat relay on the Docker bridge
+# (lain-relay). The containers now use the host network, so remove it on re-run.
+if has_systemd && [[ -f "$ENGINE_UNIT_DIR/lain-relay.service" ]]; then
+  systemctl disable --now lain-relay >/dev/null 2>&1 || true
+  rm -f "$ENGINE_UNIT_DIR/lain-relay.service"
   systemctl daemon-reload
-  systemctl enable lain-relay >/dev/null 2>&1 || true
-  systemctl restart lain-relay
-  ok "systemd unit: lain-relay.service ($DOCKER_BRIDGE_GATEWAY:$LAIN_PORT -> $LAIN_HOST:$LAIN_PORT)"
-else
-  nohup socat "TCP-LISTEN:$LAIN_PORT,fork,reuseaddr,bind=$DOCKER_BRIDGE_GATEWAY" \
-    "TCP:$LAIN_HOST:$LAIN_PORT" >>"$ENGINE_LOG" 2>&1 &
-  printf '%s' "$!" > "$ENGINE_DIR/lain-relay.pid"
-  ok "relay started (no systemd): pid $(cat "$ENGINE_DIR/lain-relay.pid")"
+  ok "removed the obsolete lain-relay service"
 fi
-
-if ! wait_for 30 bash -c "exec 3<>/dev/tcp/$DOCKER_BRIDGE_GATEWAY/$LAIN_PORT"; then
-  die "the relay is not answering on $DOCKER_BRIDGE_GATEWAY:$LAIN_PORT"
-fi
-ok "the engine is reachable from containers at http://host.docker.internal:$LAIN_PORT/mcp"
 
 # --------------------------------------------------------------------------
 # 8. deploy/.env
@@ -694,7 +646,7 @@ cat > "$ENV_FILE" <<EOF
 # These values are read by the compose stack in this directory:
 #   - DOMAIN           the public name Caddy serves (and gets a cert for)
 #   - PARALLAX_TOKENS  the access tokens (JSON array)
-#   - LAIN_URL         the analysis engine, reached through the Docker relay
+#   - LAIN_URL         the analysis engine, reached on the host loopback (the containers use the host network)
 # The rest are container-side paths: the app runs in the parallax container.
 
 DOMAIN=$DOMAIN
@@ -707,7 +659,7 @@ PARALLAX_TOKENS='$TOKENS_JSON'
 NEBIUS_TOKEN=$NEBIUS_TOKEN
 
 LAIN_ADAPTER=real
-LAIN_URL=http://host.docker.internal:$LAIN_PORT/mcp
+LAIN_URL=http://127.0.0.1:$LAIN_PORT/mcp
 PARALLAX_MCP_TRANSPORT=http-sse
 PORT=8080
 
@@ -766,7 +718,7 @@ step "Demo workspace"
 
 info "seeding the database (this runs inside the container)"
 if compose exec -T \
-      -e "SALEOR_LAIN_URL=http://host.docker.internal:$LAIN_PORT/mcp" \
+      -e "SALEOR_LAIN_URL=http://127.0.0.1:$LAIN_PORT/mcp" \
       -e "DATABASE_PATH=/data/parallax.db" \
       parallax pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts; then
   ok "workspace $WORKSPACE_ID seeded"
@@ -832,14 +784,14 @@ compose() { ( cd "\$DEPLOY_DIR" && docker compose "\$@" ); }
 case "\${1:-status}" in
   start)
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl start lain lain-relay
+      systemctl start lain
     fi
     compose up -d
     ;;
   stop)
     compose down
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl stop lain lain-relay
+      systemctl stop lain
     fi
     ;;
   restart)
@@ -848,7 +800,7 @@ case "\${1:-status}" in
     ;;
   status)
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl --no-pager status lain lain-relay || true
+      systemctl --no-pager status lain || true
     fi
     compose ps || true
     ;;

@@ -80,13 +80,15 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
 - **`gate:graphql` passes on 0.16.0** (with the version assert changed; the checked-in script still asserts 0.15.0).
 - **The Dockerfile builds and runs under podman (6.1.4), the seed script and the access rules work** (no token 401,
   read-only token 403 on writes, live Saleor data).
-- **FOUND: the container cannot reach Lain the way `install.sh` / the compose file set it up (both 0.15.0 and
-  0.16.0).** Lain answers `403` ("Host is not loopback; this server only answers localhost") to any `Host` other
-  than a loopback one (`localhost`, `127.x`, `[::1]` pass; `host.docker.internal`, bridge IPs do not). The relay
-  (socat on the bridge) forwards bytes, so the container's `Host: host.docker.internal:PORT` is rejected and the
-  API fails at boot with `lain handshake returned HTTP 403`. Verified with `curl -H 'Host: ...'` on both binaries.
-  It works with `network_mode: host` and `LAIN_URL=http://127.0.0.1:PORT/mcp`. Not yet fixed; needs a decision
-  (host networking for both services vs. making the client send a loopback Host header).
+- **FOUND and FIXED: the container could not reach Lain (both 0.15.0 and 0.16.0).** Lain answers `403` to any
+  `Host` that is not loopback, so `host.docker.internal` through the socat relay failed at boot
+  (`lain handshake returned HTTP 403`). Fix: both compose services use `network_mode: host`, `LAIN_URL` is
+  `http://127.0.0.1:<port>/mcp`, Caddy proxies to `127.0.0.1:8080`, and the API gets a new `HOST` setting (compose sets
+  `127.0.0.1`, default stays `0.0.0.0`) so port 8080 is not public. `install.sh` no longer installs socat, the bridge
+  lookup or the `lain-relay` unit (it removes an old one on re-run). Tested under podman: image rebuilt, container
+  on the host network answers on loopback only (the LAN IP is refused), seed works, read-only token 403 on writes,
+  Caddy (host mode, high port) proxies the API and web bundle. **Not tested:** `install.sh` itself, ports 80/443
+  and certificates, a Docker (not podman) daemon. Port 8080 must be free on the VM.
 
 ### Still unverified, in order of risk
 
