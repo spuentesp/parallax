@@ -43,9 +43,13 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
 
 ### Must do before relying on 0.16.0
 
-1. **Re-run the Saleor demo on 0.16.0** (the reference dataset). Not done: the Saleor repos were
-   not on this machine. Check `list_contracts` has schemas for the GraphQL operations (§2) and
-   that the dashboard's Coverage, Contract detail and Inspector screens still render.
+1. **Saleor demo on 0.16.0: done 2026-11-22, passes** (repos from `parallax/test-repos`, RUNBOOK `repos.yaml`,
+   `LAIN_INDEX_TIMEOUT=900`). All 3 repos `indexed` with a ledger (8 / 6 / 7 sensors). 669 contracts:
+   graphql 448 (**all 448 have SDL schemas** with `!` / `[...]` markers, 315 bound), topic 82, table 124, http 15.
+   The Parallax client parses every call; `getContract` works on query, mutation and consumer-read paths.
+   Loose ends: 32 (1 `not_a_call`); `classifyLooseEnds` runs live: 18 dynamic, 12 test/tooling, 2 rejected.
+   `pnpm -r test`: api 1133 and web 590 passing (fixtures; not against this live server).
+   **Not done:** the dashboard screens were not opened in a browser, and `gate:graphql` still asserts 0.15.0.
 2. **Reindex existing data dirs.** 0.15 → 0.16 may change the on-disk format; 0.16 reported
    "coverage ledger missing; reindex required" for repos that had no ledger yet. Not tested on a
    migrated 0.15 data dir (none was kept). `install.sh` already runs `lain reindex` when the installed
