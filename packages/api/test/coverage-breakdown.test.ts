@@ -35,6 +35,16 @@ function engine(reasonsFor: (consumer: string) => string[] | 'valid' | 'throw') 
   };
 }
 
+describe('classifyLooseEnds — engine reason not_a_call (Lain 0.16)', () => {
+  it('is not a gap, and is never sent to check_binding', async () => {
+    const e = engine(() => 'valid');
+    const r = await classifyLooseEnds(e.adapter, [loose('na', { reason: 'not_a_call' })]);
+    expect(r.byKey).toEqual({ na: 'outside' });
+    expect(r.gaps).toBe(0);
+    expect(e.checked).toEqual([]);
+  });
+});
+
 describe('classifyLooseEnds', () => {
   it('puts every loose end in exactly one class, from a fact: category, engine reason or check_binding', async () => {
     const e = engine((c) =>

@@ -77,6 +77,15 @@ export function classifyByRule(
       source: 'rule',
     };
   }
+  if (e.kind === 'unresolved' && e.reason === 'not_a_call') {
+    // Lain 0.16 emite esta razón: el propio motor juzgó que no hay llamada.
+    return {
+      category: 'not_a_call',
+      reason: 'the engine itself judged that nothing is being called here',
+      evidence: null,
+      source: 'rule',
+    };
+  }
   if (e.kind === 'unresolved' && e.reason === 'dynamic_topic') {
     return {
       category: 'dynamic_target',
