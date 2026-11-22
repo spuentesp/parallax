@@ -49,7 +49,11 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
    The Parallax client parses every call; `getContract` works on query, mutation and consumer-read paths.
    Loose ends: 32 (1 `not_a_call`); `classifyLooseEnds` runs live: 18 dynamic, 12 test/tooling, 2 rejected.
    `pnpm -r test`: api 1133 and web 590 passing (fixtures; not against this live server).
-   **Not done:** the dashboard screens were not opened in a browser, and `gate:graphql` still asserts 0.15.0.
+   **Screens checked** (Parallax API `LAIN_ADAPTER=real` + web dev server against this 0.16.0 index, headless
+   Chromium screenshots): Map (structure tree, graph with edges), Contracts (669 endpoints), Contract detail
+   (`productCreate`: typed fields `ProductCreateInput!`, `[ProductError!]!`, `Product?`, who reads each), Coverage
+   (3 of 3 repos ready, 32 unresolved, `not_a_call 1` chip, "221 endpoints have no schema" = 669 - 448). All render.
+   **Not done:** the Inspector side panel (needs a node click) and `gate:graphql`, which still asserts 0.15.0.
 2. **Reindex existing data dirs.** 0.15 → 0.16 may change the on-disk format; 0.16 reported
    "coverage ledger missing; reindex required" for repos that had no ledger yet. Not tested on a
    migrated 0.15 data dir (none was kept). `install.sh` already runs `lain reindex` when the installed
