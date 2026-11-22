@@ -12,7 +12,7 @@ Goal: a public, **locked** demo. Visitors see only an access-token screen; judge
 > Tested locally (no Docker available in the dev environment): Lain 0.15.0 cold index of Saleor, the API + built web bundle against it, token generation, the sign-in link and read-only behaviour. **Not tested:** the Docker image and compose file themselves — do a dry run on the VM before the deadline.
 
 ## 0. What you need
-- A VM (Nebius AI Cloud, Ubuntu 22.04+, ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
+- A VM (Nebius AI Cloud, Ubuntu 24.04 (the Lain release binary needs glibc 2.39; 22.04 forces a source build), ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
 - A DNS name pointing at it (Caddy gets the certificate automatically). If you only have an IP, use a `nip.io` name such as `1-2-3-4.nip.io`.
 - A Nebius Token Factory key (`NEBIUS_TOKEN`).
 

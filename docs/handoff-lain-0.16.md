@@ -50,7 +50,7 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
    "coverage ledger missing; reindex required" for repos that had no ledger yet. Not tested on a
    migrated 0.15 data dir (none was kept). `install.sh` already runs `lain reindex` when the installed
    version differs from `LAIN_VERSION`, but that path is untested on a real upgrade.
-3. **Raise the index budget for big repos.** Under the default 60 s (`LAIN_INDEX_TIMEOUT`,
+3. **Raise the index budget for big repos (done: `install.sh` default is now 900).** Under the default 60 s (`LAIN_INDEX_TIMEOUT`,
    `install.sh` default 60) OpenShell and NemoClaw were marked Degraded and reported as `failed`
    with `error: null`. With 900 they indexed. Saleor indexed in about 2 minutes earlier on 0.15, so
    check that the demo VM is not at the edge.
@@ -58,20 +58,19 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
    `deploy/RUNBOOK.md`, `deploy/.env.demo.example`, `docs/lain-tooling-inventory.md`,
    `test/lain-0.15-demo.ts` (rename) and the `demo:lain` script in `package.json`. Do this only
    after step 1 passes.
-5. **Pick the VM OS knowingly.** Ubuntu **24.04** now runs the release binary. Ubuntu **22.04**
-   (what `deploy/RUNBOOK.md` says) still needs the source-build fallback in `install.sh` (about
-   8 minutes on 12 cores / 15 GB in a container; the script warns 15-40 minutes on a 4 vCPU VM).
-   Either move the RUNBOOK to 24.04 or accept the build.
+5. **VM OS: decided, Ubuntu 24.04** (runs the release binary; 22.04 would need the source build). `deploy/RUNBOOK.md`
+   now says 24.04.
 
 ### Still unverified, in order of risk
 
 - **`install.sh` end to end on a real VM:** systemd units, the relay, Docker, Caddy, workspace
   seeding. Only steps 1-6 ran in a container, with Docker stubbed. (The RUNBOOK says the compose
   stack was never tested either.)
-- **Unexplained drop in HTTP contracts on cluster A:** 290 on 0.15.0 against 66 on 0.16.0 (rpc 120
-  and table 17 are identical). Test-file routes are still counted (100 of 250 providers sit under
-  test/e2e/fixture paths), so it is not that. Find out whether 0.16.0 deduplicates or stopped
-  counting something before trusting any 0.15 baseline numbers.
+- **HTTP contracts on cluster A, 290 -> 66: explained (re-ran 0.15.0 and 0.16.0 on the same repos).** Not tests:
+  the 49 test-path providers are identical in both. All 224 lost contracts are OpenShell `sdk/go` (275 providers),
+  every one `http:ANY /<Go error or format string>` (e.g. `/%w: cannot read %s: %v`, `/sandbox %q not found`).
+  0.15 read those strings as routes; 0.16 no longer does. No real-looking route was lost, none was added.
+  So 0.16 is the better sensor, and the 0.15 cluster-A HTTP baseline (290) was inflated by false positives.
 - **Clean parse is not clean use.** `provenance` and `ref` parse but no Parallax code reads them. The engine
   reason `not_a_call` is now handled (`coverage/breakdown.ts` -> `outside`, `loose-ends/classify.ts` -> category
   `not_a_call`, with tests); not yet seen on live data.
