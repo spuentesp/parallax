@@ -10,6 +10,7 @@ import {
   useLooseEnds,
   useRepoStatus,
 } from '../api/hooks.js';
+import { IndexHealth } from '../components/IndexHealth.js';
 
 // Cobertura y cabos sueltos (referencia "Coverage and loose ends"): lo que el
 // motor no pudo resolver. Una afirmación de "sin impacto" sólo vale si esta
@@ -95,6 +96,8 @@ export function Coverage(): React.ReactElement {
         selected={klass}
         onSelect={(c) => setKlass(c === klass ? null : c)}
       />
+
+      <IndexHealth ledger={ledger} />
 
       <Accounted ledger={ledger} />
 

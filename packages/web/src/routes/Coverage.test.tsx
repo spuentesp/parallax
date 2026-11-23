@@ -3,6 +3,7 @@ import { HttpResponse, http } from 'msw';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { routes } from '../router.js';
+import LIVE_LEDGER from '../test/fixtures/coverage-ledger-0.16-saleor.json';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
 
@@ -278,6 +279,14 @@ describe('Coverage: what the engine already accounts for', () => {
       ],
       schemalessEndpoints: 2,
       staleBindings: 0,
+      repos: [],
+      gaps: {
+        unresolvedConsumers: 0,
+        ambiguous: 0,
+        unresolvedRefs: 0,
+        urlDefaults: 0,
+        blindSpotSites: 0,
+      },
     });
     const box = within(await screen.findByTestId('coverage-accounted'));
     expect(box.getByText('collector.test')).toBeTruthy();
@@ -296,8 +305,24 @@ describe('Coverage: what the engine already accounts for', () => {
       external: [],
       schemalessEndpoints: 0,
       staleBindings: 0,
+      repos: [],
+      gaps: {
+        unresolvedConsumers: 0,
+        ambiguous: 0,
+        unresolvedRefs: 0,
+        urlDefaults: 0,
+        blindSpotSites: 0,
+      },
     });
     await screen.findByRole('heading', { name: 'Coverage and loose ends' });
     expect(screen.queryByTestId('coverage-accounted')).toBeNull();
+  });
+
+  it('shows the per-repo index health and the blind spots from the engine ledger', async () => {
+    serve(LIVE_LEDGER as never);
+    const health = within(await screen.findByTestId('index-health'));
+    expect(health.getAllByText('indexed')).toHaveLength(3);
+    expect(within(screen.getByTestId('blind-spots')).getByText('OrmDynamicQuery')).toBeTruthy();
+    expect(screen.getByTestId('not-complete').textContent).toContain('32 unresolved consumers');
   });
 });

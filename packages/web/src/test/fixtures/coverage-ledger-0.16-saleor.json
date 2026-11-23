@@ -1,0 +1,188 @@
+{
+ "source": "lain",
+ "complete": false,
+ "external": [],
+ "schemalessEndpoints": 221,
+ "staleBindings": 0,
+ "repos": [
+  {
+   "repo": "saleor",
+   "state": "indexed",
+   "error": null,
+   "commit": "a31848549f5dc5843fe9e66422bf34a915559ee5",
+   "languages": [
+    "python"
+   ],
+   "sensors": [
+    {
+     "name": "sql_tables",
+     "count": 788
+    },
+    {
+     "name": "graphql",
+     "count": 604
+    },
+    {
+     "name": "entry_points",
+     "count": 336
+    },
+    {
+     "name": "field_reads",
+     "count": 47
+    },
+    {
+     "name": "http_clients",
+     "count": 45
+    },
+    {
+     "name": "dynamic_dispatch",
+     "count": 14
+    },
+    {
+     "name": "http_routes",
+     "count": 5
+    },
+    {
+     "name": "websocket",
+     "count": 1
+    }
+   ],
+   "skips": [],
+   "blindSpots": [
+    {
+     "reason": "OrmDynamicQuery",
+     "count": 1760,
+     "directories": [
+      {
+       "path": "saleor/graphql/product/filters",
+       "count": 108
+      },
+      {
+       "path": "saleor/graphql/order",
+       "count": 77
+      },
+      {
+       "path": "saleor/warehouse",
+       "count": 75
+      },
+      {
+       "path": "saleor/product/migrations",
+       "count": 67
+      }
+     ]
+    },
+    {
+     "reason": "DynamicSql",
+     "count": 35,
+     "directories": []
+    }
+   ]
+  },
+  {
+   "repo": "saleor-dashboard",
+   "state": "indexed",
+   "error": null,
+   "commit": "e34cd91db8cd51ed9cbd69374b4f3bdb61c0285f",
+   "languages": [
+    "ts",
+    "tsjs",
+    "tsx"
+   ],
+   "sensors": [
+    {
+     "name": "graphql",
+     "count": 1947
+    },
+    {
+     "name": "http_clients",
+     "count": 235
+    },
+    {
+     "name": "dynamic_dispatch",
+     "count": 149
+    },
+    {
+     "name": "field_reads",
+     "count": 139
+    },
+    {
+     "name": "frontend_values",
+     "count": 13
+    },
+    {
+     "name": "entry_points",
+     "count": 2
+    }
+   ],
+   "skips": [],
+   "blindSpots": [
+    {
+     "reason": "FrontendValueUnclassified",
+     "count": 25,
+     "directories": []
+    },
+    {
+     "reason": "DynamicSql",
+     "count": 3,
+     "directories": []
+    }
+   ]
+  },
+  {
+   "repo": "storefront",
+   "state": "indexed",
+   "error": null,
+   "commit": "05641e1fa8b87a6ba0a403d2d323164872422fa5",
+   "languages": [
+    "ts",
+    "tsjs",
+    "tsx"
+   ],
+   "sensors": [
+    {
+     "name": "field_reads",
+     "count": 548
+    },
+    {
+     "name": "http_clients",
+     "count": 78
+    },
+    {
+     "name": "graphql",
+     "count": 65
+    },
+    {
+     "name": "entry_points",
+     "count": 19
+    },
+    {
+     "name": "frontend_values",
+     "count": 16
+    },
+    {
+     "name": "http_routes",
+     "count": 10
+    },
+    {
+     "name": "dynamic_dispatch",
+     "count": 3
+    }
+   ],
+   "skips": [],
+   "blindSpots": [
+    {
+     "reason": "FrontendValueUnclassified",
+     "count": 19,
+     "directories": []
+    }
+   ]
+  }
+ ],
+ "gaps": {
+  "unresolvedConsumers": 32,
+  "ambiguous": 0,
+  "unresolvedRefs": 0,
+  "urlDefaults": 1,
+  "blindSpotSites": 1842
+ }
+}

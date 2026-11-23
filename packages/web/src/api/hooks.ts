@@ -1273,6 +1273,29 @@ export interface CoverageLedgerDto {
   external: Array<{ host: string; calls: number }>;
   schemalessEndpoints: number;
   staleBindings: number;
+  repos: RepoLedgerDto[];
+  gaps: {
+    unresolvedConsumers: number;
+    ambiguous: number;
+    unresolvedRefs: number;
+    urlDefaults: number;
+    blindSpotSites: number;
+  };
+}
+
+export interface RepoLedgerDto {
+  repo: string;
+  state: string;
+  error: string | null;
+  commit: string | null;
+  languages: string[];
+  sensors: Array<{ name: string; count: number }>;
+  skips: Array<{ reason: string; count: number; samplePaths: string[] }>;
+  blindSpots: Array<{
+    reason: string;
+    count: number;
+    directories: Array<{ path: string; count: number }>;
+  }>;
 }
 
 export function useCoverageLedger(workspaceId: string | undefined) {

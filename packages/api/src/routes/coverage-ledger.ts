@@ -14,6 +14,14 @@ const none = (source: CoverageLedgerDto['source'], error?: string): CoverageLedg
   external: [],
   schemalessEndpoints: 0,
   staleBindings: 0,
+  repos: [],
+  gaps: {
+    unresolvedConsumers: 0,
+    ambiguous: 0,
+    unresolvedRefs: 0,
+    urlDefaults: 0,
+    blindSpotSites: 0,
+  },
 });
 
 // El registro de cobertura del motor (`get_coverage`): sólo lectura.
