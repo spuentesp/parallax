@@ -99,7 +99,11 @@ const MAX_CANDIDATES = 8;
 const CONCURRENCY = 6;
 const DYNAMIC = new Set(['dynamic_topic', 'dynamic_target']);
 
-async function mapPool<T, R>(items: readonly T[], size: number, fn: (i: T) => Promise<R>): Promise<R[]> {
+async function mapPool<T, R>(
+  items: readonly T[],
+  size: number,
+  fn: (i: T) => Promise<R>,
+): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
   const worker = async () => {
@@ -113,7 +117,7 @@ async function mapPool<T, R>(items: readonly T[], size: number, fn: (i: T) => Pr
 async function verdict(
   adapter: Pick<LainAdapter, 'checkBinding'>,
   item: LooseEndInput,
-): Promise<'passes' | 'only_same_service' | 'other' | 'unknown'> {
+): Promise<'passes' | 'only_same_service' | 'only_catch_all' | 'other' | 'unknown'> {
   const refs = (item.candidateRefs ?? []).slice(0, MAX_CANDIDATES);
   if (!item.consumerId || refs.length === 0) return 'unknown';
   const reasons = new Set<string>();
@@ -133,7 +137,16 @@ async function verdict(
     }
   }
   if (answered === 0) return 'unknown';
-  return reasons.size === 1 && reasons.has('same_service') ? 'only_same_service' : 'other';
+  if (reasons.size === 1 && reasons.has('same_service')) return 'only_same_service';
+  // Lo único que ofrece el motor son rutas raíz "catch-all" (con a lo sumo el mismo servicio):
+  // no hay un destino real al que atar la llamada, que es "sin candidato", no "rechazado".
+  if (
+    reasons.has('catch_all_route') &&
+    [...reasons].every((r) => r === 'catch_all_route' || r === 'same_service')
+  ) {
+    return 'only_catch_all';
+  }
+  return 'other';
 }
 
 export async function classifyLooseEnds(
@@ -145,7 +158,8 @@ export async function classifyLooseEnds(
 
   for (const i of items) {
     const category = i.assessment?.category;
-    if (i.kind === 'inferred') byKey[i.key] = category === 'test_or_tooling' ? 'test_or_tooling' : 'heuristic';
+    if (i.kind === 'inferred')
+      byKey[i.key] = category === 'test_or_tooling' ? 'test_or_tooling' : 'heuristic';
     else if (category === 'test_or_tooling') byKey[i.key] = 'test_or_tooling';
     else if (category === 'not_a_call' || category === 'external_call' || i.reason === 'not_a_call')
       byKey[i.key] = 'outside';
@@ -161,12 +175,22 @@ export async function classifyLooseEnds(
   asked.forEach((i, n) => {
     const v = verdicts[n];
     byKey[i.key] =
-      v === 'passes' ? 'fixable' : v === 'only_same_service' ? 'internal' : v === 'other' ? 'rejected' : 'unexamined';
+      v === 'passes'
+        ? 'fixable'
+        : v === 'only_same_service'
+          ? 'internal'
+          : v === 'only_catch_all'
+            ? 'no_candidate'
+            : v === 'other'
+              ? 'rejected'
+              : 'unexamined';
   });
 
   const counts = new Map<CoverageClass, number>();
   for (const c of Object.values(byKey)) counts.set(c, (counts.get(c) ?? 0) + 1);
-  const classes = CLASSES.map((c) => ({ ...c, count: counts.get(c.id) ?? 0 })).filter((c) => c.count > 0);
+  const classes = CLASSES.map((c) => ({ ...c, count: counts.get(c.id) ?? 0 })).filter(
+    (c) => c.count > 0,
+  );
   return {
     classes,
     byKey,

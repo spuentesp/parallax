@@ -132,3 +132,28 @@ describe('classifyLooseEnds', () => {
     expect(r.classes.map((c) => c.id)).toEqual(['fixable']);
   });
 });
+
+describe('classifyLooseEnds — check_binding reason catch_all_route (Lain 0.16)', () => {
+  it('treats a site whose only offers are catch-all routes as having no real candidate', async () => {
+    const e = engine(() => ['catch_all_route']);
+    const r = await classifyLooseEnds(e.adapter, [loose('c')]);
+    expect(r.byKey).toEqual({ c: 'no_candidate' });
+    expect(r.gaps).toBe(1);
+  });
+
+  it('also when the catch-all candidate is in the same service', async () => {
+    const e = engine(() => ['catch_all_route', 'same_service']);
+    const r = await classifyLooseEnds(e.adapter, [loose('c')]);
+    expect(r.byKey).toEqual({ c: 'no_candidate' });
+  });
+
+  it('keeps a mixed rejection as rejected, and a valid candidate as fixable', async () => {
+    const mixed = await classifyLooseEnds(
+      engine(() => ['catch_all_route', 'template_mismatch']).adapter,
+      [loose('m')],
+    );
+    expect(mixed.byKey).toEqual({ m: 'rejected' });
+    const ok = await classifyLooseEnds(engine(() => 'valid').adapter, [loose('v')]);
+    expect(ok.byKey).toEqual({ v: 'fixable' });
+  });
+});

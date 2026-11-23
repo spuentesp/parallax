@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ describe('GET /coverage/ledger', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   const H = { authorization: 'Bearer t' };
   let fail = false;
+  let live: unknown = null;
 
   const workspace = async (lainUrl?: string) =>
     (
@@ -29,6 +30,7 @@ describe('GET /coverage/ledger', () => {
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'parallax-ledger-'));
     fail = false;
+    live = null;
     app = await buildApp({
       port: 0,
       databasePath: join(dir, 'p.db'),
@@ -45,6 +47,7 @@ describe('GET /coverage/ledger', () => {
         ...createLainMock(),
         getCoverage: async () => {
           if (fail) throw new Error('down');
+          if (live) return live as never;
           return {
             complete: false,
             external: [{ host: 'collector.test', calls: 7 }],
@@ -67,7 +70,29 @@ describe('GET /coverage/ledger', () => {
       external: [{ host: 'collector.test', calls: 7 }],
       schemalessEndpoints: 1,
       staleBindings: 0,
+      repos: [],
+      gaps: {
+        unresolvedConsumers: 0,
+        ambiguous: 0,
+        unresolvedRefs: 0,
+        urlDefaults: 0,
+        blindSpotSites: 0,
+      },
     });
+  });
+
+  it('passes the per-repo ledger of a live 0.16 answer through', async () => {
+    live = JSON.parse(
+      readFileSync(new URL('./fixtures/lain-coverage-0.16-saleor.json', import.meta.url), 'utf8'),
+    );
+    const body = (await get(await workspace('http://lain.test'))).json();
+    expect(body.repos.map((r: { repo: string }) => r.repo)).toEqual([
+      'saleor',
+      'saleor-dashboard',
+      'storefront',
+    ]);
+    expect(body.repos[0].blindSpots[0]).toMatchObject({ reason: 'OrmDynamicQuery', count: 1760 });
+    expect(body.gaps.unresolvedConsumers).toBe(32);
   });
 
   it('is read-only, needs a token, and reports no LAIN server or an engine failure plainly', async () => {

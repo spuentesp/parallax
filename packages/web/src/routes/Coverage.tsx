@@ -336,6 +336,8 @@ function Chip({
 
 const REASON_TEXT: Record<string, string> = {
   same_service: 'the call site and the endpoint are in the same service',
+  catch_all_route:
+    'the endpoint is a catch-all route (such as "/") or an external target, which does not show a real dependency',
   template_mismatch: 'the URL template of the call does not match this endpoint',
   field_mismatch: 'the fields the call uses do not match this endpoint',
 };

@@ -444,6 +444,9 @@ export const CheckBindingReason = z.enum([
   // campo raíz. El 0.9 no los emite porque rechaza las llaves graphql:.
   'op_mismatch',
   'field_mismatch',
+  // Desde 0.16: el vínculo propuesto es a una ruta raíz "catch-all" (p. ej. `POST /`) o el
+  // destino es externo, así que no demuestra una dependencia real.
+  'catch_all_route',
 ]);
 export type CheckBindingReason = z.infer<typeof CheckBindingReason>;
 
