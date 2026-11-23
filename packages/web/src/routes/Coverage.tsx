@@ -610,8 +610,9 @@ function Accounted({
         <div className="mt-2">
           <p className="text-xs text-muted">
             Calls to these hosts are classified as external (outside the workspace), so they are not
-            counted as unresolved. A host held in a variable, such as a base URL read from the
-            environment, is not seen as external and stays unresolved.
+            counted as unresolved. A host held in a variable is resolved when it has a literal
+            default; a base URL read only from the environment is not seen as external and stays
+            unresolved.
           </p>
           <ul className="mt-2 flex flex-wrap gap-1.5">
             {ledger.external.map((e) => (

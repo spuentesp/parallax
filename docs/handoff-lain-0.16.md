@@ -1,5 +1,8 @@
 # Handoff: moving the Parallax installation to Lain 0.16.0
 
+> Status 2026-11-23: this is the install handoff. What shipped on top of it (Query page, Coverage index health,
+> fixes) is in `docs/release-0.2.0.md`; the item-by-item engine measurements are in `docs/lain-0.16-remeasure.md`.
+
 Date: 2026-11-22. Branch `spuentesp/fix-parallax-lain-dashboard` (4 local commits on top of `cf4d967`,
 nothing pushed). Lain **0.16.0** was published 2026-11-22T15:55Z; its GitHub
 release notes are empty, so everything below was measured, not read from a changelog.
