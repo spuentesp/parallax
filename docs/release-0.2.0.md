@@ -8,7 +8,7 @@ Date: 2026-11-23. Engine: **Lain v0.16.0** (was v0.15.0). Measurements behind th
 - **Query page** (`/orgs/:id/query`, opened by the Query toggle in the ask bar, which was disabled). A pipeline
   editor over the engine's graph: `find`, `connect`, `filter`, `group`, `sort`, `limit`, with the engine's count
   after each step, results as a table or JSON, and copy as pipeline or cURL. Read-only: the API accepts only those
-  six operations. Lain needs a `repo_id` in a federation, so the query runs once per repo and the API adds the
+  six operations, and a `connect` may walk at most 6 hops (read-only tokens can reach it). Lain needs a `repo_id` in a federation, so the query runs once per repo and the API adds the
   answers up (`POST /api/workspaces/:id/graph-query`). A repo that fails is named in the scope instead of failing the
   query, and the engine's own "result was cut" flag is shown. Starting points are pipelines verified on Saleor.
 - **Coverage page: index health and blind spots.** Per repo: state, languages, the sensors that ran with their counts,
@@ -53,7 +53,7 @@ Date: 2026-11-23. Engine: **Lain v0.16.0** (was v0.15.0). Measurements behind th
 ## Verified, and what was not
 
 Verified in this release: the full test suite (api 1,169, web 605, shared 373, mcp 38, gates 55); typecheck; a clean
-checkout of the branch (so the missing-files bug cannot recur unnoticed); the new screens against live Lain 0.16.0 on
+checkout of the branch; CI's own checks (lint, format, typecheck, tests, build, smoke, held-out suite, separation guard); the new screens against live Lain 0.16.0 on
 Saleor in a browser (Coverage, Query, Contracts, Contract detail, Map, Inspector); the upgrade from real 0.15 data;
 `gate:graphql`; the Dockerfile and compose behaviour under podman; `install.sh` end to end in an Ubuntu 24.04
 container (with a stub `docker`).
