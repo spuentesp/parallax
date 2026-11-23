@@ -571,7 +571,9 @@ index_poll=0
 while (( SECONDS < index_deadline )); do
   body="$(curl -sS --max-time 10 "http://$LAIN_HOST:$LAIN_PORT/health/index-status" 2>/dev/null || true)"
   if [[ -n "$body" ]]; then
-    summary="$(printf '%s' "$body" | grep -o '"id":"[^"]*","health":"[^"]*"' | tr '\n' ' ')"
+    # Lain emits {"health":"ready","id":"repo"}; do not depend on the key order,
+    # and never let a non-matching body abort the script (set -e + pipefail).
+    summary="$(printf '%s' "$body" | grep -o '"\(id\|health\)":"[^"]*"' | tr -d '"' | tr '\n' ' ' || true)"
     if [[ "$body" == *'"health":"ready"'* ]] && [[ "$body" != *'"health":"indexing"'* ]]; then
       ok "indexed: $summary"
       break
