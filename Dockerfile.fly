@@ -1,0 +1,50 @@
+# Parallax + Lain 0.16.0 in one image for the Fly.io demo: the two NVIDIA clusters, indexed at BUILD time
+# so a cold start only has to load the graph. Ubuntu 24.04 because the Lain release binary needs glibc 2.39.
+#   podman build -f Dockerfile.fly -t parallax-fly .
+ARG LAIN_TAG=v0.16.0
+ARG LAIN_SHA256=5397b1fb9ca112f15fe670d2715d49d87f500503e5ae9834c3665b4c4a76883a
+
+FROM ubuntu:24.04 AS lain
+ARG LAIN_TAG
+ARG LAIN_SHA256
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL "https://github.com/spuentesp/lain/releases/download/${LAIN_TAG}/lain-${LAIN_TAG#v}-x86_64-unknown-linux-gnu.tar.gz" -o /lain.tgz \
+ && echo "${LAIN_SHA256}  /lain.tgz" | sha256sum -c - \
+ && mkdir /lain && tar -xzf /lain.tgz -C /lain
+
+FROM alpine/git AS repos
+COPY deploy/fly/clone-repos.sh /clone-repos.sh
+RUN /clone-repos.sh
+
+FROM ubuntu:24.04
+ENV DEBIAN_FRONTEND=noninteractive CI=true
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates git bash \
+ && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+ && apt-get install -y --no-install-recommends nodejs \
+ && corepack enable \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=lain /lain/lain /usr/local/bin/lain
+COPY --from=lain /lain/lain-git-sidecar /usr/local/bin/lain-git-sidecar
+COPY --from=repos /repos /repos
+COPY deploy/fly/repos.yaml /repos/repos.yaml
+ENV LAIN_GIT_SIDECAR_BIN=/usr/local/bin/lain-git-sidecar \
+    LAIN_DISABLE_FILE_WATCHER=1 LAIN_DISABLE_COMMIT_SYNC=1
+
+# Index once at build time (graph lands in /lain-data, outside the /data volume).
+RUN lain reindex --config /repos/repos.yaml
+
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile \
+ && pnpm --filter @parallax/web build
+
+ENV NODE_ENV=production PORT=8080 \
+    LAIN_ADAPTER=real LAIN_URL=http://127.0.0.1:9999/mcp \
+    DATABASE_PATH=/data/parallax.db WEB_BUNDLE_PATH=/app/packages/web/dist
+VOLUME /data
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=300s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+RUN chmod +x deploy/fly/entrypoint.sh
+CMD ["deploy/fly/entrypoint.sh"]

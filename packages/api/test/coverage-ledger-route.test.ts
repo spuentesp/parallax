@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import * as schema from '../src/db/schema.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
 import { buildApp } from '../src/server.js';
@@ -79,6 +80,39 @@ describe('GET /coverage/ledger', () => {
         blindSpotSites: 0,
       },
     });
+  });
+
+  it("shows only the workspace's own repos when one engine backs several workspaces", async () => {
+    const mk = (repo: string) => ({
+      repo,
+      state: 'indexed',
+      sensors: {},
+      languages: {},
+      skips: [],
+      unresolved: [],
+    });
+    live = { complete: false, repos: [mk('OpenShell'), mk('NemoClaw'), mk('NeMo-Agent-Toolkit')] };
+    const id = await workspace('http://lain.test');
+    await app.db.insert(schema.repo).values([
+      {
+        id: `${id}-a`,
+        workspaceId: id,
+        uri: 'https://github.com/NVIDIA/OpenShell.git',
+        sha: 'a',
+        local: null,
+        createdAt: 1,
+      },
+      {
+        id: `${id}-b`,
+        workspaceId: id,
+        uri: 'https://github.com/NVIDIA/NemoClaw.git',
+        sha: 'b',
+        local: null,
+        createdAt: 1,
+      },
+    ] as never);
+    const body = (await get(id)).json();
+    expect(body.repos.map((r: { repo: string }) => r.repo)).toEqual(['OpenShell', 'NemoClaw']);
   });
 
   it('passes the per-repo ledger of a live 0.16 answer through', async () => {
