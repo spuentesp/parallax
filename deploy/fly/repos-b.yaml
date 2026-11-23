@@ -1,22 +1,9 @@
-# Lain federation for the Fly demo: the two NVIDIA clusters, indexed at image build time.
-# Paths are absolute: the repos are cloned into /repos by Dockerfile.fly, the index lives in /lain-data
-# (NOT on the /data volume, which would hide it).
-data_dir: /lain-data
+# Lain federation for cluster B on Fly (see Dockerfile.fly). Own engine, own index.
+data_dir: /lain-data-b
 max_concurrent_indexers: 2
 ready_threshold: 0.0
 
 repos:
-  # Cluster A (OpenShell RPC stack)
-  - id: OpenShell
-    packages: ["@nvidia/openshell-sdk", "openshell"]
-    source: {type: workspace_dir, path: /repos/OpenShell}
-  - id: NeMo-Fabric
-    packages: ["nemo-fabric"]
-    source: {type: workspace_dir, path: /repos/NeMo-Fabric}
-  - id: NemoClaw
-    packages: ["nemoclaw"]
-    source: {type: workspace_dir, path: /repos/NemoClaw}
-  # Cluster B (NeMo Agent Toolkit HTTP stack)
   - id: NeMo-Agent-Toolkit
     source: {type: workspace_dir, path: /repos/NeMo-Agent-Toolkit}
   - id: NeMo-Agent-Toolkit-UI
@@ -25,18 +12,6 @@ repos:
     source: {type: workspace_dir, path: /repos/NeMo-Agent-Toolkit-Examples}
 
 services:
-  - name: openshell-gateway
-    repo: OpenShell
-    paths: [proto, crates]
-    hosts: [openshell, openshell-gateway, "localhost:50051", "127.0.0.1:50051"]
-    env: [OPENSHELL_GATEWAY]
-  - name: openshell-sdk
-    repo: OpenShell
-    paths: [python, sdk]
-  - name: nemo-fabric
-    repo: NeMo-Fabric
-  - name: nemoclaw
-    repo: NemoClaw
   - name: nat
     repo: NeMo-Agent-Toolkit
     hosts: [nat, nat-backend, "localhost:8000", "127.0.0.1:8000"]

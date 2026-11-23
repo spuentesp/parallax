@@ -18,7 +18,7 @@ export default fp(
       if (lainUrl === undefined) {
         throw new Error('LAIN_URL is required when LAIN_ADAPTER=real');
       }
-      adapter = await createLainClient({ lainUrl, apiVersion: '1' });
+      adapter = await createLainClient({ lainUrl, apiVersion: '1', timeoutMs: 60_000 });
     } else {
       adapter = createLainMock();
     }

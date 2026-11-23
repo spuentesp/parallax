@@ -1,0 +1,29 @@
+# Lain federation for cluster A on Fly (see Dockerfile.fly). Own engine, own index.
+data_dir: /lain-data-a
+max_concurrent_indexers: 2
+ready_threshold: 0.0
+
+repos:
+  - id: OpenShell
+    packages: ["@nvidia/openshell-sdk", "openshell"]
+    source: {type: workspace_dir, path: /repos/OpenShell}
+  - id: NeMo-Fabric
+    packages: ["nemo-fabric"]
+    source: {type: workspace_dir, path: /repos/NeMo-Fabric}
+  - id: NemoClaw
+    packages: ["nemoclaw"]
+    source: {type: workspace_dir, path: /repos/NemoClaw}
+
+services:
+  - name: openshell-gateway
+    repo: OpenShell
+    paths: [proto, crates]
+    hosts: [openshell, openshell-gateway, "localhost:50051", "127.0.0.1:50051"]
+    env: [OPENSHELL_GATEWAY]
+  - name: openshell-sdk
+    repo: OpenShell
+    paths: [python, sdk]
+  - name: nemo-fabric
+    repo: NeMo-Fabric
+  - name: nemoclaw
+    repo: NemoClaw

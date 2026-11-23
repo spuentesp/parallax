@@ -7,11 +7,14 @@ import Database from 'better-sqlite3';
 import { runMigrations } from '../src/db/migrate.js';
 
 const LAIN_URL = process.env.LAIN_URL ?? 'http://127.0.0.1:9999/mcp';
+const CLUSTER_A_URL = process.env.CLUSTER_A_LAIN_URL ?? LAIN_URL;
+const CLUSTER_B_URL = process.env.CLUSTER_B_LAIN_URL ?? LAIN_URL;
 const gh = (name: string) => `https://github.com/NVIDIA/${name}.git`;
 
 const WORKSPACES = [
   {
     id: 'ws_cluster_a',
+    lainUrl: CLUSTER_A_URL,
     name: 'Cluster A: OpenShell RPC Stack',
     description:
       'OpenShell gRPC proto surface joined with the Python SDK and the NeMo-Fabric / NemoClaw consumers.',
@@ -23,6 +26,7 @@ const WORKSPACES = [
   },
   {
     id: 'ws_cluster_b',
+    lainUrl: CLUSTER_B_URL,
     name: 'Cluster B: NeMo Agent Toolkit HTTP Stack',
     description:
       'NeMo Agent Toolkit HTTP and WebSocket endpoints, the Next.js API routes and the UI reverse proxy.',
@@ -44,7 +48,7 @@ const now = Date.now();
 for (const ws of WORKSPACES) {
   db.prepare(
     'INSERT OR REPLACE INTO workspace (id, name, description, lain_url, created_at) VALUES (?, ?, ?, ?, ?)',
-  ).run(ws.id, ws.name, ws.description, LAIN_URL, now);
+  ).run(ws.id, ws.name, ws.description, ws.lainUrl, now);
   for (const [name, sha] of ws.repos) {
     db.prepare(
       'INSERT OR REPLACE INTO repo (id, workspace_id, uri, sha, local, created_at) VALUES (?, ?, ?, ?, ?, ?)',
