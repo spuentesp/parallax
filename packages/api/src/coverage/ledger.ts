@@ -77,7 +77,17 @@ function normalizeRepo(raw: unknown): RepoLedger[] {
   const skips = arr(o.skips).flatMap((x) => {
     const e = obj(x);
     const reason = str(e.reason);
-    return reason ? [{ reason, count: num(e.count), samplePaths: arr(e.sample_paths).filter((p): p is string => typeof p === 'string').slice(0, 3) }] : [];
+    return reason
+      ? [
+          {
+            reason,
+            count: num(e.count),
+            samplePaths: arr(e.sample_paths)
+              .filter((p): p is string => typeof p === 'string')
+              .slice(0, 3),
+          },
+        ]
+      : [];
   });
   const blindSpots = arr(o.unresolved).flatMap((x) => {
     const e = obj(x);
