@@ -28,13 +28,15 @@ describe('Ask bar on the map', () => {
     expect(new URLSearchParams(router.state.location.search).get('prov')).toBe('inferred');
   });
 
-  it('offers suggestions about the selection and says plainly that Query is not available', async () => {
+  it('offers suggestions about the selection, and Query opens the query page', async () => {
     const router = createMemoryRouter(routes, { initialEntries: ['/orgs/acme?sel=svc:orders'] });
     renderWithQuery(<RouterProvider router={router} />);
     expect(await screen.findByRole('button', { name: 'Who depends on orders?' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Query' }) as HTMLButtonElement).disabled).toBe(
-      true,
-    );
+    const query = screen.getByRole('button', { name: 'Query' }) as HTMLButtonElement;
+    expect(query.disabled).toBe(false);
+    fireEvent.click(query);
+    await waitFor(() => expect(router.state.location.pathname).toBe('/orgs/acme/query'));
+    expect(await screen.findByTestId('query-page')).toBeTruthy();
   });
 
   it('opens the command palette from its Ctrl K hint', async () => {

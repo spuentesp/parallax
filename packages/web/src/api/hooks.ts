@@ -1306,3 +1306,37 @@ export function useCoverageLedger(workspaceId: string | undefined) {
     staleTime: 60_000,
   });
 }
+
+// ── Consulta estructurada sobre el grafo (find → connect → filter → group → sort → limit) ──
+
+export interface GraphQueryOp {
+  op: 'find' | 'connect' | 'filter' | 'group' | 'sort' | 'limit';
+  [key: string]: unknown;
+}
+
+export interface GraphQueryResultDto {
+  source: 'lain';
+  groups: Array<{ key: string; count: number; byRepo: Record<string, number> }> | null;
+  nodes: Array<{
+    id: string;
+    type: string;
+    name: string;
+    repo: string;
+    path?: string;
+    line?: number;
+  }> | null;
+  /** Conteo tras cada paso, sumado entre los repos que respondieron. */
+  steps: Array<{ op: string; nodes: number; edges: number }>;
+  total: number;
+  truncated: boolean;
+  engineTruncated: boolean;
+  scope: { analyzed: string[]; failed: Array<{ repo: string; error: string }> };
+  elapsedMs: number;
+}
+
+export function useGraphQuery(workspaceId: string | undefined) {
+  return useMutation({
+    mutationFn: (body: { ops: GraphQueryOp[]; repos?: string[] }) =>
+      client.post<GraphQueryResultDto>(`/api/workspaces/${workspaceId}/graph-query`, body),
+  });
+}

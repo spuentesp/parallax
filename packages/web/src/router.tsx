@@ -10,6 +10,7 @@ import { Contracts } from './routes/Contracts.js';
 import { Coverage } from './routes/Coverage.js';
 import { LegacyAssessmentRedirect } from './routes/LegacyAssessmentRedirect.js';
 import { OrgLayout } from './routes/OrgLayout.js';
+import { Query } from './routes/Query.js';
 import { Home, ToWorkspaceList, WorkspaceRedirect } from './routes/Redirects.js';
 import { Repos } from './routes/Repos.js';
 import { Service } from './routes/Service.js';
@@ -46,6 +47,7 @@ export const routes: RouteObject[] = [
           { path: 'contracts/detail', element: <ContractDetail /> },
           { path: 'services/:serviceId', element: <Service /> },
           { path: 'coverage', element: <Coverage /> },
+          { path: 'query', element: <Query /> },
           { path: 'assessments', element: <Assessments /> },
           { path: 'assessments/:assessmentId', element: <Assessment /> },
           { path: '*', element: <OrgCatchAll /> },

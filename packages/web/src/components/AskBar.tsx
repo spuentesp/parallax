@@ -1,6 +1,6 @@
 import type * as React from 'react';
 import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { OPEN_PALETTE_EVENT } from './CommandPalette.js';
 
 // Barra de pregunta al pie del mapa (referencia "Ask / Query"). La pregunta se
@@ -19,6 +19,8 @@ export function AskBar({
   selectedName?: string | undefined;
 }): React.ReactElement {
   const [, setParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { orgId } = useParams();
   const [text, setText] = useState('');
   const suggestions = selectedName
     ? [
@@ -65,9 +67,10 @@ export function AskBar({
           </button>
           <button
             type="button"
-            disabled
-            title="Query mode needs a query service this workspace does not have yet"
-            className="bg-surface-2 px-3 py-1.5 text-muted/60"
+            disabled={!orgId}
+            title="Build a pipeline over the engine's graph"
+            onClick={() => orgId && navigate(`/orgs/${orgId}/query`)}
+            className="bg-surface-2 px-3 py-1.5 text-muted hover:text-fg"
           >
             Query
           </button>
