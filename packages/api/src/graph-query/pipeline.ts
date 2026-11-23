@@ -11,6 +11,8 @@ export type QueryOpName = (typeof QUERY_OPS)[number];
 
 export const MAX_OPS = 12;
 export const MAX_ROWS = 1000;
+/** Saltos máximos de un connect: una consulta de sólo lectura no debe poder pedir un recorrido ilimitado. */
+export const MAX_DEPTH = 6;
 /** Tope por repo cuando la consulta no lo pone (el motor corta en 100 por defecto). */
 export const DEFAULT_ROWS = 500;
 
@@ -70,6 +72,17 @@ export function preparePipeline(ops: readonly Op[]): PreparedPipeline {
   }
   if (engineOps.some((o) => o.op === 'limit' && num(o.count, 0) > MAX_ROWS)) {
     throw new PipelineError(`limit count must be at most ${MAX_ROWS}`);
+  }
+  for (const o of engineOps) {
+    if (o.op !== 'connect') continue;
+    const d = o.depth;
+    const deepest =
+      typeof d === 'number'
+        ? d
+        : typeof d === 'object' && d !== null
+          ? num((d as { max?: unknown }).max, MAX_DEPTH)
+          : MAX_DEPTH;
+    if (deepest > MAX_DEPTH) throw new PipelineError(`connect depth must be at most ${MAX_DEPTH}`);
   }
   const hasGroup = engineOps.some((o) => o.op === 'group');
   // Sin un limit explícito el motor corta en 100 por repo (incluso antes de agrupar, y los

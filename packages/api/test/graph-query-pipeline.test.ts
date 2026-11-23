@@ -57,6 +57,18 @@ describe('preparePipeline', () => {
     expect(p.appendedLimit).toBe(false);
   });
 
+  it('caps how deep a connect may walk', () => {
+    const q = (depth: unknown) => ops({ op: 'find' }, { op: 'connect', edge: 'Binds', depth });
+    expect(() => preparePipeline(q(7))).toThrow(/at most 6/);
+    expect(() => preparePipeline(q({ min: 1, max: 50 }))).toThrow(/at most 6/);
+    expect(() => preparePipeline(q(6))).not.toThrow();
+    expect(() => preparePipeline(q({ min: 1, max: 3 }))).not.toThrow();
+    // Sin depth explícito el motor usa su valor por defecto: se acepta.
+    expect(() =>
+      preparePipeline(ops({ op: 'find' }, { op: 'connect', edge: 'Binds' })),
+    ).not.toThrow();
+  });
+
   it('rejects limits outside 1..1000', () => {
     expect(() => preparePipeline(ops({ op: 'find' }, { op: 'limit', count: 0 }))).toThrow(
       /between 1 and 1000/,

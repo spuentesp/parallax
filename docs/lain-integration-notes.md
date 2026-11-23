@@ -1,5 +1,9 @@
 # Notas de integración con LAIN
 
+> 2026-11-23: el pin vigente es la **release v0.16.0** de lain (`analyzer_version` 0.16.0), no el build de dev
+> descrito en la sección siguiente, que queda como historia. Ver `docs/release-0.2.0.md` y
+> `docs/lain-0.16-remeasure.md`.
+
 ## Actualización 2026-11-10: pin a dev (batch v0.15.0, `b7fd2935`)
 
 Parallax apunta ahora a `origin/dev` de lain (`b7fd2935`, el batch v0.15.0).
