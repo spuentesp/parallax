@@ -36,7 +36,7 @@ function textOf(res: { content: Array<{ type: string; text?: string }> }): strin
 describe('buildMcpServer', () => {
   it('announces the parallax server identity', async () => {
     const client = await connect();
-    expect(client.getServerVersion()).toEqual({ name: 'parallax', version: '0.1.0' });
+    expect(client.getServerVersion()).toEqual({ name: 'parallax', version: '0.2.0' });
   });
 
   it('parallax_explore serves the organization payload as JSON text', async () => {

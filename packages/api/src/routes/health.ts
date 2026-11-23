@@ -1,3 +1,4 @@
+import { PARALLAX_VERSION } from '@parallax/shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 
@@ -20,7 +21,7 @@ export const healthRoutes: FastifyPluginAsync = async (app) => {
     },
     async () => ({
       status: 'ok' as const,
-      version: '0.1.0',
+      version: PARALLAX_VERSION,
       lainAdapter: app.config.lainAdapter,
       apiVersion: app.lain.apiVersion,
       analyzerVersion: app.lain.analyzerVersion,

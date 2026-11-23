@@ -98,7 +98,7 @@ describe('parallax-mcp entrypoint', { timeout: 30_000 }, () => {
       const init = (await waitFor(1)) as {
         result: { serverInfo: { name: string; version: string } };
       };
-      expect(init.result.serverInfo).toEqual({ name: 'parallax', version: '0.1.0' });
+      expect(init.result.serverInfo).toEqual({ name: 'parallax', version: '0.2.0' });
 
       child.stdin.write(
         `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
