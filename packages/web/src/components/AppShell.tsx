@@ -83,7 +83,9 @@ export function AppShell(): React.ReactElement {
   // Mismos parámetros que el mapa sin expandir: el servidor lo tiene en caché y
   // de ahí sale si los datos son reales o de muestra.
   const map = useOrgMap(orgId ?? undefined, { expand: [], filters: {} });
-  const sample = map.data?.meta != null && map.data.meta.source !== 'lain';
+  const mapSource = map.data?.meta?.source;
+  const sample = mapSource === 'unconfigured' || mapSource === 'none';
+  const engineDown = mapSource === 'error';
   const base = orgId ? `/orgs/${orgId}` : null;
   // Volver al mapa lo deja como se dejó (filtros, foco, nodos abiertos).
   const targetFor = (item: (typeof NAV_ITEMS)[number]): string | null => {
@@ -162,6 +164,15 @@ export function AppShell(): React.ReactElement {
               title="This map is built from sample data, not from a connected Lain engine."
             >
               {wide ? 'Sample data' : 'Sample'}
+            </span>
+          )}
+          {engineDown && (
+            <span
+              className="self-start rounded-full bg-error/15 px-2.5 py-0.5 text-xs text-error"
+              data-testid="engine-unreachable-badge"
+              title="The Lain engine did not answer, so this map may be empty or out of date. Try again shortly."
+            >
+              {wide ? 'Engine unreachable' : 'Offline'}
             </span>
           )}
           {who.data?.readOnly && (

@@ -70,7 +70,7 @@ describe('Coverage page', () => {
     expect(screen.queryByText('src/a.ts:4')).toBeNull();
     expect(screen.getByText('src/b.ts:4')).toBeTruthy();
 
-    const health = within(screen.getByRole('region', { name: 'Repository index health' }));
+    const health = within(screen.getByRole('region', { name: 'Indexed commits by repo' }));
     expect(health.getByText('ready')).toBeTruthy();
     expect(health.getByText('not reviewed')).toBeTruthy();
   });

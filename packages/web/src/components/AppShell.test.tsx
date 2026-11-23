@@ -171,3 +171,41 @@ describe('product chrome', () => {
     expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeTruthy();
   });
 });
+
+describe('data-source badge', () => {
+  const mapSource = (source: string) =>
+    server.use(
+      http.post('/api/workspaces/:id/map/view', () =>
+        HttpResponse.json({
+          nodes: [],
+          edges: [],
+          hiddenChildren: {},
+          focus: null,
+          unknownExpand: [],
+          meta: { source },
+        }),
+      ),
+    );
+
+  it('says "Sample data" only when no engine is configured', async () => {
+    mapSource('unconfigured');
+    renderAt('/orgs/acme');
+    expect(await screen.findByTestId('sample-data-badge')).toBeTruthy();
+    expect(screen.queryByTestId('engine-unreachable-badge')).toBeNull();
+  });
+
+  it('says the engine is unreachable, not "sample data", when it errors', async () => {
+    mapSource('error');
+    renderAt('/orgs/acme');
+    expect(await screen.findByTestId('engine-unreachable-badge')).toBeTruthy();
+    expect(screen.queryByTestId('sample-data-badge')).toBeNull();
+  });
+
+  it('shows neither badge on a live engine', async () => {
+    mapSource('lain');
+    renderAt('/orgs/acme');
+    await screen.findByTestId('map-explorer');
+    expect(screen.queryByTestId('sample-data-badge')).toBeNull();
+    expect(screen.queryByTestId('engine-unreachable-badge')).toBeNull();
+  });
+});

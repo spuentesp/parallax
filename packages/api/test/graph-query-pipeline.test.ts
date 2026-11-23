@@ -150,6 +150,27 @@ describe('mergeAnswers over real 0.16.0 answers', () => {
     expect(r.truncated).toBe(true);
   });
 
+  it('sorts a node list by path or line, and rejects a field it cannot sort by', () => {
+    const byPath = (by: string, direction: 'asc' | 'desc' = 'asc') =>
+      mergeAnswers(
+        preparePipeline(ops({ op: 'find', type: 'Table' }, { op: 'sort', by, direction })),
+        answers('nodes'),
+      ).nodes ?? [];
+    const paths = byPath('path').map((n) => n.path ?? '');
+    expect(paths).toEqual([...paths].sort((x, y) => x.localeCompare(y)));
+    const lines = byPath('line', 'desc').map((n) => n.line ?? 0);
+    expect(lines).toEqual([...lines].sort((x, y) => y - x));
+    expect(() => preparePipeline(ops({ op: 'find' }, { op: 'sort', by: 'bogus' }))).toThrow(
+      /sort by must be one of/,
+    );
+    // after a group, count is a valid sort
+    expect(() =>
+      preparePipeline(
+        ops({ op: 'find' }, { op: 'group', by: 'repo' }, { op: 'sort', by: 'count' }),
+      ),
+    ).not.toThrow();
+  });
+
   it('sorts groups ascending by count when asked, and pages with offset', () => {
     const p = preparePipeline(
       ops(

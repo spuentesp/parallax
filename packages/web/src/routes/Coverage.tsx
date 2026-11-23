@@ -245,10 +245,10 @@ export function Coverage(): React.ReactElement {
       )}
 
       <section
-        aria-label="Repository index health"
+        aria-label="Indexed commits by repo"
         className="rounded-xl border border-border bg-surface"
       >
-        <h2 className="border-b border-border p-3 text-sm font-semibold">Index health by repo</h2>
+        <h2 className="border-b border-border p-3 text-sm font-semibold">Indexed commits</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs text-muted">

@@ -87,6 +87,11 @@ export function preparePipeline(ops: readonly Op[]): PreparedPipeline {
     }
   }
   const hasGroup = engineOps.some((o) => o.op === 'group');
+  if (sort && !hasGroup && !NODE_SORT_FIELDS.includes(sort.by)) {
+    throw new PipelineError(
+      `sort by must be one of ${NODE_SORT_FIELDS.join(', ')} (or count after a group)`,
+    );
+  }
   // Sin un limit explícito el motor corta en 100 por repo (incluso antes de agrupar, y los
   // conteos saldrían bajos). Se pide un tope claro; lo que aún se corte lo dice `truncated`.
   const appendedLimit = !engineOps.some((o) => o.op === 'limit');
@@ -120,6 +125,9 @@ export interface GroupRow {
   /** Cuánto aporta cada repo. */
   byRepo: Record<string, number>;
 }
+
+/** Fields a node list can be ordered by (after a group, `count` and the key are used instead). */
+const NODE_SORT_FIELDS = ['name', 'type', 'repo', 'path', 'line', 'id'];
 
 export interface NodeRow {
   id: string;
@@ -239,10 +247,21 @@ export function mergeAnswers(p: PreparedPipeline, answers: readonly RepoAnswer[]
   const all: NodeRow[] = answers.flatMap((a) => a.nodes.map((n) => ({ ...n, repo: a.repo })));
   const by = p.sort?.by ?? 'name';
   const dir = p.sort?.direction ?? 'asc';
-  const key = (n: NodeRow) => (by === 'type' ? n.type : n.name);
-  all.sort(
-    (a, b) => (dir === 'desc' ? -1 : 1) * key(a).localeCompare(key(b)) || a.id.localeCompare(b.id),
-  );
+  const text = (n: NodeRow): string =>
+    by === 'type'
+      ? n.type
+      : by === 'repo'
+        ? n.repo
+        : by === 'path'
+          ? (n.path ?? '')
+          : by === 'id'
+            ? n.id
+            : n.name;
+  all.sort((a, b) => {
+    const sign = dir === 'desc' ? -1 : 1;
+    const c = by === 'line' ? (a.line ?? 0) - (b.line ?? 0) : text(a).localeCompare(text(b));
+    return sign * c || a.id.localeCompare(b.id);
+  });
   const off = p.limit?.offset ?? 0;
   const page = p.limit ? all.slice(off, off + p.limit.count) : all;
   const matched = answers.reduce(
