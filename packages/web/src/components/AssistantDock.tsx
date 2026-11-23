@@ -144,7 +144,11 @@ export function AssistantDock({
   const askSentRef = useRef<string | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: handleSend cambia en cada render; el ref evita reenvíos.
   useEffect(() => {
-    if (!askParam || askSentRef.current === askParam) return;
+    if (!askParam) {
+      askSentRef.current = null;
+      return;
+    }
+    if (askSentRef.current === askParam) return;
     askSentRef.current = askParam;
     setOpenDocked(true);
     setOpenFloating(true);

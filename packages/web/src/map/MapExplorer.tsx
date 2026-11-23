@@ -208,11 +208,9 @@ export function MapExplorer({
     const pinEndpoint = (ep: ProjectedNode | undefined) => {
       if (!ep) return;
       const owner = ownerLainRepo(ep);
-      const repos = owner ? [owner] : lainRepos;
-      for (const repo of repos) {
-        for (const path of candidateEndpointPaths(ep)) {
-          pinned.add(codeNodeId(repo, 'File', path));
-        }
+      if (!owner) return; // never guess the repo: a path exists in one checkout only
+      for (const path of candidateEndpointPaths(ep)) {
+        pinned.add(codeNodeId(owner, 'File', path));
       }
     };
     for (const ep of [endpointOf(selectedId), endpointOf(focus ?? null)]) pinEndpoint(ep);
@@ -1445,7 +1443,7 @@ function CanvasControls({
           type="button"
           className={btn}
           onPointerDown={hold(onZoomOut)}
-          onClick={onZoomOut}
+          onClick={(e) => e.detail === 0 && onZoomOut()}
           aria-label="Zoom out"
           title="Zoom out (mantén pulsado para repetir)"
         >
@@ -1472,7 +1470,7 @@ function CanvasControls({
           type="button"
           className={btn}
           onPointerDown={hold(onZoomIn)}
-          onClick={onZoomIn}
+          onClick={(e) => e.detail === 0 && onZoomIn()}
           aria-label="Zoom in"
           title="Zoom in (mantén pulsado para repetir)"
         >

@@ -187,7 +187,7 @@ export function Coverage(): React.ReactElement {
             </table>
           </div>
         </section>
-        <ResolvePanel orgId={orgId} item={selected} />
+        <ResolvePanel key={selected?.key ?? 'none'} orgId={orgId} item={selected} />
       </div>
 
       {inferred.length > 0 && (

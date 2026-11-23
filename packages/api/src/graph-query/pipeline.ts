@@ -76,13 +76,15 @@ export function preparePipeline(ops: readonly Op[]): PreparedPipeline {
   for (const o of engineOps) {
     if (o.op !== 'connect') continue;
     const d = o.depth;
-    const deepest =
-      typeof d === 'number'
-        ? d
-        : typeof d === 'object' && d !== null
-          ? num((d as { max?: unknown }).max, MAX_DEPTH)
-          : MAX_DEPTH;
-    if (deepest > MAX_DEPTH) throw new PipelineError(`connect depth must be at most ${MAX_DEPTH}`);
+    const max = typeof d === 'object' && d !== null ? (d as { max?: unknown }).max : d;
+    // Only a plain integer in range reaches the engine: a string or fraction could be coerced
+    // there past the cap, and an omitted depth is the engine's own default.
+    if (
+      max !== undefined &&
+      (!Number.isInteger(max) || (max as number) < 1 || (max as number) > MAX_DEPTH)
+    ) {
+      throw new PipelineError(`connect depth must be an integer from 1 to ${MAX_DEPTH}`);
+    }
   }
   const hasGroup = engineOps.some((o) => o.op === 'group');
   // Sin un limit explícito el motor corta en 100 por repo (incluso antes de agrupar, y los

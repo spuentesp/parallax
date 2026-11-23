@@ -59,8 +59,12 @@ describe('preparePipeline', () => {
 
   it('caps how deep a connect may walk', () => {
     const q = (depth: unknown) => ops({ op: 'find' }, { op: 'connect', edge: 'Binds', depth });
-    expect(() => preparePipeline(q(7))).toThrow(/at most 6/);
-    expect(() => preparePipeline(q({ min: 1, max: 50 }))).toThrow(/at most 6/);
+    expect(() => preparePipeline(q(7))).toThrow(/from 1 to 6/);
+    expect(() => preparePipeline(q({ min: 1, max: 50 }))).toThrow(/from 1 to 6/);
+    expect(() => preparePipeline(q('50'))).toThrow(/from 1 to 6/);
+    expect(() => preparePipeline(q({ max: '1000' }))).toThrow(/from 1 to 6/);
+    expect(() => preparePipeline(q(2.5))).toThrow(/from 1 to 6/);
+    expect(() => preparePipeline(q(0))).toThrow(/from 1 to 6/);
     expect(() => preparePipeline(q(6))).not.toThrow();
     expect(() => preparePipeline(q({ min: 1, max: 3 }))).not.toThrow();
     // Sin depth explícito el motor usa su valor por defecto: se acepta.

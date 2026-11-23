@@ -123,7 +123,7 @@ export function contractGroup(key: string, boundConsumers: number): ContractGrou
     // confunde con rutas porque parecen un path. Un path URL real nunca lleva
     // un % seguido de letra (el percent-encoding siempre es %HH), así que
     // "%w"/"%s"/"%q"/"%v" delatan una cadena de formato, no una ruta.
-    if (/%[a-zA-Z]/.test(rest)) {
+    if (/%(?![0-9a-fA-F]{2})[a-zA-Z]/.test(rest)) {
       return {
         key: 'http-format-string',
         label: 'Not routes (format strings)',

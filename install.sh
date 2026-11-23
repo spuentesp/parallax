@@ -504,8 +504,12 @@ ok "wrote $ENGINE_CONFIG"
 if [[ -n "$PREV_LAIN_TAG" && "$PREV_LAIN_TAG" != "$LAIN_TAG" ]] \
    && [[ -f "$ENGINE_DATA_DIR/federated_graph.bin" ]]; then
   warn "upgrading lain $PREV_LAIN_TAG → $LAIN_TAG: reindexing the existing graph (the graph schema changed)"
+  # The old server may still hold the graph file; stop it first (step 6 restarts it).
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop lain >/dev/null 2>&1 || true
+  fi
   "$LAIN_BIN_DIR/lain" reindex --config "$ENGINE_CONFIG" || \
-    warn "reindex failed — run it by hand: lain reindex --config $ENGINE_CONFIG"
+    die "reindex failed — the new engine refuses the old graph. Run: lain reindex --config $ENGINE_CONFIG"
 fi
 
 # --------------------------------------------------------------------------

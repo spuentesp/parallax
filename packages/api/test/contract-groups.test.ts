@@ -57,6 +57,8 @@ describe('contractGroup — what a contract is called on the map', () => {
     }
     // %HH (p. ej. %20) sí es percent-encoding válido: sigue siendo ruta.
     expect(contractGroup('http:GET /files/%20name', 0).key).toBe('http');
+    // UTF-8 percent-encoding starts with a letter (%C3%A9): still a real route.
+    expect(contractGroup('http:GET /caf%C3%A9/menu', 0).key).toBe('http');
     expect(contractGroup('http:ANY /a%20b', 0).key).toBe('http-methodless');
   });
 
