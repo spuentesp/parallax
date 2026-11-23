@@ -1,19 +1,28 @@
 import type {
   ApplyContractContextArgs,
   ApplyContractContextResponse,
+  AssessChangeArgs,
+  AssessChangeResponse,
   CheckBindingArgs,
   CheckBindingResponse,
   DescribeSchemaArgs,
   DescribeSchemaResponse,
   DiffContractsArgs,
   DiffContractsResponse,
+  ExplainDispatchArgs,
+  ExplainDispatchResponse,
   ExplainSymbolArgs,
+  GetCallChainArgs,
   GetCallSitesArgs,
   GetCodeSnippetArgs,
   GetContractArgs,
   GetContractResponse,
   GetCoverageArgs,
   GetCoverageResponse,
+  GetCrossRuntimeCallersArgs,
+  GetCrossRuntimeCallersResponse,
+  GetFederationHealthArgs,
+  GetFederationHealthResponse,
   GetServiceArgs,
   GetServiceResponse,
   GetSnapshotArgs,
@@ -37,6 +46,8 @@ import type {
   ReadSourceResponse,
   ResolveEvidenceArgs,
   ResolveEvidenceResponse,
+  SearchCodeArgs,
+  SearchCodeResponse,
   TraceFlowArgs,
   TraceFlowResponse,
   TraceImpactArgs,
@@ -135,46 +146,6 @@ export function createLainMock(): LainAdapter {
     async traceImpact(req: TraceImpactArgs): Promise<TraceImpactResponse> {
       recordMockCall({ tool: 'trace_impact', snapshot: req.snapshot, args: req });
       return pickScenario(req.snapshot).traceImpact;
-    },
-
-    async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
-      recordMockCall({ tool: 'trace_flow', snapshot: req.snapshot, args: req });
-      const seed = req.from.endpoint?.key ?? req.from.symbol ?? req.from.table ?? '';
-      return {
-        from: req.from,
-        direction: req.direction ?? (req.from.table ? 'upstream' : 'downstream'),
-        seeds: [seed],
-        paths: [],
-        gaps: [{ node: seed, name: seed, kind: 'no_handler', reason: 'no path in mock graph' }],
-        truncated: false,
-        truncation_reasons: [],
-        nodes_visited: 1,
-        scope: { configured_only: true, reviewed: [], unreviewed: [] },
-        ...(req.strategy === 'depth' ? { strategy: 'depth' as const } : {}),
-      };
-    },
-
-    async applyContractContext(
-      req: ApplyContractContextArgs,
-    ): Promise<ApplyContractContextResponse> {
-      recordMockCall({ tool: 'apply_contract_context', snapshot: req.snapshot, args: req });
-      return {
-        applied: !req.dry_run,
-        dry_run: req.dry_run,
-        yaml: '# contract context validated by mock\n',
-        added: req.provides ?? [],
-        added_host_aliases: req.host_aliases ?? [],
-        added_bindings: req.bindings ?? [],
-      };
-    },
-
-    async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
-      recordMockCall({ tool: 'list_service_refs', snapshot: req.snapshot, args: req });
-      return {
-        items: [],
-        scope: { configured_only: true, reviewed: [], unreviewed: [] },
-        ...(req.suggestions ? { suggestions_status: 'no_embedding_model' as const } : {}),
-      };
     },
 
     async getCoverage(req: GetCoverageArgs): Promise<GetCoverageResponse> {
@@ -314,7 +285,20 @@ export function createLainMock(): LainAdapter {
       if (limit.count !== undefined && nodes.length > limit.count) {
         nodes = nodes.slice(0, limit.count);
       }
-      return { count: nodes.length, legacy: false, nodes };
+      // Desde 0.11 las consultas connect devuelven también edges/paths
+      // concretos (from = semilla, to = cada nodo alcanzado).
+      const connectEdge = Array.isArray(connect.edge) ? connect.edge[0] : connect.edge;
+      const edges =
+        connectEdge !== undefined
+          ? nodes.map((n) => ({
+              id: `e-seed-${n.id}`,
+              type: String(connectEdge),
+              from: `seed:${name}`,
+              to: n.id,
+            }))
+          : [];
+      const paths = edges.length > 0 ? [{ nodes, edges }] : [];
+      return { count: nodes.length, legacy: false, nodes, edges, paths };
     },
 
     async describeSchema(_req: DescribeSchemaArgs): Promise<DescribeSchemaResponse> {
@@ -375,17 +359,102 @@ export function createLainMock(): LainAdapter {
       };
     },
 
+    async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {
+      recordMockCall({ tool: 'get_call_sites', args: req });
+      return { text: `No call sites found for '${req.symbol}' (${req.symbol} is a leaf)` };
+    },
+
+    // ---- Batch v0.15.0 de dev ----
+
+    async traceFlow(req: TraceFlowArgs): Promise<TraceFlowResponse> {
+      recordMockCall({
+        tool: 'trace_flow',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      const seed = req.from.endpoint?.key ?? req.from.symbol ?? req.from.table ?? '';
+      return {
+        from: req.from as unknown as Record<string, unknown>,
+        direction: req.direction ?? (req.from.table ? 'upstream' : 'downstream'),
+        seeds: [seed],
+        paths: [],
+        gaps: [{ node: seed, name: seed, kind: 'no_handler', reason: 'no path in mock graph' }],
+        truncated: false,
+        nodes_visited: 1,
+        ...(req.strategy === 'depth' ? { strategy: 'depth' as const } : {}),
+      };
+    },
+
+    async listServiceRefs(req: ListServiceRefsArgs): Promise<ListServiceRefsResponse> {
+      recordMockCall({ tool: 'list_service_refs', snapshot: req.snapshot, args: req });
+      return { items: [] };
+    },
+
+    async applyContractContext(
+      req: ApplyContractContextArgs,
+    ): Promise<ApplyContractContextResponse> {
+      recordMockCall({ tool: 'apply_contract_context', snapshot: req.snapshot, args: req });
+      return { applied: true, dry_run: req.dry_run ?? true, note: 'mock: nothing written' };
+    },
+
+    async searchCode(req: SearchCodeArgs): Promise<SearchCodeResponse> {
+      recordMockCall({
+        tool: 'search_code',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { query: req.query, mode: req.mode ?? 'lexical', results: [], count: 0 };
+    },
+
+    async assessChange(req: AssessChangeArgs): Promise<AssessChangeResponse> {
+      recordMockCall({
+        tool: 'assess_change',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { target: { symbol: req.symbol }, risk: 'low' };
+    },
+
+    async explainDispatch(req: ExplainDispatchArgs): Promise<ExplainDispatchResponse> {
+      recordMockCall({
+        tool: 'explain_dispatch',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { verdict: 'static' };
+    },
+
+    async getCrossRuntimeCallers(
+      req: GetCrossRuntimeCallersArgs,
+    ): Promise<GetCrossRuntimeCallersResponse> {
+      recordMockCall({
+        tool: 'get_cross_runtime_callers',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { target: { node_id: req.node_id } };
+    },
+
+    async getFederationHealth(_req: GetFederationHealthArgs): Promise<GetFederationHealthResponse> {
+      recordMockCall({ tool: 'get_federation_health', args: _req });
+      return { repos: [] };
+    },
+
+    async getCallChain(req: GetCallChainArgs): Promise<LainTextResponse> {
+      recordMockCall({
+        tool: 'get_call_chain',
+        ...(req.snapshot ? { snapshot: req.snapshot } : {}),
+        args: req,
+      });
+      return { text: `No path from ${req.from} to ${req.to} in the mock graph` };
+    },
+
     async codeTool(
       tool: CodeTool | ProductCodeTool,
       args: Record<string, unknown>,
     ): Promise<LainTextResponse> {
       recordMockCall({ tool, args });
       return { text: `## ${tool}\n\n(mock) ${JSON.stringify(args)}` };
-    },
-
-    async getCallSites(req: GetCallSitesArgs): Promise<LainTextResponse> {
-      recordMockCall({ tool: 'get_call_sites', args: req });
-      return { text: `No call sites found for '${req.symbol}' (${req.symbol} is a leaf)` };
     },
   };
 }

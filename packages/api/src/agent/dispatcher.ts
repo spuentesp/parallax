@@ -14,6 +14,7 @@
 //    de detalle más estrecha ofrecida; los unknowns no se esconden (INV 3).
 
 import {
+  ExplainDispatchArgs,
   GetContractArgs,
   GetCoverageArgs,
   GetServiceArgs,
@@ -23,6 +24,7 @@ import {
   ListUnresolvedArgs,
   ReadSourceArgs,
   ResolveEvidenceArgs,
+  TraceFlowArgs,
   TraceImpactArgs,
 } from '@parallax/shared/lain';
 import { z } from 'zod';
@@ -40,6 +42,10 @@ export const DISPATCHER_TOOLS = [
   'list_contracts',
   'get_contract',
   'trace_impact',
+  // Batch v0.15.0 de lain dev: flujo a través del borde de contratos con gaps.
+  'trace_flow',
+  // Raw (paquete raw): análisis de despacho de un símbolo del grafo.
+  'explain_dispatch',
   'resolve_evidence',
   'read_source',
   'list_unresolved',
@@ -78,6 +84,8 @@ const ModelArgsSchemas = {
   list_contracts: ListContractsArgs.omit({ snapshot: true }),
   get_contract: GetContractArgs.omit({ snapshot: true }),
   trace_impact: TraceImpactArgs.omit({ snapshot: true }),
+  trace_flow: TraceFlowArgs.omit({ snapshot: true }),
+  explain_dispatch: ExplainDispatchArgs.omit({ snapshot: true }),
   resolve_evidence: ResolveEvidenceArgs.omit({ snapshot: true }),
   read_source: ReadSourceArgs.omit({ snapshot: true }),
   list_unresolved: ListUnresolvedArgs.omit({ snapshot: true }),
@@ -106,6 +114,10 @@ const TOOL_DESCRIPTIONS: Record<DispatcherTool, string> = {
   get_contract: 'Full detail of one contract by key (e.g. "http:GET /api/orders/{}").',
   trace_impact:
     'Impact paths from one endpoint/field/symbol in the fixed view. Returns paths with provenance confidence.',
+  trace_flow:
+    'One path from an endpoint/symbol/table across the contract boundary (lain dev batch), with per-hop provenance and explicit gaps. Use it to follow a call through services, not just within one repo.',
+  explain_dispatch:
+    'How a symbol dispatches (virtual/interface/fat-pointer dispatch) in the code graph: candidate targets and why they were chosen or ruled out.',
   resolve_evidence:
     'Resolve evidence refs/ids previously delivered by the backend. A bad ref returns exists=false, never a guess.',
   read_source:
@@ -544,6 +556,10 @@ export class LainDispatcher {
         return this.lain.getContract({ ...(args as object), snapshot } as never);
       case 'trace_impact':
         return this.lain.traceImpact({ ...(args as object), snapshot } as never);
+      case 'trace_flow':
+        return this.lain.traceFlow({ ...(args as object), snapshot } as never);
+      case 'explain_dispatch':
+        return this.lain.explainDispatch({ ...(args as object), snapshot } as never);
       case 'resolve_evidence':
         return this.lain.resolveEvidence({ ...(args as object), snapshot } as never);
       case 'read_source':
@@ -729,9 +745,19 @@ No web result. Say that the web had nothing, and answer from the repositories.`,
     tool: DispatcherTool,
     args: Record<string, unknown>,
   ): Promise<string | null> {
+    // trace_flow trae el servicio anidado en from.endpoint.service y el repo
+    // como repo_id: se validan igual que service/repo de primer nivel.
+    const from = args.from as { endpoint?: { service?: unknown }; repo_id?: unknown } | undefined;
+    const nestedService =
+      from && typeof from.endpoint === 'object' && from.endpoint !== null
+        ? from.endpoint.service
+        : undefined;
+    const nestedRepo = from?.repo_id;
     const needsCatalog =
       'service' in args ||
       'repo' in args ||
+      nestedService !== undefined ||
+      nestedRepo !== undefined ||
       tool === 'resolve_evidence' ||
       tool === 'list_services';
     if (!needsCatalog) return null;
@@ -739,11 +765,11 @@ No web result. Say that the web had nothing, and answer from the repositories.`,
     const catalog = this.catalog;
     const catalogNote = this.catalogError ? ` (catalog unavailable: ${this.catalogError})` : '';
 
-    const service = args.service;
+    const service = (args.service ?? nestedService) as unknown;
     if (typeof service === 'string' && catalog && !catalog.services.has(service)) {
       return `service "${service}" is outside the analyzed view. Known services: ${[...catalog.services].join(', ')}${catalogNote}`;
     }
-    const repo = args.repo;
+    const repo = (args.repo ?? nestedRepo) as unknown;
     if (typeof repo === 'string' && catalog && !catalog.repos.has(repo)) {
       return `repo "${repo}" is outside the analyzed view. Known repos: ${[...catalog.repos].join(', ')}${catalogNote}`;
     }

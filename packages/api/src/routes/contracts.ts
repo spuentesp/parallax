@@ -8,6 +8,7 @@ import type { LainAdapter } from '../lain-adapter/types.js';
 
 const Params = z.object({ id: z.string().min(1) });
 const ServiceRefsQuery = ListServiceRefsArgs.extend({
+  snapshot: z.literal('live').default('live'),
   suggestions: z
     .enum(['true', 'false'])
     .transform((value) => value === 'true')

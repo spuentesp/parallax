@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DescribeSchemaResponse,
   GetCodeSnippetArgs,
+  LainTextResponse,
   LoadPackageArgs,
   QueryGraphArgs,
   QueryGraphResponse,
@@ -95,5 +96,21 @@ describe('snippet tool args', () => {
   it('requires package for load_package', () => {
     expect(LoadPackageArgs.safeParse({}).success).toBe(false);
     expect(LoadPackageArgs.safeParse({ package: 'raw' }).success).toBe(true);
+  });
+});
+
+describe('LainTextResponse (batch v0.15.0 de dev)', () => {
+  it('keeps answer_scope alongside the markdown text', () => {
+    const parsed = LainTextResponse.parse({
+      text: '# call sites',
+      answerScope: { truncated: true, dynamic_target: 2 },
+    });
+    expect(parsed.text).toBe('# call sites');
+    expect(parsed.answerScope).toEqual({ truncated: true, dynamic_target: 2 });
+  });
+
+  it('stays valid without answer_scope (tools sólo-texto)', () => {
+    const parsed = LainTextResponse.parse({ text: 'snippet' });
+    expect(parsed.answerScope).toBeUndefined();
   });
 });

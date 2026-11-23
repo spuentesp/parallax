@@ -397,7 +397,7 @@ describe('buildMcpServer (tool contract)', () => {
     });
     const [url] = fetchSpy.mock.calls[0] as [string];
     expect(url).toBe(
-      'http://api/api/workspaces/ws_1/service-refs?snapshot=live&outcome=resolved&suggestions=true&min_score=0.7&limit=10',
+      'http://api/api/workspaces/ws_1/service-refs?snapshot=live&outcome=resolved&limit=10&suggestions=true&min_score=0.7',
     );
     expect(res.isError).toBeFalsy();
     expect(res.structuredContent).toEqual(payload);

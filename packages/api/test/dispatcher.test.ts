@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { ALL_TOOLS, createDispatcher, summarizeConsumers } from '../src/agent/dispatcher.js';
 import type { ToolCall } from '../src/agent/nemotron.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
+import { getLainMockCalls, resetLainMock } from '../src/lain-adapter/record.js';
 import type { LainAdapter } from '../src/lain-adapter/types.js';
 
 function call(id: string, name: string, args: unknown): ToolCall {
@@ -28,6 +29,33 @@ describe('LainDispatcher', () => {
       const params = spec.function.parameters as { properties?: Record<string, unknown> };
       expect(params.properties?.snapshot).toBeUndefined();
     }
+  });
+
+  it('exposes the lain dev v0.15.0 tools and injects the fixed view into them', async () => {
+    resetLainMock();
+    const d = createDispatcher({ lain: createLainMock(), view: 'snap_abc123' });
+    const names = d.toolSpecs().map((s) => s.function.name);
+    // assess_change queda fuera a propósito: es product-only (PR review), el
+    // modelo del investigador no la ve (ver product-tools.ts).
+    for (const t of [
+      'trace_flow',
+      'search_code',
+      'get_call_chain',
+      'get_cross_runtime_callers',
+      'explain_dispatch',
+    ]) {
+      expect(names).toContain(t);
+    }
+    const r = await d.execute(call('t1', 'trace_flow', { from: { symbol: 'main' } }));
+    expect(r.ok).toBe(true);
+    const r2 = await d.execute(call('t2', 'search_code', { query: 'create order' }));
+    expect(r2.ok).toBe(true);
+    const calls = getLainMockCalls();
+    expect(calls.find((c) => c.tool === 'trace_flow')?.snapshot).toBe('snap_abc123');
+    // Las tools de código van por codeTool y no llevan snapshot: el código no
+    // depende de la vista de contratos.
+    expect(calls.find((c) => c.tool === 'search_code')).toBeTruthy();
+    expect(calls.find((c) => c.tool === 'search_code')?.snapshot).toBeUndefined();
   });
 
   it('executes a valid call and injects the fixed view', async () => {

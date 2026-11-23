@@ -10,6 +10,7 @@ import { type LainCoverage, presentCoverage } from '../coverage.js';
 import * as schema from '../db/schema.js';
 import type { GitHubReader } from '../github/reader.js';
 import type { GitLabReader } from '../gitlab/reader.js';
+import { isLainCallError } from '../lain-adapter/errors.js';
 import type { LainAdapter } from '../lain-adapter/types.js';
 import { reviewCodeImpact } from '../pr-review/code-impact.js';
 
@@ -503,6 +504,13 @@ export class AssessmentWorker {
 
     try {
       const diff = await lain.diffContracts({ base: rec.baseId, head });
+      // INV 3: el motor dev puede devolver un diff incompleto por timeout
+      // (truncated/truncation_reason); nunca se presenta como "sin hallazgos".
+      if (diff.truncated === true) {
+        gaps.push(
+          `diff_contracts truncated (${diff.truncation_reason ?? 'timeout'}): the finding list may be incomplete`,
+        );
+      }
 
       let coverageRaw: LainCoverage;
       try {
@@ -591,7 +599,26 @@ export class AssessmentWorker {
       await this.endStep(id, 'analyze', attempt, 'done', sha256Hex(engineJson));
       return next;
     } catch (e) {
+      // LainCallError y los errores del motor son objetos planos (no Error):
+      // describeError conserva code y message legibles.
       const message = describeError(e);
+      // El motor rechaza con analyzer_mismatch los snapshots grabados bajo
+      // otra versión del analizador (upgrade de lain entre runs): re-preparar
+      // los snapshots una vez y reintentar con los ids nuevos. El intento 2
+      // ya no reintenta: un mismatch persistente es un fallo real.
+      const cause = isLainCallError(e) && e.code === 'LainUnavailable' ? e.cause : undefined;
+      const mismatch =
+        (typeof cause === 'object' &&
+          cause !== null &&
+          (cause as { code?: unknown }).code === 'analyzer_mismatch') ||
+        /analyzer_mismatch/.test(message);
+      if (mismatch && attempt === 1) {
+        await this.endStep(id, 'analyze', attempt, 'failed', null);
+        const back = await this.transition(id, 'SNAPSHOTTING');
+        const reSnap = await this.stepSnapshot(id, back, manifest);
+        if (reSnap.status === 'ANALYZING') return this.stepAnalyze(id, reSnap, manifest);
+        return reSnap;
+      }
       await this.endStep(id, 'analyze', attempt, 'failed', null);
       return this.fail(rec, `analysis failed: ${message}`);
     }

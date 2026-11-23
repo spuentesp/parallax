@@ -80,6 +80,10 @@ describe('GET /api/workspaces/:id/advisor', () => {
             'get_coverage',
             'resolve_evidence',
             'read_source',
+            // Batch v0.15.0 de dev: el handshake exige estas tres también.
+            'trace_flow',
+            'list_service_refs',
+            'apply_contract_context',
           ];
           res.setHeader('content-type', 'application/json');
           res.end(
@@ -142,6 +146,8 @@ describe('GET /api/workspaces/:id/advisor', () => {
           );
         } else if (tool === 'check_binding') {
           res.end(rpcError(rpc.id, 'invalid_argument: topic endpoints not supported in 0.9'));
+        } else if (tool === 'list_service_refs') {
+          res.end(envelope(rpc.id, { items: [] }));
         } else {
           res.end(envelope(rpc.id, {}));
         }

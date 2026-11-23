@@ -1,7 +1,8 @@
-// Pruebas de contrato contra la versión fijada del motor: cada schema zod de
-// argumentos debe aceptar lo que docs/lain-tool-schemas.json (capturado con
-// tools/list de lain 0.9.1) documenta y rechazar los requeridos ausentes. Si
-// el archivo y los zod divergen, estos tests fallan.
+// Pruebas de contrato contra el pin vigente del motor: cada schema zod de
+// argumentos debe aceptar lo que docs/lain-tool-schemas.json (recapturado con
+// tools/list del paquete contracts del build de dev; ver
+// docs/lain-integration-notes.md) documenta y rechazar los requeridos
+// ausentes. Si el archivo y los zod divergen, estos tests fallan.
 import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import docsJson from '../../../docs/lain-tool-schemas.json';

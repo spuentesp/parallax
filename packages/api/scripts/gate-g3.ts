@@ -131,8 +131,8 @@ async function g3Surface(lain: LainAdapter): Promise<void> {
   const d = createDispatcher({ lain, view: 'live' });
   const names = d.toolSpecs().map((s) => s.function.name);
   check(
-    'la superficie es exactamente el conjunto de lectura (9 tools)',
-    names.length === 9 && !names.some((n) => /publish|write|delete|create_snapshot/.test(n)),
+    'la superficie es exactamente el conjunto de lectura (16 tools: 10 base + 6 del batch lain dev v0.15.0)',
+    names.length === 16 && !names.some((n) => /publish|write|delete|create_snapshot/.test(n)),
     names.join(', '),
   );
   check(

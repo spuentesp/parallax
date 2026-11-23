@@ -87,7 +87,9 @@ export function TraceFlowVisualizer({
           <div className="text-xs text-muted" data-testid="native-flow-stats">
             {result.nodes_visited} nodes visited · {result.paths.length} paths ·{' '}
             {result.gaps.length} gaps
-            {result.truncated ? ` · truncated (${result.truncation_reasons.join(', ')})` : ''}
+            {result.truncated
+              ? ` · truncated (${(result.truncation_reasons ?? []).join(', ')})`
+              : ''}
           </div>
           {result.paths.map((path) => (
             <ol

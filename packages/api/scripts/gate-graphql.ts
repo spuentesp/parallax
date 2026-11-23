@@ -35,7 +35,7 @@ async function stop(): Promise<void> {
   }
 }
 
-async function start(providesGraphql: boolean, binding?: string): Promise<LainAdapter> {
+async function start(providesGraphql: boolean): Promise<LainAdapter> {
   await stop();
   const config = [
     'share: false',
@@ -55,8 +55,6 @@ async function start(providesGraphql: boolean, binding?: string): Promise<LainAd
     `    provides_graphql: ${providesGraphql}`,
     '  - name: saleor-storefront',
     '    repo: storefront',
-    // Keep the engine-generated list item verbatim under bindings.
-    ...(binding ? ['bindings:', binding] : []),
   ].join('\n');
   writeFileSync(configPath, `${config}\n`);
   const listener = createServer();
@@ -103,7 +101,10 @@ async function start(providesGraphql: boolean, binding?: string): Promise<LainAd
     }
   }
   const lain = await createLainClient({ lainUrl: url, apiVersion: '1', maxRetries: 0 });
-  assert.equal(lain.analyzerVersion, '0.16.0');
+  // Pin del motor: la release v0.16.0 reporta analyzer_version 0.16.0.
+  // LAIN_EXPECTED_ANALYZER_VERSION permite apuntar el gate a otro binario (p. ej. un build
+  // de desarrollo, que reporta la versión de su Cargo.toml).
+  assert.equal(lain.analyzerVersion, process.env.LAIN_EXPECTED_ANALYZER_VERSION ?? '0.16.0');
   await waitForIndexedRepos(lain, repoNames, 60_000);
   return lain;
 }
@@ -150,16 +151,44 @@ async function main(): Promise<void> {
     (p) => p.consumer.repo === 'storefront' && p.status === 'applicable',
   );
   assert.ok(binding?.bindingsEntry, 'the advisor must return an engine-validated binding');
-  lain = await start(true, binding.bindingsEntry);
+  // Batch v0.15.0 de dev: el binding se aplica vía apply_contract_context del
+  // motor (dry-run primero: el YAML que escribiría debe traer la entrada
+  // verbatim; luego apply real, que escribe repos.yaml con .bak y lo sirve).
+  const contextBinding = {
+    consumer: {
+      repo: binding.consumer.repo,
+      path: binding.consumer.path,
+      symbol: binding.consumer.symbol,
+      key: binding.consumer.key,
+      ...(binding.consumerId ? { site: binding.consumerId } : {}),
+    },
+    provider: { service: binding.provider.service, key: binding.provider.key },
+  };
+  const dry = await lain.applyContractContext({
+    snapshot: 'live',
+    bindings: [contextBinding],
+    dry_run: true,
+  });
+  assert.equal(dry.dry_run, true);
+  assert.ok(
+    (dry.yaml ?? '').includes(binding.consumer.key) || (dry.yaml ?? '').includes('bindings:'),
+    'dry-run yaml must contain the proposed binding entry',
+  );
+  const applied = await lain.applyContractContext({
+    snapshot: 'live',
+    bindings: [contextBinding],
+    dry_run: false,
+  });
+  assert.equal(applied.applied, true, `apply_contract_context must report served: ${applied.note ?? ''}`);
   const confirmed = await lain.getService({ snapshot: 'live', service: 'saleor-api' });
   assert.ok(
     confirmed.consumers.some(
       (c) =>
         c.service === 'saleor-storefront' && c.uses.some((u) => /confirmed/i.test(u.binding.kind)),
     ),
-    'the verbatim binding must round-trip as Confirmed',
+    'the applied binding must round-trip as Confirmed',
   );
-  console.log('PASS: advisor binding YAML round-trips through the real config write path');
+  console.log('PASS: advisor binding applies via apply_contract_context and round-trips as Confirmed');
 
   lain = await start(false);
   const fixed = await fetchAllContracts(lain, { snapshot: 'live' });

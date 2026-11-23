@@ -13,6 +13,7 @@
 //   LAIN_URL=http://localhost:9999/mcp pnpm --filter @parallax/api exec tsx scripts/gate-advisor.ts
 
 import { join } from 'node:path';
+import { UnresolvedReason } from '@parallax/shared/lain';
 import { waitForIndexedRepos } from './lain-readiness.js';
 import { createLainClient } from '../src/lain-adapter/client.js';
 import { runAdvisor, type AdvisorReport } from '../src/advisor/index.js';
@@ -130,9 +131,16 @@ async function main(): Promise<void> {
   console.log('\n=== A.2 correlación con el motor (paginada al agotamiento) ===');
   const sfReasons = report.correlation.byRepoReason.storefront ?? {};
   const sf = report.correlation.graphqlNoOp.byRepo.storefront ?? { total: 0, matched: 0, keys: 0 };
+  const sfTotal = Object.values(sfReasons).reduce((acc, n) => acc + n, 0);
+  // Vocabulario del motor dev (v0.15.0 batch): `dynamic_target` salió de
+  // `no_route_in_service` para las rutas seleccionadas en runtime.
+  const knownReasons = new Set<string>(UnresolvedReason.options);
+  // Motor dev (v0.15.0 batch): el storefront reporta 71 ítems (antes 78 con
+  // 0.13.0) — 7 que eran no_match/no_route_in_service ahora se resuelven, y 3
+  // rutas seleccionadas en runtime clasifican como dynamic_target.
   check(
-    'list_unresolved agotado: 78 ítems del storefront',
-    (sfReasons.graphql_no_op ?? 0) + (sfReasons.no_match ?? 0) + (sfReasons.no_route_in_service ?? 0) === 78,
+    'list_unresolved agotado: 71 ítems del storefront, todos con razón del vocabulario del motor',
+    sfTotal === 71 && Object.keys(sfReasons).every((r) => knownReasons.has(r)),
     `storefront=${JSON.stringify(sfReasons)}; total todas las repos=${report.correlation.unresolvedTotal} (todas las páginas)`,
   );
   check(
@@ -141,14 +149,31 @@ async function main(): Promise<void> {
     `por repo=${String(sf.total)}`,
   );
   check(
-    'el resto de razones explicadas (no_match / no_route_in_service)',
-    (sfReasons.no_match ?? 0) >= 1 && (sfReasons.no_route_in_service ?? 0) >= 1,
-    `no_match=${String(sfReasons.no_match)} no_route_in_service=${String(sfReasons.no_route_in_service)}`,
+    'los 8 restantes quedan explicados por el vocabulario, con el split dynamic_target presente',
+    sfTotal - (sfReasons.graphql_no_op ?? 0) === 8 &&
+      (sfReasons.dynamic_target ?? 0) >= 1 &&
+      Object.keys(sfReasons).some((r) => r !== 'graphql_no_op' && r !== 'dynamic_target'),
+    `razones=${JSON.stringify(sfReasons)}`,
   );
   check(
     'los 63 graphql_no_op del storefront correlacionan con señales escaneadas',
     sf.matched === sf.total && sf.total === 63,
     `correlacionados=${sf.matched}/${sf.total}, llaves=${sf.keys}`,
+  );
+  // list_service_refs (batch v0.15.0 de dev, live): refs de literales URL por
+  // repo con outcome clasificado. En este fixture los servicios se ligan por
+  // env (NEXT_PUBLIC_SALEOR_API_URL → saleor-api, vía check_binding en la capa
+  // de contratos), no por literales de host, así que el gate verifica que el
+  // storefront tiene refs y que todo outcome cae en el vocabulario declarado
+  // (resolved/ambiguous/unknown) — sin exigir un resolved que el fixture no
+  // produce por diseño.
+  const sfRefs = report.correlation.serviceRefs;
+  const knownOutcomes = new Set(['resolved', 'ambiguous', 'unknown']);
+  check(
+    'list_service_refs: el storefront tiene refs y todos los outcomes son del vocabulario declarado',
+    (sfRefs.byRepo.storefront ?? 0) >= 1 &&
+      Object.keys(sfRefs.byOutcome).every((k) => knownOutcomes.has(k)),
+    `refs=${JSON.stringify({ total: sfRefs.total, byOutcome: sfRefs.byOutcome, byRepo: sfRefs.byRepo })}`,
   );
   check(
     'las (op, field) del storefront tienen proveedor en el índice',
