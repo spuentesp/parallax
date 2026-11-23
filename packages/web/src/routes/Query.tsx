@@ -20,6 +20,26 @@ interface Step {
 
 const PRESETS: Array<{ label: string; hint: string; steps: Array<[OpName, object]> }> = [
   {
+    label: 'HTTP client calls by repo',
+    hint: 'Every outbound HTTP call the analyzer found, per repository.',
+    steps: [
+      ['find', { type: 'HttpClientCall' }],
+      ['group', { by: 'repo' }],
+      ['sort', { by: 'count', direction: 'desc' }],
+    ],
+  },
+  {
+    label: 'gRPC call sites into each service',
+    hint: 'Client calls bound to a provider, grouped by the provider service.',
+    steps: [
+      ['find', { type: 'Function', name: { glob: 'rpc-call:*' } }],
+      ['connect', { edge: 'Binds', direction: 'outgoing', depth: 1 }],
+      ['group', { by: 'service' }],
+      ['sort', { by: 'count', direction: 'desc' }],
+      ['limit', { count: 10 }],
+    ],
+  },
+  {
     label: 'GraphQL call sites into each service',
     hint: 'Consumers bound to a provider, grouped by the provider service.',
     steps: [
@@ -28,15 +48,6 @@ const PRESETS: Array<{ label: string; hint: string; steps: Array<[OpName, object
       ['group', { by: 'service' }],
       ['sort', { by: 'count', direction: 'desc' }],
       ['limit', { count: 10 }],
-    ],
-  },
-  {
-    label: 'HTTP client calls by repo',
-    hint: 'Every outbound HTTP call the analyzer found, per repository.',
-    steps: [
-      ['find', { type: 'HttpClientCall' }],
-      ['group', { by: 'repo' }],
-      ['sort', { by: 'count', direction: 'desc' }],
     ],
   },
   {

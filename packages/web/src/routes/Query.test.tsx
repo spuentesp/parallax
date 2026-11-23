@@ -30,6 +30,9 @@ describe('Query page', () => {
     );
     open();
     await screen.findByTestId('query-page');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'GraphQL call sites into each service' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     const results = within(await screen.findByTestId('query-results'));
 
@@ -123,9 +126,21 @@ describe('Query page', () => {
     expect(results.getByText(/counts are partial/)).toBeTruthy();
   });
 
+  it('opens on a starting point that works on any workspace, with a gRPC one next to GraphQL', async () => {
+    open();
+    await screen.findByTestId('query-page');
+    expect(
+      (screen.getByLabelText('Step 1 parameters (JSON)') as HTMLTextAreaElement).value,
+    ).toContain('HttpClientCall');
+    expect(screen.getByRole('button', { name: 'gRPC call sites into each service' })).toBeTruthy();
+  });
+
   it('removes and adds steps', async () => {
     open();
     await screen.findByTestId('query-page');
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'GraphQL call sites into each service' }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Remove step 5' }));
     expect(screen.queryByLabelText('Step 5 operation')).toBeNull();
     fireEvent.click(screen.getByText('+ Add step'));

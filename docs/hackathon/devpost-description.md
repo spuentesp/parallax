@@ -14,6 +14,7 @@ Parallax builds an explorable map of an organization's architecture from its cod
 - **A hierarchical map**: repos → services → endpoints → code (files, functions), loaded lazily so it scales. Relationships between services are drawn solid when the static analysis proves them and dashed (fainter = less sure) when they are inferred. You can filter by either, or by contract kind (HTTP, GraphQL, topics…).
 - **"Who consumes this?"** Select any endpoint and see the services that use it, across repos, with how sure the engine is.
 - **An investigator you can talk to.** Ask a question in plain language. A Nemotron agent explores the code through the analysis engine's tools, then answers. Every relationship it asserts is **re-verified by the engine** — confirmed, contradicted, or unverifiable — and the answer can drive the map straight to the subgraph that backs it.
+- **Query and coverage.** A read-only query page runs pipelines (find, connect, filter, group, sort, limit) over the engine's graph and shows the engine's count after each step. The coverage page shows, per repo, which analyses ran, what was skipped and where the blind spots are, so "no impact" is never claimed over code the engine could not read.
 - **PR impact.** Assess a pull request against the other repos that consume what it changes, with the engine deciding the facts and the model only explaining them.
 
 The point is not another chatbot over code: the model never decides what is true. The static-analysis engine does; the model explains and navigates.
@@ -22,7 +23,8 @@ The point is not another chatbot over code: the model never decides what is true
 - **Nemotron on Nebius Token Factory.** The investigator uses Nemotron 3 Super (planning / structured decomposition) and Nemotron 3.5 Lightning (fast worker calls) through the Token Factory OpenAI-compatible API, as a tool-calling loop with a hard budget (tool calls and wall-clock) and a persisted, auditable record of each explanation (model, prompt version, tool calls, citations). Nemotron 3 Ultra is configurable for heavier reasoning.
 - **Engine-verified claims.** The agent finishes with a typed `submit_answer` (prose + claims). Relationship claims are adjudicated by the engine (`get_service`), and only verified claims can produce a "show on map" target.
 - **Static analysis engine (Lain).** Provides the federated, multi-repo code graph and service/contract bindings, with the distinction between deterministic and heuristic bindings that the map preserves.
-- **Stack.** TypeScript, Fastify, SQLite, React, Cytoscape (compound nodes) with our own stable layout, an MCP server for coding agents, ~1,400 tests.
+- **Web search through Tavily.** For general technical questions the investigator can call a `web_search` tool (Tavily), official documentation first; what it reads is indexed like repo docs, so a quote is checked against what the model actually saw.
+- **Stack.** TypeScript, Fastify, SQLite, React, Cytoscape (compound nodes) with our own stable layout, an MCP server for coding agents, ~2,200 tests.
 
 ## Challenges
 Keeping the model honest. Early on the investigator "rediscovered" findings the engine already had and sometimes promoted an inference to a fact. We changed the contract: the engine's findings go in, the model explains by id, the backend composes every fact, and anything the model claims is re-checked. We also had to make a large graph readable: lazy loading, roll-up of collapsed nodes into counted relationships, and progressive disclosure of dense edges.
@@ -38,10 +40,20 @@ Cross-org "what changed this week" digests from merged PRs; ownership/domain met
 
 ## Nebius / NVIDIA usage
 - NVIDIA Nemotron 3 Super and Nemotron 3.5 Lightning (Ultra configurable), served via **Nebius Token Factory**.
-- Deployed on **Nebius AI Cloud**. <!-- confirm: Serverless Endpoint / VM -->
+- Model calls (investigator, claim checking, PR explanations) go to Nemotron on **Nebius Token Factory**.
+- The demo itself is hosted on **Fly.io** (one machine: Parallax plus two Lain engines). We did not host it on Nebius AI Cloud: the hackathon credits cover Token Factory, not compute.
+- The demo shows two NVIDIA stacks analysed from public GitHub repos at pinned commits: Cluster A (OpenShell, NemoClaw, NeMo-Fabric) and Cluster B (NeMo Agent Toolkit, its UI and examples).
 
 ## Feedback on Nebius Token Factory and NVIDIA tools
 <!-- Fill with your real experience before submitting — see docs/hackathon/feedback-notes.md for prompts. -->
 
 ## Testing instructions
-Open: `<DEMO_URL>/orgs/ws_saleor?token=<READ_ONLY_TOKEN>` (read-only; signs you in automatically). If prompted for an access token, paste `<READ_ONLY_TOKEN>`. Try: *"Which services consume the checkout API, and from which repos?"* then click **Show on map**.
+Open: `https://marbled-river-9619.fly.dev/orgs/ws_cluster_a?token=<READ_ONLY_TOKEN>` (read-only; signs you in automatically; Cluster B is `/orgs/ws_cluster_b`). If prompted for an access token, paste `<READ_ONLY_TOKEN>`.
+
+Try, in this order:
+1. Ask: *"Which services consume the OpenShell gRPC gateway, and from which repos?"*, then click **Show on map**. Every relationship in the answer is marked verified, supported or unverifiable by the engine.
+2. Ask: *"According to the official gRPC documentation, what is server reflection, and which of our services would expose it?"* This one uses web search (Tavily) and cites the official page.
+3. **Query** (sidebar or the Query toggle in the ask bar): it opens on "HTTP client calls by repo"; run it, then try "gRPC call sites into each service" on Cluster A.
+4. **Coverage**: per-repo index health and the blind spots the engine reports.
+
+The machine can take about a minute to answer the first request after a restart.

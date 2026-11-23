@@ -121,11 +121,14 @@ For resource-constrained installs, `install.sh` passes `LAIN_DISABLE_LSP`, `LAIN
 
 **Live demo and access.** The demo URL and a read-only access link are in the
 "testing instructions" of the Devpost submission. The link looks like
-`https://<demo-host>/orgs/ws_saleor?token=<read-only-token>`: it signs you in,
+`https://<demo-host>/orgs/ws_cluster_a?token=<read-only-token>`: it signs you in,
 removes the token from the address bar, and opens the architecture map of
-[Saleor](https://github.com/saleor/saleor) (an open-source multi-repo
-e-commerce platform: API, dashboard, storefront). Without the link the app asks
-for an access token. The token is **read-only**: you can explore the map and ask
+Cluster A: NVIDIA's [OpenShell](https://github.com/NVIDIA/OpenShell) gRPC gateway with
+its consumers [NemoClaw](https://github.com/NVIDIA/NemoClaw) and
+[NeMo-Fabric](https://github.com/NVIDIA/NeMo-Fabric). Cluster B
+(`/orgs/ws_cluster_b`) is the [NeMo Agent Toolkit](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
+HTTP stack with its UI and examples. Both are analysed from public repos at pinned
+commits. Without the link the app asks for an access token. The token is **read-only**: you can explore the map and ask
 questions, but you cannot rebuild the graph or change workspaces.
 
 **Three-minute tour**
@@ -139,11 +142,15 @@ questions, but you cannot rebuild the graph or change workspaces.
    across repos, with how sure the engine is of each link. Click "View source" on
    a function or file.
 3. **Ask.** Open *Ask the architecture* and try *"Which services consume the
-   checkout API, and from which repos?"*. Nemotron (served on Nebius Token
+   OpenShell gRPC gateway, and from which repos?"*. Nemotron (served on Nebius Token
    Factory) investigates with the engine's tools. Every relationship it claims is
    re-checked by the engine; the answer shows how many were verified, and
    *Show on map* jumps to exactly the subgraph the engine backs.
-4. **Assess a PR.** *Assessments* shows the impact report of a pull request on
+4. **Query and Coverage.** *Query* runs read-only pipelines over the engine's graph with
+   the count after each step; *Coverage* shows per repo which analyses ran, what was
+   skipped and where the engine is blind, so "no impact" is never claimed over code it
+   could not read.
+5. **Assess a PR.** *Assessments* shows the impact report of a pull request on
    the other repos that consume what it changes.
 
 **Configuring repositories (no model involved).** In a workspace, the
