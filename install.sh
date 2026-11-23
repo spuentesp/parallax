@@ -61,6 +61,7 @@ WORKSPACE_ID="${WORKSPACE_ID:-ws_saleor}"
 
 DOMAIN="${DOMAIN:-}"
 NEBIUS_TOKEN="${NEBIUS_TOKEN:-}"
+TAVILY_TOKEN="${TAVILY_TOKEN:-}"
 LAIN_BIN="${LAIN_BIN:-}"      # path to a prebuilt lain binary (skips the Rust build)
 SKIP_DOCKER=0
 SKIP_LAIN_BUILD=0
@@ -101,11 +102,12 @@ usage() {
   cat <<'EOF'
 Install Parallax + Lain (release v0.16.0) + the Saleor demo on a fresh Linux box.
 
-  sudo ./install.sh --domain <name> [--nebius-token <token>]
+  sudo ./install.sh --domain <name> [--nebius-token <token>] [--tavily-token <token>]
 
 Options:
   --domain <name>          Public DNS name for the demo (or an IP.nip.io name).
                            Caddy gets the TLS certificate for it.
+  --tavily-token <token>   Tavily key for web search (optional; kept on re-runs).
   --nebius-token <token>   Nebius Token Factory key. Without it the structural
                            analysis still works; the investigator does not.
   --lain-bin <path>        Use this lain binary instead of downloading the release.
@@ -117,7 +119,7 @@ Options:
   --skip-build             Do not rebuild the container image.
   -y, --yes                Never prompt; use the values from the environment.
 
-Environment overrides: DOMAIN, NEBIUS_TOKEN, LAIN_VERSION, LAIN_FROM_SOURCE,
+Environment overrides: DOMAIN, NEBIUS_TOKEN, TAVILY_TOKEN, LAIN_VERSION, LAIN_FROM_SOURCE,
 LAIN_BRANCH, LAIN_PORT, LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP,
 LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT, LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR,
 WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.16.0);
@@ -133,6 +135,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --nebius-token) NEBIUS_TOKEN="${2:-}"; shift 2 ;;
+    --tavily-token) TAVILY_TOKEN="${2:-}"; shift 2 ;;
     --lain-bin) LAIN_BIN="${2:-}"; shift 2 ;;
     --keep-extra-workspaces) KEEP_EXTRA_WORKSPACES=1; shift ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
@@ -642,6 +645,14 @@ if [[ -z "$NEBIUS_TOKEN" ]]; then
   fi
 fi
 
+# Web search (Tavily) is optional; keep the key across re-runs like the model credential.
+if [[ -z "$TAVILY_TOKEN" ]]; then
+  TAVILY_TOKEN="$(existing_env_value TAVILY_TOKEN)"
+  if [[ -n "$TAVILY_TOKEN" ]]; then
+    ok "reusing the Tavily token from the existing $ENV_FILE"
+  fi
+fi
+
 if [[ -f "$ENV_FILE" ]]; then
   cp "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
   warn "backed up the previous $ENV_FILE"
@@ -664,6 +675,10 @@ PARALLAX_TOKENS='$TOKENS_JSON'
 # Nebius Token Factory credential (the investigator). Empty means the model
 # features are off and the investigator reports failed:no_model_configured.
 NEBIUS_TOKEN=$NEBIUS_TOKEN
+
+# Tavily key for the web_search tool (official docs next to what the engine found).
+# Empty means the tool is not offered to the model.
+TAVILY_TOKEN=$TAVILY_TOKEN
 
 LAIN_ADAPTER=real
 LAIN_URL=http://127.0.0.1:$LAIN_PORT/mcp

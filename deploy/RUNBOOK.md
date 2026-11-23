@@ -15,6 +15,7 @@ Goal: a public, **locked** demo. Visitors see only an access-token screen; judge
 - A VM (Nebius AI Cloud, Ubuntu 24.04 (the Lain release binary needs glibc 2.39; 22.04 forces a source build), ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
 - A DNS name pointing at it (Caddy gets the certificate automatically). If you only have an IP, use a `nip.io` name such as `1-2-3-4.nip.io`.
 - A Nebius Token Factory key (`NEBIUS_TOKEN`).
+- Optional: a Tavily key (`TAVILY_TOKEN`, `--tavily-token`) for the web-search tool. Without it the tool is not offered to the model. `install.sh` keeps it across re-runs.
 
 ## 1. Install Docker and Git
 ```bash
