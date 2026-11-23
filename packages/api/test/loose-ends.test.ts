@@ -338,7 +338,12 @@ describe('classifyByRule — Rust std methods are not RPCs', () => {
 
 describe('classifyByRule — engine reason not_a_call (Lain 0.16)', () => {
   it('maps it to the not_a_call category', () => {
-    const a = classifyByRule({ path: 'src/a.ts', kind: 'unresolved', reason: 'not_a_call', detail: {} });
+    const a = classifyByRule({
+      path: 'src/a.ts',
+      kind: 'unresolved',
+      reason: 'not_a_call',
+      detail: {},
+    });
     expect(a?.category).toBe('not_a_call');
     expect(a?.source).toBe('rule');
   });

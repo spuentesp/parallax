@@ -164,10 +164,9 @@ export function MatrixLens({
               between them; blocks on the diagonal are inside one repo.
             </div>
             <div className="ml-auto flex items-center gap-3">
-              <div
-                role="group"
+              <fieldset
                 aria-label="Order"
-                className="flex items-center gap-1.5 text-xs text-muted"
+                className="m-0 flex items-center gap-1.5 border-0 p-0 text-xs text-muted"
               >
                 <span>Order</span>
                 {(['cluster', 'name'] as const).map((o) => (
@@ -185,7 +184,7 @@ export function MatrixLens({
                     {o}
                   </button>
                 ))}
-              </div>
+              </fieldset>
               <div className="flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5 text-xs">
                 {(['repos', 'services'] as const).map((l) => (
                   <button
