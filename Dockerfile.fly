@@ -31,9 +31,11 @@ COPY deploy/fly/repos-a.yaml deploy/fly/repos-b.yaml /repos/
 ENV LAIN_GIT_SIDECAR_BIN=/usr/local/bin/lain-git-sidecar \
     LAIN_DISABLE_FILE_WATCHER=1 LAIN_DISABLE_COMMIT_SYNC=1
 
-# One engine per cluster, so each workspace sees only its own repos. Indexed once at build time; the graphs
-# land in /lain-data-a and /lain-data-b, outside the /data volume (which would hide them).
-RUN lain reindex --config /repos/repos-a.yaml && lain reindex --config /repos/repos-b.yaml
+# One engine per cluster, so each workspace sees only its own repos. Each runs to completion once here so it
+# publishes its startup checkpoint; the graphs land in /lain-data-a and /lain-data-b (outside the /data volume,
+# which would hide them). A cold start on Fly then restores them instead of re-indexing.
+COPY deploy/fly/bake.sh /usr/local/bin/bake.sh
+RUN bake.sh
 
 WORKDIR /app
 COPY . .
