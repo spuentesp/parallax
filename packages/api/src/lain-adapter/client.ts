@@ -219,9 +219,14 @@ export class RealLainAdapter implements LainAdapter {
       try {
         parsed = JSON.parse(envelope.content[0].text) as Record<string, unknown>;
       } catch {
+        // Un rechazo del motor llega como texto plano ("Error: Invalid argument: ...") con
+        // sus razones: se conserva en vez de reducirlo a "unparseable".
+        const text = envelope.content[0].text.trim();
         throw LainCallError.parse({
           code: 'LainUnavailable',
-          message: `lain returned unparseable content[0].text for ${tool}`,
+          message: text.startsWith('Error:')
+            ? `lain rejected ${tool}: ${text.slice('Error:'.length).trim().slice(0, 400)}`
+            : `lain returned unparseable content[0].text for ${tool}`,
         });
       }
     }

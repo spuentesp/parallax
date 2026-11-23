@@ -24,6 +24,8 @@ export type QueryGraphOp = z.infer<typeof QueryGraphOp>;
 
 export const QueryGraphSpec = z.object({
   ops: z.array(QueryGraphOp).min(1),
+  // Desde 0.16: el motor devuelve `explain`, los conteos de nodos y aristas tras cada op.
+  explain: z.boolean().optional(),
 });
 export type QueryGraphSpec = z.infer<typeof QueryGraphSpec>;
 

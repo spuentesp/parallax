@@ -1,0 +1,754 @@
+{
+ "saleor": {
+  "group": {
+   "count": 315,
+   "edges": [
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "saleor-dashboard:Function:src/announcements/queries.ts:graphql-call%3Aquery%3Ashop:3",
+     "id": "saleor-dashboard:Function:src/announcements/queries.ts:graphql-call%3Aquery%3Ashop:3->a2ae6305-1f52-5e2c-b68d-aac2e2aaea2c:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "a2ae6305-1f52-5e2c-b68d-aac2e2aaea2c",
+     "type": "Binds"
+    },
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "saleor-dashboard:Function:src/attributes/mutations.ts:graphql-call%3Amutation%3AattributeBulkDelete:3",
+     "id": "saleor-dashboard:Function:src/attributes/mutations.ts:graphql-call%3Amutation%3AattributeBulkDelete:3->a4865e84-973d-59a2-9a27-510c1e791861:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "a4865e84-973d-59a2-9a27-510c1e791861",
+     "type": "Binds"
+    }
+   ],
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 636,
+     "op": "find"
+    },
+    {
+     "edges": 636,
+     "nodes": 315,
+     "op": "connect"
+    },
+    {
+     "edges": 636,
+     "nodes": 315,
+     "op": "group"
+    },
+    {
+     "edges": 636,
+     "nodes": 315,
+     "op": "limit"
+    }
+   ],
+   "groups": [
+    {
+     "count": 636,
+     "key": "saleor-api",
+     "nodes": [
+      {
+       "id": "0b7fc3e7-9537-50aa-9337-6ff68860441f",
+       "line_end": 22783,
+       "line_start": 22783,
+       "name": "mutation:staffCreate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      },
+      {
+       "id": "c9c33ff0-96fc-5a5b-bda0-117251ee401d",
+       "line_end": 22796,
+       "line_start": 22796,
+       "name": "mutation:staffUpdate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 37563,
+    "matched_before_limit": 1,
+    "nodes_visited": 951
+   },
+   "nodes": [
+    {
+     "id": "0b7fc3e7-9537-50aa-9337-6ff68860441f",
+     "line_end": 22783,
+     "line_start": 22783,
+     "name": "mutation:staffCreate",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    },
+    {
+     "id": "c9c33ff0-96fc-5a5b-bda0-117251ee401d",
+     "line_end": 22796,
+     "line_start": 22796,
+     "name": "mutation:staffUpdate",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    }
+   ],
+   "occupancy": {
+    "active_agents": []
+   },
+   "paths": [
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffCreate:3",
+       "id": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffCreate:3->0b7fc3e7-9537-50aa-9337-6ff68860441f:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "0b7fc3e7-9537-50aa-9337-6ff68860441f",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffCreate:3",
+       "line_start": 3,
+       "name": "graphql-call:mutation:staffCreate",
+       "path": "src/staff/mutations.ts",
+       "repo_id": "saleor-dashboard",
+       "type": "Function"
+      },
+      {
+       "id": "0b7fc3e7-9537-50aa-9337-6ff68860441f",
+       "line_end": 22783,
+       "line_start": 22783,
+       "name": "mutation:staffCreate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    },
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffUpdate:16",
+       "id": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffUpdate:16->c9c33ff0-96fc-5a5b-bda0-117251ee401d:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "c9c33ff0-96fc-5a5b-bda0-117251ee401d",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "saleor-dashboard:Function:src/staff/mutations.ts:graphql-call%3Amutation%3AstaffUpdate:16",
+       "line_start": 16,
+       "name": "graphql-call:mutation:staffUpdate",
+       "path": "src/staff/mutations.ts",
+       "repo_id": "saleor-dashboard",
+       "type": "Function"
+      },
+      {
+       "id": "c9c33ff0-96fc-5a5b-bda0-117251ee401d",
+       "line_end": 22796,
+       "line_start": 22796,
+       "name": "mutation:staffUpdate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ]
+  },
+  "nodes": {
+   "count": 8,
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 8,
+     "op": "find"
+    },
+    {
+     "edges": 0,
+     "nodes": 8,
+     "op": "limit"
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 4780,
+    "matched_before_limit": 8,
+    "nodes_visited": 8
+   },
+   "nodes": [
+    {
+     "id": "71f6142d-4d24-5962-8981-2a503164b2ed",
+     "line_start": 776,
+     "name": "order_fulfillment",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "08ba837f-78f3-5a83-9f7a-de73004a4124",
+     "line_start": 856,
+     "name": "order_fulfillmentline",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "1ef4ef0c-967c-5dd2-b414-8def4599a527",
+     "line_start": 109,
+     "name": "order_order",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "5f6b1042-86bc-598d-b1e8-83a05de07c87",
+     "line_start": 893,
+     "name": "order_orderevent",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "1c73ca2f-0392-5655-b456-8f707ea35d66",
+     "line_start": 493,
+     "name": "order_ordereventdiscountobject",
+     "path": "saleor/graphql/order/types.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "b5fb68fe-9677-55dd-9e61-30a96966674a",
+     "line_start": 940,
+     "name": "order_ordergrantedrefund",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "fb336d42-a22c-54d7-a093-9b0a2249f489",
+     "line_start": 992,
+     "name": "order_ordergrantedrefundline",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    },
+    {
+     "id": "9eb405c1-e59b-5206-9201-e667ee1373fc",
+     "line_start": 567,
+     "name": "order_orderline",
+     "path": "saleor/order/models.py",
+     "repo_id": "saleor",
+     "type": "Table"
+    }
+   ],
+   "occupancy": {
+    "active_agents": []
+   }
+  }
+ },
+ "saleor-dashboard": {
+  "group": {
+   "count": 302,
+   "edges": [
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "00119b92-de64-5d67-b144-073db86b88aa",
+     "id": "00119b92-de64-5d67-b144-073db86b88aa->saleor:Module:saleor/graphql/schema.graphql:mutation%3AdraftOrderCreate:19829:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AdraftOrderCreate:19829",
+     "type": "Binds"
+    },
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "0069c7bd-20f1-5ca2-b7eb-44abe9a6d62a",
+     "id": "0069c7bd-20f1-5ca2-b7eb-44abe9a6d62a->saleor:Module:saleor/graphql/schema.graphql:query%3Aorder:802:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "saleor:Module:saleor/graphql/schema.graphql:query%3Aorder:802",
+     "type": "Binds"
+    }
+   ],
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 575,
+     "op": "find"
+    },
+    {
+     "edges": 573,
+     "nodes": 302,
+     "op": "connect"
+    },
+    {
+     "edges": 573,
+     "nodes": 302,
+     "op": "group"
+    },
+    {
+     "edges": 573,
+     "nodes": 302,
+     "op": "limit"
+    }
+   ],
+   "groups": [
+    {
+     "count": 573,
+     "key": "saleor-api",
+     "nodes": [
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffCreate:22783",
+       "line_end": 22783,
+       "line_start": 22783,
+       "name": "mutation:staffCreate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffUpdate:22796",
+       "line_end": 22796,
+       "line_start": 22796,
+       "name": "mutation:staffUpdate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 37392,
+    "matched_before_limit": 1,
+    "nodes_visited": 877
+   },
+   "nodes": [
+    {
+     "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffCreate:22783",
+     "line_end": 22783,
+     "line_start": 22783,
+     "name": "mutation:staffCreate",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    },
+    {
+     "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffUpdate:22796",
+     "line_end": 22796,
+     "line_start": 22796,
+     "name": "mutation:staffUpdate",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    }
+   ],
+   "occupancy": {
+    "active_agents": []
+   },
+   "paths": [
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "3dfe3f15-9573-5c30-a4f5-1cd9f1aa891c",
+       "id": "3dfe3f15-9573-5c30-a4f5-1cd9f1aa891c->saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffCreate:22783:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffCreate:22783",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "3dfe3f15-9573-5c30-a4f5-1cd9f1aa891c",
+       "line_start": 3,
+       "name": "graphql-call:mutation:staffCreate",
+       "path": "src/staff/mutations.ts",
+       "repo_id": "saleor-dashboard",
+       "type": "Function"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffCreate:22783",
+       "line_end": 22783,
+       "line_start": 22783,
+       "name": "mutation:staffCreate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    },
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "a7cd07cd-47cc-5d8c-891d-c4ab5b22c594",
+       "id": "a7cd07cd-47cc-5d8c-891d-c4ab5b22c594->saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffUpdate:22796:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffUpdate:22796",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "a7cd07cd-47cc-5d8c-891d-c4ab5b22c594",
+       "line_start": 16,
+       "name": "graphql-call:mutation:staffUpdate",
+       "path": "src/staff/mutations.ts",
+       "repo_id": "saleor-dashboard",
+       "type": "Function"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AstaffUpdate:22796",
+       "line_end": 22796,
+       "line_start": 22796,
+       "name": "mutation:staffUpdate",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ]
+  },
+  "nodes": {
+   "count": 0,
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 0,
+     "op": "find"
+    },
+    {
+     "edges": 0,
+     "nodes": 0,
+     "op": "limit"
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 3489,
+    "matched_before_limit": 0,
+    "nodes_visited": 0
+   },
+   "nodes": [],
+   "occupancy": {
+    "active_agents": []
+   }
+  }
+ },
+ "storefront": {
+  "group": {
+   "count": 27,
+   "edges": [
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "01b8a743-4284-5e2c-b1da-1cfe57f4225a",
+     "id": "01b8a743-4284-5e2c-b1da-1cfe57f4225a->saleor:Module:saleor/graphql/schema.graphql:query%3Apages:702:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "saleor:Module:saleor/graphql/schema.graphql:query%3Apages:702",
+     "type": "Binds"
+    },
+    {
+     "confidence": 1.0,
+     "detail": {
+      "route_match": "Exact",
+      "stripped_prefix": null
+     },
+     "from": "033eb0b2-448d-56e6-8063-88dd19c46368",
+     "id": "033eb0b2-448d-56e6-8063-88dd19c46368->saleor:Module:saleor/graphql/schema.graphql:mutation%3AcheckoutLinesDelete:21431:Binds",
+     "kind": "static",
+     "provenance": {
+      "Static": {
+       "source": "Regex"
+      }
+     },
+     "source": "Regex",
+     "to": "saleor:Module:saleor/graphql/schema.graphql:mutation%3AcheckoutLinesDelete:21431",
+     "type": "Binds"
+    }
+   ],
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 63,
+     "op": "find"
+    },
+    {
+     "edges": 63,
+     "nodes": 27,
+     "op": "connect"
+    },
+    {
+     "edges": 63,
+     "nodes": 27,
+     "op": "group"
+    },
+    {
+     "edges": 63,
+     "nodes": 27,
+     "op": "limit"
+    }
+   ],
+   "groups": [
+    {
+     "count": 63,
+     "key": "saleor-api",
+     "nodes": [
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Ame:1679",
+       "line_end": 1679,
+       "line_start": 1679,
+       "name": "query:me",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Apage:683",
+       "line_end": 683,
+       "line_start": 683,
+       "name": "query:page",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 1845,
+    "matched_before_limit": 1,
+    "nodes_visited": 90
+   },
+   "nodes": [
+    {
+     "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Ame:1679",
+     "line_end": 1679,
+     "line_start": 1679,
+     "name": "query:me",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    },
+    {
+     "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Apage:683",
+     "line_end": 683,
+     "line_start": 683,
+     "name": "query:page",
+     "path": "saleor/graphql/schema.graphql",
+     "repo_id": "saleor",
+     "type": "Module"
+    }
+   ],
+   "occupancy": {
+    "active_agents": []
+   },
+   "paths": [
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "531ff0c5-fa57-5ad0-934c-00376fd39b78",
+       "id": "531ff0c5-fa57-5ad0-934c-00376fd39b78->saleor:Module:saleor/graphql/schema.graphql:query%3Ame:1679:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "saleor:Module:saleor/graphql/schema.graphql:query%3Ame:1679",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "531ff0c5-fa57-5ad0-934c-00376fd39b78",
+       "line_start": 1,
+       "name": "graphql-call:query:me",
+       "path": "src/graphql/CurrentUserOrdersPaginated.graphql",
+       "repo_id": "storefront",
+       "type": "Function"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Ame:1679",
+       "line_end": 1679,
+       "line_start": 1679,
+       "name": "query:me",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    },
+    {
+     "edges": [
+      {
+       "confidence": 1.0,
+       "detail": {
+        "route_match": "Exact",
+        "stripped_prefix": null
+       },
+       "from": "47050f79-ea92-5d3e-9cc5-47976f7d44d8",
+       "id": "47050f79-ea92-5d3e-9cc5-47976f7d44d8->saleor:Module:saleor/graphql/schema.graphql:query%3Apage:683:Binds",
+       "kind": "static",
+       "provenance": {
+        "Static": {
+         "source": "Regex"
+        }
+       },
+       "source": "Regex",
+       "to": "saleor:Module:saleor/graphql/schema.graphql:query%3Apage:683",
+       "type": "Binds"
+      }
+     ],
+     "nodes": [
+      {
+       "id": "47050f79-ea92-5d3e-9cc5-47976f7d44d8",
+       "line_start": 1,
+       "name": "graphql-call:query:page",
+       "path": "src/graphql/PageGetBySlug.graphql",
+       "repo_id": "storefront",
+       "type": "Function"
+      },
+      {
+       "id": "saleor:Module:saleor/graphql/schema.graphql:query%3Apage:683",
+       "line_end": 683,
+       "line_start": 683,
+       "name": "query:page",
+       "path": "saleor/graphql/schema.graphql",
+       "repo_id": "saleor",
+       "type": "Module"
+      }
+     ]
+    }
+   ]
+  },
+  "nodes": {
+   "count": 0,
+   "explain": [
+    {
+     "edges": 0,
+     "nodes": 0,
+     "op": "find"
+    },
+    {
+     "edges": 0,
+     "nodes": 0,
+     "op": "limit"
+    }
+   ],
+   "legacy": false,
+   "meta": {
+    "exec_us": 402,
+    "matched_before_limit": 0,
+    "nodes_visited": 0
+   },
+   "nodes": [],
+   "occupancy": {
+    "active_agents": []
+   }
+  }
+ }
+}

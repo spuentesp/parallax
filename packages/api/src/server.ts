@@ -21,6 +21,7 @@ import { conversationRoutes } from './routes/conversations.js';
 import { coverageBreakdownRoutes } from './routes/coverage-breakdown.js';
 import { coverageLedgerRoutes } from './routes/coverage-ledger.js';
 import { docsRoutes } from './routes/docs.js';
+import { graphQueryRoutes } from './routes/graph-query.js';
 // API routes (all under /api/)
 import { healthRoutes } from './routes/health.js';
 import { implementationRoutes } from './routes/implementation.js';
@@ -75,6 +76,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(recommendationsRoutes);
   await app.register(coverageBreakdownRoutes);
   await app.register(coverageLedgerRoutes);
+  await app.register(graphQueryRoutes);
   await app.register(implementationRoutes);
   await app.register(docsRoutes);
   await app.register(officialDocsRoutes);
