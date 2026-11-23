@@ -90,10 +90,20 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
   Caddy (host mode, high port) proxies the API and web bundle. **Not tested:** `install.sh` itself, ports 80/443
   and certificates, a Docker (not podman) daemon. Port 8080 must be free on the VM.
 
+- **`install.sh` ran end to end in a throwaway Ubuntu 24.04 container (podman), exit 0, pin v0.16.0.** Real: apt
+  packages, release download and SHA256 check, **the 0.16.0 binary runs on 24.04** (glibc 2.39), the Saleor clones,
+  `repos.yaml`, the engine (no-systemd fallback) indexing all 3 repos, `.env` and token generation, the image
+  build, the seed and cleanup commands, the control script. Stubbed: `docker` (a logging stub; the image build and
+  compose were not real in that run, they were tested separately under podman, see above).
+- **FOUND and FIXED by that run:** the index wait parsed `/health/index-status` assuming `"id"` before `"health"`,
+  but Lain emits `{"health":"ready","id":"repo"}`; the `grep` never matched and, under `set -e` + `pipefail`,
+  the installer aborted at line 574 right after the engine started. Now order-independent and non-fatal.
+  (Likely hit on any Lain version; it was missed because earlier container runs never reached a live engine.)
+
 ### Still unverified, in order of risk
 
-- **`install.sh` end to end on a real VM:** systemd units, the relay, Docker, Caddy, workspace
-  seeding (not run on the workstation: it installs system packages and units). Only steps 1-6 ran in a container. (The RUNBOOK says the compose
+- **On a real VM (the only thing left):** systemd units (the container used the no-systemd fallback), a real Docker
+  daemon, Caddy on 80/443 with a certificate, and the public HTTPS URL. (The RUNBOOK says the compose
   stack was never tested either.)
 - **HTTP contracts on cluster A, 290 -> 66: explained (re-ran 0.15.0 and 0.16.0 on the same repos).** Not tests:
   the 49 test-path providers are identical in both. All 224 lost contracts are OpenShell `sdk/go` (275 providers),
