@@ -2,7 +2,15 @@
 
 Date: 2026-10-28. Lain **0.13.0** (live server loaded with every package: `list_packages` + `load_package` for each, then `tools/list`). Method and caveats at the end.
 
-## Update 2026-11-11: Lain 0.15.0 (latest release)
+## Update 2026-11-22: Lain 0.16.0 (latest release)
+
+Tool surface unchanged from 0.15.0 (100 tools, same required arguments). Measured, not read from release notes
+(empty). Fixed: live coverage ledger with sensors, `catch_all_route` in `check_binding`, SDL types in GraphQL
+contracts (all 448 Saleor GraphQL contracts carry one), glibc 2.39. New and additive: `provenance` on unresolved
+candidates, `ref` edges, `not_a_call` as an unresolved reason (Parallax maps it to "not a gap"). The federation
+graph schema went v5 → v7: `lain reindex` once on existing data dirs. Details: `docs/handoff-lain-0.16.md`.
+
+## Update 2026-11-11: Lain 0.15.0
 
 Verified against the release binary `v0.15.0` (`lain --version` → `lain 0.15.0`,
 `lain schema dump` → 100 tools; live server with every package loaded → 97 tools):

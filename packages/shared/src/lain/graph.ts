@@ -3,7 +3,7 @@ import { LainView } from './enums.js';
 
 // Tipos del grafo crudo de lain (paquetes raw/arch): query_graph,
 // describe_schema, get_code_snippet, explain_symbol y get_call_sites.
-// Verificados contra el binario de release v0.15.0.
+// Verificados contra el binario de release v0.16.0 (y v0.15.0).
 //
 // Divergencias motor ↔ docs/query-language.md de lain, verificadas en vivo
 // contra el fixture :9997:

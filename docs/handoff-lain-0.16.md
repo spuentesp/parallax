@@ -8,7 +8,7 @@ release notes are empty, so everything below was measured, not read from a chang
 
 0.16.0 is compatible with Parallax as it is today (every call parsed by Parallax's own client and
 Zod schemas, on two real federations) and fixes three of the items in `docs/lain-agent-report.md`.
-The installation still points at **v0.15.0**: nothing has been bumped yet.
+The pin was bumped to **v0.16.0** after the Saleor run passed (see below).
 
 ## What was verified (real 0.16.0 binary, SHA256-checked)
 
@@ -63,7 +63,7 @@ and a `service` filter on `list_unresolved` that now also matches candidate endp
    `install.sh` default 60) OpenShell and NemoClaw were marked Degraded and reported as `failed`
    with `error: null`. With 900 they indexed. Saleor indexed in about 2 minutes earlier on 0.15, so
    check that the demo VM is not at the edge.
-4. **Bump the pin** in `install.sh` (`LAIN_VERSION`, usage text, header comment), `README.md`,
+4. **Bump the pin (done after the Saleor run; `demo:lain` now runs `test/lain-demo.ts`)** in `install.sh` (`LAIN_VERSION`, usage text, header comment), `README.md`,
    `deploy/RUNBOOK.md`, `deploy/.env.demo.example`, `docs/lain-tooling-inventory.md`,
    `test/lain-0.15-demo.ts` (rename) and the `demo:lain` script in `package.json`. Do this only
    after step 1 passes.

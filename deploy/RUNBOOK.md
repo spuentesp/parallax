@@ -3,13 +3,13 @@
 Goal: a public, **locked** demo. Visitors see only an access-token screen; judges get a link that signs them in with a **read-only** token. Everything runs on one VM: Lain (analysis engine) on the host, Parallax + HTTPS (Caddy) in Docker.
 
 > **Automated:** `install.sh` in the repository root does all of this in one
-> command (Docker, the Lain v0.15.0 release binary, the demo repos, the
+> command (Docker, the Lain v0.16.0 release binary, the demo repos, the
 > engine service, `deploy/.env` with generated tokens, the compose stack and
 > the seeded workspace): `sudo ./install.sh --domain <name> --nebius-token <token>`.
 > This runbook is the manual path it follows — read it when something in the
 > script needs changing, or when you want to do a step by hand.
 
-> Tested locally (no Docker available in the dev environment): Lain 0.15.0 cold index of Saleor, the API + built web bundle against it, token generation, the sign-in link and read-only behaviour. **Not tested:** the Docker image and compose file themselves — do a dry run on the VM before the deadline.
+> Tested locally (no Docker available in the dev environment): Lain 0.16.0 cold index of Saleor, the API + built web bundle against it, token generation, the sign-in link and read-only behaviour. **Not tested:** the Docker image and compose file themselves — do a dry run on the VM before the deadline.
 
 ## 0. What you need
 - A VM (Nebius AI Cloud, Ubuntu 24.04 (the Lain release binary needs glibc 2.39; 22.04 forces a source build), ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
@@ -21,20 +21,20 @@ Goal: a public, **locked** demo. Visitors see only an access-token screen; judge
 curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgrp docker
 ```
 
-## 2. Lain 0.15.0 on the host
+## 2. Lain 0.16.0 on the host
 ```bash
 mkdir -p ~/lain && cd ~/lain
-gh release download v0.15.0 -R spuentesp/lain -p 'lain-0.15.0-x86_64-unknown-linux-gnu.tar.gz' -p SHA256SUMS
-grep x86_64-unknown-linux-gnu.tar.gz$ SHA256SUMS | sha256sum -c - && tar xzf lain-0.15.0-x86_64-unknown-linux-gnu.tar.gz
+gh release download v0.16.0 -R spuentesp/lain -p 'lain-0.16.0-x86_64-unknown-linux-gnu.tar.gz' -p SHA256SUMS
+grep x86_64-unknown-linux-gnu.tar.gz$ SHA256SUMS | sha256sum -c - && tar xzf lain-0.16.0-x86_64-unknown-linux-gnu.tar.gz
 ```
-> The v0.15.0 Linux release binary is linked against glibc 2.43; on Ubuntu
-> 22.04/24.04 it fails to start (`GLIBC_2.43 not found`). Check with
+> The v0.16.0 Linux release binary is linked against glibc 2.39: it runs on Ubuntu
+> 24.04 but not on 22.04 (`GLIBC_2.38 not found`). Check with
 > `~/lain/lain --version`; if it fails, build the tag from source
-> (`git clone --branch v0.15.0 https://github.com/spuentesp/lain && cargo build --release --locked --bin lain`),
+> (`git clone --branch v0.16.0 https://github.com/spuentesp/lain && cargo build --release --locked --bin lain`),
 > which is what `install.sh` does automatically.
 
-> Upgrading an existing data dir: 0.15.0 raises the federation graph schema
-> (v4 → v5), so run `~/lain/lain reindex --config ~/saleor/repos.yaml` once
+> Upgrading an existing data dir (for example from 0.15.x): 0.16.0 raises the federation
+> graph schema (v5 → v7) and refuses the old one, so run `~/lain/lain reindex --config ~/saleor/repos.yaml` once
 > after upgrading; it backs up `federated_graph.bin` to `.bak` and rebuilds.
 Clone the repos to analyse and describe them in `repos.yaml` (Saleor example):
 ```bash

@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { FindingClass, LainView } from './enums.js';
 
-// Contra la versión fijada del motor (lain 0.15.0, verificado en vivo contra
-// el binario de release v0.15.0): los *Args replican el inputSchema de
+// Contra la versión fijada del motor (lain 0.16.0, verificado en vivo contra
+// el binario de release v0.16.0): los *Args replican el inputSchema de
 // docs/lain-tool-schemas.json y las *Response describen el campo `data` del
 // envoltorio
 // { analyzer_version, api_version, data, meta, snapshot, view, reproducible }

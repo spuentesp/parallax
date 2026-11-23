@@ -6,7 +6,7 @@
 # What it puts on the box:
 #   1. System packages: git, build toolchain (for the Rust engine).
 #   2. Docker, if the machine has none.
-#   3. Lain — the pinned release binary (LAIN_VERSION, default v0.15.0) from
+#   3. Lain — the pinned release binary (LAIN_VERSION, default v0.16.0) from
 #      the GitHub releases of spuentesp/lain. Set LAIN_FROM_SOURCE=1 to build
 #      a branch (LAIN_BRANCH) from source with cargo instead.
 #   4. The Saleor demo repos (shallow clones) + the federation config.
@@ -35,7 +35,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$REPO_ROOT/deploy"
 
 LAIN_REPO_URL="${LAIN_REPO_URL:-https://github.com/spuentesp/lain.git}"
-LAIN_VERSION="${LAIN_VERSION:-v0.15.0}"   # release tag installed by default
+LAIN_VERSION="${LAIN_VERSION:-v0.16.0}"   # release tag installed by default
 LAIN_FROM_SOURCE="${LAIN_FROM_SOURCE:-0}" # 1 = build LAIN_BRANCH from source
 LAIN_BRANCH="${LAIN_BRANCH:-dev}"         # only used when LAIN_FROM_SOURCE=1
 LAIN_SRC_DIR="${LAIN_SRC_DIR:-/opt/lain/src}"
@@ -99,7 +99,7 @@ trap on_error ERR
 
 usage() {
   cat <<'EOF'
-Install Parallax + Lain (release v0.15.0) + the Saleor demo on a fresh Linux box.
+Install Parallax + Lain (release v0.16.0) + the Saleor demo on a fresh Linux box.
 
   sudo ./install.sh --domain <name> [--nebius-token <token>]
 
@@ -120,7 +120,7 @@ Options:
 Environment overrides: DOMAIN, NEBIUS_TOKEN, LAIN_VERSION, LAIN_FROM_SOURCE,
 LAIN_BRANCH, LAIN_PORT, LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP,
 LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT, LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR,
-WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.15.0);
+WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.16.0);
 LAIN_FROM_SOURCE=1 builds LAIN_BRANCH from source with cargo instead.
 EOF
 }
@@ -322,7 +322,7 @@ ok "Docker daemon is up"
 # 4. Lain: the pinned release binary by default, a source build on request
 # --------------------------------------------------------------------------
 
-LAIN_TAG="${LAIN_VERSION#/}"           # accept both v0.15.0 and 0.15.0
+LAIN_TAG="${LAIN_VERSION#/}"           # accept both v0.16.0 and 0.16.0
 LAIN_TAG="v${LAIN_TAG#v}"
 LAIN_VERSION_MARKER="$LAIN_BIN_DIR/.lain-version"
 
@@ -423,8 +423,8 @@ else
     tar -xzf "$workdir/$asset" -C "$workdir"
     install_lain_binary "$workdir/lain"
     rm -rf "$workdir"
-    # The release binary is linked against a recent glibc (2.43 for v0.15.0),
-    # newer than Ubuntu 22.04/24.04 ship. If it cannot start here, build the
+    # The release binary is linked against a recent glibc (2.39 for v0.16.0:
+    # Ubuntu 24.04 runs it, 22.04 does not). If it cannot start here, build the
     # same tag from source instead of leaving a binary that cannot run.
     if "$LAIN_BIN_DIR/lain" --version >/dev/null 2>&1; then
       printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
@@ -497,12 +497,13 @@ services:
 EOF
 ok "wrote $ENGINE_CONFIG"
 
-# 0.15.0 raises the federation graph schema (v4 → v5): an existing data dir
-# written by an older lain must be reindexed once (the old graph is backed up
+# A new Lain can raise the federation graph schema (0.15 -> 0.16 went v5 -> v7;
+# the new server refuses the old graph): an existing data dir written by an
+# older lain must be reindexed once (the old graph is backed up
 # to federated_graph.bin.bak by lain itself).
 if [[ -n "$PREV_LAIN_TAG" && "$PREV_LAIN_TAG" != "$LAIN_TAG" ]] \
    && [[ -f "$ENGINE_DATA_DIR/federated_graph.bin" ]]; then
-  warn "upgrading lain $PREV_LAIN_TAG → $LAIN_TAG: reindexing the existing graph (schema v4 → v5)"
+  warn "upgrading lain $PREV_LAIN_TAG → $LAIN_TAG: reindexing the existing graph (the graph schema changed)"
   "$LAIN_BIN_DIR/lain" reindex --config "$ENGINE_CONFIG" || \
     warn "reindex failed — run it by hand: lain reindex --config $ENGINE_CONFIG"
 fi
