@@ -98,7 +98,7 @@ await step('proven / inferred filters', async () => {
 await step('web-search ask', async () => {
   await page.goto(url(), { waitUntil: 'domcontentloaded' });
   await wait(8000);
-  await ask(WEB, /server reflection (is|allows|lets|enables)/i);
+  await ask(WEB, /Server reflection in|reflection (service|is|allows|lets)/i);
   await wait(6000);
 });
 
