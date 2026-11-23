@@ -30,7 +30,7 @@ export function Assessment(): React.ReactElement {
     <div className="p-6 space-y-6">
       <div>
         <Link to={`/orgs/${orgId ?? ''}`} className="text-xs text-accent">
-          ← Volver al hub de {orgId}
+          ← Back to the {orgId} map
         </Link>{' '}
         <Link
           to={`/orgs/${orgId ?? ''}/assessments`}
@@ -118,7 +118,7 @@ export function Assessment(): React.ReactElement {
         </h2>
         {report.evidence.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted">
-            Sin evidencia registrada para este informe.
+            No evidence recorded for this report.
           </div>
         ) : (
           <div className="rounded-xl border border-border bg-surface overflow-hidden">

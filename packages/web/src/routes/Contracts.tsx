@@ -77,11 +77,13 @@ export function Contracts(): React.ReactElement {
         <div className="flex items-baseline justify-between mb-2">
           <h2 className="font-semibold">Dependencies &amp; evidence</h2>
           <span className="text-xs text-muted">
-            Cada call-site abre el código en la vista del motor
+            Each call site opens the code in the engine view
           </span>
         </div>
         <DependencyList
-          edges={topo?.topology?.edges ?? []}
+          // Sólo dependencias reales: las aristas `contains` (un servicio EXPONE un endpoint)
+          // son estructura, no un consumo, y llenaban la lista con filas de 0 call-sites.
+          edges={(topo?.topology?.edges ?? []).filter((e) => e.kind === 'consumes')}
           loading={evidence.isPending}
           evidence={cited}
           onLoadEvidence={(refs) => {
