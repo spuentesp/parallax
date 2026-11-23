@@ -2,6 +2,7 @@
 # Clone the six NVIDIA repos at pinned commits into /repos (used by Dockerfile.fly).
 set -eu
 mkdir -p /repos && cd /repos
+export GIT_LFS_SKIP_SMUDGE=1
 fetch() { # fetch <name> <sha>
   git init -q "$1" && cd "$1"
   git remote add origin "https://github.com/NVIDIA/$1.git"
