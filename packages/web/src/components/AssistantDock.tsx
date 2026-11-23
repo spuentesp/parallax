@@ -28,6 +28,9 @@ import { useMediaQuery } from './useMediaQuery.js';
 // La conversación vive en el servidor y en la URL (?conv=): recargar o abrir el
 // enlace recupera el hilo.
 
+/** Una pregunta idéntica que llega por ?ask= dentro de esta ventana es un reenvío, no una pregunta nueva. */
+const ASK_DEDUPE_MS = 60_000;
+
 export function AssistantDock({
   workspaceId,
   docked = false,
@@ -141,18 +144,21 @@ export function AssistantDock({
   // Pregunta planteada desde otra pantalla (?ask=…, p. ej. "Ask about this pair"
   // en la matriz): se abre el chat, se envía una sola vez y se retira la URL.
   const askParam = params.get('ask');
-  const askSentRef = useRef<string | null>(null);
+  // Lo último enviado desde la URL y cuándo. `setSearchParams` con función parte de una foto vieja de la URL, así que
+  // otro cambio de parámetros (p. ej. ?conv= al llegar el hilo) puede volver a poner ?ask=. Se ignora la misma
+  // pregunta dentro de la ventana; pasada, volver a preguntarlo es una pregunta nueva.
+  const askSentRef = useRef<{ q: string; at: number } | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: handleSend cambia en cada render; el ref evita reenvíos.
   useEffect(() => {
-    if (!askParam) {
-      askSentRef.current = null;
-      return;
+    if (!askParam) return;
+    const last = askSentRef.current;
+    const repeat = last !== null && last.q === askParam && Date.now() - last.at < ASK_DEDUPE_MS;
+    if (!repeat) {
+      askSentRef.current = { q: askParam, at: Date.now() };
+      setOpenDocked(true);
+      setOpenFloating(true);
+      handleSend(askParam);
     }
-    if (askSentRef.current === askParam) return;
-    askSentRef.current = askParam;
-    setOpenDocked(true);
-    setOpenFloating(true);
-    handleSend(askParam);
     setParams(
       (prev) => {
         const next = new URLSearchParams(prev);
