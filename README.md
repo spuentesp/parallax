@@ -59,9 +59,9 @@ cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ## Install on a machine (one command)
 
 `install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
-the [lain](https://github.com/spuentesp/lain) **release binary** (v0.16.0,
+the [lain](https://github.com/spuentesp/lain) **release binary** (v0.16.1,
 SHA256-verified; set `LAIN_FROM_SOURCE=1` to build a branch from source
-instead; if the binary needs a newer glibc than the machine has, as v0.16.0
+instead; if the binary needs a newer glibc than the machine has, as v0.16.1
 does on Ubuntu 22.04, the script builds the same tag from source), the Saleor demo repos, the engine as a service, the HTTPS front end
 (Caddy), and a `deploy/.env` with generated tokens.
 
@@ -82,7 +82,7 @@ pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
 The api uses `LAIN_ADAPTER=mock` by default. Use
-[Lain v0.16.0](https://github.com/spuentesp/lain/releases/tag/v0.16.0) (the
+[Lain v0.16.1](https://github.com/spuentesp/lain/releases/tag/v0.16.1) (the
 latest release) for the GraphQL provider and binding fixes, the indexing performance
 and startup cache, the live coverage ledger, and the `query_graph` pipeline the Query
 page uses. Parallax does not hard-pin the engine's `analyzer_version` string at boot;
@@ -96,7 +96,7 @@ lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
 The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
-is superseded: v0.16.0 includes that work, so no patch is needed. On upgrade the
+is superseded: v0.16.1 includes that work, so no patch is needed. On upgrade the
 federation graph schema changes (v4 → v5 in 0.15, v5 → v7 in 0.16): run `lain reindex`
 once per data dir (the server refuses the old graph and says so), and re-prepare
 snapshots — `diff_contracts` refuses base/head recorded under a different
@@ -237,7 +237,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-0.16.0 pnpm gate:graphql   # expects analyzer_version 0.16.0 (override: LAIN_EXPECTED_ANALYZER_VERSION)
+LAIN_BIN=/path/to/lain-0.16.1 pnpm gate:graphql   # expects analyzer_version 0.16.1 (override: LAIN_EXPECTED_ANALYZER_VERSION)
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the

@@ -1,4 +1,4 @@
-# Fly.io app for the hackathon demo (the two NVIDIA clusters). Build: Dockerfile.fly (Parallax 0.2.0 + Lain 0.16.0).
+# Fly.io app for the hackathon demo (the two NVIDIA clusters). Build: Dockerfile.fly (Parallax 0.2.0 + Lain 0.16.1).
 app = 'marbled-river-9619'
 primary_region = 'gru'
 

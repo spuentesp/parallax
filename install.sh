@@ -6,7 +6,7 @@
 # What it puts on the box:
 #   1. System packages: git, build toolchain (for the Rust engine).
 #   2. Docker, if the machine has none.
-#   3. Lain — the pinned release binary (LAIN_VERSION, default v0.16.0) from
+#   3. Lain — the pinned release binary (LAIN_VERSION, default v0.16.1) from
 #      the GitHub releases of spuentesp/lain. Set LAIN_FROM_SOURCE=1 to build
 #      a branch (LAIN_BRANCH) from source with cargo instead.
 #   4. The Saleor demo repos (shallow clones) + the federation config.
@@ -35,7 +35,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$REPO_ROOT/deploy"
 
 LAIN_REPO_URL="${LAIN_REPO_URL:-https://github.com/spuentesp/lain.git}"
-LAIN_VERSION="${LAIN_VERSION:-v0.16.0}"   # release tag installed by default
+LAIN_VERSION="${LAIN_VERSION:-v0.16.1}"   # release tag installed by default
 LAIN_FROM_SOURCE="${LAIN_FROM_SOURCE:-0}" # 1 = build LAIN_BRANCH from source
 LAIN_BRANCH="${LAIN_BRANCH:-dev}"         # only used when LAIN_FROM_SOURCE=1
 LAIN_SRC_DIR="${LAIN_SRC_DIR:-/opt/lain/src}"
@@ -100,7 +100,7 @@ trap on_error ERR
 
 usage() {
   cat <<'EOF'
-Install Parallax + Lain (release v0.16.0) + the Saleor demo on a fresh Linux box.
+Install Parallax + Lain (release v0.16.1) + the Saleor demo on a fresh Linux box.
 
   sudo ./install.sh --domain <name> [--nebius-token <token>] [--tavily-token <token>]
 
@@ -122,7 +122,7 @@ Options:
 Environment overrides: DOMAIN, NEBIUS_TOKEN, TAVILY_TOKEN, LAIN_VERSION, LAIN_FROM_SOURCE,
 LAIN_BRANCH, LAIN_PORT, LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP,
 LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT, LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR,
-WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.16.0);
+WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.16.1);
 LAIN_FROM_SOURCE=1 builds LAIN_BRANCH from source with cargo instead.
 EOF
 }
@@ -325,7 +325,7 @@ ok "Docker daemon is up"
 # 4. Lain: the pinned release binary by default, a source build on request
 # --------------------------------------------------------------------------
 
-LAIN_TAG="${LAIN_VERSION#/}"           # accept both v0.16.0 and 0.16.0
+LAIN_TAG="${LAIN_VERSION#/}"           # accept both v0.16.1 and 0.16.1
 LAIN_TAG="v${LAIN_TAG#v}"
 LAIN_VERSION_MARKER="$LAIN_BIN_DIR/.lain-version"
 
@@ -426,7 +426,7 @@ else
     tar -xzf "$workdir/$asset" -C "$workdir"
     install_lain_binary "$workdir/lain"
     rm -rf "$workdir"
-    # The release binary is linked against a recent glibc (2.39 for v0.16.0:
+    # The release binary is linked against a recent glibc (2.39 for v0.16.1:
     # Ubuntu 24.04 runs it, 22.04 does not). If it cannot start here, build the
     # same tag from source instead of leaving a binary that cannot run.
     if "$LAIN_BIN_DIR/lain" --version >/dev/null 2>&1; then

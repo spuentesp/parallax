@@ -1,7 +1,8 @@
 # Parallax 0.2.0
 
-Date: 2026-11-23. Engine: **Lain v0.16.0** (was v0.15.0). Measurements behind the engine claims are in
-`docs/lain-0.16-remeasure.md`; the install handoff is `docs/handoff-lain-0.16.md`.
+Date: 2026-11-23. Engine: **Lain v0.16.1** (was v0.15.0). The measurements behind the engine claims were taken on
+v0.16.0 (`docs/lain-0.16-remeasure.md`); v0.16.1 adds `lain prewarm` and a log line for a missed startup checkpoint,
+and `gate:graphql` passes on it. The install pins, the README and the Fly image use v0.16.1; the install handoff is `docs/handoff-lain-0.16.md`.
 
 ## What is new
 
