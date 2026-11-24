@@ -65,6 +65,17 @@ const TICKETS = [
       'After rpc openshell.v1.OpenShell/UpdateConfig, rpc openshell.v1.OpenShell/GetProviderProfile can return the previous profile for a few seconds.',
       'The nemoclaw service reads provider profiles through its OpenShell adapter, so this may surface as flaky provider setup there.',
     ],
+    // A real, merged NemoClaw PR that edits the OpenShell adapter (code-only: no contract change).
+    pr: 'https://github.com/NVIDIA/NemoClaw/pull/13812',
+  },
+  {
+    type: 'Story',
+    summary: "Keep pool sandbox sessions on their supervisor's gateway",
+    body: [
+      'Pool sandbox sessions should stay on the gateway of their supervisor. We expect to change rpc openshell.v1.OpenShell/ConnectSupervisor in the openshell-gateway service.',
+    ],
+    // A real, merged OpenShell PR that changes gateway contracts (it touches more than the ticket names).
+    pr: 'https://github.com/NVIDIA/OpenShell/pull/5052',
   },
   {
     type: 'Task',
@@ -106,21 +117,35 @@ const typeId = Object.fromEntries((types.issueTypes ?? types.values ?? []).map((
 const existing = await call(
   'POST',
   '/rest/api/3/search/jql',
-  { jql: `project = ${PROJECT}`, fields: ['summary'], maxResults: 100 },
+  { jql: `project = ${PROJECT}`, fields: ['summary', 'description'], maxResults: 100 },
 );
-const have = new Set((existing.issues ?? []).map((i) => i.fields.summary));
+const have = new Map((existing.issues ?? []).map((i) => [i.fields.summary, i]));
+
+// Plain text of an Atlassian Document Format value (enough to look for a URL).
+const adfText = (node) =>
+  !node ? '' : node.text ?? (node.content ?? []).map(adfText).join(' ');
+
+// The description for a ticket: its body, plus the pull request it links when there is one.
+const describe = (t) => adf(...t.body, ...(t.pr ? [`Pull request: ${t.pr}`] : []));
 
 let epicKey;
 for (const t of TICKETS) {
-  if (have.has(t.summary)) {
-    console.log(`skip   ${t.summary}`);
+  const found = have.get(t.summary);
+  if (found) {
+    // Idempotent update: add the pull request link to a ticket that exists without it.
+    if (t.pr && !adfText(found.fields.description).includes(t.pr)) {
+      await call('PUT', `/rest/api/3/issue/${found.key}`, { fields: { description: describe(t) } });
+      console.log(`update ${found.key}  linked ${t.pr}`);
+    } else {
+      console.log(`skip   ${t.summary}`);
+    }
     continue;
   }
   const fields = {
     project: { key: PROJECT },
     issuetype: { id: typeId[t.type] },
     summary: t.summary,
-    description: adf(...t.body),
+    description: describe(t),
     labels: ['parallax-demo'],
   };
   if (t.type !== 'Epic' && epicKey && /CreateSandbox|ListSandboxes/.test(t.summary)) {
