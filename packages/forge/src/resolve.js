@@ -31,12 +31,16 @@ const PATTERNS = [
 // Words that look like identifiers but are not architecture. Kept short on purpose.
 const STOPWORDS = new Set(['e2e-test', 'follow-up', 'work-in-progress', 'built-in', 'read-only']);
 
+// Links carry repository names in their path (github.com/NVIDIA/OpenShell/pull/1), which are
+// not things the ticket is about. Remove them before looking for identifiers.
+export const stripUrls = (text) => String(text ?? '').replace(/https?:\/\/\S+/gi, ' ');
+
 // Extract identifier-like terms from free text, most specific first, without duplicates.
 export function extractTerms(text) {
   const seen = new Set();
   const terms = [];
   for (const { re, pick } of PATTERNS) {
-    for (const m of String(text ?? '').matchAll(re)) {
+    for (const m of stripUrls(text).matchAll(re)) {
       const term = pick(m);
       const key = term.toLowerCase();
       if (term.length < 3 || STOPWORDS.has(key) || seen.has(key)) continue;
@@ -100,7 +104,7 @@ export async function expectedImpact({ text, workspaces, briefing, search, impac
     } catch {
       // A workspace whose briefing fails is skipped for name matching; term search still runs.
     }
-    const serviceHits = matchServiceNames(String(text ?? ''), serviceNames).map((name) => ({
+    const serviceHits = matchServiceNames(stripUrls(text), serviceNames).map((name) => ({
       term: name,
       hit: { nodeId: `svc:${name}`, label: name, kind: 'service' },
       exact: true,

@@ -25,6 +25,27 @@ describe('extractTerms', () => {
     expect(terms).toContain('nemo-fabric');
   });
 
+  it('ignores identifiers that only appear inside a link', () => {
+    // Regression: "OpenShell" in github.com/NVIDIA/OpenShell/pull/1 was read as a ticket term.
+    expect(extractTerms('Improve sessions. https://github.com/NVIDIA/OpenShell/pull/5052')).toEqual(
+      [],
+    );
+    expect(extractTerms('Change CreateSandbox, see https://example.com/NemoClaw/x')).toEqual([
+      'CreateSandbox',
+    ]);
+  });
+
+  it('does not match a service name that appears only inside a link', async () => {
+    const out = await expectedImpact({
+      text: 'See https://github.com/org/nemoclaw/pull/1',
+      workspaces: [{ id: 'w', name: 'W' }],
+      briefing: async () => ({ briefing: { repos: [{ services: [{ name: 'nemoclaw' }] }] } }),
+      search: async () => [],
+      impact: async () => ({ error: 'unexpected lookup' }),
+    });
+    expect(out.targets).toEqual([]);
+  });
+
   it('ignores ordinary prose, short words and known false friends', () => {
     expect(extractTerms('fix the follow-up and the read-only thing, ok')).toEqual([]);
     expect(extractTerms('')).toEqual([]);

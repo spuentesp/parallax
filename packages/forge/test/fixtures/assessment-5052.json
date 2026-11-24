@@ -1,0 +1,684 @@
+{
+  "id": "a_mwv5twg8_76hlpk",
+  "status": "PARTIAL",
+  "manifest": {
+    "pr": {
+      "owner": "NVIDIA",
+      "repo": "OpenShell",
+      "number": 5052,
+      "repoId": "OpenShell",
+      "name": "OpenShell"
+    },
+    "configHash": "demo-v7"
+  },
+  "findings": [
+    {
+      "affected": [
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "topic-read:adapters/typescript/qwen/src/qwen-sdk.ts:254",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "UNKNOWN <dynamic>",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /api/v0/projects",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /api/v0/projects/{}/releases",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "ws:client:localhost:9000:/",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /health",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_reset",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        }
+      ],
+      "compat": "NeedsReview",
+      "endpoint": {
+        "key": "rpc:openshell.supervisor.host.v1.SupervisorHost/Attach",
+        "service": "openshell-gateway"
+      },
+      "impact": {
+        "class": "NeedsInvestigation",
+        "reasons": ["unresolved_candidates"],
+        "scope": {
+          "caveats": {
+            "excluded_repositories": [],
+            "failed_repositories": [],
+            "unconfigured_scope": "Only explicitly configured repositories were reviewed; unconfigured organization repositories are not visible to analysis."
+          },
+          "configured_only": true,
+          "excluded": [],
+          "failed": [],
+          "reviewed": [
+            {
+              "commit": "4fdf65a4b4c96024327501ae28243f2d206e7ec7",
+              "dirty": false,
+              "repo": "NeMo-Fabric"
+            },
+            {
+              "commit": "37f1e4cb9942a3dc05c0c76995f86624261bc7b1",
+              "dirty": false,
+              "repo": "NemoClaw"
+            },
+            {
+              "commit": "3e2dfab579465726d928f2a1d318c953efd9eca4",
+              "dirty": false,
+              "repo": "OpenShell"
+            }
+          ],
+          "unreviewed": []
+        }
+      },
+      "kind": "ChangedWithoutSchema",
+      "side": "provider",
+      "truncated": false
+    },
+    {
+      "affected": [
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "topic-read:adapters/typescript/qwen/src/qwen-sdk.ts:254",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "UNKNOWN <dynamic>",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /chat/completions",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /api/v0/projects",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /api/v0/projects/{}/releases",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "ws:client:localhost:9000:/",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /health",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_reset",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_mcp_authorization_headers",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "GET /_requests",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "POST /_scenario",
+          "reasons": "unresolved_candidates",
+          "service": "NeMo-Fabric"
+        }
+      ],
+      "compat": "NeedsReview",
+      "endpoint": {
+        "key": "rpc:openshell.v1.OpenShell/ConnectSupervisor",
+        "service": "openshell-gateway"
+      },
+      "impact": {
+        "class": "NeedsInvestigation",
+        "reasons": ["unresolved_candidates"],
+        "scope": {
+          "caveats": {
+            "excluded_repositories": [],
+            "failed_repositories": [],
+            "unconfigured_scope": "Only explicitly configured repositories were reviewed; unconfigured organization repositories are not visible to analysis."
+          },
+          "configured_only": true,
+          "excluded": [],
+          "failed": [],
+          "reviewed": [
+            {
+              "commit": "4fdf65a4b4c96024327501ae28243f2d206e7ec7",
+              "dirty": false,
+              "repo": "NeMo-Fabric"
+            },
+            {
+              "commit": "37f1e4cb9942a3dc05c0c76995f86624261bc7b1",
+              "dirty": false,
+              "repo": "NemoClaw"
+            },
+            {
+              "commit": "3e2dfab579465726d928f2a1d318c953efd9eca4",
+              "dirty": false,
+              "repo": "OpenShell"
+            }
+          ],
+          "unreviewed": []
+        }
+      },
+      "kind": "ChangedWithoutSchema",
+      "side": "provider",
+      "truncated": false
+    },
+    {
+      "affected": [
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:2946:exec_sandbox_interactive",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        }
+      ],
+      "compat": "NeedsReview",
+      "endpoint": {
+        "key": "rpc:openshell.v1.OpenShell/ExecSandboxInteractive",
+        "service": "openshell-gateway"
+      },
+      "impact": {
+        "class": "NeedsInvestigation",
+        "reasons": ["no_schema"],
+        "scope": {
+          "caveats": {
+            "excluded_repositories": [],
+            "failed_repositories": [],
+            "unconfigured_scope": "Only explicitly configured repositories were reviewed; unconfigured organization repositories are not visible to analysis."
+          },
+          "configured_only": true,
+          "excluded": [],
+          "failed": [],
+          "reviewed": [
+            {
+              "commit": "4fdf65a4b4c96024327501ae28243f2d206e7ec7",
+              "dirty": false,
+              "repo": "NeMo-Fabric"
+            },
+            {
+              "commit": "37f1e4cb9942a3dc05c0c76995f86624261bc7b1",
+              "dirty": false,
+              "repo": "NemoClaw"
+            },
+            {
+              "commit": "3e2dfab579465726d928f2a1d318c953efd9eca4",
+              "dirty": false,
+              "repo": "OpenShell"
+            }
+          ],
+          "unreviewed": []
+        }
+      },
+      "kind": "ChangedWithoutSchema",
+      "side": "provider",
+      "truncated": false
+    },
+    {
+      "affected": [
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:48020:get_sandbox_config",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:88125:get_sandbox_config",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:152916:get_sandbox_config",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:2059:get_sandbox_config",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        },
+        {
+          "class": "NeedsInvestigation",
+          "consumer": "rpc-call:rust:4524:get_sandbox_config",
+          "reasons": "no_schema",
+          "service": "OpenShell"
+        }
+      ],
+      "compat": "NeedsReview",
+      "endpoint": {
+        "key": "rpc:openshell.v1.OpenShell/GetSandboxConfig",
+        "service": "openshell-gateway"
+      },
+      "impact": {
+        "class": "NeedsInvestigation",
+        "reasons": ["no_schema"],
+        "scope": {
+          "caveats": {
+            "excluded_repositories": [],
+            "failed_repositories": [],
+            "unconfigured_scope": "Only explicitly configured repositories were reviewed; unconfigured organization repositories are not visible to analysis."
+          },
+          "configured_only": true,
+          "excluded": [],
+          "failed": [],
+          "reviewed": [
+            {
+              "commit": "4fdf65a4b4c96024327501ae28243f2d206e7ec7",
+              "dirty": false,
+              "repo": "NeMo-Fabric"
+            },
+            {
+              "commit": "37f1e4cb9942a3dc05c0c76995f86624261bc7b1",
+              "dirty": false,
+              "repo": "NemoClaw"
+            },
+            {
+              "commit": "3e2dfab579465726d928f2a1d318c953efd9eca4",
+              "dirty": false,
+              "repo": "OpenShell"
+            }
+          ],
+          "unreviewed": []
+        }
+      },
+      "kind": "ChangedWithoutSchema",
+      "side": "provider",
+      "truncated": false
+    }
+  ],
+  "coverage": {
+    "complete": false,
+    "scope": {
+      "configured_only": true,
+      "reviewed": ["NeMo-Fabric", "NemoClaw", "OpenShell"],
+      "unreviewed": [],
+      "excluded": []
+    }
+  },
+  "codeImpact": {
+    "repo": "OpenShell",
+    "filesChanged": 20,
+    "filesAnalyzed": 12,
+    "highestRisk": "high",
+    "symbols": [
+      {
+        "name": "attach",
+        "kind": "function",
+        "repo": "OpenShell",
+        "path": "crates/openshell-server/src/grpc/supervisor_host.rs",
+        "line": 42,
+        "change": "edited",
+        "direct": 0,
+        "transitive": 0,
+        "risk": "low",
+        "untested": true,
+        "dependents": [],
+        "crossRepo": null,
+        "crossRepoNote": "cross-repo symbol lookup was incomplete"
+      },
+      {
+        "name": "run_server",
+        "kind": "function",
+        "repo": "OpenShell",
+        "path": "crates/openshell-server/src/lib.rs",
+        "line": 595,
+        "change": "edited",
+        "direct": 0,
+        "transitive": 0,
+        "risk": "low",
+        "untested": true,
+        "dependents": [],
+        "crossRepo": null,
+        "crossRepoNote": "cross-repo lookup cannot uniquely identify this symbol"
+      },
+      {
+        "name": "close_admission",
+        "kind": "function",
+        "repo": "OpenShell",
+        "path": "crates/openshell-server/src/supervisor_session.rs",
+        "line": 434,
+        "change": "edited",
+        "direct": 3,
+        "transitive": 4,
+        "risk": "medium",
+        "untested": false,
+        "dependents": [
+          {
+            "name": "run_server",
+            "path": "crates/openshell-server/src/lib.rs"
+          },
+          {
+            "name": "shutdown_waits_for_admitted_setup_and_rejects_new_connections",
+            "path": "crates/openshell-server/src/supervisor_session.rs"
+          },
+          {
+            "name": "shutdown",
+            "path": "crates/openshell-server/src/supervisor_session.rs"
+          }
+        ],
+        "crossRepo": {
+          "repositories": [],
+          "truncated": false
+        }
+      },
+      {
+        "name": "Inner",
+        "kind": "struct",
+        "repo": "OpenShell",
+        "path": "crates/openshell-supervisor-control/src/controller.rs",
+        "line": 343,
+        "change": "edited",
+        "direct": 0,
+        "transitive": 1828,
+        "risk": "high",
+        "untested": true,
+        "dependents": [],
+        "crossRepo": null,
+        "crossRepoNote": "cross-repo lookup cannot uniquely identify this symbol"
+      }
+    ]
+  },
+  "explanation": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "narrative": "This workspace has 9 ChangedWithoutSchema contract findings for the openshell-gateway RPC interface. Five of the findings (F1, F2, F5, F8, and F9) are classified as NeedsInvestigation with unresolved_candidates, meaning the engine could not determine impact for some consumers. Sixteen other affected consumer entries are also NeedsInvestigation: unresolved_candidates, reflecting the same engine limitation. The remaining four findings (F3, F4, F6, F7) are classified as NeedsInvestigation with no_schema, where the engine detected a schema change but could not map it to any consumer impact. Two consumer services—OpenShell and NemoClaw—appear as both self-consumers and external consumers; NeMo-Fabric appears as an external consumer for F1, F2, F5, F8, and F9 but its impact is unresolved. No impact paths could be fully resolved due to the INCOMPLETE coverage (trace_impact was skipped for 1 of 9 changed contracts).\n\nFindings (engine classifications are authoritative):\n- F1 ChangedWithoutSchema openshell-gateway rpc:openshell.supervisor.host.v1.SupervisorHost/Attach [engine: NeedsInvestigation] affects: NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.supervisor.host.v1.SupervisorHost/Attach. The engine reports no compatible schema change and classifies it as NeedsInvestigation (unresolved_candidates). Affected consumers include NeMo-Fabric (24 entries) and NemoClaw (9 entries), all marked NeedsInvestigation: unresolved_candidates. Evidence: OpenShell:Module:proto/supervisor_host.proto:SupervisorHost.Attach:30. The unresolved status means the engine could not bind the changed endpoint to concrete callers; resolution requires schema visibility or consumer code review.\n- F2 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/ConnectSupervisor [engine: NeedsInvestigation] affects: NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/ConnectSupervisor. Engine class NeedsInvestigation (unresolved_candidates). Affected consumers: NeMo-Fabric (24 entries) and NemoClaw (15 entries), all unresolved. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.ConnectSupervisor:585. Same class of unknown: the engine could not resolve callers for this endpoint.\n- F3 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/ExecSandboxInteractive [engine: NeedsInvestigation] affects: OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/ExecSandboxInteractive. Engine class NeedsInvestigation (no_schema). Only affected consumer is OpenShell itself, marked NeedsInvestigation: no_schema. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.ExecSandboxInteractive:293. The no_schema classification means the engine detected a schema change but could not associate it with any consumer contract; impact is unknown but limited to the owning service.\n- F4 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/ForwardTcp [engine: NeedsInvestigation] affects: OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/ForwardTcp. Engine class NeedsInvestigation (no_schema). Affected consumer: OpenShell itself, marked NeedsInvestigation: no_schema. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.ForwardTcp:282 and OpenShell:Function:python/grpc_typing_test.py:rpc-call%3AOpenShell%3AForwardTcp:40. Same no_schema situation as F3.\n- F5 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/GetGatewayConfig [engine: NeedsInvestigation] affects: NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/GetGatewayConfig. Engine class NeedsInvestigation (unresolved_candidates). Affected consumers: NeMo-Fabric (23 entries) and NemoClaw (9 entries), all unresolved. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.GetGatewayConfig:472. Unresolved due to missing candidate bindings.\n- F6 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/GetSandboxConfig [engine: NeedsInvestigation] affects: OpenShell, OpenShell, OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/GetSandboxConfig. Engine class NeedsInvestigation (no_schema). Affected consumers: OpenShell (5 entries), all marked NeedsInvestigation: no_schema. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.GetSandboxConfig:456 and example calls in OpenShell governance-interceptor repo. No_schema means the engine detected a schema change but could not map consumer impact beyond the owning service.\n- F7 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/PeerRelay [engine: NeedsInvestigation] affects: OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/PeerRelay. Engine class NeedsInvestigation (no_schema). Affected consumer: OpenShell itself, marked NeedsInvestigation: no_schema. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.PeerRelay:630. Same pattern as F3/F6.\n- F8 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/PushSandboxLogs [engine: NeedsInvestigation] affects: NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NeMo-Fabric, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, NemoClaw, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/PushSandboxLogs. Engine class NeedsInvestigation (unresolved_candidates). Affected consumers: NeMo-Fabric (24 entries) and NemoClaw (9 entries), all unresolved. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.PushSandboxLogs:570. Unresolved until candidate callers are bound.\n- F9 ChangedWithoutSchema openshell-gateway rpc:openshell.v1.OpenShell/RelayStream [engine: NeedsInvestigation] affects: OpenShell, OpenShell, OpenShell\n  ChangedWithoutSchema for rpc:openshell.v1.OpenShell/RelayStream. Engine class NeedsInvestigation (no_schema). Affected consumers: OpenShell (3 entries), all marked NeedsInvestigation: no_schema. Evidence: OpenShell:Module:proto/openshell.proto:OpenShell.RelayStream:617. No_schema classification; impact confined to the owning service until schema resolution occurs.\n\nCoverage: INCOMPLETE — trace_impact skipped for 1 of 9 changed contracts (limit 8): their impact is not traced. Absence of an impact is not evidence of no impact.\nINCOMPLETE — trace_impact was skipped for 1 of 9 changed contracts (limit 8). Absence of an impact is not evidence of no impact."
+  }
+}

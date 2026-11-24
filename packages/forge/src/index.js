@@ -6,6 +6,7 @@
 import api, { assumeTrustedRoute, fetch } from '@forge/api';
 import { lookupAnnotations, publishServicePage } from './publisher.js';
 import { expectedImpact as resolveExpectedImpact, toGraph } from './resolve.js';
+import { assessmentMatchesPr, computeDrift, extractPrRefs, summarizeAssessment } from './review.js';
 
 const BACKEND = 'https://marbled-river-9619.fly.dev';
 
@@ -173,6 +174,11 @@ export async function nodeImpact(payload) {
 // The longest ticket text we analyse; the rest is ignored.
 const MAX_TEXT_CHARS = 8000;
 
+// Limits that keep a ticket review answer small enough for a panel and for an agent.
+const MAX_PRS_PER_TICKET = 3;
+const MAX_TARGETS_IN_REVIEW = 6;
+const MAX_CONSUMERS_IN_REVIEW = 6;
+
 // Attach Confluence annotations (owner, criticality) to every distinct consumer of every
 // target, with one lookup per service. Best effort, like withAnnotations.
 async function annotateTargets(result) {
@@ -195,16 +201,15 @@ async function annotateTargets(result) {
   }
 }
 
-// Predict what a piece of text (a Jira ticket) will touch, before any code exists.
-export async function expectedImpact(payload) {
-  const text = String(payload.text ?? '').slice(0, MAX_TEXT_CHARS);
+// Predict what a piece of text will touch (not size-capped; callers cap).
+async function buildExpected(text, workspaceId) {
   const list = await parallax('/api/workspaces');
   if (list.error) return list;
   let workspaces = (list.workspaces || []).map((w) => ({ id: w.id, name: w.name }));
-  if (payload.workspaceId) workspaces = workspaces.filter((w) => w.id === payload.workspaceId);
+  if (workspaceId) workspaces = workspaces.filter((w) => w.id === workspaceId);
 
   const result = await resolveExpectedImpact({
-    text,
+    text: String(text ?? '').slice(0, MAX_TEXT_CHARS),
     workspaces,
     briefing: (id) => parallax(`${ws(id)}/map/briefing`),
     search: async (id, term) => (await findNodes({ workspaceId: id, query: term })).results ?? [],
@@ -213,7 +218,92 @@ export async function expectedImpact(payload) {
   await annotateTargets(result);
   // Rebuild the graph after annotations so owners and criticality are drawn.
   result.graph = toGraph(result.targets);
-  return compact(result);
+  return result;
+}
+
+// Predict what a piece of text (a Jira ticket) will touch, before any code exists.
+export async function expectedImpact(payload) {
+  const result = await buildExpected(payload.text, payload.workspaceId);
+  return result.error ? result : compact(result);
+}
+
+// How many stored assessments are read when looking for a ticket's pull request.
+const MAX_ASSESSMENTS_SCANNED = 8;
+const FINAL_STATUSES = new Set(['READY', 'PARTIAL']);
+
+// Find the newest stored assessment of one pull request.
+// Returns { assessment } (final), { running: status } or { failed: true } or {} when none exists.
+async function findPrAssessment(ref) {
+  const list = await parallax('/api/assessments');
+  if (list.error) return { error: list.error };
+  const recent = (list.assessments || [])
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    .slice(0, MAX_ASSESSMENTS_SCANNED);
+  const full = await Promise.all(recent.map((a) => parallax(`/api/assessments/${a.id}`)));
+  const matches = full.map((r) => r.assessment).filter((a) => a && assessmentMatchesPr(a, ref));
+  const done = matches.find((a) => FINAL_STATUSES.has(a.status));
+  if (done) return { assessment: done };
+  const other = matches[0];
+  if (!other) return {};
+  return other.status === 'FAILED' ? { failed: true } : { running: other.status };
+}
+
+// Everything a Jira ticket panel needs: the prediction from the ticket's words, the real
+// analysis of any pull request the ticket links, and how the two differ.
+export async function ticketReview(payload) {
+  const text = String(payload.text ?? '').slice(0, MAX_TEXT_CHARS);
+  const expected = await buildExpected(text, payload.workspaceId);
+  if (expected.error) return expected;
+
+  const pullRequests = [];
+  for (const ref of extractPrRefs(text).slice(0, MAX_PRS_PER_TICKET)) {
+    const found = await findPrAssessment(ref);
+    if (found.error) {
+      pullRequests.push({ url: ref.url, note: found.error });
+    } else if (found.assessment) {
+      const summary = summarizeAssessment(found.assessment);
+      pullRequests.push({
+        url: ref.url,
+        assessment: summary,
+        drift: computeDrift(expected, summary),
+      });
+    } else if (found.running) {
+      pullRequests.push({
+        url: ref.url,
+        note: `Analysis is ${found.running.toLowerCase()}; check back shortly.`,
+      });
+    } else {
+      pullRequests.push({
+        url: ref.url,
+        note: found.failed
+          ? 'The last analysis of this pull request failed. Re-run it from Parallax.'
+          : 'This pull request has not been analysed yet.',
+      });
+    }
+  }
+
+  // Keep the answer small: the full per-target consumer lists are already summarised.
+  return compact({
+    expected: {
+      summary: expected.summary,
+      unmatchedTerms: expected.unmatchedTerms,
+      targets: expected.targets.slice(0, MAX_TARGETS_IN_REVIEW).map((t) => ({
+        workspaceId: t.workspaceId,
+        matched: t.matched,
+        node: { nodeId: t.node.nodeId, label: t.node.label, kind: t.node.kind },
+        consumersTotal: t.consumersTotal,
+        consumers: t.consumers.slice(0, MAX_CONSUMERS_IN_REVIEW).map((c) => ({
+          service: c.service,
+          provenance: c.provenance,
+          usages: c.usages,
+          annotations: c.annotations,
+          confluencePage: c.confluencePage,
+        })),
+      })),
+      graph: expected.graph,
+    },
+    pullRequests,
+  });
 }
 
 // Publish (create or update) a machine-generated Confluence page for one service.

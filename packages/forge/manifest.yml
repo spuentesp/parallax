@@ -11,6 +11,7 @@ modules:
         - parallax-node-impact
         - parallax-contract-detail
         - parallax-expected-impact
+        - parallax-ticket-review
         - parallax-publish-service-doc
   # The same actions, packaged as an agent that ships with the app, so it is
   # available on every site that installs it.
@@ -43,6 +44,10 @@ modules:
            It is a prediction from words, not from code: say which matches were exact and which
            were fuzzy, list terms that could not be placed, and never claim a change is safe
            just because nothing matched.
+        10. When the text also links a GitHub pull request, call Review a ticket and its pull
+            request instead. It compares what the ticket predicted with what the pull request
+            actually changed. Report the drift in one sentence, list what was touched but never
+            named, and repeat the coverage caveat: an incomplete analysis is never proof of safety.
       conversationStarters:
         - Which Parallax workspaces are available?
         - What breaks if I change the openshell-gateway service in ws_cluster_a?
@@ -56,8 +61,27 @@ modules:
         - parallax-node-impact
         - parallax-contract-detail
         - parallax-expected-impact
+        - parallax-ticket-review
         - parallax-publish-service-doc
   action:
+    - key: parallax-ticket-review
+      name: Review a ticket and its pull request
+      function: ticketReview
+      actionVerb: GET
+      description: |
+        Compare what a ticket predicts with what its linked GitHub pull request actually
+        changed. Returns expected impact, the stored analysis of the PR, and the drift.
+      inputs:
+        text:
+          title: Ticket text
+          type: string
+          required: true
+          description: "Ticket summary and description, including any GitHub pull request link"
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: false
+          description: "Optional: limit the search to one workspace"
     - key: parallax-expected-impact
       name: Expected impact of a change
       function: expectedImpact
@@ -201,6 +225,8 @@ modules:
       handler: index.contractDetail
     - key: expectedImpact
       handler: index.expectedImpact
+    - key: ticketReview
+      handler: index.ticketReview
     - key: publishServiceDoc
       handler: index.publishServiceDoc
 
