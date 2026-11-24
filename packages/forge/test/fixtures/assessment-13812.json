@@ -1,0 +1,84 @@
+{
+  "id": "a_mwv7bp8b_wflahd",
+  "status": "READY",
+  "manifest": {
+    "pr": {
+      "owner": "NVIDIA",
+      "repo": "NemoClaw",
+      "number": 13812,
+      "repoId": "NemoClaw",
+      "name": "NemoClaw"
+    },
+    "configHash": "demo13812-3"
+  },
+  "findings": [],
+  "coverage": {
+    "complete": false,
+    "scope": {
+      "configured_only": true,
+      "reviewed": ["NeMo-Fabric", "NemoClaw", "OpenShell"],
+      "unreviewed": [],
+      "excluded": []
+    }
+  },
+  "codeImpact": {
+    "repo": "NemoClaw",
+    "filesChanged": 4,
+    "filesAnalyzed": 2,
+    "highestRisk": "high",
+    "symbols": [
+      {
+        "name": "requireNativeProviderPolicy",
+        "kind": "function",
+        "repo": "NemoClaw",
+        "path": "src/lib/adapters/openshell/provider-policy.ts",
+        "line": 98,
+        "change": "edited",
+        "direct": 4,
+        "transitive": 176,
+        "risk": "high",
+        "untested": false,
+        "dependents": [
+          {
+            "name": "checkedAttachment",
+            "path": "src/lib/inference/native-local/profile.ts"
+          },
+          {
+            "name": "ensureNativeLocalProvider",
+            "path": "src/lib/inference/native-local/profile.ts"
+          }
+        ],
+        "crossRepo": {
+          "repositories": [],
+          "truncated": true
+        }
+      },
+      {
+        "name": "handleOnboardCommandError",
+        "kind": "function",
+        "repo": "NemoClaw",
+        "path": "src/lib/onboard/command/error-reporting.ts",
+        "line": 57,
+        "change": "edited",
+        "direct": 2,
+        "transitive": 13,
+        "risk": "medium",
+        "untested": true,
+        "dependents": [
+          {
+            "name": "handleOnboardCommandAttemptError",
+            "path": "src/lib/onboard/command.ts"
+          }
+        ],
+        "crossRepo": {
+          "repositories": [],
+          "truncated": true
+        }
+      }
+    ]
+  },
+  "explanation": {
+    "model": "nvidia/Nemotron-3_5-Lightning",
+    "narrative": "Engine compared two snapshots and reported 0 contract changes across the workspace. However, coverage is INCOMPLETE: the reviewed repos are NeMo-Fabric, NemoClaw, and OpenShell (partial). OpenShell SDK is unreviewed. Unresolved calls exist in all repos (dynamic topics, dynamic targets, env-unmapped URLs, rpc_stub_unknown, etc.), meaning the engine could not fully bind all call targets. An empty diff of published contracts does not guarantee no impact when coverage is incomplete and many calls remain unbound.\n\nFindings (engine classifications are authoritative):\n\nCoverage: INCOMPLETE — revisados: NeMo-Fabric, NemoClaw, OpenShell · la cobertura está incompleta: un resultado vacío no autoriza a concluir ausencia de impacto. Absence of an impact is not evidence of no impact."
+  }
+}

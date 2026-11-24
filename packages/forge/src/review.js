@@ -110,6 +110,8 @@ export function summarizeAssessment(assessment) {
           filesChanged: ci.filesChanged,
           filesAnalyzed: ci.filesAnalyzed,
           highestRisk: ci.highestRisk,
+          symbolsTotal: (ci.symbols ?? []).length,
+          untestedTotal: (ci.symbols ?? []).filter((s) => s.untested).length,
           symbols: (ci.symbols ?? []).slice(0, MAX_SYMBOLS).map((s) => ({
             name: s.name,
             path: s.path,
@@ -158,9 +160,24 @@ export function computeDrift(expected, summary) {
   const touchedSet = new Set(touched.map((f) => f.endpoint));
   const missed = [...namedEndpoints].filter((e) => !touchedSet.has(e));
 
+  // Code-level changes are reported even when no contract changed: a PR can edit risky
+  // code without touching any published contract.
+  const code = summary.codeImpact;
+  const codeChanges =
+    code && code.symbolsTotal > 0
+      ? {
+          repo: code.repo,
+          symbols: code.symbolsTotal,
+          highestRisk: code.highestRisk,
+          untested: code.untestedTotal,
+          filesChanged: code.filesChanged,
+          filesAnalyzed: code.filesAnalyzed,
+        }
+      : null;
+
   let verdict;
-  if (targets.length === 0) verdict = 'ticket-named-nothing';
-  else if (touched.length === 0) verdict = 'pr-touched-no-contracts';
+  if (touched.length === 0) verdict = codeChanges ? 'code-only' : 'pr-touched-no-contracts';
+  else if (targets.length === 0) verdict = 'ticket-named-nothing';
   else if (inNamedService.length === 0 && elsewhere.length === 0 && missed.length === 0)
     verdict = 'aligned';
   else if (confirmed.length === 0) verdict = 'different';
@@ -173,7 +190,9 @@ export function computeDrift(expected, summary) {
       confirmed: confirmed.length,
       extra: inNamedService.length + elsewhere.length,
       missed: missed.length,
+      code: codeChanges,
     }),
+    codeChanges,
     confirmed,
     touchedButNotNamed: [...inNamedService, ...elsewhere].map((f) => ({
       endpoint: f.endpoint,
@@ -203,4 +222,7 @@ const HEADLINES = {
     `The ticket named no known service or endpoint, but the PR touched ${plural(touched, 'contract change')}.`,
   'pr-touched-no-contracts': ({ missed }) =>
     `The PR changed no contracts${missed ? `, although the ticket named ${missed}` : ''}.`,
+  'code-only': ({ code }) =>
+    `The PR changed no contracts, but edited ${plural(code.symbols, 'code symbol')} in ${code.repo} ` +
+    `(highest risk: ${code.highestRisk}${code.untested ? `; ${code.untested} untested` : ''}).`,
 };

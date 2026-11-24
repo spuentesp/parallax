@@ -12,6 +12,10 @@ import {
 const real = JSON.parse(
   readFileSync(new URL('./fixtures/assessment-5052.json', import.meta.url), 'utf8'),
 );
+// A real code-only PR (NemoClaw #13812): no contract findings, but risky code edits.
+const codeOnly = JSON.parse(
+  readFileSync(new URL('./fixtures/assessment-13812.json', import.meta.url), 'utf8'),
+);
 
 describe('extractPrRefs', () => {
   it('finds GitHub pull request URLs and ignores everything else', () => {
@@ -176,6 +180,27 @@ describe('computeDrift', () => {
   it('warns that "untouched" is not "safe" when coverage is incomplete', () => {
     const d = computeDrift({ targets: [endpointTarget('rpc:x/A', 'gw')] }, summary([], false));
     expect(d.caveat).toMatch(/does not mean "safe"/);
+  });
+
+  it('reports risky code edits even when no contract changed (real code-only PR)', () => {
+    const s = summarizeAssessment(codeOnly);
+    expect(s.status).toBe('READY');
+    expect(s.counts).toEqual({ verified: 0, needsInvestigation: 0, noKnownImpact: 0 });
+    expect(s.codeImpact).toMatchObject({ repo: 'NemoClaw', symbolsTotal: 2, untestedTotal: 1 });
+
+    const d = computeDrift({ targets: [serviceTarget('nemoclaw')] }, s);
+    expect(d.verdict).toBe('code-only');
+    expect(d.codeChanges).toMatchObject({ repo: 'NemoClaw', symbols: 2, highestRisk: 'high' });
+    expect(d.headline).toBe(
+      'The PR changed no contracts, but edited 2 code symbols in NemoClaw (highest risk: high; 1 untested).',
+    );
+    // coverage is incomplete in this report, so the caveat must still be there
+    expect(d.caveat).toMatch(/does not mean "safe"/);
+  });
+
+  it('still says code-only when the ticket named nothing', () => {
+    const d = computeDrift({ targets: [] }, summarizeAssessment(codeOnly));
+    expect(d.verdict).toBe('code-only');
   });
 
   it('works end to end on the real report: wider than a ticket that named one contract', () => {
