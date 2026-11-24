@@ -26,6 +26,8 @@ primary_region = 'gru'
   timeout = '10s'
 
 [[vm]]
-  memory = '4gb'
-  cpu_kind = 'shared'
-  cpus = 2
+  # 8 GB / 4 shared CPUs: cluster A's Lain engine alone holds ~2.5 GB, and a PR assessment
+  # snapshots two more commits of a large repo. At 4 GB an assessment exhausted memory
+  # (LainUnavailable). Fly allows 8 GB only from shared-cpu-4x.
+  size = 'shared-cpu-4x'
+  memory = '8gb'
