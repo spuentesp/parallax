@@ -6,7 +6,14 @@
 import api, { assumeTrustedRoute, fetch } from '@forge/api';
 import { lookupAnnotations, publishServicePage } from './publisher.js';
 import { expectedImpact as resolveExpectedImpact, toGraph } from './resolve.js';
-import { assessmentMatchesPr, computeDrift, extractPrRefs, summarizeAssessment } from './review.js';
+import {
+  assessmentMatchesPr,
+  computeDrift,
+  contactsFor,
+  extractPrRefs,
+  nextSteps,
+  summarizeAssessment,
+} from './review.js';
 
 const BACKEND = 'https://marbled-river-9619.fly.dev';
 
@@ -262,10 +269,12 @@ export async function ticketReview(payload) {
       pullRequests.push({ url: ref.url, note: found.error });
     } else if (found.assessment) {
       const summary = summarizeAssessment(found.assessment);
+      const drift = computeDrift(expected, summary);
       pullRequests.push({
         url: ref.url,
         assessment: summary,
-        drift: computeDrift(expected, summary),
+        drift,
+        nextSteps: nextSteps({ expected, drift, summary }),
       });
     } else if (found.running) {
       pullRequests.push({
@@ -302,6 +311,10 @@ export async function ticketReview(payload) {
       })),
       graph: expected.graph,
     },
+    // Who to talk to, and what to do next. With a linked PR the steps live on that PR; without
+    // one they come from the prediction alone.
+    contacts: contactsFor(expected),
+    nextSteps: pullRequests.some((p) => p.nextSteps) ? undefined : nextSteps({ expected }),
     pullRequests,
   });
 }

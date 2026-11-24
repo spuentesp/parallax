@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   assessmentMatchesPr,
   computeDrift,
+  contactsFor,
   extractPrRefs,
+  nextSteps,
   summarizeAssessment,
 } from '../src/review.js';
 
@@ -122,6 +124,135 @@ const summary = (endpoints, complete = false) => ({
     service,
     class: 'NeedsInvestigation',
   })),
+});
+
+// Consumers as the resolver returns them, with the owner a human wrote on their page.
+const owned = (service, owner, criticality, provenance = 'deterministic') => ({
+  service,
+  provenance,
+  annotations: owner ? { owner, criticality } : undefined,
+});
+const withConsumers = (...consumers) => ({ targets: [{ node: { kind: 'service' }, consumers }] });
+
+describe('contactsFor', () => {
+  it('lists owners once per service, most critical first', () => {
+    const c = contactsFor(
+      withConsumers(
+        owned('web', 'Web team', 'Low'),
+        owned('nemoclaw', 'Platform team', 'High'),
+        owned('web', 'Someone else', 'High'),
+        owned('sdk', undefined),
+      ),
+    );
+    expect(c).toEqual([
+      { service: 'nemoclaw', owner: 'Platform team', criticality: 'High' },
+      { service: 'web', owner: 'Web team', criticality: 'Low' },
+    ]);
+  });
+  it('returns nothing when nobody wrote an owner down', () => {
+    expect(contactsFor(withConsumers(owned('sdk', undefined)))).toEqual([]);
+    expect(contactsFor(undefined)).toEqual([]);
+  });
+});
+
+describe('nextSteps', () => {
+  it('tells the reader to name something when the ticket names nothing', () => {
+    expect(nextSteps({ expected: { targets: [] } })).toEqual([
+      'Name the service or endpoint this ticket changes, so Parallax can predict its impact.',
+    ]);
+  });
+
+  it('starts with who to talk to and never runs past five steps', () => {
+    const expected = withConsumers(
+      owned('a', 'Team A', 'High'),
+      owned('b', 'Team B', 'High'),
+      owned('c', 'Team C', 'High'),
+      owned('d', undefined, undefined, 'inferred'),
+    );
+    const steps = nextSteps({ expected });
+    expect(steps[0]).toBe('Talk to Team A (owns a, high criticality) before this ships.');
+    expect(steps).toHaveLength(3); // two contacts + the inferred warning
+    expect(steps.at(-1)).toMatch(/inferred dependency on d/);
+  });
+
+  it('asks the reader to confirm contracts the ticket never named (real report)', () => {
+    const s = summarizeAssessment(real);
+    const expected = {
+      targets: [
+        endpointTarget('rpc:openshell.v1.OpenShell/ConnectSupervisor', 'openshell-gateway'),
+      ],
+    };
+    const steps = nextSteps({ expected, drift: computeDrift(expected, s), summary: s });
+    expect(steps.some((t) => /3 contracts the ticket did not name are intended/.test(t))).toBe(
+      true,
+    );
+    // coverage is incomplete in this report, and the last step must say so
+    expect(steps.at(-1)).toMatch(/cannot prove the absence of impact/);
+  });
+
+  it('points at the riskiest edit and at missing tests for a code-only PR (real report)', () => {
+    const s = summarizeAssessment(codeOnly);
+    const expected = { targets: [serviceTarget('nemoclaw')] };
+    const steps = nextSteps({ expected, drift: computeDrift(expected, s), summary: s });
+    expect(steps[0]).toMatch(
+      /second reviewer read requireNativeProviderPolicy .*provider-policy\.ts:98.*high risk/,
+    );
+    expect(
+      steps.some((t) => /Add tests for the 1 untested edited symbol in NemoClaw/.test(t)),
+    ).toBe(true);
+  });
+
+  it('flags proven consumers differently from open questions', () => {
+    const summary = {
+      coverage: { complete: true },
+      findings: [
+        { endpoint: 'x', service: 's', class: 'Verified', affectedDistinct: 2, affectedByRepo: {} },
+      ],
+    };
+    const drift = computeDrift({ targets: [serviceTarget('other')] }, summary);
+    expect(
+      nextSteps({ expected: { targets: [serviceTarget('other')] }, drift, summary })[0],
+    ).toMatch(/^1 contract the ticket never named has proven consumers/);
+  });
+
+  it('uses the plural form for several proven contracts', () => {
+    const finding = (endpoint) => ({
+      endpoint,
+      service: 's',
+      class: 'Verified',
+      affectedDistinct: 1,
+      affectedByRepo: {},
+    });
+    const summary = { coverage: { complete: true }, findings: [finding('a'), finding('b')] };
+    const expected = { targets: [serviceTarget('other')] };
+    expect(nextSteps({ expected, drift: computeDrift(expected, summary), summary })[0]).toMatch(
+      /^2 contracts the ticket never named have proven consumers/,
+    );
+  });
+});
+
+describe('drift ranking', () => {
+  it('puts proven findings first, then those with the most distinct consumers', () => {
+    const f = (endpoint, cls, n) => ({
+      endpoint,
+      service: 'x',
+      class: cls,
+      affectedDistinct: n,
+      affectedByRepo: {},
+    });
+    const d = computeDrift(
+      { targets: [serviceTarget('elsewhere')] },
+      {
+        coverage: { complete: true },
+        findings: [
+          f('small', 'NeedsInvestigation', 1),
+          f('big', 'NeedsInvestigation', 9),
+          f('proven', 'Verified', 1),
+        ],
+      },
+    );
+    expect(d.touchedButNotNamed.map((x) => x.endpoint)).toEqual(['proven', 'big', 'small']);
+  });
 });
 
 describe('computeDrift', () => {

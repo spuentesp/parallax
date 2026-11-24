@@ -48,6 +48,8 @@ modules:
             request instead. It compares what the ticket predicted with what the pull request
             actually changed. Report the drift in one sentence, list what was touched but never
             named, and repeat the coverage caveat: an incomplete analysis is never proof of safety.
+            Finish with the "nextSteps" in order and name the "contacts" (owners) it returns;
+            do not add steps of your own.
       conversationStarters:
         - Which Parallax workspaces are available?
         - What breaks if I change the openshell-gateway service in ws_cluster_a?

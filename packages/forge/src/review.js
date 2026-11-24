@@ -194,12 +194,21 @@ export function computeDrift(expected, summary) {
     }),
     codeChanges,
     confirmed,
-    touchedButNotNamed: [...inNamedService, ...elsewhere].map((f) => ({
-      endpoint: f.endpoint,
-      service: f.service,
-      class: f.class,
-      serviceWasNamed: namedServices.has(f.service),
-    })),
+    // Ranked: proven impact first, then the ones with the most distinct consumers.
+    touchedButNotNamed: [...inNamedService, ...elsewhere]
+      .map((f) => ({
+        endpoint: f.endpoint,
+        service: f.service,
+        class: f.class,
+        serviceWasNamed: namedServices.has(f.service),
+        affectedDistinct: f.affectedDistinct,
+        affectedByRepo: f.affectedByRepo,
+      }))
+      .sort(
+        (a, b) =>
+          (CLASS_ORDER[a.class] ?? 9) - (CLASS_ORDER[b.class] ?? 9) ||
+          b.affectedDistinct - a.affectedDistinct,
+      ),
     namedButUntouched: missed,
     // The prediction can only be as good as the words in the ticket.
     caveat: summary.coverage.complete
@@ -226,3 +235,95 @@ const HEADLINES = {
     `The PR changed no contracts, but edited ${plural(code.symbols, 'code symbol')} in ${code.repo} ` +
     `(highest risk: ${code.highestRisk}${code.untested ? `; ${code.untested} untested` : ''}).`,
 };
+
+// People to talk to: the owners that humans wrote on the Confluence pages of the consumers the
+// ticket's targets reach. One entry per service, most critical first.
+export function contactsFor(expected) {
+  const rank = { critical: 0, high: 1, medium: 2, low: 3 };
+  const byService = new Map();
+  for (const t of expected?.targets ?? []) {
+    for (const c of t.consumers ?? []) {
+      if (c.annotations?.owner && !byService.has(c.service)) {
+        byService.set(c.service, {
+          service: c.service,
+          owner: c.annotations.owner,
+          criticality: c.annotations.criticality ?? null,
+        });
+      }
+    }
+  }
+  return [...byService.values()].sort(
+    (a, b) =>
+      (rank[String(a.criticality).toLowerCase()] ?? 9) -
+        (rank[String(b.criticality).toLowerCase()] ?? 9) || a.service.localeCompare(b.service),
+  );
+}
+
+const MAX_NEXT_STEPS = 5;
+const RISK_ORDER = { high: 0, medium: 1, low: 2 };
+
+// What a reader should do next. Fixed rules over the evidence, never a model's opinion,
+// so every line can be traced to a fact above it. `drift` and `summary` are optional
+// (a ticket with no linked PR has neither).
+export function nextSteps({ expected, drift, summary }) {
+  const steps = [];
+  const targets = expected?.targets ?? [];
+
+  const contacts = contactsFor(expected).slice(0, 2);
+  for (const c of contacts) {
+    const crit = c.criticality ? `, ${String(c.criticality).toLowerCase()} criticality` : '';
+    steps.push(`Talk to ${c.owner} (owns ${c.service}${crit}) before this ships.`);
+  }
+
+  if (targets.length === 0) {
+    steps.push(
+      'Name the service or endpoint this ticket changes, so Parallax can predict its impact.',
+    );
+  }
+
+  const unnamed = drift?.touchedButNotNamed?.length ?? 0;
+  if (unnamed > 0) {
+    const proven = drift.touchedButNotNamed.filter((f) => f.class === 'Verified').length;
+    steps.push(
+      proven
+        ? `${plural(proven, 'contract')} the ticket never named ${proven === 1 ? 'has' : 'have'} proven consumers: confirm the change is intended and update the ticket.`
+        : `Check whether the ${plural(unnamed, 'contract')} the ticket did not name ${unnamed === 1 ? 'is' : 'are'} intended; update the ticket or the PR.`,
+    );
+  }
+
+  const code = drift?.codeChanges;
+  if (code) {
+    const risky = (summary?.codeImpact?.symbols ?? [])
+      .filter((s) => s.risk === 'high' || s.risk === 'medium')
+      .sort((a, b) => (RISK_ORDER[a.risk] ?? 9) - (RISK_ORDER[b.risk] ?? 9))[0];
+    if (risky) {
+      steps.push(
+        `Have a second reviewer read ${risky.name} (${risky.path}:${risky.line}): ${risky.risk} risk${risky.untested ? ', untested' : ''}.`,
+      );
+    }
+    if (code.untested > 0) {
+      steps.push(
+        `Add tests for the ${plural(code.untested, 'untested edited symbol')} in ${code.repo}.`,
+      );
+    }
+  }
+
+  const inferredOnly = targets
+    .flatMap((t) => t.consumers ?? [])
+    .filter((c) => c.provenance !== 'deterministic')
+    .map((c) => c.service);
+  const uniqueInferred = [...new Set(inferredOnly)];
+  if (uniqueInferred.length > 0) {
+    steps.push(
+      `Verify the inferred dependency on ${uniqueInferred.slice(0, 3).join(', ')}: it comes from a heuristic, not from proof.`,
+    );
+  }
+
+  if (summary && !summary.coverage.complete) {
+    steps.push(
+      'Treat "needs investigation" as open questions: this analysis cannot prove the absence of impact.',
+    );
+  }
+
+  return steps.slice(0, MAX_NEXT_STEPS);
+}
