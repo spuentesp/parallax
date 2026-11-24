@@ -1,8 +1,8 @@
-# Parallax + Lain 0.16.0 in one image for the Fly.io demo: the two NVIDIA clusters, indexed at BUILD time
+# Parallax + Lain 0.16.1 in one image for the Fly.io demo: the two NVIDIA clusters, indexed at BUILD time
 # so a cold start only has to load the graph. Ubuntu 24.04 because the Lain release binary needs glibc 2.39.
 #   podman build -f Dockerfile.fly -t parallax-fly .
-ARG LAIN_TAG=v0.16.0
-ARG LAIN_SHA256=5397b1fb9ca112f15fe670d2715d49d87f500503e5ae9834c3665b4c4a76883a
+ARG LAIN_TAG=v0.16.1
+ARG LAIN_SHA256=0097321371ce1711b88f7487ad67e80feedf0416523a505090cefacc742a04b3
 
 FROM ubuntu:24.04 AS lain
 ARG LAIN_TAG
@@ -31,8 +31,8 @@ COPY deploy/fly/repos-a.yaml deploy/fly/repos-b.yaml /repos/
 ENV LAIN_GIT_SIDECAR_BIN=/usr/local/bin/lain-git-sidecar \
     LAIN_DISABLE_FILE_WATCHER=1 LAIN_DISABLE_COMMIT_SYNC=1
 
-# One engine per cluster, so each workspace sees only its own repos. Each runs to completion once here so it
-# publishes its startup checkpoint; the graphs land in /lain-data-a and /lain-data-b (outside the /data volume,
+# One engine per cluster, so each workspace sees only its own repos. `lain prewarm` publishes each one's
+# startup checkpoint; the graphs land in /lain-data-a and /lain-data-b (outside the /data volume,
 # which would hide them). A cold start on Fly then restores them instead of re-indexing.
 COPY deploy/fly/bake.sh /usr/local/bin/bake.sh
 RUN bake.sh
