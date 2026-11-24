@@ -60,5 +60,6 @@ fresh conversation. The Asks take 40 to 60 s: the web-search block is written to
 - Cluster A's coverage is not complete (the engine says so on the Coverage page); say that, it is the point.
 - The Query page has no natural-language "Translate" box yet.
 
-### Shot list checklist
-- [ ] Map zoomed out · [ ] Ask + verdicts + Show on map · [ ] drill repo→file · [ ] inferred vs deterministic · [ ] inspector "Consumed by" · [ ] Query → gRPC preset → Run · [ ] Coverage health + blind spots · [ ] web-search Ask citing grpc.io · [ ] end card with URLs
+### Shot list checklist (in recorded order)
+- [ ] Map fit to view, repos → services → endpoints · [ ] Query → gRPC preset → Run · [ ] Coverage health + blind spots · [ ] Ask + verdicts · [ ] Show on map + inspector "Consumed by" · [ ] inferred vs proven · [ ] web-search Ask · [ ] end card with URLs (add in the editor)
+- Not in the capture: drilling repo → file. Record it by hand if you want it.
