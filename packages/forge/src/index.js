@@ -3,7 +3,8 @@
 // Every tool is a thin, read-only wrapper around a deterministic Parallax API
 // endpoint. Rovo (or any MCP client) does the reasoning; Parallax supplies
 // evidence from the real code graph. No second LLM is involved.
-import { fetch } from '@forge/api';
+import api, { assumeTrustedRoute, fetch } from '@forge/api';
+import { publishServicePage } from './publisher.js';
 
 const BACKEND = 'https://marbled-river-9619.fly.dev';
 
@@ -113,22 +114,46 @@ function summarizeEdge(entry) {
   };
 }
 
-// Who consumes a node and what it depends on, with provenance. This is the blast radius.
-export async function nodeImpact(payload) {
-  const data = await parallax(`${ws(payload.workspaceId)}/map/node`, { id: payload.nodeId });
+// Load and summarize the blast radius of one node (not size-capped; callers cap).
+async function loadNodeImpact(workspaceId, nodeId) {
+  const data = await parallax(`${ws(workspaceId)}/map/node`, { id: nodeId });
   if (data.error) return data;
   // The API wraps the payload as { detail: {...} }; detail is null when the engine is unavailable.
   const d = data.detail;
   if (!d?.node) {
-    return { error: `Node '${payload.nodeId}' was not found in workspace '${payload.workspaceId}'. Use parallax-find to get a valid nodeId.` };
+    return { error: `Node '${nodeId}' was not found in workspace '${workspaceId}'. Use parallax-find to get a valid nodeId.` };
   }
-  return compact({
+  return {
     node: { nodeId: d.node.id, label: d.node.label, kind: d.node.kind, ...d.node.meta },
     endpointCount: d.endpointCount,
     consumers: (d.consumers || []).map(summarizeEdge),
     providers: (d.providers || []).map(summarizeEdge),
     groups: (d.children || []).map((c) => ({ nodeId: c.id, label: c.label, ...c.meta })),
-  });
+  };
+}
+
+// Who consumes a node and what it depends on, with provenance. This is the blast radius.
+export async function nodeImpact(payload) {
+  const data = await loadNodeImpact(payload.workspaceId, payload.nodeId);
+  return data.error ? data : compact(data);
+}
+
+// Publish (create or update) a machine-generated Confluence page for one service.
+export async function publishServiceDoc(payload) {
+  const impact = await loadNodeImpact(payload.workspaceId, payload.nodeId);
+  if (impact.error) return impact;
+  if (impact.node.kind !== 'service') {
+    return { error: `Node '${payload.nodeId}' is a ${impact.node.kind}, not a service. Pass a service node id such as svc:<name>.` };
+  }
+  const list = await parallax('/api/workspaces');
+  const workspace = (list.workspaces || []).find((w) => w.id === payload.workspaceId);
+  // Run the Confluence calls as the invoking user so Confluence enforces their space permissions.
+  const cf = (path, init) => api.asUser().requestConfluence(assumeTrustedRoute(path), init);
+  try {
+    return await publishServicePage({ cf, spaceKey: payload.spaceKey, impact, workspace });
+  } catch (e) {
+    return { error: e.message };
+  }
 }
 
 // Providers, schemas and consumers of one API contract (e.g. a GraphQL field or proto message).

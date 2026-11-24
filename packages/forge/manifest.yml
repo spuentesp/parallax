@@ -10,6 +10,7 @@ modules:
         - parallax-find
         - parallax-node-impact
         - parallax-contract-detail
+        - parallax-publish-service-doc
   action:
     - key: parallax-status
       name: Parallax backend status
@@ -97,6 +98,30 @@ modules:
           type: string
           required: false
           description: "Optional service name to narrow the contract"
+    - key: parallax-publish-service-doc
+      name: Publish service architecture page to Confluence
+      function: publishServiceDoc
+      actionVerb: CREATE
+      description: |
+        Create or update a Confluence page documenting one service and who depends
+        on it, with proof level and analysed commit. Labelled parallax, lain and
+        machine-made. Only updates pages Parallax created. Ask which space to use.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        nodeId:
+          title: Service node ID
+          type: string
+          required: true
+          description: "A service node id such as svc:openshell-gateway (from parallax-briefing or parallax-find)"
+        spaceKey:
+          title: Confluence space key
+          type: string
+          required: true
+          description: "Key of the Confluence space to publish into"
   function:
     - key: parallaxStatus
       handler: index.parallaxStatus
@@ -110,6 +135,8 @@ modules:
       handler: index.nodeImpact
     - key: contractDetail
       handler: index.contractDetail
+    - key: publishServiceDoc
+      handler: index.publishServiceDoc
 
 # Required for any app with a rovo:mcp module from 2027-01-05 (tag <= 8 chars,
 # description <= 100 chars, keywords combined <= 50 chars).
@@ -119,6 +146,12 @@ app:
     memoryMB: 256
     architecture: arm64
   id: ari:cloud:ecosystem::app/9fe4925c-2d52-4c10-b231-f5bf5a9df465
+  # Jira is where the app is installed first; Confluence is connected afterwards.
+  compatibility:
+    jira:
+      required: true
+    confluence:
+      required: false
   rovo:
     tag: plx
     description: Service topology, contracts and blast radius for Jira work
@@ -132,4 +165,10 @@ permissions:
     fetch:
       backend:
         - address: marbled-river-9619.fly.dev
-  scopes: []
+  scopes:
+    - read:space:confluence
+    - read:page:confluence
+    - write:page:confluence
+    - write:label:confluence
+    - read:content.property:confluence
+    - write:content.property:confluence
