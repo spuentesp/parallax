@@ -10,6 +10,7 @@ modules:
         - parallax-find
         - parallax-node-impact
         - parallax-contract-detail
+        - parallax-expected-impact
         - parallax-publish-service-doc
   # The same actions, packaged as an agent that ships with the app, so it is
   # available on every site that installs it.
@@ -37,9 +38,15 @@ modules:
         7. Only publish a Confluence page when the user asks you to, and ask which space key to
            use if they have not said. Report whether the page was created or updated and give its link.
         8. If a tool returns an error, say what the error was instead of guessing.
+        9. When the user pastes a ticket or describes a planned change in words ("we want to
+           change how sandboxes are created"), call Expected impact of a change with that text.
+           It is a prediction from words, not from code: say which matches were exact and which
+           were fuzzy, list terms that could not be placed, and never claim a change is safe
+           just because nothing matched.
       conversationStarters:
         - Which Parallax workspaces are available?
         - What breaks if I change the openshell-gateway service in ws_cluster_a?
+        - What would this ticket affect? We want to add labels to the CreateSandbox call.
         - Document the nemoclaw service in Confluence
       actions:
         - parallax-status
@@ -48,8 +55,27 @@ modules:
         - parallax-find
         - parallax-node-impact
         - parallax-contract-detail
+        - parallax-expected-impact
         - parallax-publish-service-doc
   action:
+    - key: parallax-expected-impact
+      name: Expected impact of a change
+      function: expectedImpact
+      actionVerb: GET
+      description: |
+        Predict what a described change (a ticket) will touch. Finds the services and
+        endpoints named in the text and returns who consumes them, with proof level.
+      inputs:
+        text:
+          title: Change description
+          type: string
+          required: true
+          description: "The ticket text or a description of the planned change"
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: false
+          description: "Optional: limit the search to one workspace"
     - key: parallax-status
       name: Parallax backend status
       function: parallaxStatus
@@ -173,6 +199,8 @@ modules:
       handler: index.nodeImpact
     - key: contractDetail
       handler: index.contractDetail
+    - key: expectedImpact
+      handler: index.expectedImpact
     - key: publishServiceDoc
       handler: index.publishServiceDoc
 

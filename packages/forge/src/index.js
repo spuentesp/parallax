@@ -5,6 +5,7 @@
 // evidence from the real code graph. No second LLM is involved.
 import api, { assumeTrustedRoute, fetch } from '@forge/api';
 import { lookupAnnotations, publishServicePage } from './publisher.js';
+import { expectedImpact as resolveExpectedImpact, toGraph } from './resolve.js';
 
 const BACKEND = 'https://marbled-river-9619.fly.dev';
 
@@ -169,6 +170,52 @@ export async function nodeImpact(payload) {
   return data.error ? data : compact(await withAnnotations(data));
 }
 
+// The longest ticket text we analyse; the rest is ignored.
+const MAX_TEXT_CHARS = 8000;
+
+// Attach Confluence annotations (owner, criticality) to every distinct consumer of every
+// target, with one lookup per service. Best effort, like withAnnotations.
+async function annotateTargets(result) {
+  const services = [...new Set(result.targets.flatMap((t) => t.consumers.map((c) => c.service)))];
+  try {
+    const found = await Promise.all(
+      services.slice(0, MAX_ANNOTATION_LOOKUPS).map((s) => lookupAnnotations(cfAsUser, s)),
+    );
+    const bySvc = new Map(services.map((s, i) => [s, found[i]]));
+    for (const t of result.targets) {
+      for (const c of t.consumers) {
+        const hit = bySvc.get(c.service);
+        if (!hit) continue;
+        c.confluencePage = hit.pageUrl;
+        if (hit.annotations) c.annotations = hit.annotations;
+      }
+    }
+  } catch {
+    result.annotationsUnavailable = 'Confluence annotations could not be read for this user.';
+  }
+}
+
+// Predict what a piece of text (a Jira ticket) will touch, before any code exists.
+export async function expectedImpact(payload) {
+  const text = String(payload.text ?? '').slice(0, MAX_TEXT_CHARS);
+  const list = await parallax('/api/workspaces');
+  if (list.error) return list;
+  let workspaces = (list.workspaces || []).map((w) => ({ id: w.id, name: w.name }));
+  if (payload.workspaceId) workspaces = workspaces.filter((w) => w.id === payload.workspaceId);
+
+  const result = await resolveExpectedImpact({
+    text,
+    workspaces,
+    briefing: (id) => parallax(`${ws(id)}/map/briefing`),
+    search: async (id, term) => (await findNodes({ workspaceId: id, query: term })).results ?? [],
+    impact: loadNodeImpact,
+  });
+  await annotateTargets(result);
+  // Rebuild the graph after annotations so owners and criticality are drawn.
+  result.graph = toGraph(result.targets);
+  return compact(result);
+}
+
 // Publish (create or update) a machine-generated Confluence page for one service.
 export async function publishServiceDoc(payload) {
   const impact = await loadNodeImpact(payload.workspaceId, payload.nodeId);
@@ -186,7 +233,9 @@ export async function publishServiceDoc(payload) {
       spaceKey: payload.spaceKey,
       impact,
       workspace,
-      consoleBase: `${BACKEND}/app`,
+      // The console is served at the server root; the router has no /app prefix
+      // (a /app/... URL falls through to the default workspace).
+      consoleBase: BACKEND,
     });
   } catch (e) {
     return { error: e.message };
