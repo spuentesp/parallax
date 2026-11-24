@@ -44,6 +44,9 @@ import { workspaceRoutes } from './routes/workspaces.js';
 export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? 'info' },
+    // The boot handshake with an engine that is still loading its graph can take longer than
+    // Fastify's 10 s plugin default (observed on a 2-CPU VM with two engines starting together).
+    pluginTimeout: 90_000,
   }).withTypeProvider<ZodTypeProvider>();
 
   app.setValidatorCompiler(validatorCompiler);

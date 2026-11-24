@@ -1,0 +1,38 @@
+# Lain federation for cluster B on Fly (see Dockerfile.fly). Own engine, own index.
+data_dir: /lain-data-b
+max_concurrent_indexers: 2
+ready_threshold: 0.0
+
+repos:
+  - id: NeMo-Agent-Toolkit
+    source: {type: workspace_dir, path: /repos/NeMo-Agent-Toolkit}
+  - id: NeMo-Agent-Toolkit-UI
+    source: {type: workspace_dir, path: /repos/NeMo-Agent-Toolkit-UI}
+  - id: NeMo-Agent-Toolkit-Examples
+    source: {type: workspace_dir, path: /repos/NeMo-Agent-Toolkit-Examples}
+
+services:
+  - name: nat
+    repo: NeMo-Agent-Toolkit
+    hosts: [nat, nat-backend, "localhost:8000", "127.0.0.1:8000"]
+    env: [NAT_BACKEND_URL, NAT_SERVER_URL, NAT_URL, NEXT_PUBLIC_NAT_URL]
+  - name: nat-ui
+    repo: NeMo-Agent-Toolkit-UI
+  - name: nat-examples
+    repo: NeMo-Agent-Toolkit-Examples
+
+provides:
+  - service: nat
+    key: "http:POST /chat/stream"
+    source: "nat config.yaml (general.endpoint.path)"
+  - service: nat
+    key: "http:POST /chat"
+    source: "nat config.yaml"
+  - service: nat
+    key: "ws:/websocket"
+    source: "nat config.yaml (general.endpoint.websocket_path)"
+
+host_aliases:
+  - host: UPSTREAM_HTTP_ORIGIN
+    service: nat
+    source: "nat-ui proxy/server.js (NAT_BACKEND_URL)"

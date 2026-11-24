@@ -1,0 +1,31 @@
+# Fly.io app for the hackathon demo (the two NVIDIA clusters). Build: Dockerfile.fly (Parallax 0.2.0 + Lain 0.16.1).
+app = 'marbled-river-9619'
+primary_region = 'gru'
+
+[build]
+  dockerfile = 'Dockerfile.fly'
+
+[[mounts]]
+  source = 'data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # One machine stays up so a judge never waits through a multi-minute cold start.
+  min_machines_running = 1
+  processes = ['app']
+
+[[http_service.checks]]
+  grace_period = '6m'
+  interval = '30s'
+  method = 'GET'
+  path = '/api/health'
+  timeout = '10s'
+
+[[vm]]
+  memory = '4gb'
+  cpu_kind = 'shared'
+  cpus = 2

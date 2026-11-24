@@ -59,9 +59,9 @@ cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ## Install on a machine (one command)
 
 `install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
-the [lain](https://github.com/spuentesp/lain) **release binary** (v0.16.0,
+the [lain](https://github.com/spuentesp/lain) **release binary** (v0.16.1,
 SHA256-verified; set `LAIN_FROM_SOURCE=1` to build a branch from source
-instead; if the binary needs a newer glibc than the machine has, as v0.16.0
+instead; if the binary needs a newer glibc than the machine has, as v0.16.1
 does on Ubuntu 22.04, the script builds the same tag from source), the Saleor demo repos, the engine as a service, the HTTPS front end
 (Caddy), and a `deploy/.env` with generated tokens.
 
@@ -82,7 +82,7 @@ pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
 The api uses `LAIN_ADAPTER=mock` by default. Use
-[Lain v0.16.0](https://github.com/spuentesp/lain/releases/tag/v0.16.0) (the
+[Lain v0.16.1](https://github.com/spuentesp/lain/releases/tag/v0.16.1) (the
 latest release) for the GraphQL provider and binding fixes, the indexing performance
 and startup cache, the live coverage ledger, and the `query_graph` pipeline the Query
 page uses. Parallax does not hard-pin the engine's `analyzer_version` string at boot;
@@ -96,7 +96,7 @@ lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
 The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
-is superseded: v0.16.0 includes that work, so no patch is needed. On upgrade the
+is superseded: v0.16.1 includes that work, so no patch is needed. On upgrade the
 federation graph schema changes (v4 → v5 in 0.15, v5 → v7 in 0.16): run `lain reindex`
 once per data dir (the server refuses the old graph and says so), and re-prepare
 snapshots — `diff_contracts` refuses base/head recorded under a different
@@ -121,11 +121,14 @@ For resource-constrained installs, `install.sh` passes `LAIN_DISABLE_LSP`, `LAIN
 
 **Live demo and access.** The demo URL and a read-only access link are in the
 "testing instructions" of the Devpost submission. The link looks like
-`https://<demo-host>/orgs/ws_saleor?token=<read-only-token>`: it signs you in,
+`https://<demo-host>/orgs/ws_cluster_a?token=<read-only-token>`: it signs you in,
 removes the token from the address bar, and opens the architecture map of
-[Saleor](https://github.com/saleor/saleor) (an open-source multi-repo
-e-commerce platform: API, dashboard, storefront). Without the link the app asks
-for an access token. The token is **read-only**: you can explore the map and ask
+Cluster A: NVIDIA's [OpenShell](https://github.com/NVIDIA/OpenShell) gRPC gateway with
+its consumers [NemoClaw](https://github.com/NVIDIA/NemoClaw) and
+[NeMo-Fabric](https://github.com/NVIDIA/NeMo-Fabric). Cluster B
+(`/orgs/ws_cluster_b`) is the [NeMo Agent Toolkit](https://github.com/NVIDIA/NeMo-Agent-Toolkit)
+HTTP stack with its UI and examples. Both are analysed from public repos at pinned
+commits. Without the link the app asks for an access token. The token is **read-only**: you can explore the map and ask
 questions, but you cannot rebuild the graph or change workspaces.
 
 **Three-minute tour**
@@ -139,11 +142,15 @@ questions, but you cannot rebuild the graph or change workspaces.
    across repos, with how sure the engine is of each link. Click "View source" on
    a function or file.
 3. **Ask.** Open *Ask the architecture* and try *"Which services consume the
-   checkout API, and from which repos?"*. Nemotron (served on Nebius Token
+   OpenShell gRPC gateway, and from which repos?"*. Nemotron (served on Nebius Token
    Factory) investigates with the engine's tools. Every relationship it claims is
    re-checked by the engine; the answer shows how many were verified, and
    *Show on map* jumps to exactly the subgraph the engine backs.
-4. **Assess a PR.** *Assessments* shows the impact report of a pull request on
+4. **Query and Coverage.** *Query* runs read-only pipelines over the engine's graph with
+   the count after each step; *Coverage* shows per repo which analyses ran, what was
+   skipped and where the engine is blind, so "no impact" is never claimed over code it
+   could not read.
+5. **Assess a PR.** *Assessments* shows the impact report of a pull request on
    the other repos that consume what it changes.
 
 **Configuring repositories (no model involved).** In a workspace, the
@@ -230,7 +237,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-0.16.0 pnpm gate:graphql   # expects analyzer_version 0.16.0 (override: LAIN_EXPECTED_ANALYZER_VERSION)
+LAIN_BIN=/path/to/lain-0.16.1 pnpm gate:graphql   # expects analyzer_version 0.16.1 (override: LAIN_EXPECTED_ANALYZER_VERSION)
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the

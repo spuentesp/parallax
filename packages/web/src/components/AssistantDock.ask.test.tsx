@@ -54,4 +54,31 @@ describe('assistant: question handed over by ?ask=', () => {
     });
     await waitFor(() => expect(asked).toHaveLength(2));
   });
+
+  it('does not send again when a slow answer (longer than the window) brings ?conv= back', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => {
+      release = r;
+    });
+    server.use(
+      http.post('/api/query', async ({ request }) => {
+        asked.push(((await request.json()) as { question: string }).question);
+        await gate;
+        return HttpResponse.json({
+          answer: 'ok',
+          claims: [],
+          status: 'ok',
+          conversation: { id: 'c1' },
+        });
+      }),
+    );
+    const router = open('/orgs/acme?ask=Where%20are%20the%20loose%20ends%3F');
+    await waitFor(() => expect(asked).toHaveLength(1));
+    await waitFor(() => expect(router.state.location.search).not.toContain('ask='));
+    vi.setSystemTime(Date.now() + 90_000);
+    release();
+    await waitFor(() => expect(router.state.location.search).toContain('conv=c1'));
+    expect(router.state.location.search).not.toContain('ask=');
+    expect(asked).toHaveLength(1);
+  });
 });

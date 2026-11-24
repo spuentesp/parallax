@@ -1,60 +1,65 @@
-# 3-minute pitch video — script
+# 3-minute pitch video — script (v3, Parallax 0.2.0, Lain 0.16.1, NVIDIA clusters)
 
-Target: **2:45–2:55**. Record the screen at 1080p, voice-over after (re-recordable). No music, or music you have the licence for. No third-party logos on screen other than the product itself (Saleor is open source; it is fine to show its name).
+Target: **about 3:15**. This version follows the footage `docs/hackathon/record-demo.mjs` records, in the order it records it
+(the clips are not in the order of the earlier drafts). Timings were read from a contact sheet at 8 s steps: about ±5 s.
+About 2.5 spoken words a second. Record the voice-over after the capture; no music, or music you have the licence for.
 
-**Before recording:** warm the map cache (open the map once), pre-run the two questions below so Nemotron answers fast, check `NEBIUS_TOKEN` works on the demo host, close notifications, light **or** dark theme — pick one and stay on it.
+**Before recording:** open the demo once so the machine is warm, close notifications, stay on one theme. Use the read-only link.
+Demo: `https://marbled-river-9619.fly.dev/orgs/ws_cluster_a?token=<READ_ONLY_TOKEN>` (Cluster B: `/orgs/ws_cluster_b`).
+Capture: `PLAYWRIGHT_CORE=<path> node docs/hackathon/record-demo.mjs <BASE_URL> <READ_ONLY_TOKEN> <OUT_DIR>`. Each Ask starts in a
+fresh conversation. The Asks take 40 to 60 s: the web-search block is written to be spoken over that wait.
 
 ---
 
-### 0:00–0:20 — The problem (talk to camera or title card)
-> "I just joined a company. I'm assigned to checkout. I don't know the stack, I don't know which repos matter, I don't know what depends on what. Normally I'd spend two weeks asking people. Architects have the same problem at a bigger scale: a service mesh nobody fully understands. Knowledge silos. Parallax is built to destroy them."
+### 0:00–0:32 — Map
+*Screen: the Cluster A map fits to view, then repos, services, endpoints.*
+> "I just joined a team that builds on NVIDIA's agent stack. I don't know which repos matter, which services call which, or what breaks if I change something. Normally that's two weeks of asking people. This is Parallax, pointed at three of NVIDIA's public repos: OpenShell, NemoClaw and NeMo-Fabric. Repos, then services, then every endpoint, drawn from the code itself."
 
-*(Screen: the Parallax map, zoomed out, repos only.)*
+### 0:32–0:46 — Query
+*Screen: the Query page, the gRPC preset, Run.*
+> "For the raw graph there's a read-only query page. Here, every gRPC call site, grouped by the service that provides it. No model involved. This is the engine's own answer, with a count after every step."
 
-### 0:20–1:10 — New engineer: ask
-> "I ask Parallax what I'm walking into."
+### 0:46–1:02 — Coverage
+*Screen: the four tiles, the "real gaps" breakdown, the sensor table.*
+> "And the honest part. For every repo: which analyses ran, and where the engine is blind. It says outright that it does not claim complete coverage. So 'no impact' is only ever claimed over code it could actually read."
 
-Type: **"Which services consume the checkout API, and from which repos?"**
-> "Nemotron, running on Nebius Token Factory, investigates using the code analysis engine's tools. It answers — and look at this: every relationship it claimed was checked by the engine. Verified. Contradicted. Unverifiable. The model doesn't decide what's true; the engine does."
+### 1:04–1:40 — Ask, and every claim is checked
+*Screen: "Which services consume the OpenShell gRPC gateway, and from which repos?" is typed; tool calls scroll; the answer lands with verdicts (for example "3 verified · 1 unverifiable").*
+> "Now I ask what I'm walking into: which services consume the OpenShell gRPC gateway, and from which repos? Nemotron, running on Nebius Token Factory, investigates with the code analysis engine's tools. It answers, and every relationship it claimed is re-checked by the engine. Three verified, one unverifiable. The model doesn't decide what's true. The engine does, and it flags what it can't confirm."
 
-Click **Show on map**.
-> "And it takes me to exactly the part of the architecture that backs the answer."
+*(Say the verdict counts that are on screen; they can differ by a take.)*
 
-### 1:10–1:55 — Architect: explore
-> "Now I'm the architect. I want the whole picture."
+### 1:40–2:00 — Show on map, and the inspector
+*Screen: "Show on map"; the inspector with "Consumed by 3 services across 2 repos".*
+> "One click takes me to the exact part of the architecture behind the answer. The inspector lists who consumes this service, across repos, and how each link is known: deterministic here, proven by static analysis."
 
-*(Zoom out → open a repo → open a service → endpoint → Code → a file → a function.)*
-> "Repos, services, endpoints, then the code itself — functions inside files inside the repo. All loaded on demand, so it scales."
+### 2:00–2:16 — Proven and inferred
+*Screen: the Inferred and Proven toggles.*
+> "Solid lines are proven. Dashed lines are inferred, and Parallax labels them that way. It never promotes a guess to a fact."
 
-*(Toggle **inferred** only, then **deterministic**.)*
-> "Solid lines are proven by static analysis. Dashed lines are inferred, fainter the less sure the engine is. Parallax never promotes a guess to a fact."
+### 2:16–3:10 — Web search, and how it's built
+*Screen: the question, "Investigating…" with its steps, then the answer with its verdicts.*
+> "For general technical questions it can search the web, official documentation first. I'll ask what gRPC server reflection is, and whether any of our services expose it. While it works, you can see each step. Nemotron 3 Super plans, Nemotron 3.5 Lightning does the fast reads, both through Nebius Token Factory, in a tool-calling loop with a hard budget. The answer separates what the documentation says from what the code shows, and the engine checks the code part."
 
-*(Select an endpoint; inspector shows Consumed by.)*
-> "Click any endpoint: who consumes it, across repos, and how sure we are."
-
-### 1:55–2:25 — Change impact
-*(Assessments → a PR report.)*
-> "Before a change ships: what does this pull request break in other repos? The engine decides the facts — which consumers, how severe — and Nemotron explains them, by finding, so nothing is invented."
-
-### 2:25–2:50 — How it's built (quick, for the judges)
-*(Show a short architecture diagram or the investigator's tool-call trace.)*
-> "Nemotron 3 Super plans, Nemotron 3.5 Lightning does the fast work, both through Nebius Token Factory, in a tool-calling loop with a hard budget. Every explanation is stored with the model, prompt and tool calls, so it's auditable. The app runs on Nebius."
-
-### 2:50–3:00 — Close
+### 3:10–3:17 — Close
+*Screen: hold on the final answer; add an end card with the repo and demo URLs in your editor.*
 > "Knowledge locked in people's heads, made navigable and verifiable. That's Parallax: if it's in your org's code, it can guide you."
 
-*(End card: repo URL + demo URL.)*
-
 ---
 
-### Real numbers you can quote (measured, Saleor on Lain 0.13.0)
-- 3 repos (API, dashboard, storefront) → 3 services → **661 contracts** (591 GraphQL, 164 topics, 80 HTTP…).
-- **331 service-to-contract dependencies; 657 uses proven (deterministic), 8 inferred.** Built in ~11 s; cold index of the three repos ~2 min.
-- The biggest service has 591 endpoints: Parallax shows the 50 most connected and says "+541 more" instead of drawing a hairball.
+### Real numbers you can quote (measured on the deployed demo, Lain 0.16.1)
+- **Cluster A** (OpenShell, NemoClaw, NeMo-Fabric): 5 services, 203 endpoints, 52 dependencies.
+- **Cluster B** (NeMo Agent Toolkit, UI, examples): 3 services, 27 endpoints, 2 dependencies.
+- An Ask on the deployed demo takes about a minute (40 to 60 s measured).
+- ~2,200 tests; every Ask's claims are re-checked by the engine.
 
-### Keep it honest (do not say these — they are not built yet)
-- Do **not** claim a "what happened this week across all repos" digest, or that it knows which *team* owns a service / which services "belong to sales". Say "checkout" or another name-based domain.
-- If asked in Q&A: PR impact is per-PR today; ownership metadata and digests are the roadmap.
+### Keep it honest (do not say these)
+- Do **not** say the app runs on Nebius AI Cloud: the model calls go to Nebius Token Factory; the demo is hosted on Fly.io.
+- Do **not** claim the web answer cites grpc.io, or name which service exposes server reflection: both vary from run to run.
+- Do **not** claim a weekly digest across repos or team ownership ("which services belong to sales"); those are roadmap. Say "gRPC gateway" or another name-based concept.
+- Cluster A's coverage is not complete (the engine says so on the Coverage page); say that, it is the point.
+- The Query page has no natural-language "Translate" box yet.
 
-### Shot list checklist
-- [ ] Map zoomed out (repos) · [ ] ask + verdicts + Show on map · [ ] drill repo→function · [ ] inferred vs deterministic filter · [ ] inspector "Consumed by" · [ ] PR assessment · [ ] architecture/trace slide · [ ] end card with URLs
+### Shot list checklist (in recorded order)
+- [ ] Map fit to view, repos → services → endpoints · [ ] Query → gRPC preset → Run · [ ] Coverage health + blind spots · [ ] Ask + verdicts · [ ] Show on map + inspector "Consumed by" · [ ] inferred vs proven · [ ] web-search Ask · [ ] end card with URLs (add in the editor)
+- Not in the capture: drilling repo → file. Record it by hand if you want it.

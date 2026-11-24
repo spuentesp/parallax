@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { scopeToWorkspace } from '../coverage/scope.js';
 import * as schema from '../db/schema.js';
 import {
   type MergedResult,
@@ -93,8 +94,14 @@ export const graphQueryRoutes: FastifyPluginAsync = async (app) => {
         const cov = (await adapter.getCoverage({ snapshot: 'live' })) as {
           repos?: Array<{ repo?: unknown }>;
         };
-        const engineRepos = (cov.repos ?? []).flatMap((r) =>
-          typeof r.repo === 'string' ? [r.repo] : [],
+        const wsRows = await app.db
+          .select()
+          .from(schema.repo)
+          .where(eq(schema.repo.workspaceId, id));
+        const engineRepos = scopeToWorkspace(
+          (cov.repos ?? []).flatMap((r) => (typeof r.repo === 'string' ? [r.repo] : [])),
+          (r) => r,
+          wsRows,
         );
         const repos = body.data.repos
           ? engineRepos.filter((r) => body.data.repos?.includes(r))
