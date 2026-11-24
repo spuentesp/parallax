@@ -1,0 +1,10 @@
+{
+  "name": "@parallax/forge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Parallax Forge app for Atlassian Codegeist 2026 (Rovo MCP + agent, Jira panel)",
+  "dependencies": {
+    "@forge/api": "^7.0.0"
+  }
+}

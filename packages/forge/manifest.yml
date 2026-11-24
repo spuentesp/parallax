@@ -1,0 +1,135 @@
+modules:
+  # One MCP server: the same actions power Rovo agents and third-party MCP clients.
+  rovo:mcp:
+    - key: parallax-mcp
+      name: Parallax Architecture
+      tools:
+        - parallax-status
+        - parallax-list-workspaces
+        - parallax-briefing
+        - parallax-find
+        - parallax-node-impact
+        - parallax-contract-detail
+  action:
+    - key: parallax-status
+      name: Parallax backend status
+      function: parallaxStatus
+      actionVerb: GET
+      description: |
+        Report whether the Parallax architecture backend is reachable and which
+        Lain analyzer version it runs.
+    - key: parallax-list-workspaces
+      name: List architecture workspaces
+      function: listWorkspaces
+      actionVerb: GET
+      description: |
+        List the architecture workspaces Parallax has analysed. Each workspace is a
+        set of repositories studied together. Call this first to get a workspaceId.
+    - key: parallax-briefing
+      name: Workspace architecture briefing
+      function: briefing
+      actionVerb: GET
+      description: |
+        Get a deterministic overview of a workspace: which services exist, their
+        entry points, and who uses what. Use it to orient before asking about a change.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+    - key: parallax-find
+      name: Find services or symbols
+      function: findNodes
+      actionVerb: GET
+      description: |
+        Search a workspace's code graph for services, symbols or contracts by name.
+        Returns node ids to pass to parallax-node-impact.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        query:
+          title: Search text
+          type: string
+          required: true
+          description: "Name or fragment of a service, symbol or contract"
+    - key: parallax-node-impact
+      name: Blast radius of a node
+      function: nodeImpact
+      actionVerb: GET
+      description: |
+        Show who consumes a service or symbol and what it depends on, with
+        provenance. Use it to answer "what breaks if we change X?".
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        nodeId:
+          title: Node ID
+          type: string
+          required: true
+          description: "Node id returned by parallax-find"
+    - key: parallax-contract-detail
+      name: API contract detail
+      function: contractDetail
+      actionVerb: GET
+      description: |
+        Show the providers, schemas and consumers of one API contract, such as a
+        GraphQL field or a protobuf message.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        contractKey:
+          title: Contract key
+          type: string
+          required: true
+          description: "The contract key, e.g. a GraphQL field or proto message name"
+        service:
+          title: Service
+          type: string
+          required: false
+          description: "Optional service name to narrow the contract"
+  function:
+    - key: parallaxStatus
+      handler: index.parallaxStatus
+    - key: listWorkspaces
+      handler: index.listWorkspaces
+    - key: briefing
+      handler: index.briefing
+    - key: findNodes
+      handler: index.findNodes
+    - key: nodeImpact
+      handler: index.nodeImpact
+    - key: contractDetail
+      handler: index.contractDetail
+
+# Required for any app with a rovo:mcp module from 2027-01-05 (tag <= 8 chars,
+# description <= 100 chars, keywords combined <= 50 chars).
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/9fe4925c-2d52-4c10-b231-f5bf5a9df465
+  rovo:
+    tag: plx
+    description: Service topology, contracts and blast radius for Jira work
+    keywords:
+      - architecture
+      - blast-radius
+      - services
+
+permissions:
+  external:
+    fetch:
+      backend:
+        - address: marbled-river-9619.fly.dev
+  scopes: []
