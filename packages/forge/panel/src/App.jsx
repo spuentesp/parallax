@@ -177,6 +177,12 @@ function PullRequest({ pr }) {
       </div>
 
       <Unnamed items={drift.touchedButNotNamed} />
+      {drift.couldNotCompare > 0 && (
+        <p className="muted small">
+          {drift.couldNotCompare} methods in the interface files this PR changed could not be
+          compared (streaming or schema-less methods). That is not evidence that they changed.
+        </p>
+      )}
       <CodeRisk code={a.codeImpact} />
 
       {drift.caveat && <p className="caveat">{drift.caveat}</p>}

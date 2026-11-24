@@ -128,8 +128,9 @@
     "pr": "NVIDIA/OpenShell#5052",
     "counts": {
      "verified": 0,
-     "needsInvestigation": 9,
-     "noKnownImpact": 0
+     "needsInvestigation": 0,
+     "noKnownImpact": 0,
+     "couldNotCompare": 9
     },
     "coverage": {
      "complete": false,
@@ -140,152 +141,47 @@
      ],
      "note": "Coverage is incomplete: an empty result does not prove there is no impact."
     },
-    "findings": [
+    "findings": [],
+    "findingsTotal": 0,
+    "couldNotCompare": [
      {
       "endpoint": "rpc:openshell.supervisor.host.v1.SupervisorHost/Attach",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "unresolved_candidates"
-      ],
-      "affectedTotal": 187,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/ConnectSupervisor",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "unresolved_candidates"
-      ],
-      "affectedTotal": 187,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/GetGatewayConfig",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "unresolved_candidates"
-      ],
-      "affectedTotal": 187,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/PushSandboxLogs",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "unresolved_candidates"
-      ],
-      "affectedTotal": 187,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/GetSandboxConfig",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "no_schema"
-      ],
-      "affectedTotal": 5,
-      "affectedDistinct": 5,
-      "affectedByRepo": {
-       "OpenShell": 5
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/RelayStream",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "no_schema"
-      ],
-      "affectedTotal": 3,
-      "affectedDistinct": 3,
-      "affectedByRepo": {
-       "OpenShell": 3
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/ExecSandboxInteractive",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "no_schema"
-      ],
-      "affectedTotal": 1,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/ForwardTcp",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "no_schema"
-      ],
-      "affectedTotal": 1,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
+      "service": "openshell-gateway"
      },
      {
       "endpoint": "rpc:openshell.v1.OpenShell/PeerRelay",
-      "service": "openshell-gateway",
-      "change": "ChangedWithoutSchema",
-      "compat": "NeedsReview",
-      "class": "NeedsInvestigation",
-      "reasons": [
-       "no_schema"
-      ],
-      "affectedTotal": 1,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
+      "service": "openshell-gateway"
      }
     ],
-    "findingsTotal": 9,
+    "compatibleChanges": 0,
     "codeImpact": {
      "repo": "OpenShell",
      "filesChanged": 20,
@@ -343,8 +239,8 @@
     }
    },
    "drift": {
-    "verdict": "wider-than-ticket",
-    "headline": "The PR touched 1 contract the ticket named, and 8 it never mentioned.",
+    "verdict": "code-only",
+    "headline": "The PR changed no contracts, but edited 10 code symbols in OpenShell (highest risk: high; 7 untested). Also: 9 methods in changed interface files could not be compared.",
     "codeChanges": {
      "repo": "OpenShell",
      "symbols": 10,
@@ -353,105 +249,20 @@
      "filesChanged": 20,
      "filesAnalyzed": 12
     },
-    "confirmed": [
+    "couldNotCompare": 9,
+    "compatibleChanges": 0,
+    "confirmed": [],
+    "touchedButNotNamed": [],
+    "namedButUntouched": [
      "rpc:openshell.v1.OpenShell/ConnectSupervisor"
     ],
-    "touchedButNotNamed": [
-     {
-      "endpoint": "rpc:openshell.supervisor.host.v1.SupervisorHost/Attach",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/GetGatewayConfig",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/PushSandboxLogs",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 99,
-      "affectedByRepo": {
-       "NeMo-Fabric": 11,
-       "NemoClaw": 82,
-       "OpenShell": 6
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/GetSandboxConfig",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 5,
-      "affectedByRepo": {
-       "OpenShell": 5
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/RelayStream",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 3,
-      "affectedByRepo": {
-       "OpenShell": 3
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/ExecSandboxInteractive",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/ForwardTcp",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
-     },
-     {
-      "endpoint": "rpc:openshell.v1.OpenShell/PeerRelay",
-      "service": "openshell-gateway",
-      "class": "NeedsInvestigation",
-      "serviceWasNamed": true,
-      "affectedDistinct": 1,
-      "affectedByRepo": {
-       "OpenShell": 1
-      }
-     }
-    ],
-    "namedButUntouched": [],
     "caveat": "The assessment has incomplete coverage, so \"untouched\" does not mean \"safe\"."
    },
    "nextSteps": [
     "Talk to Platform team (owns nemoclaw, high criticality) before this ships.",
-    "Check whether the 8 contracts the ticket did not name are intended; update the ticket or the PR.",
     "Have a second reviewer read Inner (crates/openshell-supervisor-control/src/controller.rs:343): high risk, untested.",
     "Add tests for the 7 untested edited symbols in OpenShell.",
+    "Read the diff of the changed interface files yourself: the engine could not compare 9 methods in them.",
     "Treat \"needs investigation\" as open questions: this analysis cannot prove the absence of impact."
    ]
   }

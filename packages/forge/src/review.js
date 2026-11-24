@@ -9,6 +9,7 @@
 //   2. A prediction from text is never presented as proof; "drift" only says the ticket and the
 //      PR disagree, and which side the disagreement is on.
 
+const UNCOMPARED = 'ChangedWithoutSchema';
 const CLASS_ORDER = { Verified: 0, NeedsInvestigation: 1, NoKnownImpact: 2 };
 const MAX_FINDINGS = 12;
 const MAX_NARRATIVE_CHARS = 700;
@@ -78,10 +79,18 @@ export function summarizeAssessment(assessment) {
       b.affectedDistinct - a.affectedDistinct,
   );
 
+  // "ChangedWithoutSchema" does NOT mean the contract changed. The engine cannot extract a schema
+  // for these methods (streaming calls, for instance), so it cannot compare them, and it flags
+  // all of them whenever their interface file changes at all, even for a comment edit. They are
+  // reported separately as "could not be compared", never as contracts the PR touched.
+  const uncompared = findings.filter((f) => f.change === UNCOMPARED);
+  const definite = findings.filter((f) => f.change !== UNCOMPARED);
+
   const counts = {
-    verified: findings.filter((f) => f.class === 'Verified').length,
-    needsInvestigation: findings.filter((f) => f.class === 'NeedsInvestigation').length,
-    noKnownImpact: findings.filter((f) => f.class === 'NoKnownImpact').length,
+    verified: definite.filter((f) => f.class === 'Verified').length,
+    needsInvestigation: definite.filter((f) => f.class === 'NeedsInvestigation').length,
+    noKnownImpact: definite.filter((f) => f.class === 'NoKnownImpact').length,
+    couldNotCompare: uncompared.length,
   };
   const coverageComplete = assessment.coverage?.complete === true;
   const ci = assessment.codeImpact;
@@ -102,8 +111,14 @@ export function summarizeAssessment(assessment) {
         ? 'Coverage is complete.'
         : 'Coverage is incomplete: an empty result does not prove there is no impact.',
     },
-    findings: findings.slice(0, MAX_FINDINGS),
-    findingsTotal: findings.length,
+    findings: definite.slice(0, MAX_FINDINGS),
+    findingsTotal: definite.length,
+    couldNotCompare: uncompared
+      .slice(0, MAX_FINDINGS)
+      .map((f) => ({ endpoint: f.endpoint, service: f.service })),
+    // Wire-compatible changes (a field added or removed, for example) are counted by the engine
+    // but not listed one by one.
+    compatibleChanges: Number(assessment.engine?.diff?.compatible_changes) || 0,
     codeImpact: ci
       ? {
           repo: ci.repo,
@@ -183,9 +198,16 @@ export function computeDrift(expected, summary) {
         }
       : null;
 
+  // What the engine could not settle, said next to the verdict so it is never missed.
+  const couldNotCompare = summary.counts?.couldNotCompare ?? 0;
+  const compatibleChanges = summary.compatibleChanges ?? 0;
+
   let verdict;
-  if (touched.length === 0) verdict = codeChanges ? 'code-only' : 'pr-touched-no-contracts';
-  else if (targets.length === 0) verdict = 'ticket-named-nothing';
+  if (touched.length === 0) {
+    if (codeChanges) verdict = 'code-only';
+    else if (couldNotCompare > 0 || compatibleChanges > 0) verdict = 'no-definite-change';
+    else verdict = 'pr-touched-no-contracts';
+  } else if (targets.length === 0) verdict = 'ticket-named-nothing';
   else if (inNamedService.length === 0 && elsewhere.length === 0 && missed.length === 0)
     verdict = 'aligned';
   else if (confirmed.length === 0) verdict = 'different';
@@ -193,14 +215,17 @@ export function computeDrift(expected, summary) {
 
   return {
     verdict,
-    headline: HEADLINES[verdict]({
-      touched: touched.length,
-      confirmed: confirmed.length,
-      extra: inNamedService.length + elsewhere.length,
-      missed: missed.length,
-      code: codeChanges,
-    }),
+    headline:
+      HEADLINES[verdict]({
+        touched: touched.length,
+        confirmed: confirmed.length,
+        extra: inNamedService.length + elsewhere.length,
+        missed: missed.length,
+        code: codeChanges,
+      }) + settleNote(couldNotCompare, compatibleChanges),
     codeChanges,
+    couldNotCompare,
+    compatibleChanges,
     confirmed,
     // Ranked: proven impact first, then the ones with the most distinct consumers.
     touchedButNotNamed: [...inNamedService, ...elsewhere]
@@ -227,6 +252,22 @@ export function computeDrift(expected, summary) {
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+// What the engine could not settle, as a sentence to append to a headline.
+function settleNote(couldNotCompare, compatibleChanges) {
+  const parts = [];
+  if (couldNotCompare > 0) {
+    parts.push(
+      `${plural(couldNotCompare, 'method')} in changed interface files could not be compared`,
+    );
+  }
+  if (compatibleChanges > 0) {
+    parts.push(
+      `${plural(compatibleChanges, 'wire-compatible change')} (such as an added or removed field) ${compatibleChanges === 1 ? 'was' : 'were'} found but not listed`,
+    );
+  }
+  return parts.length ? ` Also: ${parts.join('; ')}.` : '';
+}
+
 // One sentence a reader can take in at a glance. Each takes the counts it needs.
 const HEADLINES = {
   aligned: ({ touched }) =>
@@ -237,6 +278,7 @@ const HEADLINES = {
     `The PR touched ${plural(extra, 'contract')}, none of them the ones the ticket named.`,
   'ticket-named-nothing': ({ touched }) =>
     `The ticket named no known service or endpoint, but the PR touched ${plural(touched, 'contract change')}.`,
+  'no-definite-change': () => 'The engine found no definite contract change in this PR.',
   'pr-touched-no-contracts': ({ missed }) =>
     `The PR changed no contracts${missed ? `, although the ticket named ${missed}` : ''}.`,
   'code-only': ({ code }) =>
@@ -324,6 +366,20 @@ export function nextSteps({ expected, drift, summary }) {
   if (uniqueInferred.length > 0) {
     steps.push(
       `Verify the inferred dependency on ${uniqueInferred.slice(0, 3).join(', ')}: it comes from a heuristic, not from proof.`,
+    );
+  }
+
+  // The engine counts wire-compatible changes without naming them, so a contract the ticket
+  // names is not necessarily untouched: the unnamed change may be it.
+  if ((drift?.compatibleChanges ?? 0) > 0 && (drift?.namedButUntouched?.length ?? 0) > 0) {
+    steps.push(
+      `The engine counted ${plural(drift.compatibleChanges, 'wire-compatible change')} without naming ${drift.compatibleChanges === 1 ? 'it' : 'them'}: check whether ${drift.compatibleChanges === 1 ? 'it is' : 'they are'} what the ticket names, in the diff.`,
+    );
+  }
+
+  if ((drift?.couldNotCompare ?? 0) > 0) {
+    steps.push(
+      `Read the diff of the changed interface files yourself: the engine could not compare ${plural(drift.couldNotCompare, 'method')} in them.`,
     );
   }
 

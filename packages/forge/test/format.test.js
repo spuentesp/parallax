@@ -69,6 +69,14 @@ describe('countsLine', () => {
       '2 verified · 1 need investigation · 4 no known impact',
     );
   });
+  it('keeps methods that could not be compared apart from findings', () => {
+    expect(
+      countsLine({ verified: 0, needsInvestigation: 0, noKnownImpact: 0, couldNotCompare: 9 }),
+    ).toBe('9 could not be compared');
+    expect(
+      countsLine({ verified: 1, needsInvestigation: 2, noKnownImpact: 0, couldNotCompare: 3 }),
+    ).toBe('1 verified · 2 need investigation · 3 could not be compared');
+  });
   it('says so when there are no contract findings', () => {
     expect(countsLine({ verified: 0, needsInvestigation: 0, noKnownImpact: 0 })).toBe(
       'no contract findings',

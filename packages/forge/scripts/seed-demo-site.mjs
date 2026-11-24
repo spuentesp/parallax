@@ -44,11 +44,15 @@ const TICKETS = [
   },
   {
     type: 'Story',
-    summary: 'Add a labels map to the CreateSandbox request',
+    summary: 'Remove the labels map from the CreateSandbox request',
+    // This ticket used to say "add" a labels map, which already exists in the real repository.
+    renamedFrom: 'Add a labels map to the CreateSandbox request',
     body: [
-      'Callers want to tag sandboxes. Add an optional labels map to rpc openshell.v1.OpenShell/CreateSandbox in the openshell-gateway service.',
+      'Labels will be set after creation instead. Remove the labels map from rpc openshell.v1.OpenShell/CreateSandbox in the openshell-gateway service.',
       'Open question: who calls CreateSandbox today, and do we have to coordinate a client release?',
     ],
+    // A clearly labelled synthetic PR on a fork that makes exactly this breaking change.
+    pr: 'https://github.com/spuentesp/openshell/pull/1',
   },
   {
     type: 'Task',
@@ -130,6 +134,15 @@ const describe = (t) => adf(...t.body, ...(t.pr ? [`Pull request: ${t.pr}`] : []
 
 let epicKey;
 for (const t of TICKETS) {
+  // A ticket that was reworded: bring the existing issue up to date instead of creating a twin.
+  const old = t.renamedFrom && !have.has(t.summary) ? have.get(t.renamedFrom) : undefined;
+  if (old) {
+    await call('PUT', `/rest/api/3/issue/${old.key}`, {
+      fields: { summary: t.summary, description: describe(t) },
+    });
+    console.log(`rename ${old.key}  -> ${t.summary}`);
+    continue;
+  }
   const found = have.get(t.summary);
   if (found) {
     // Idempotent update: add the pull request link to a ticket that exists without it.

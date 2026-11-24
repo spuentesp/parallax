@@ -60,7 +60,7 @@ External exposure of Forge tools is off by default (Atlassian's rovo:mcp Preview
 
 The panel compares what a ticket *predicts* with what its pull request *actually changed*.
 
-1. In any Jira project, create an issue and paste one of the three tickets below as its
+1. In any Jira project, create an issue and paste one of the four tickets below as its
    description (the first line is the summary).
 2. Open the issue. **The panel is not shown by default.** On the issue toolbar, click the
    **hexagon (app) icon**, then **Parallax impact**. The panel opens in the issue content.
@@ -69,10 +69,10 @@ The panel compares what a ticket *predicts* with what its pull request *actually
    pull request's real analysis with a one-sentence headline of how the two differ, and a ranked
    list of next steps.
 
-Tickets to paste (two real, merged pull requests are analysed; **any other pull request link
-shows "has not been analysed yet"**):
+Tickets to paste (three pull requests are analysed: two real, merged ones and one clearly
+labelled synthetic demo; **any other pull request link shows "has not been analysed yet"**):
 
-**A. A contract change that goes wider than the ticket**
+**A. A PR that edits risky code and touches an interface file**
 
 > Keep pool sandbox sessions on their supervisor's gateway
 >
@@ -80,7 +80,12 @@ shows "has not been analysed yet"**):
 >
 > Pull request: https://github.com/NVIDIA/OpenShell/pull/5052
 
-Expected headline: "The PR touched 1 contract the ticket named, and 8 it never mentioned."
+Expected headline: "The PR changed no contracts, but edited 10 code symbols in OpenShell (highest
+risk: high; 7 untested). Also: 9 methods in changed interface files could not be compared."
+
+"Could not be compared" is deliberate: the engine cannot extract a schema for streaming methods, so
+it flags every such method in an interface file whenever that file changes, even for a comment
+edit. Parallax reports those separately and never calls them contracts the PR touched.
 
 **B. A code-only change with risky edits and no contract change**
 
@@ -92,13 +97,26 @@ Expected headline: "The PR touched 1 contract the ticket named, and 8 it never m
 
 Expected headline: "The PR changed no contracts, but edited 2 code symbols in NemoClaw (highest risk: high; 1 untested)."
 
-**C. A prediction only, no pull request yet**
+**C. A synthetic demo PR that makes a wire-compatible change**
 
-> Add a labels map to the CreateSandbox request
+> Remove the labels map from the CreateSandbox request
 >
-> Add an optional labels map to rpc openshell.v1.OpenShell/CreateSandbox in the openshell-gateway service.
+> Labels will be set after creation instead. Remove the labels map from rpc openshell.v1.OpenShell/CreateSandbox in the openshell-gateway service.
+>
+> Pull request: https://github.com/spuentesp/openshell/pull/1
 
-Only the prediction and its graph are shown. Both reports are honest about their limits:
+That pull request is a labelled demo on a fork (do not merge): it removes one field. Expected: the
+prediction graph shows `openshell-sdk` depending on `CreateSandbox` (the SDK sets `labels=`), and
+the headline says the engine found no definite contract change and counted one wire-compatible
+change that it does not list individually.
+
+**D. A prediction only, no pull request yet**
+
+> Change the ListSandboxes default page size from 50 to 25
+>
+> rpc openshell.v1.OpenShell/ListSandboxes on openshell-gateway returns up to 50 sandboxes by default. Halve the default.
+
+Only the prediction and its graph are shown. All reports are honest about their limits:
 "needs investigation" means the engine could not prove or rule out an impact, and the panel
 says so when coverage is incomplete.
 
@@ -113,7 +131,7 @@ The app ships a Rovo agent. Open Rovo (<https://home.atlassian.com> > your site 
 - "Which Parallax workspaces are available?"
 - "What breaks if I change the openshell-gateway service in the ws_cluster_a workspace?"
 - "Document the nemoclaw service in Confluence space `<KEY>`"
-- Paste any of the three tickets above and ask "What would this ticket affect, and how did its
+- Paste any of the tickets above and ask "What would this ticket affect, and how did its
   pull request compare?" The agent reviews the ticket and its pull request and finishes with the
   same next steps and contacts as the panel.
 
@@ -173,10 +191,11 @@ A page that Parallax did not create is never overwritten, even if it has the sam
 
 - The demo data are two public NVIDIA code clusters, indexed at pinned commits. Parallax does
   not index your own repositories in this build.
-- Only two pull requests have been analysed (OpenShell #5052 and NemoClaw #13812). Others report
-  "has not been analysed yet". Neither analysis contains a "Verified" finding: those projects
-  mostly add to their interfaces rather than break them, and the engine does not claim a proof
-  it does not have.
+- Only three pull requests have been analysed (OpenShell #5052, NemoClaw #13812 and the synthetic
+  demo spuentesp/openshell#1). Others report "has not been analysed yet". None of the analyses
+  contains a "Verified" finding: real OpenShell and NemoClaw changes mostly add to their
+  interfaces, a removed proto3 field is wire-compatible, and the engine does not claim a proof it
+  does not have.
 - Confluence pages are written as the calling user, so Confluence's own space permissions apply.
 - External MCP exposure and `rovo:mcp` are Atlassian Preview features.
 - The Forge app is not eligible for "Runs on Atlassian": it calls an external server by design.

@@ -145,7 +145,8 @@
     "counts": {
      "verified": 0,
      "needsInvestigation": 0,
-     "noKnownImpact": 0
+     "noKnownImpact": 0,
+     "couldNotCompare": 0
     },
     "coverage": {
      "complete": false,
@@ -158,6 +159,8 @@
     },
     "findings": [],
     "findingsTotal": 0,
+    "couldNotCompare": [],
+    "compatibleChanges": 0,
     "codeImpact": {
      "repo": "NemoClaw",
      "filesChanged": 4,
@@ -201,6 +204,8 @@
      "filesChanged": 4,
      "filesAnalyzed": 2
     },
+    "couldNotCompare": 0,
+    "compatibleChanges": 0,
     "confirmed": [],
     "touchedButNotNamed": [],
     "namedButUntouched": [

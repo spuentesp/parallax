@@ -14,6 +14,11 @@ import {
 const real = JSON.parse(
   readFileSync(new URL('./fixtures/assessment-5052.json', import.meta.url), 'utf8'),
 );
+// The real report of a synthetic PR that removes one proto3 field: the engine counts one
+// wire-compatible change and flags 8 streaming methods it could not compare.
+const fork = JSON.parse(
+  readFileSync(new URL('./fixtures/assessment-fork.json', import.meta.url), 'utf8'),
+);
 // A real code-only PR (NemoClaw #13812): no contract findings, but risky code edits.
 const codeOnly = JSON.parse(
   readFileSync(new URL('./fixtures/assessment-13812.json', import.meta.url), 'utf8'),
@@ -74,13 +79,48 @@ describe('summarizeAssessment (real report)', () => {
     expect(s.id).toBe(real.id);
     expect(s.status).toBe('PARTIAL');
     expect(s.pr).toBe('NVIDIA/OpenShell#5052');
-    expect(s.counts).toEqual({ verified: 0, needsInvestigation: 4, noKnownImpact: 0 });
+    // Regression: these streaming methods used to be counted as "needs investigation" contract
+    // changes. They are methods the engine could not compare, not changes the PR made.
+    expect(s.counts).toEqual({
+      verified: 0,
+      needsInvestigation: 0,
+      noKnownImpact: 0,
+      couldNotCompare: 4,
+    });
+    expect(s.findings).toEqual([]);
+    expect(s.couldNotCompare.map((f) => f.endpoint)).toContain(
+      'rpc:openshell.supervisor.host.v1.SupervisorHost/Attach',
+    );
   });
 
   it('collapses repeated call sites so a reader sees consumers, not a wall of lines', () => {
-    const attach = s.findings.find((f) => f.endpoint.endsWith('SupervisorHost/Attach'));
-    expect(attach.affectedTotal).toBeGreaterThan(attach.affectedDistinct);
-    expect(attach.affectedByRepo).toMatchObject({ 'NeMo-Fabric': expect.any(Number) });
+    const site = (consumer) => ({ service: 'NeMo-Fabric', consumer, class: 'Verified' });
+    const out = summarizeAssessment({
+      id: 'x',
+      status: 'READY',
+      coverage: { complete: true },
+      findings: [
+        {
+          kind: 'Changed',
+          endpoint: { key: 'rpc:x/A', service: 'gw' },
+          impact: { class: 'Verified' },
+          // the same consumer reported at three call sites, plus one other consumer
+          affected: [site('POST /a'), site('POST /a'), site('POST /a'), site('GET /b')],
+        },
+      ],
+    });
+    const f = out.findings[0];
+    expect(f.affectedTotal).toBe(4);
+    expect(f.affectedDistinct).toBe(2);
+    expect(f.affectedByRepo).toEqual({ 'NeMo-Fabric': 2 });
+  });
+
+  it('reports the engine count of wire-compatible changes (real synthetic PR)', () => {
+    const forkSummary = summarizeAssessment(fork);
+    // one removed field: counted by the engine, not listed one by one
+    expect(forkSummary.compatibleChanges).toBe(1);
+    expect(forkSummary.counts.couldNotCompare).toBe(8);
+    expect(forkSummary.counts.needsInvestigation).toBe(0);
   });
 
   it('says plainly that incomplete coverage is not proof of safety', () => {
@@ -185,7 +225,7 @@ describe('nextSteps', () => {
     expect(steps.at(-1)).toMatch(/inferred dependency on d/);
   });
 
-  it('asks the reader to confirm contracts the ticket never named (real report)', () => {
+  it('tells the reader to read the diff when methods could not be compared (real report)', () => {
     const s = summarizeAssessment(real);
     const expected = {
       targets: [
@@ -193,9 +233,9 @@ describe('nextSteps', () => {
       ],
     };
     const steps = nextSteps({ expected, drift: computeDrift(expected, s), summary: s });
-    expect(steps.some((t) => /3 contracts the ticket did not name are intended/.test(t))).toBe(
-      true,
-    );
+    expect(steps.some((t) => /could not compare 4 methods/.test(t))).toBe(true);
+    // and it must NOT claim contracts the ticket never named were touched
+    expect(steps.some((t) => /did not name/.test(t))).toBe(false);
     // coverage is incomplete in this report, and the last step must say so
     expect(steps.at(-1)).toMatch(/cannot prove the absence of impact/);
   });
@@ -326,7 +366,12 @@ describe('computeDrift', () => {
   it('reports risky code edits even when no contract changed (real code-only PR)', () => {
     const s = summarizeAssessment(codeOnly);
     expect(s.status).toBe('READY');
-    expect(s.counts).toEqual({ verified: 0, needsInvestigation: 0, noKnownImpact: 0 });
+    expect(s.counts).toEqual({
+      verified: 0,
+      needsInvestigation: 0,
+      noKnownImpact: 0,
+      couldNotCompare: 0,
+    });
     expect(s.codeImpact).toMatchObject({ repo: 'NemoClaw', symbolsTotal: 2, untestedTotal: 1 });
 
     const d = computeDrift({ targets: [serviceTarget('nemoclaw')] }, s);
@@ -344,7 +389,20 @@ describe('computeDrift', () => {
     expect(d.verdict).toBe('code-only');
   });
 
-  it('works end to end on the real report: wider than a ticket that named one contract', () => {
+  it('does not call a named contract untouched when the engine counted unnamed compatible changes (real synthetic PR)', () => {
+    const s = summarizeAssessment(fork);
+    const expected = {
+      targets: [endpointTarget('rpc:openshell.v1.OpenShell/CreateSandbox', 'gw')],
+    };
+    const steps = nextSteps({ expected, drift: computeDrift(expected, s), summary: s });
+    expect(steps.some((t) => /counted 1 wire-compatible change without naming it/.test(t))).toBe(
+      true,
+    );
+  });
+
+  it('does not call a ticket "wider" because of methods the engine could not compare (real report)', () => {
+    // Regression: PR #5052 only edited comments and added one field, yet 9 streaming methods in
+    // the changed files were reported as contracts "touched but never named".
     const d = computeDrift(
       {
         targets: [
@@ -353,8 +411,25 @@ describe('computeDrift', () => {
       },
       summarizeAssessment(real),
     );
-    expect(d.verdict).toBe('wider-than-ticket');
-    expect(d.confirmed).toEqual(['rpc:openshell.v1.OpenShell/ConnectSupervisor']);
-    expect(d.touchedButNotNamed.length).toBe(3);
+    expect(d.verdict).toBe('code-only');
+    expect(d.confirmed).toEqual([]);
+    expect(d.touchedButNotNamed).toEqual([]);
+    expect(d.couldNotCompare).toBe(4);
+    expect(d.headline).toMatch(
+      /Also: 4 methods in changed interface files could not be compared\.$/,
+    );
+  });
+
+  it('says no definite change was found for a PR whose only change is wire-compatible (real synthetic PR)', () => {
+    const s = summarizeAssessment(fork);
+    const expected = {
+      targets: [endpointTarget('rpc:openshell.v1.OpenShell/CreateSandbox', 'gw')],
+    };
+    const d = computeDrift(expected, s);
+    expect(d.verdict).toBe('no-definite-change');
+    expect(d.headline).toBe(
+      'The engine found no definite contract change in this PR. Also: 8 methods in changed interface files could not be compared; 1 wire-compatible change (such as an added or removed field) was found but not listed.',
+    );
+    expect(d.namedButUntouched).toEqual(['rpc:openshell.v1.OpenShell/CreateSandbox']);
   });
 });

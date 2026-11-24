@@ -56,6 +56,9 @@ export function countsLine(counts) {
   if (counts?.verified) out.push(`${counts.verified} verified`);
   if (counts?.needsInvestigation) out.push(`${counts.needsInvestigation} need investigation`);
   if (counts?.noKnownImpact) out.push(`${counts.noKnownImpact} no known impact`);
+  // Methods the engine could not compare are not findings; they are listed last and never
+  // folded into "need investigation".
+  if (counts?.couldNotCompare) out.push(`${counts.couldNotCompare} could not be compared`);
   return out.length ? out.join(' · ') : 'no contract findings';
 }
 
