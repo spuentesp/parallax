@@ -11,7 +11,7 @@ Parallax for Atlassian is a **plugin plus a server**.
 
 | Part | What it is | Where it runs |
 |---|---|---|
-| **Forge app** `parallax-codegeist` | The plugin you install. Adds tools, Confluence pages and (soon) Jira panels. | Atlassian Forge, on your site |
+| **Forge app** `parallax-codegeist` | The plugin you install. Adds a Jira issue panel, a Rovo agent, MCP tools and Confluence pages. | Atlassian Forge, on your site |
 | **Parallax server** | Fastify API + the Lain code-graph engine, already indexed on two demo workspaces. | Fly.io: `https://marbled-river-9619.fly.dev` |
 
 **The Forge app needs the Parallax server to be running.** Every tool calls it through one
@@ -42,7 +42,9 @@ in the Forge app is the domain in `packages/forge/manifest.yml` and the `BACKEND
 2. Choose your site and install on **Jira**. Open the link again and install on **Confluence**.
    **Install on both**: pages are written to Confluence and linked from Jira.
 3. Review the permissions screen: Parallax reads and writes Confluence pages, labels and content
-   properties. It does not read Jira issues in this version.
+   properties, and **reads Jira issues** (summary, description, comments, links) as the person
+   viewing them, to power the issue panel. It never writes to Jira. See [privacy.md](privacy.md).
+   The first time you use a feature, Atlassian may ask you to approve the app's access: approve it.
 
 ## 2. Turn on the tools (about 1 minute, admin)
 
@@ -54,7 +56,56 @@ External exposure of Forge tools is off by default (Atlassian's rovo:mcp Preview
 
 ## 3. Use it
 
-### Option A: the Parallax Architect agent in Rovo (nothing else to install)
+### Option A: the Parallax impact panel on a Jira issue
+
+The panel compares what a ticket *predicts* with what its pull request *actually changed*.
+
+1. In any Jira project, create an issue and paste one of the three tickets below as its
+   description (the first line is the summary).
+2. Open the issue. **The panel is not shown by default.** On the issue toolbar, click the
+   **hexagon (app) icon**, then **Parallax impact**. The panel opens in the issue content.
+3. Read it top to bottom: who to talk to, a graph of what the ticket's words point at (green
+   solid line = proven by code, amber dashed = inferred, red dot = criticality), then the
+   pull request's real analysis with a one-sentence headline of how the two differ, and a ranked
+   list of next steps.
+
+Tickets to paste (two real, merged pull requests are analysed; **any other pull request link
+shows "has not been analysed yet"**):
+
+**A. A contract change that goes wider than the ticket**
+
+> Keep pool sandbox sessions on their supervisor's gateway
+>
+> Pool sandbox sessions should stay on the gateway of their supervisor. We expect to change rpc openshell.v1.OpenShell/ConnectSupervisor in the openshell-gateway service.
+>
+> Pull request: https://github.com/NVIDIA/OpenShell/pull/5052
+
+Expected headline: "The PR touched 1 contract the ticket named, and 8 it never mentioned."
+
+**B. A code-only change with risky edits and no contract change**
+
+> GetProviderProfile returns stale data after UpdateConfig
+>
+> After rpc openshell.v1.OpenShell/UpdateConfig, rpc openshell.v1.OpenShell/GetProviderProfile can return the previous profile for a few seconds. The nemoclaw service reads provider profiles through its OpenShell adapter.
+>
+> Pull request: https://github.com/NVIDIA/NemoClaw/pull/13812
+
+Expected headline: "The PR changed no contracts, but edited 2 code symbols in NemoClaw (highest risk: high; 1 untested)."
+
+**C. A prediction only, no pull request yet**
+
+> Add a labels map to the CreateSandbox request
+>
+> Add an optional labels map to rpc openshell.v1.OpenShell/CreateSandbox in the openshell-gateway service.
+
+Only the prediction and its graph are shown. Both reports are honest about their limits:
+"needs investigation" means the engine could not prove or rule out an impact, and the panel
+says so when coverage is incomplete.
+
+**To see an owner in "Talk to":** first do section 4 below (publish the `nemoclaw` page and fill in
+**Owner**), then refresh the panel. The owner you wrote appears.
+
+### Option B: the Parallax Architect agent in Rovo (nothing else to install)
 
 The app ships a Rovo agent. Open Rovo (<https://home.atlassian.com> > your site > **Chat**), go to
 **Agents**, search for **Parallax Architect** (app: parallax-codegeist) and start a chat. Try:
@@ -62,11 +113,14 @@ The app ships a Rovo agent. Open Rovo (<https://home.atlassian.com> > your site 
 - "Which Parallax workspaces are available?"
 - "What breaks if I change the openshell-gateway service in the ws_cluster_a workspace?"
 - "Document the nemoclaw service in Confluence space `<KEY>`"
+- Paste any of the three tickets above and ask "What would this ticket affect, and how did its
+  pull request compare?" The agent reviews the ticket and its pull request and finishes with the
+  same next steps and contacts as the panel.
 
 The agent chains the tools below, states whether each dependency is proven by code or only inferred,
 and names the owner when a Confluence page has one. If it says it has no tools, complete step 2.
 
-### Option B: an external MCP client
+### Option C: an external MCP client
 
 The MCP endpoint for this app is:
 
@@ -92,6 +146,8 @@ Connected apps > parallax-codegeist).
 | `parallax-find` | "Find CreateSandbox in ws_cluster_a" | Matching endpoints and their node ids |
 | `parallax-node-impact` | "What breaks if I change svc:openshell-gateway?" | Consumers with proof level, endpoints used, call sites and, when present, the owner written on their Confluence page |
 | `parallax-contract-detail` | "Show the contract for `rpc:openshell.compute.v1.ComputeDriver/AuthenticateSandbox`" | Providers, request and response schema, consumers |
+| `parallax-expected-impact` | Paste a ticket: "What would this affect?" | Services and endpoints the words point at, with consumers and proof level |
+| `parallax-ticket-review` | Paste a ticket that links a pull request | The prediction, the pull request's real analysis, the drift between them, contacts and next steps |
 | `parallax-publish-service-doc` | "Document svc:openshell-gateway in Confluence space `<KEY>`" | Creates or updates a Confluence page |
 
 Every consumer edge carries a proof level: **deterministic** means the code proves it,
@@ -117,6 +173,10 @@ A page that Parallax did not create is never overwritten, even if it has the sam
 
 - The demo data are two public NVIDIA code clusters, indexed at pinned commits. Parallax does
   not index your own repositories in this build.
+- Only two pull requests have been analysed (OpenShell #5052 and NemoClaw #13812). Others report
+  "has not been analysed yet". Neither analysis contains a "Verified" finding: those projects
+  mostly add to their interfaces rather than break them, and the engine does not claim a proof
+  it does not have.
 - Confluence pages are written as the calling user, so Confluence's own space permissions apply.
 - External MCP exposure and `rovo:mcp` are Atlassian Preview features.
 - The Forge app is not eligible for "Runs on Atlassian": it calls an external server by design.

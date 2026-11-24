@@ -91,7 +91,11 @@ export function layoutGraph(graph, width = 640) {
       const x2 = b.x;
       const y2 = b.y + b.h / 2;
       const mid = (x1 + x2) / 2;
-      return { ...e, path: `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`, width: strokeWidth(e.usages) };
+      return {
+        ...e,
+        path: `M${x1},${y1} C${mid},${y1} ${mid},${y2} ${x2},${y2}`,
+        width: strokeWidth(e.usages),
+      };
     });
 
   return { width, height, nodes: [...placedConsumers, ...placedTargets], edges: placedEdges };

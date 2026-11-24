@@ -45,10 +45,26 @@ export default function Graph({ graph }) {
       aria-label="Consumers on the left depend on the things this ticket changes on the right"
     >
       <defs>
-        <marker id="arrow-proven" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <marker
+          id="arrow-proven"
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto"
+        >
           <path d="M0,0 L8,4 L0,8 z" className="arrow proven" />
         </marker>
-        <marker id="arrow-inferred" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <marker
+          id="arrow-inferred"
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto"
+        >
           <path d="M0,0 L8,4 L0,8 z" className="arrow inferred" />
         </marker>
       </defs>
