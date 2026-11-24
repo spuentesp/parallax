@@ -27,6 +27,14 @@ not you. Nothing else is sent.
   contain request paths and query strings, so the search text you type can appear there.
   Logs are used for troubleshooting only.
 
+## Language model
+
+The Parallax server can use a hosted language model (NVIDIA Nemotron through Nebius Token Factory)
+to write short explanations of pull-request assessments. That input is public repository and
+pull-request data from the demonstration repositories. **The Forge app's tools never call the
+language model, and nothing from your Atlassian site is sent to it.** The "Parallax Architect"
+agent that runs in Rovo uses Atlassian's own models, not this one.
+
 ## Third parties
 
 The Parallax server runs on Fly.io. The Atlassian MCP endpoint and Forge platform are operated
