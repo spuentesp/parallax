@@ -34,12 +34,22 @@ const step = async (name, fn) => {
   try { await fn(); console.log('ok  ', name); } catch (e) { console.log('FAIL', name, String(e).split('\n').slice(0, 12).join(" | ").slice(0, 900)); }
 };
 const typeSlow = async (loc, text) => { await loc.click(); await loc.pressSequentially(text, { delay: 35 }); };
-const ask = async (q, doneText) => {
+// The dock reopens the last conversation after a page load. Start from an empty one so the wait below cannot match
+// text from an earlier answer.
+const freshChat = async () => {
+  const b = page.getByRole('button', { name: 'New', exact: true });
+  if (await b.isVisible().catch(() => false)) {
+    await b.click({ timeout: 5000 }).catch(() => {});
+    await wait(1500);
+  }
+};
+const ask = async (q, doneText, timeout = 240000) => {
+  await freshChat();
   const box = page.getByLabel('Ask about the architecture');
   await typeSlow(box, q);
   await wait(600);
   await box.press('Enter');
-  await page.getByText(doneText).first().waitFor({ timeout: 240000 });
+  await page.getByText(doneText).first().waitFor({ timeout });
   await wait(5000);
 };
 
@@ -48,7 +58,16 @@ const ask = async (q, doneText) => {
 
 await step('open the map', async () => {
   await page.goto(url(), { waitUntil: 'domcontentloaded', timeout: 120000 });
-  await wait(12000);
+  await wait(8000);
+  // Fit the graph to the canvas, then walk the detail levels (repos -> services -> endpoints).
+  await page.getByRole('button', { name: 'Fit to view' }).click({ timeout: 10000 });
+  await wait(3000);
+  for (const name of ['Repos', 'Services', 'Endpoints']) {
+    await page.getByRole('button', { name: name, exact: true }).click({ timeout: 8000 });
+    await wait(3500);
+    await page.getByRole('button', { name: 'Fit to view' }).click({ timeout: 8000 });
+    await wait(2500);
+  }
 });
 
 await step('query page', async () => {
@@ -98,7 +117,14 @@ await step('proven / inferred filters', async () => {
 await step('web-search ask', async () => {
   await page.goto(url(), { waitUntil: 'domcontentloaded' });
   await wait(8000);
-  await ask(WEB, /Server reflection in|reflection (service|is|allows|lets)/i);
+  const done = /Server reflection in|reflection (service|is|allows|lets)/i;
+  try {
+    await ask(WEB, done, 150000);
+  } catch {
+    // The model sometimes answers without citations ("failed:citations_missing"). Start a new conversation and ask again.
+    console.log('     web-search ask did not finish, retrying once');
+    await ask(WEB, done, 150000);
+  }
   await wait(6000);
 });
 

@@ -72,6 +72,9 @@ export function AssistantDock({
   const del = useDeleteConversation();
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
+  // Lo último enviado desde ?ask= y cuándo (ver el efecto de ?ask= más abajo).
+  const askSentRef = useRef<{ q: string; at: number } | null>(null);
+
   const setConv = (id: string | null) => {
     setConvId(id);
     writeConv(orgId, id);
@@ -80,6 +83,9 @@ export function AssistantDock({
         const next = new URLSearchParams(prev);
         if (id) next.set('conv', id);
         else next.delete('conv');
+        // `prev` es una foto vieja: si el ?ask= que ya enviamos sigue ahí, volvería a dispararse al llegar la
+        // respuesta, y una respuesta lenta (más que ASK_DEDUPE_MS) ya no se reconocería como reenvío.
+        if (next.get('ask') === askSentRef.current?.q) next.delete('ask');
         return next;
       },
       { replace: true },
@@ -144,10 +150,9 @@ export function AssistantDock({
   // Pregunta planteada desde otra pantalla (?ask=…, p. ej. "Ask about this pair"
   // en la matriz): se abre el chat, se envía una sola vez y se retira la URL.
   const askParam = params.get('ask');
-  // Lo último enviado desde la URL y cuándo. `setSearchParams` con función parte de una foto vieja de la URL, así que
-  // otro cambio de parámetros (p. ej. ?conv= al llegar el hilo) puede volver a poner ?ask=. Se ignora la misma
-  // pregunta dentro de la ventana; pasada, volver a preguntarlo es una pregunta nueva.
-  const askSentRef = useRef<{ q: string; at: number } | null>(null);
+  // `setSearchParams` con función parte de una foto vieja de la URL, así que otro cambio de parámetros puede volver
+  // a poner ?ask=. `setConv` ya lo retira; como red de seguridad se ignora la misma pregunta dentro de la ventana
+  // (pasada, volver a preguntarlo es una pregunta nueva).
   // biome-ignore lint/correctness/useExhaustiveDependencies: handleSend cambia en cada render; el ref evita reenvíos.
   useEffect(() => {
     if (!askParam) return;
