@@ -253,6 +253,10 @@ importers:
       '@forge/api':
         specifier: ^7.0.0
         version: 7.2.2
+    devDependencies:
+      vitest:
+        specifier: 5.0.4
+        version: 5.0.4(@types/node@24.19.2)(jsdom@25.0.1(canvas@3.2.3)(supports-color@7.2.0))(msw@2.13.2(@types/node@24.19.2)(typescript@7.0.2))(vite@8.3.4(@types/node@24.19.2)(jiti@2.7.0)(tsx@4.20.0)(yaml@2.9.1))
 
   packages/gates:
     devDependencies:

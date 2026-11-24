@@ -4,9 +4,15 @@
 // endpoint. Rovo (or any MCP client) does the reasoning; Parallax supplies
 // evidence from the real code graph. No second LLM is involved.
 import api, { assumeTrustedRoute, fetch } from '@forge/api';
-import { publishServicePage } from './publisher.js';
+import { lookupAnnotations, publishServicePage } from './publisher.js';
 
 const BACKEND = 'https://marbled-river-9619.fly.dev';
+
+// Confluence calls run as the invoking user, so Confluence enforces their permissions.
+const cfAsUser = (path, init) => api.asUser().requestConfluence(assumeTrustedRoute(path), init);
+
+// How many consumers get a Confluence lookup per blast-radius call (keeps latency bounded).
+const MAX_ANNOTATION_LOOKUPS = 8;
 
 // Forge function responses are size-limited, and agents read better from a
 // compact answer. Cap the serialized JSON and say so when we truncate.
@@ -121,7 +127,9 @@ async function loadNodeImpact(workspaceId, nodeId) {
   // The API wraps the payload as { detail: {...} }; detail is null when the engine is unavailable.
   const d = data.detail;
   if (!d?.node) {
-    return { error: `Node '${nodeId}' was not found in workspace '${workspaceId}'. Use parallax-find to get a valid nodeId.` };
+    return {
+      error: `Node '${nodeId}' was not found in workspace '${workspaceId}'. Use parallax-find to get a valid nodeId.`,
+    };
   }
   return {
     node: { nodeId: d.node.id, label: d.node.label, kind: d.node.kind, ...d.node.meta },
@@ -132,10 +140,31 @@ async function loadNodeImpact(workspaceId, nodeId) {
   };
 }
 
+// Attach what people wrote on each consumer's Confluence page (owner, criticality, ...).
+// Best effort: if Confluence is not connected or the user has not consented yet, the
+// blast radius is still returned, just without annotations.
+async function withAnnotations(impact) {
+  const targets = impact.consumers.slice(0, MAX_ANNOTATION_LOOKUPS);
+  try {
+    const found = await Promise.all(targets.map((c) => lookupAnnotations(cfAsUser, c.service)));
+    targets.forEach((c, i) => {
+      if (!found[i]) return;
+      c.confluencePage = found[i].pageUrl;
+      if (found[i].annotations) c.annotations = found[i].annotations;
+    });
+    return impact;
+  } catch {
+    return {
+      ...impact,
+      annotationsUnavailable: 'Confluence annotations could not be read for this user.',
+    };
+  }
+}
+
 // Who consumes a node and what it depends on, with provenance. This is the blast radius.
 export async function nodeImpact(payload) {
   const data = await loadNodeImpact(payload.workspaceId, payload.nodeId);
-  return data.error ? data : compact(data);
+  return data.error ? data : compact(await withAnnotations(data));
 }
 
 // Publish (create or update) a machine-generated Confluence page for one service.
@@ -143,14 +172,20 @@ export async function publishServiceDoc(payload) {
   const impact = await loadNodeImpact(payload.workspaceId, payload.nodeId);
   if (impact.error) return impact;
   if (impact.node.kind !== 'service') {
-    return { error: `Node '${payload.nodeId}' is a ${impact.node.kind}, not a service. Pass a service node id such as svc:<name>.` };
+    return {
+      error: `Node '${payload.nodeId}' is a ${impact.node.kind}, not a service. Pass a service node id such as svc:<name>.`,
+    };
   }
   const list = await parallax('/api/workspaces');
   const workspace = (list.workspaces || []).find((w) => w.id === payload.workspaceId);
-  // Run the Confluence calls as the invoking user so Confluence enforces their space permissions.
-  const cf = (path, init) => api.asUser().requestConfluence(assumeTrustedRoute(path), init);
   try {
-    return await publishServicePage({ cf, spaceKey: payload.spaceKey, impact, workspace });
+    return await publishServicePage({
+      cf: cfAsUser,
+      spaceKey: payload.spaceKey,
+      impact,
+      workspace,
+      consoleBase: `${BACKEND}/app`,
+    });
   } catch (e) {
     return { error: e.message };
   }

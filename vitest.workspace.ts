@@ -6,4 +6,5 @@ export default defineWorkspace([
   'packages/mcp',
   'packages/web',
   'packages/gates',
+  'packages/forge',
 ]);

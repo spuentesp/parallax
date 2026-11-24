@@ -4,7 +4,14 @@
   "private": true,
   "type": "module",
   "description": "Parallax Forge app for Atlassian Codegeist 2026 (Rovo MCP + agent, Jira panel)",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "dependencies": {
     "@forge/api": "^7.0.0"
+  },
+  "devDependencies": {
+    "vitest": "5.0.4"
   }
 }
