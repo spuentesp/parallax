@@ -112,6 +112,8 @@ function summarizeEdge(entry) {
     provenance: edge?.provenance, // deterministic = proven by code, inferred = heuristic
     confidence: edge?.confidence,
     usages: edge?.count,
+    // The list is shortened to the busiest endpoints; the total says how many there really are.
+    endpointsUsedTotal: links.length,
     endpointsUsed: links.slice(0, MAX_LINKS).map((l) => ({
       endpoint: l.endpoint?.label,
       usages: l.count,

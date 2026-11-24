@@ -41,3 +41,6 @@ site; nothing else is kept elsewhere.
 ## Contact
 
 Open an issue at <https://github.com/spuentesp/parallax/issues>.
+This statement lives at
+<https://github.com/spuentesp/parallax/blob/main/docs/codegeist/privacy.md>; the source code of
+the app and the server is at <https://github.com/spuentesp/parallax> under the MIT license.

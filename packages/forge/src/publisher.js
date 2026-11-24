@@ -52,6 +52,12 @@ const evidence = (provenance) =>
 
 export const pageTitle = (label) => `Service architecture: ${label}`;
 
+// When the endpoint list was shortened, say how many more there are.
+const moreItem = (c) => {
+  const hidden = (c.endpointsUsedTotal ?? c.endpointsUsed.length) - c.endpointsUsed.length;
+  return hidden > 0 ? `<li>and ${hidden} more</li>` : '';
+};
+
 // ---------------------------------------------------------------------------
 // Template
 // ---------------------------------------------------------------------------
@@ -118,7 +124,7 @@ export function buildFragments({ impact, workspace, generatedAt, links }) {
     evidence(c.provenance),
     esc(c.usages),
     c.endpointsUsed.length
-      ? `<ul>${c.endpointsUsed.map((e) => `<li><code>${esc(e.endpoint)}</code> (${esc(e.usages)})</li>`).join('')}</ul>`
+      ? `<ul>${c.endpointsUsed.map((e) => `<li><code>${esc(e.endpoint)}</code> (${esc(e.usages)})</li>`).join('')}${moreItem(c)}</ul>`
       : '-',
     c.sampleCallSites.length
       ? `<ul>${c.sampleCallSites.map((s) => `<li><code>${esc(s.repo)}:${esc(s.path)}:${esc(s.line)}</code></li>`).join('')}</ul>`

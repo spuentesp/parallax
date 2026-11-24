@@ -52,7 +52,21 @@ External exposure of Forge tools is off by default (Atlassian's rovo:mcp Preview
 2. Open **Connected apps**, choose **parallax-codegeist**, then **View app details**.
 3. Under **Tools**, choose **Expose tools to MCP-compatible apps** > **Enable tools**.
 
-## 3. Use the tools
+## 3. Use it
+
+### Option A: the Parallax Architect agent in Rovo (nothing else to install)
+
+The app ships a Rovo agent. Open Rovo (<https://home.atlassian.com> > your site > **Chat**), go to
+**Agents**, search for **Parallax Architect** (app: parallax-codegeist) and start a chat. Try:
+
+- "Which Parallax workspaces are available?"
+- "What breaks if I change the openshell-gateway service in the ws_cluster_a workspace?"
+- "Document the nemoclaw service in Confluence space `<KEY>`"
+
+The agent chains the tools below, states whether each dependency is proven by code or only inferred,
+and names the owner when a Confluence page has one. If it says it has no tools, complete step 2.
+
+### Option B: an external MCP client
 
 The MCP endpoint for this app is:
 
@@ -68,9 +82,8 @@ claude mcp add --transport http parallax https://mcp.atlassian.com/forge/9fe4925
 
 Run `/mcp`, pick `parallax`, and sign in. Choose your site on the consent screen.
 
-Atlassian's documentation also describes adding the tools to a custom agent in **Rovo Studio**
-(Tools > Add tools > Connected apps > parallax-codegeist). The steps above were verified with an
-MCP client; the Rovo Studio route follows Atlassian's guide.
+You can also add the tools to your own agent in **Rovo Studio** (Tools > Add tools >
+Connected apps > parallax-codegeist).
 
 | Tool | Ask it | You get |
 |---|---|---|
@@ -108,4 +121,5 @@ A page that Parallax did not create is never overwritten, even if it has the sam
 - External MCP exposure and `rovo:mcp` are Atlassian Preview features.
 - The Forge app is not eligible for "Runs on Atlassian": it calls an external server by design.
 
-Support: <https://github.com/spuentesp/parallax/issues> · Privacy: [privacy.md](privacy.md)
+Source: <https://github.com/spuentesp/parallax> (MIT) · Support: <https://github.com/spuentesp/parallax/issues> ·
+Privacy: <https://github.com/spuentesp/parallax/blob/main/docs/codegeist/privacy.md>

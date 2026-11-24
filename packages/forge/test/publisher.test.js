@@ -218,6 +218,21 @@ describe('publishServicePage', () => {
     expect(conf.props.has(`${templateId}:${TEMPLATE_MARKER_KEY}`)).toBe(true);
   });
 
+  it('says how many endpoints were left out when the list is shortened', async () => {
+    const big = impact();
+    big.consumers[0].endpointsUsedTotal = 20; // one listed, twenty in the graph
+    const out = await publishServicePage({ cf: conf.cf, impact: big, ...base });
+    expect(conf.pages.get(out.pageId).body).toContain('and 19 more');
+
+    const small = impact(); // no total given: nothing hidden, nothing claimed
+    const out2 = await publishServicePage({
+      cf: fakeConfluence().cf,
+      impact: small,
+      ...base,
+    });
+    expect(out2.action).toBe('created');
+  });
+
   it('escapes graph-derived names in the page', async () => {
     const hostile = impact();
     hostile.consumers[0].service = '<script>alert(1)</script>';
