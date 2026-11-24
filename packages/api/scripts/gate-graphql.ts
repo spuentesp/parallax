@@ -1,6 +1,6 @@
 // Self-contained release gate: every graph fact comes from committed source
-// scanned by the dev binary. No graph/database state is hand-inserted.
-// LAIN_BIN=/path/to/lain-dev pnpm gate:graphql
+// scanned by the released binary. No graph/database state is hand-inserted.
+// LAIN_BIN=/path/to/lain-0.16.0 pnpm gate:graphql
 import assert from 'node:assert/strict';
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
@@ -101,10 +101,10 @@ async function start(providesGraphql: boolean): Promise<LainAdapter> {
     }
   }
   const lain = await createLainClient({ lainUrl: url, apiVersion: '1', maxRetries: 0 });
-  // Pin del motor: lain dev (origin/dev @ b7fd2935, batch v0.15.0) reporta
-  // CARGO_PKG_VERSION = 0.14.0 como analyzer_version. LAIN_EXPECTED_ANALYZER_VERSION
-  // permite apuntar el gate a otro binario (p. ej. una release etiquetada).
-  assert.equal(lain.analyzerVersion, process.env.LAIN_EXPECTED_ANALYZER_VERSION ?? '0.14.0');
+  // Pin del motor: la release v0.16.0 reporta analyzer_version 0.16.0.
+  // LAIN_EXPECTED_ANALYZER_VERSION permite apuntar el gate a otro binario (p. ej. un build
+  // de desarrollo, que reporta la versión de su Cargo.toml).
+  assert.equal(lain.analyzerVersion, process.env.LAIN_EXPECTED_ANALYZER_VERSION ?? '0.16.0');
   await waitForIndexedRepos(lain, repoNames, 60_000);
   return lain;
 }

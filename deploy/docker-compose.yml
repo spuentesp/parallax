@@ -1,24 +1,27 @@
 # Parallax demo: the app behind automatic HTTPS (Caddy).
 # Lain runs on the host (or another VM) and is reached via LAIN_URL.
+#
+# Both services use the host network. Lain answers only requests whose Host
+# header is a loopback address (it returns 403 for "host.docker.internal" or a
+# bridge IP), so the app must reach it as http://127.0.0.1:<port>/mcp. The app
+# listens on 127.0.0.1 only (HOST below): the single public entry is Caddy.
 services:
   parallax:
     build: ..
+    network_mode: host
     env_file: .env
     environment:
       LAIN_ADAPTER: real
       PARALLAX_MCP_TRANSPORT: http-sse
+      HOST: 127.0.0.1
     volumes:
       - parallax-data:/data
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   caddy:
     image: caddy:2
+    network_mode: host
     depends_on: [parallax]
-    ports:
-      - "80:80"
-      - "443:443"
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env (a DNS name pointing at this host)}
     volumes:

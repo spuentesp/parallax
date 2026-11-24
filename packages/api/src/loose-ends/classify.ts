@@ -36,9 +36,56 @@ export function classifyByPath(e: Pick<LooseEnd, 'path'>): Assessment | null {
  * pedírselo al modelo. "dynamic_topic" es, por definición, un nombre de tema que
  * el motor no pudo resolver estáticamente: un destino construido en ejecución.
  */
-export function classifyByRule(e: Pick<LooseEnd, 'path' | 'kind' | 'reason'>): Assessment | null {
+/**
+ * El sensor de RPC de Rust toma por llamada a un stub métodos que son de la librería
+ * estándar: visto en un cluster real (OpenShell), 5 de sus 23 "sin candidato" eran
+ * `.unwrap()` o `.map_err()` (el resto sí eran métodos gRPC). Un método de `Option`/`Result` no es un RPC: los métodos gRPC son
+ * identificadores propios del servicio (`GetCapabilities`), nunca estos.
+ */
+const RUST_STD_NOT_RPC =
+  /^rpc-call:rust:\d+:(unwrap|expect|unwrap_or|unwrap_or_else|unwrap_or_default|unwrap_err|expect_err|map_err)$/;
+
+/**
+ * `ServerReflectionInfo` es el RPC estándar de gRPC reflection (`grpc.reflection.v1`):
+ * lo sirve una librería (tonic-reflection, grpcurl...), no un servicio del workspace, así
+ * que no hay contrato propio al que atarlo. Visto en OpenShell: 6 de sus 17 "sin
+ * candidato" de tipo RPC eran este.
+ */
+const GRPC_REFLECTION = /^rpc-call:[a-z]+:\d+:server_reflection_info$/i;
+
+export function classifyByRule(
+  e: Pick<LooseEnd, 'path' | 'kind' | 'reason' | 'detail'>,
+): Assessment | null {
   const byPath = classifyByPath(e);
   if (byPath) return byPath;
+  const expr = e.detail?.urlExpr ?? '';
+  if (e.kind === 'unresolved' && e.reason === 'rpc_stub_unknown' && GRPC_REFLECTION.test(expr)) {
+    return {
+      category: 'external_call',
+      reason:
+        'standard gRPC reflection (grpc.reflection.v1.ServerReflection): served by a library, not by a service in this workspace',
+      evidence: expr,
+      source: 'rule',
+    };
+  }
+  if (e.kind === 'unresolved' && e.reason === 'rpc_stub_unknown' && RUST_STD_NOT_RPC.test(expr)) {
+    const method = expr.slice(expr.lastIndexOf(':') + 1);
+    return {
+      category: 'not_a_call',
+      reason: `"${method}" is a Rust Option/Result method, not an RPC: the analyzer's RPC sensor misread it`,
+      evidence: expr,
+      source: 'rule',
+    };
+  }
+  if (e.kind === 'unresolved' && e.reason === 'not_a_call') {
+    // Lain 0.16 emite esta razón: el propio motor juzgó que no hay llamada.
+    return {
+      category: 'not_a_call',
+      reason: 'the engine itself judged that nothing is being called here',
+      evidence: null,
+      source: 'rule',
+    };
+  }
   if (e.kind === 'unresolved' && e.reason === 'dynamic_topic') {
     return {
       category: 'dynamic_target',

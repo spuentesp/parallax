@@ -1,6 +1,7 @@
 import type { NodeDetail, NodeRelation, OrgEdge, OrgNode } from '@parallax/shared/org-map';
 import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { server } from '../test/msw.js';
 import { renderWithQuery } from '../test/render.js';
@@ -152,7 +153,8 @@ describe('MapInspector detail', () => {
       }),
     );
     const view = within(await screen.findByTestId('map-inspector'));
-    expect(view.getByText('3 services across 2 repos')).toBeTruthy();
+    // El resumen incluye el desglose por procedencia (como la referencia de diseño).
+    expect(view.getByText('3 services across 2 repos · 2 proven · 1 inferred')).toBeTruthy();
     const names = view
       .getAllByRole('button')
       .map((x) => x.textContent ?? '')
@@ -176,9 +178,49 @@ describe('MapInspector detail', () => {
     const a = on('svc:a', 'service', { label: 'alpha', parent: 'repo:r1' });
     const h = setup(detail({ consumers: [rel(a)] }));
     const view = within(await screen.findByTestId('map-inspector'));
-    expect(view.getByText('1 service across 1 repo')).toBeTruthy();
+    expect(view.getByText('1 service across 1 repo · 1 proven')).toBeTruthy();
     fireEvent.click(view.getByText('alpha'));
     expect(h.onSelect).toHaveBeenCalledWith('svc:a');
+  });
+
+  it('service nodes get stat cards: endpoints contained, consumers, outbound (with provenance split)', async () => {
+    setup(
+      detail({
+        endpointCount: 5,
+        consumers: [rel(on('svc:x', 'service', { label: 'x' }))],
+        providers: [
+          rel(on('svc:y', 'service', { label: 'y' })),
+          rel(on('svc:z', 'service', { label: 'z' }), {
+            provenance: 'inferred',
+            confidence: 0.5,
+            deterministicCount: 0,
+            inferredCount: 2,
+            count: 2,
+          }),
+        ],
+      }),
+    );
+    const view = within(await screen.findByTestId('map-inspector'));
+    const cards = within(view.getByTestId('node-stat-cards'));
+    expect(cards.getByText('5')).toBeTruthy();
+    expect(cards.getByText(/endpoints/)).toBeTruthy();
+    expect(cards.getByText(/consumers · 1 proven/)).toBeTruthy();
+    expect(cards.getByText(/outbound · 1 proven · 1 inferred/)).toBeTruthy();
+  });
+
+  it('repo nodes get stat cards too; other kinds do not', async () => {
+    setup(
+      detail({
+        node: on('repo:r1', 'repo', { label: 'r1' }),
+        endpointCount: 12,
+        consumers: [],
+        providers: [rel(on('svc:y', 'service', { label: 'y' }))],
+      }),
+    );
+    const view = within(await screen.findByTestId('map-inspector'));
+    const cards = within(view.getByTestId('node-stat-cards'));
+    expect(cards.getByText('12')).toBeTruthy();
+    expect(cards.getByText(/outbound · 1 proven/)).toBeTruthy();
   });
 
   it('no consumers: an honest "not proof" note; no providers: its own note', async () => {
@@ -485,5 +527,154 @@ describe('MapInspector — trace end to end', () => {
     setup(d(ep));
     await screen.findByTestId('map-inspector');
     expect(screen.queryByRole('button', { name: 'Trace end to end' })).toBeNull();
+  });
+});
+
+describe('MapInspector scope and asking', () => {
+  const looseItem = (target: string) => ({
+    key: `k-${target}`,
+    kind: 'unresolved',
+    repo: 'dash',
+    path: 'src/a.ts',
+    line: 1,
+    reason: 'no_match',
+    detail: { targetService: target },
+    candidates: [],
+    candidateCount: 0,
+    assessment: null,
+  });
+  const serveScope = (states: Array<'indexed' | 'unreviewed'>, items: unknown[]) =>
+    server.use(
+      http.get('/api/workspaces/:id/map/node', () =>
+        HttpResponse.json({ detail: detail(), meta: { source: 'lain' } }),
+      ),
+      http.get('/api/workspaces/:id/repos/status', () =>
+        HttpResponse.json({
+          source: 'lain',
+          repos: states.map((state, i) => ({
+            id: `r${i}`,
+            uri: 'u',
+            sha: null,
+            local: null,
+            lainRepoId: `r${i}`,
+            state,
+          })),
+          untracked: [],
+        }),
+      ),
+      http.get('/api/workspaces/:id/loose-ends', () =>
+        HttpResponse.json({
+          source: 'lain',
+          generatedAt: 1,
+          items,
+          summary: { total: items.length, byCategory: {}, pendingCases: 0 },
+          run: { state: 'idle', done: 0, total: 0 },
+        }),
+      ),
+    );
+  const mount = () =>
+    renderWithQuery(
+      <MemoryRouter>
+        <MapInspector
+          workspaceId="ws1"
+          nodeId="svc:orders"
+          focusing={false}
+          onSelect={vi.fn()}
+          onFocus={vi.fn()}
+          onToggle={vi.fn()}
+          onClearFocus={vi.fn()}
+          onAsk={asked}
+        />
+      </MemoryRouter>,
+    );
+  const asked = vi.fn();
+
+  it('does not claim "no impact" while an unresolved call is aimed at this service or a repo is unanalyzed', async () => {
+    serveScope(['indexed', 'unreviewed'], [looseItem('orders'), looseItem('billing')]);
+    mount();
+    const note = await screen.findByTestId('scope-note');
+    expect(note.textContent).toMatch(/Scope: 1 of 2 repos analyzed/);
+    expect(note.textContent).toMatch(/1 unresolved call could match this service/);
+    expect(note.textContent).toMatch(/Unanalyzed repos/);
+    expect(within(note).getByRole('link', { name: 'Open in Coverage' }).getAttribute('href')).toBe(
+      '/orgs/ws1/coverage',
+    );
+  });
+
+  it('an unresolved call that merely lists this service among its candidates also blocks a "no impact" claim', async () => {
+    const viaCandidate = {
+      ...looseItem('nobody'),
+      candidateRefs: [{ key: 'http:POST /x', service: 'orders', reason: 'pattern' }],
+    };
+    serveScope(['indexed', 'indexed'], [viaCandidate, looseItem('billing')]);
+    mount();
+    const note = await screen.findByTestId('scope-note');
+    expect(note.textContent).toMatch(/1 unresolved call could match this service/);
+    expect(note.textContent).toMatch(/not claimed/);
+  });
+
+  it('a complete scope is stated without the warning, and "Ask about this" asks about the node', async () => {
+    serveScope(['indexed', 'indexed'], [looseItem('billing')]);
+    mount();
+    const note = await screen.findByTestId('scope-note');
+    expect(note.textContent).toMatch(/Scope: 2 of 2 repos analyzed/);
+    expect(note.textContent).not.toMatch(/not claimed/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Ask about this' }));
+    expect(asked).toHaveBeenCalledWith(expect.stringContaining('orders'));
+  });
+});
+
+describe('MapInspector repository details', () => {
+  it('shows the repo that matches by name, not the first whose URI merely contains it', async () => {
+    server.use(
+      http.get('/api/workspaces/:id/map/node', () =>
+        HttpResponse.json({
+          detail: detail({
+            node: on('repo:saleor', 'repo', { label: 'saleor' }),
+            path: [],
+          }),
+          meta: { source: 'lain' },
+        }),
+      ),
+      http.get('/api/workspaces/:id', () =>
+        HttpResponse.json({
+          workspace: {
+            id: 'ws1',
+            name: 'Saleor',
+            repos: [
+              // El de "dashboard" va primero: su URI también contiene "saleor".
+              {
+                id: 'r1',
+                uri: 'https://github.com/saleor/saleor-dashboard.git',
+                sha: 'dash111',
+                local: './dash',
+              },
+              {
+                id: 'r2',
+                uri: 'https://github.com/saleor/saleor.git',
+                sha: 'api222',
+                local: './api',
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    renderWithQuery(
+      <MemoryRouter>
+        <MapInspector
+          workspaceId="ws1"
+          nodeId="repo:saleor"
+          focusing={false}
+          onSelect={vi.fn()}
+          onFocus={vi.fn()}
+          onToggle={vi.fn()}
+          onClearFocus={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText('https://github.com/saleor/saleor.git')).toBeTruthy();
+    expect(screen.getByText(/api222/)).toBeTruthy();
+    expect(screen.queryByText(/dash111/)).toBeNull();
   });
 });

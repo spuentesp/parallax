@@ -1,10 +1,10 @@
 import { z } from 'zod';
 import { FindingClass, LainView } from './enums.js';
 
-// Contra el pin vigente del motor: los *Args replican el inputSchema de
-// docs/lain-tool-schemas.json (recapturado con tools/list del paquete
-// `contracts` del lain de dev; ver docs/lain-integration-notes.md) y las
-// *Response describen el campo `data` del envoltorio
+// Contra la versión fijada del motor (lain 0.16.0, verificado en vivo contra el binario
+// de release v0.16.0): los *Args replican el inputSchema de docs/lain-tool-schemas.json
+// (recapturado con tools/list del paquete `contracts`; ver docs/lain-integration-notes.md)
+// y las *Response describen el campo `data` del envoltorio
 // { analyzer_version, api_version, data, meta, snapshot, view, reproducible }
 // que el LainAdapter devuelve tras parsear content[0].text (o structuredContent).
 //
@@ -307,6 +307,9 @@ export const CheckBindingReason = z.enum([
   // campo raíz. El 0.9 no los emite porque rechaza las llaves graphql:.
   'op_mismatch',
   'field_mismatch',
+  // Desde 0.16: el vínculo propuesto es a una ruta raíz "catch-all" (p. ej. `POST /`) o el
+  // destino es externo, así que no demuestra una dependencia real.
+  'catch_all_route',
 ]);
 export type CheckBindingReason = z.infer<typeof CheckBindingReason>;
 
@@ -334,8 +337,8 @@ export const DiffContractsArgs = z
     repo: z.string().min(1).optional(),
     cap: z.number().int().min(1).max(500).optional(),
     min_impact: FindingClass.optional(),
-    // Del motor dev (v0.15.0 batch): profundidad máxima de los caminos de
-    // impacto y timeout cooperativo del análisis (diff_contracts.in.json).
+    // Desde 0.15: profundidad máxima de los caminos de impacto y timeout cooperativo del
+    // análisis (diff_contracts.in.json).
     max_hops: z.number().int().min(1).max(100).optional(),
     timeout_ms: z.number().int().min(1).max(600_000).optional(),
   })

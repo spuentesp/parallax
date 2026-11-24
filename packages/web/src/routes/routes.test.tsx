@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import { HttpResponse, http } from 'msw';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -73,6 +73,25 @@ describe('routes render in isolation', () => {
     expect(screen.getByText(/no autoriza a concluir/i)).toBeTruthy();
     // INV 2: la explicación no toca los findings del analizador.
     expect(screen.getByText(/no puede promover NeedsInvestigation a Verified/i)).toBeTruthy();
+  });
+
+  it('Assessment opens with the engine verdict: counts by class, honest scope, and a way to ask', async () => {
+    renderWithQuery(
+      <MemoryRouter initialEntries={['/orgs/ws_fixture/assessments/a_1']}>
+        <Routes>
+          <Route path="/orgs/:orgId/assessments/:assessmentId" element={<Assessment />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const strip = await screen.findByTestId('verdict-strip');
+    // El informe de prueba tiene un hallazgo Verified y ninguno de las otras clases.
+    expect(strip.textContent).toMatch(
+      /1 verified impact · 0 needs investigation · 0 no known impact/,
+    );
+    // reviewed: orders, billing · unreviewed: reports → 2 de 3.
+    expect(strip.textContent).toMatch(/Scope: 2 of 3 repos reviewed, 1 unreviewed/);
+    const ask = within(strip).getByRole('link', { name: 'Ask about this PR' });
+    expect(ask.getAttribute('href')).toMatch(/^\/orgs\/ws_fixture\?ask=/);
   });
 
   it('Assessment shows the model explanation text next to its status, and what was left unexplained', async () => {

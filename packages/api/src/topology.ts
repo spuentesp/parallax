@@ -119,6 +119,17 @@ export function contractGroup(key: string, boundConsumers: number): ContractGrou
       : { key: 'topic', label: 'Topics and events' };
   }
   if (kind === 'http') {
+    // Cadenas de formato (fmt.Errorf("%w: …"), "%s URL must…"): el sensor las
+    // confunde con rutas porque parecen un path. Un path URL real nunca lleva
+    // un % seguido de letra (el percent-encoding siempre es %HH), así que
+    // "%w"/"%s"/"%q"/"%v" delatan una cadena de formato, no una ruta.
+    if (/%(?![0-9a-fA-F]{2})[a-zA-Z]/.test(rest)) {
+      return {
+        key: 'http-format-string',
+        label: 'Not routes (format strings)',
+        note: 'These are format strings from error messages (e.g. Go fmt.Errorf("%w: client secret is required…")), not HTTP routes: the engine\'s route sensor mistook them for paths. A real URL path can never contain a raw % followed by a letter. Kept visible, labelled, so the noise is explained instead of hidden.',
+      };
+    }
     if (rest.startsWith('ANY ') && boundConsumers === 0) {
       return {
         key: 'http-methodless',

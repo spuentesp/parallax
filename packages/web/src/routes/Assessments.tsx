@@ -16,13 +16,13 @@ export function Assessments(): React.ReactElement {
   return (
     <div className="p-6">
       <Link to={`/orgs/${orgId ?? ''}`} className="text-xs text-accent">
-        ← Volver al hub de {orgId}
+        ← Back to the {orgId} map
       </Link>
       <div className="mb-6">
         <h1 className="text-2xl font-bold">Assessments</h1>
         <p className="text-sm mt-1 text-muted">
-          Informes de impacto persistidos. Cada uno referencia SHAs concretos y se sirve igual por
-          web y por MCP.
+          Saved impact reports. Each one pins concrete commit SHAs and is served the same way over
+          the web and MCP.
         </p>
       </div>
 
@@ -78,7 +78,7 @@ function AssessmentRow({ a, orgId }: { a: AssessmentSummary; orgId: string }): R
         </div>
         <div className="text-right text-xs text-muted whitespace-nowrap">
           <div>{new Date(a.createdAt).toLocaleString()}</div>
-          <div className="mt-1 text-accent">Ver informe →</div>
+          <div className="mt-1 text-accent">View report →</div>
         </div>
       </div>
     </Link>

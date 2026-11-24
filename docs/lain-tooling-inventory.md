@@ -2,6 +2,43 @@
 
 Date: 2026-10-28. Lain **0.13.0** (live server loaded with every package: `list_packages` + `load_package` for each, then `tools/list`). Method and caveats at the end.
 
+## Update 2026-11-22: Lain 0.16.0 (latest release)
+
+Tool surface unchanged from 0.15.0 (100 tools, same required arguments). Measured, not read from release notes
+(empty). Fixed: live coverage ledger with sensors, `catch_all_route` in `check_binding`, SDL types in GraphQL
+contracts (all 448 Saleor GraphQL contracts carry one), glibc 2.39. New and additive: `provenance` on unresolved
+candidates, `ref` edges, `not_a_call` as an unresolved reason (Parallax maps it to "not a gap"). The federation
+graph schema went v5 → v7: `lain reindex` once on existing data dirs. Details: `docs/handoff-lain-0.16.md`.
+
+## Update 2026-11-11: Lain 0.15.0
+
+Verified against the release binary `v0.15.0` (`lain --version` → `lain 0.15.0`,
+`lain schema dump` → 100 tools; live server with every package loaded → 97 tools):
+
+- **Nothing Parallax calls was removed or renamed.** All 16 contract-package
+  tools, the raw/arch/workspace tools (`query_graph`, `describe_schema`,
+  `get_code_snippet`, `explain_symbol`, `get_call_sites`, …) and the code tools
+  the investigator uses are present with unchanged required arguments.
+  `trace_flow`, `apply_contract_context` and `list_service_refs` are now part
+  of the default `schema dump` surface as well.
+- **Envelope unchanged:** contract tools still answer
+  `{ analyzer_version, api_version: 1, data, … }`; the adapter handshake and
+  `pnpm demo:lain` pass against a live 0.15.0 server.
+- **Raw/code tools now also return `structuredContent`** (the payload directly,
+  no `data` wrapper) in addition to the markdown `content[0].text` Parallax
+  parses — both shapes are handled by `RealLainAdapter.parsePayload`.
+- **New optional inputs:** `snapshot` on `query_graph`/`find_symbol`/`get_context`/
+  `explain_symbol`/`get_call_sites`/`get_cross_runtime_callers`/`assess_change`
+  (raw reads can target a named snapshot; default `live`), and `max_hops` +
+  `timeout_ms` on `diff_contracts` (modeled in `DiffContractsArgs`).
+- **New output field:** `answer_scope` on `get_call_sites`, `assess_change`,
+  `explain_dispatch`, `get_cross_repo_blast_radius` (null = complete, else a
+  reason like `unresolved_name`/`truncated`). Additive; the text parsers in
+  `pr-review/lain-parse.ts` are unaffected.
+- **Operational:** the federation graph schema went v4 → v5 — run
+  `lain reindex` once on existing data dirs (install.sh does it automatically
+  on upgrade). `get_capabilities` still reports `repositories[].last_indexed_commit`.
+
 ## Bottom line
 
 - Lain exposes **97 tools** (90 on the live 0.13.0 server once every package is loaded; 7 more in the federation set that `docs/tool-schema.json` lists).

@@ -91,7 +91,7 @@ describe('MapCanvas data', () => {
     mount();
     const e2 = cy().getElementById('e2');
     expect(e2.hasClass('inferred')).toBe(true);
-    expect(e2.data('opacity')).toBeCloseTo(0.625);
+    expect(e2.data('opacity')).toBeCloseTo(0.75);
     expect(cy().getElementById('e1').hasClass('deterministic')).toBe(true);
   });
 
@@ -101,9 +101,12 @@ describe('MapCanvas data', () => {
       .nodes()
       .filter((n) => !n.isParent());
     for (const n of leaves.toArray()) {
-      expect(n.data('w')).toBeGreaterThanOrEqual(84);
       expect(n.data('h')).toBeGreaterThan(0);
       expect(n.data('tw')).toBe(n.data('w') - 12);
+      // Las hojas-punto (dot) se dibujan con tamaño fijo (18/14/10px); el
+      // resto son cajas cuyo tamaño de datos viene del rótulo.
+      if (n.hasClass('dot')) expect(['18px', '14px', '10px']).toContain(n.style('width'));
+      else expect(n.data('w')).toBeGreaterThanOrEqual(84);
     }
     const spots = new Set(
       leaves.toArray().map((n) => {
@@ -162,18 +165,63 @@ describe('MapCanvas data', () => {
 });
 
 describe('MapCanvas interaction', () => {
-  it('tap selects a node, double-tap toggles it, tap on the background clears the selection', () => {
+  it('tap only selects (never toggles); double-tap toggles; background tap clears', () => {
     const { onSelect, onToggle } = mount();
+    // Un clic sobre cualquier nodo (contenedor o no) sólo selecciona.
+    cy().getElementById('repo:a').emit('tap');
+    expect(onSelect).toHaveBeenLastCalledWith('repo:a');
+    expect(onToggle).not.toHaveBeenCalled();
     cy().getElementById('svc:b').emit('tap');
     expect(onSelect).toHaveBeenLastCalledWith('svc:b');
+    expect(onToggle).not.toHaveBeenCalled();
+    // El doble clic es el que abre/cierra.
     cy().getElementById('svc:b').emit('dbltap');
     expect(onToggle).toHaveBeenCalledWith('svc:b');
+    // Tap en el fondo: limpia la selección.
     cy().emit('tap');
     expect(onSelect).toHaveBeenLastCalledWith(null);
-    // Un tap sobre un nodo no cuenta como tap de fondo.
-    onSelect.mockClear();
-    cy().getElementById('svc:b').emit('tap');
-    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('once the user has touched the canvas, a view change does not snap existing nodes back', () => {
+    const { rerender, props } = mount();
+    const n = cy().getElementById('svc:b');
+    const before = { ...n.position() };
+    // El usuario toca el lienzo (arrastre/zoom) y mueve el nodo de verdad.
+    props.view &&
+      (document.querySelector('[aria-label="Architecture map"]') as HTMLElement).dispatchEvent(
+        new MouseEvent('pointerdown', { bubbles: true }) as unknown as PointerEvent,
+      );
+    n.emit('dragstart');
+    n.position({ x: before.x + 120, y: before.y + 80 });
+    n.emit('dragfree');
+    // Llega una vista nueva (p. ej. se ancla un archivo al seleccionar): los
+    // nodos existentes conservan la posición que el usuario les dio.
+    rerender({
+      view: {
+        ...props.view,
+        nodes: [...props.view.nodes, pn('svc:d', { parent: 'repo:a' })],
+      },
+    });
+    expect(n.position().x).toBeCloseTo(before.x + 120);
+    expect(n.position().y).toBeCloseTo(before.y + 80);
+    // El nodo nuevo sí aparece.
+    expect(cy().getElementById('svc:d').nonempty()).toBe(true);
+  });
+
+  it('a click that barely moves the node (<8px) snaps back instead of dragging', () => {
+    mount();
+    const n = cy().getElementById('svc:b');
+    const before = { ...n.position() };
+    n.emit('dragstart');
+    n.position({ x: before.x + 3, y: before.y + 2 });
+    n.emit('dragfree');
+    expect(n.position().x).toBeCloseTo(before.x);
+    expect(n.position().y).toBeCloseTo(before.y);
+    // Un arrastre de verdad sí se queda.
+    n.emit('dragstart');
+    n.position({ x: before.x + 60, y: before.y });
+    n.emit('dragfree');
+    expect(n.position().x).toBeCloseTo(before.x + 60);
   });
 
   it('always calls the latest handlers', () => {
@@ -260,7 +308,7 @@ describe('buildStyle', () => {
       'node.service',
       'node.group',
       'node.interfaces',
-      'node.endpoint',
+      'node.endpoint.row',
       'node.code',
       'node.file',
       'node.symbol',
@@ -278,32 +326,46 @@ describe('buildStyle', () => {
   });
 
   it('reads colours from the theme tokens at call time', () => {
-    document.documentElement.style.setProperty('--color-repo', '#111111');
+    document.documentElement.style.setProperty('--color-border-strong', '#111111');
+    document.documentElement.style.setProperty('--color-repo-fill', '#121212');
+    document.documentElement.style.setProperty('--color-service', '#161616');
     document.documentElement.style.setProperty('--color-inferred', '#222222');
     document.documentElement.style.setProperty('--color-deterministic', '#333333');
     expect(rule('node.repo')?.['border-color']).toBe('#111111');
+    expect(rule('node.repo')?.['background-color']).toBe('#121212');
+    expect(rule('node.service')?.['border-color']).toBe('#161616');
     expect(rule('edge.inferred')?.['line-color']).toBe('#222222');
     expect(rule('edge.deterministic')?.['line-color']).toBe('#333333');
   });
 
   it('falls back to defaults when a token is missing', () => {
-    expect(rule('node.repo')?.['border-color']).toBe('#5b6572');
+    expect(rule('node.repo')?.['border-color']).toBe('#343b45');
+    expect(rule('node.repo')?.['background-color']).toBe('#0f1216');
     expect(rule('node.service')?.['border-color']).toBe('#4f46e5');
-    expect(rule('node.endpoint')?.['border-color']).toBe('#475569');
+    expect(rule('node.service')?.['background-color']).toBe('#141824');
+    expect(rule('node.endpoint.row')?.['border-color']).toBe('#343b45');
   });
 
-  it('inferred edges are dashed, deterministic solid, and secondary edges fade', () => {
+  it('inferred edges are dashed, deterministic solid; dim/quiet never hide information below readable', () => {
     expect(rule('edge.inferred')?.['line-style']).toBe('dashed');
     expect(rule('edge.deterministic')?.['line-style']).toBe('solid');
-    // Atenuar jerarquiza: por debajo de 0.2 el nodo se vuelve ilegible.
-    expect(rule('.dim')?.opacity).toBe(0.2);
-    expect(rule('edge.quiet')).toMatchObject({ opacity: 0.12, width: 1 });
+    // Nada se apaga por defecto (no hay .muted); el modo foco atenúa a 0.38
+    // (legible) y las aristas secundarias a 0.35: presentes, nunca invisibles.
+    expect(buildStyle().some((r) => r.selector === '.muted')).toBe(false);
+    expect(rule('.dim')?.opacity).toBe(0.38);
+    expect(rule('edge.quiet')).toMatchObject({ opacity: 0.35, width: 1 });
     expect(rule('node.collapsible')?.['border-style']).toBe('dashed');
   });
 
   it('leaf sizes come from data so the layout and the drawing agree', () => {
-    for (const k of ['repo', 'service', 'group', 'endpoint', 'code', 'file', 'symbol']) {
+    for (const k of ['repo', 'service', 'group', 'file', 'symbol']) {
       expect(rule(`node.${k}`)).toMatchObject({ width: 'data(w)', height: 'data(h)' });
     }
+    // Las filas de interfaz también toman tamaño del layout.
+    expect(rule('node.endpoint.row')).toMatchObject({ width: 'data(w)', height: 'data(h)' });
+    // La puerta de código abierta es caja (tamaño del layout); plegada es
+    // pastilla fija, no una caja fantasma vacía.
+    expect(rule('node.code:parent')).toMatchObject({ width: 'data(w)', height: 'data(h)' });
+    expect(rule('node.code:childless')).toMatchObject({ width: 96, height: 26 });
   });
 });

@@ -1,0 +1,127 @@
+{
+  "groups": {
+    "source": "lain",
+    "groups": [
+      {
+        "key": "saleor-api",
+        "count": 1272,
+        "byRepo": {
+          "saleor": 636,
+          "saleor-dashboard": 573,
+          "storefront": 63
+        }
+      }
+    ],
+    "nodes": null,
+    "steps": [
+      {
+        "op": "find",
+        "nodes": 1274,
+        "edges": 0
+      },
+      {
+        "op": "connect",
+        "nodes": 644,
+        "edges": 1272
+      },
+      {
+        "op": "group",
+        "nodes": 644,
+        "edges": 1272
+      }
+    ],
+    "total": 1,
+    "truncated": false,
+    "engineTruncated": false,
+    "scope": {
+      "analyzed": ["saleor", "saleor-dashboard", "storefront"],
+      "failed": []
+    },
+    "elapsedMs": 7600
+  },
+  "nodes": {
+    "source": "lain",
+    "groups": null,
+    "nodes": [
+      {
+        "id": "71f6142d-4d24-5962-8981-2a503164b2ed",
+        "type": "Table",
+        "name": "order_fulfillment",
+        "path": "saleor/order/models.py",
+        "line": 776,
+        "repo": "saleor"
+      },
+      {
+        "id": "08ba837f-78f3-5a83-9f7a-de73004a4124",
+        "type": "Table",
+        "name": "order_fulfillmentline",
+        "path": "saleor/order/models.py",
+        "line": 856,
+        "repo": "saleor"
+      },
+      {
+        "id": "1ef4ef0c-967c-5dd2-b414-8def4599a527",
+        "type": "Table",
+        "name": "order_order",
+        "path": "saleor/order/models.py",
+        "line": 109,
+        "repo": "saleor"
+      },
+      {
+        "id": "5f6b1042-86bc-598d-b1e8-83a05de07c87",
+        "type": "Table",
+        "name": "order_orderevent",
+        "path": "saleor/order/models.py",
+        "line": 893,
+        "repo": "saleor"
+      },
+      {
+        "id": "1c73ca2f-0392-5655-b456-8f707ea35d66",
+        "type": "Table",
+        "name": "order_ordereventdiscountobject",
+        "path": "saleor/graphql/order/types.py",
+        "line": 493,
+        "repo": "saleor"
+      },
+      {
+        "id": "b5fb68fe-9677-55dd-9e61-30a96966674a",
+        "type": "Table",
+        "name": "order_ordergrantedrefund",
+        "path": "saleor/order/models.py",
+        "line": 940,
+        "repo": "saleor"
+      },
+      {
+        "id": "fb336d42-a22c-54d7-a093-9b0a2249f489",
+        "type": "Table",
+        "name": "order_ordergrantedrefundline",
+        "path": "saleor/order/models.py",
+        "line": 992,
+        "repo": "saleor"
+      },
+      {
+        "id": "9eb405c1-e59b-5206-9201-e667ee1373fc",
+        "type": "Table",
+        "name": "order_orderline",
+        "path": "saleor/order/models.py",
+        "line": 567,
+        "repo": "saleor"
+      }
+    ],
+    "steps": [
+      {
+        "op": "find",
+        "nodes": 8,
+        "edges": 0
+      }
+    ],
+    "total": 8,
+    "truncated": false,
+    "engineTruncated": false,
+    "scope": {
+      "analyzed": ["saleor", "saleor-dashboard", "storefront"],
+      "failed": []
+    },
+    "elapsedMs": 7600
+  }
+}

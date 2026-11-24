@@ -4,12 +4,14 @@
 # Linux machine (Ubuntu/Debian).
 #
 # What it puts on the box:
-#   1. System packages: git, build toolchain (for the Rust engine), socat.
+#   1. System packages: git, build toolchain (for the Rust engine).
 #   2. Docker, if the machine has none.
-#   3. Lain — built from the `dev` branch of spuentesp/lain (not `main`).
+#   3. Lain — the pinned release binary (LAIN_VERSION, default v0.16.0) from
+#      the GitHub releases of spuentesp/lain. Set LAIN_FROM_SOURCE=1 to build
+#      a branch (LAIN_BRANCH) from source with cargo instead.
 #   4. The Saleor demo repos (shallow clones) + the federation config.
-#   5. The engine as a service on 127.0.0.1:9999, plus a loopback relay so
-#      the Parallax container can reach it without exposing it to the world.
+#   5. The engine as a service on 127.0.0.1:9999 (never exposed: it only answers
+#      loopback Host headers; the Parallax containers use the host network).
 #   6. deploy/.env with generated tokens, and the Parallax stack
 #      (docker compose: api + web bundle + Caddy for HTTPS).
 #   7. The demo workspace (Saleor) seeded in the database.
@@ -33,14 +35,16 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$REPO_ROOT/deploy"
 
 LAIN_REPO_URL="${LAIN_REPO_URL:-https://github.com/spuentesp/lain.git}"
-LAIN_BRANCH="${LAIN_BRANCH:-dev}"
+LAIN_VERSION="${LAIN_VERSION:-v0.16.0}"   # release tag installed by default
+LAIN_FROM_SOURCE="${LAIN_FROM_SOURCE:-0}" # 1 = build LAIN_BRANCH from source
+LAIN_BRANCH="${LAIN_BRANCH:-dev}"         # only used when LAIN_FROM_SOURCE=1
 LAIN_SRC_DIR="${LAIN_SRC_DIR:-/opt/lain/src}"
 LAIN_BIN_DIR="${LAIN_BIN_DIR:-/usr/local/bin}"
 LAIN_PORT="${LAIN_PORT:-9999}"
 LAIN_HOST="${LAIN_HOST:-127.0.0.1}"
 LAIN_DISABLE_LSP="${LAIN_DISABLE_LSP:-0}"
 LAIN_LSP_LEAN="${LAIN_LSP_LEAN:-0}"
-LAIN_INDEX_TIMEOUT="${LAIN_INDEX_TIMEOUT:-60}"
+LAIN_INDEX_TIMEOUT="${LAIN_INDEX_TIMEOUT:-900}"
 # Independent operator wait for the whole demo, not Lain's per-repo pipeline budget.
 LAIN_INDEX_TIMEOUT_SEC="${LAIN_INDEX_TIMEOUT_SEC:-1800}"
 
@@ -57,6 +61,7 @@ WORKSPACE_ID="${WORKSPACE_ID:-ws_saleor}"
 
 DOMAIN="${DOMAIN:-}"
 NEBIUS_TOKEN="${NEBIUS_TOKEN:-}"
+TAVILY_TOKEN="${TAVILY_TOKEN:-}"
 LAIN_BIN="${LAIN_BIN:-}"      # path to a prebuilt lain binary (skips the Rust build)
 SKIP_DOCKER=0
 SKIP_LAIN_BUILD=0
@@ -95,27 +100,30 @@ trap on_error ERR
 
 usage() {
   cat <<'EOF'
-Install Parallax + Lain (dev branch) + the Saleor demo on a fresh Linux box.
+Install Parallax + Lain (release v0.16.0) + the Saleor demo on a fresh Linux box.
 
-  sudo ./install.sh --domain <name> [--nebius-token <token>]
+  sudo ./install.sh --domain <name> [--nebius-token <token>] [--tavily-token <token>]
 
 Options:
   --domain <name>          Public DNS name for the demo (or an IP.nip.io name).
                            Caddy gets the TLS certificate for it.
+  --tavily-token <token>   Tavily key for web search (optional; kept on re-runs).
   --nebius-token <token>   Nebius Token Factory key. Without it the structural
                            analysis still works; the investigator does not.
-  --lain-bin <path>        Use this lain binary instead of building from source.
+  --lain-bin <path>        Use this lain binary instead of downloading the release.
   --keep-extra-workspaces  Keep the seed's Online Boutique / Contracts Fixture
                            workspaces (they need their own engines to work).
   --skip-docker            Do not install Docker (assume it is there).
-  --skip-lain-build        Do not build lain (assume `lain` is on PATH).
+  --skip-lain-build        Do not install lain (assume `lain` is on PATH).
   --skip-demo              Do not clone the Saleor demo repos.
   --skip-build             Do not rebuild the container image.
   -y, --yes                Never prompt; use the values from the environment.
 
-Environment overrides: DOMAIN, NEBIUS_TOKEN, LAIN_BRANCH, LAIN_PORT,
-LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP, LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT,
-LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR, WORKSPACE_ID.
+Environment overrides: DOMAIN, NEBIUS_TOKEN, TAVILY_TOKEN, LAIN_VERSION, LAIN_FROM_SOURCE,
+LAIN_BRANCH, LAIN_PORT, LAIN_REPO_URL, LAIN_BIN, LAIN_DISABLE_LSP,
+LAIN_LSP_LEAN, LAIN_INDEX_TIMEOUT, LAIN_INDEX_TIMEOUT_SEC, PREFIX, DEMO_DIR,
+WORKSPACE_ID. LAIN_VERSION selects the GitHub release tag (default v0.16.0);
+LAIN_FROM_SOURCE=1 builds LAIN_BRANCH from source with cargo instead.
 EOF
 }
 
@@ -127,6 +135,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --domain) DOMAIN="${2:-}"; shift 2 ;;
     --nebius-token) NEBIUS_TOKEN="${2:-}"; shift 2 ;;
+    --tavily-token) TAVILY_TOKEN="${2:-}"; shift 2 ;;
     --lain-bin) LAIN_BIN="${2:-}"; shift 2 ;;
     --keep-extra-workspaces) KEEP_EXTRA_WORKSPACES=1; shift ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
@@ -157,7 +166,8 @@ require_root() {
   fi
   printf 'need root: re-running under sudo...\n'
   exec sudo env \
-    DOMAIN="$DOMAIN" NEBIUS_TOKEN="$NEBIUS_TOKEN" LAIN_BRANCH="$LAIN_BRANCH" \
+    DOMAIN="$DOMAIN" NEBIUS_TOKEN="$NEBIUS_TOKEN" LAIN_VERSION="$LAIN_VERSION" \
+    LAIN_FROM_SOURCE="$LAIN_FROM_SOURCE" LAIN_BRANCH="$LAIN_BRANCH" \
     LAIN_PORT="$LAIN_PORT" LAIN_REPO_URL="$LAIN_REPO_URL" LAIN_BIN="$LAIN_BIN" \
     LAIN_DISABLE_LSP="$LAIN_DISABLE_LSP" LAIN_LSP_LEAN="$LAIN_LSP_LEAN" \
     LAIN_INDEX_TIMEOUT="$LAIN_INDEX_TIMEOUT" LAIN_INDEX_TIMEOUT_SEC="$LAIN_INDEX_TIMEOUT_SEC" \
@@ -276,8 +286,8 @@ fi
 
 step "System packages"
 
-apt_install ca-certificates curl git build-essential pkg-config cmake libssl-dev socat
-ok "toolchain, git and socat installed"
+apt_install ca-certificates curl git build-essential pkg-config cmake libssl-dev
+ok "toolchain and git installed"
 
 # --------------------------------------------------------------------------
 # 3. Docker
@@ -311,17 +321,23 @@ if ! docker info >/dev/null 2>&1; then
 fi
 ok "Docker daemon is up"
 
-DOCKER_BRIDGE_GATEWAY="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}' 2>/dev/null || true)"
-if [[ -z "$DOCKER_BRIDGE_GATEWAY" ]]; then
-  die "could not read the default Docker bridge gateway (needed to reach the engine from the container)"
+# --------------------------------------------------------------------------
+# 4. Lain: the pinned release binary by default, a source build on request
+# --------------------------------------------------------------------------
+
+LAIN_TAG="${LAIN_VERSION#/}"           # accept both v0.16.0 and 0.16.0
+LAIN_TAG="v${LAIN_TAG#v}"
+LAIN_VERSION_MARKER="$LAIN_BIN_DIR/.lain-version"
+
+# Version of the engine installed before this run (empty on a fresh box), used
+# below to decide whether the existing federation graph needs a reindex.
+PREV_LAIN_TAG=""
+if [[ -x "$LAIN_BIN_DIR/lain" ]]; then
+  prev_ver="$("$LAIN_BIN_DIR/lain" --version 2>/dev/null | awk '{print $2}')"
+  [[ -n "$prev_ver" ]] && PREV_LAIN_TAG="v${prev_ver#v}"
 fi
-ok "docker bridge gateway: $DOCKER_BRIDGE_GATEWAY"
 
-# --------------------------------------------------------------------------
-# 4. Lain, built from the dev branch
-# --------------------------------------------------------------------------
-
-step "Lain (${LAIN_BRANCH} branch)"
+step "Lain ($LAIN_TAG)"
 
 install_lain_binary() { # install_lain_binary <path-to-binary>
   install -m 0755 "$1" "$LAIN_BIN_DIR/lain"
@@ -334,14 +350,7 @@ install_lain_binary() { # install_lain_binary <path-to-binary>
   fi
 }
 
-if [[ -n "$LAIN_BIN" ]]; then
-  [[ -x "$LAIN_BIN" ]] || die "--lain-bin $LAIN_BIN is not executable"
-  install_lain_binary "$LAIN_BIN"
-  ok "installed the provided lain binary: $LAIN_BIN_DIR/lain"
-elif [[ $SKIP_LAIN_BUILD -eq 1 ]]; then
-  command -v lain >/dev/null 2>&1 || die "--skip-lain-build was given but lain is not on PATH"
-  ok "using the lain already on PATH: $(command -v lain)"
-else
+build_lain_from_source() {
   if ! command -v cargo >/dev/null 2>&1; then
     info "installing Rust (stable)"
     curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable >/dev/null
@@ -381,7 +390,55 @@ else
     ( cd "$LAIN_SRC_DIR" && cargo build --release --locked -j "$build_jobs" --bin lain --bin lain-git-sidecar )
     install_lain_binary "$LAIN_SRC_DIR/target/release/lain"
     printf '%s' "$LAIN_COMMIT" > "$BUILD_MARKER"
+    printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
     ok "lain $LAIN_COMMIT built and installed in $LAIN_BIN_DIR"
+  fi
+}
+
+if [[ -n "$LAIN_BIN" ]]; then
+  [[ -x "$LAIN_BIN" ]] || die "--lain-bin $LAIN_BIN is not executable"
+  install_lain_binary "$LAIN_BIN"
+  printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
+  ok "installed the provided lain binary: $LAIN_BIN_DIR/lain"
+elif [[ $SKIP_LAIN_BUILD -eq 1 ]]; then
+  command -v lain >/dev/null 2>&1 || die "--skip-lain-build was given but lain is not on PATH"
+  ok "using the lain already on PATH: $(command -v lain)"
+elif [[ $LAIN_FROM_SOURCE -eq 1 ]]; then
+  build_lain_from_source
+else
+  # Default: download the pinned release binary and verify its SHA256.
+  if [[ -f "$LAIN_VERSION_MARKER" ]] && [[ "$(cat "$LAIN_VERSION_MARKER")" == "$LAIN_TAG" ]] \
+     && [[ -x "$LAIN_BIN_DIR/lain" ]]; then
+    ok "lain $LAIN_TAG is already installed (skipping the download)"
+  else
+    lain_num="${LAIN_TAG#v}"
+    asset="lain-${lain_num}-x86_64-unknown-linux-gnu.tar.gz"
+    workdir="$(mktemp -d /tmp/lain-release.XXXXXX)"
+    info "downloading lain $LAIN_TAG ($asset) from GitHub releases"
+    if command -v gh >/dev/null 2>&1; then
+      gh release download "$LAIN_TAG" -R spuentesp/lain --dir "$workdir" -p "$asset" -p SHA256SUMS
+    else
+      base="https://github.com/spuentesp/lain/releases/download/$LAIN_TAG"
+      curl -fsSL "$base/$asset" -o "$workdir/$asset"
+      curl -fsSL "$base/SHA256SUMS" -o "$workdir/SHA256SUMS"
+    fi
+    ( cd "$workdir" && grep "x86_64-unknown-linux-gnu.tar.gz$" SHA256SUMS | sha256sum -c - )
+    tar -xzf "$workdir/$asset" -C "$workdir"
+    install_lain_binary "$workdir/lain"
+    rm -rf "$workdir"
+    # The release binary is linked against a recent glibc (2.39 for v0.16.0:
+    # Ubuntu 24.04 runs it, 22.04 does not). If it cannot start here, build the
+    # same tag from source instead of leaving a binary that cannot run.
+    if "$LAIN_BIN_DIR/lain" --version >/dev/null 2>&1; then
+      printf '%s' "$LAIN_TAG" > "$LAIN_VERSION_MARKER"
+      ok "lain $LAIN_TAG installed in $LAIN_BIN_DIR"
+    else
+      warn "the lain $LAIN_TAG release binary does not run on this system: $("$LAIN_BIN_DIR/lain" --version 2>&1 | head -n1)"
+      warn "falling back to building $LAIN_TAG from source"
+      rm -f "$LAIN_BIN_DIR/lain" "$LAIN_BIN_DIR/lain-git-sidecar" "$LAIN_VERSION_MARKER"
+      LAIN_BRANCH="$LAIN_TAG"
+      build_lain_from_source
+    fi
   fi
 fi
 
@@ -443,6 +500,21 @@ services:
 EOF
 ok "wrote $ENGINE_CONFIG"
 
+# A new Lain can raise the federation graph schema (0.15 -> 0.16 went v5 -> v7;
+# the new server refuses the old graph): an existing data dir written by an
+# older lain must be reindexed once (the old graph is backed up
+# to federated_graph.bin.bak by lain itself).
+if [[ -n "$PREV_LAIN_TAG" && "$PREV_LAIN_TAG" != "$LAIN_TAG" ]] \
+   && [[ -f "$ENGINE_DATA_DIR/federated_graph.bin" ]]; then
+  warn "upgrading lain $PREV_LAIN_TAG → $LAIN_TAG: reindexing the existing graph (the graph schema changed)"
+  # The old server may still hold the graph file; stop it first (step 6 restarts it).
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl stop lain >/dev/null 2>&1 || true
+  fi
+  "$LAIN_BIN_DIR/lain" reindex --config "$ENGINE_CONFIG" || \
+    die "reindex failed — the new engine refuses the old graph. Run: lain reindex --config $ENGINE_CONFIG"
+fi
+
 # --------------------------------------------------------------------------
 # 6. The engine as a service
 # --------------------------------------------------------------------------
@@ -454,7 +526,7 @@ ENGINE_UNIT="$ENGINE_UNIT_DIR/lain.service"
 write_engine_unit() {
   cat > "$ENGINE_UNIT" <<EOF
 [Unit]
-Description=Parallax analysis engine (lain, $LAIN_BRANCH)
+Description=Parallax analysis engine (lain, $LAIN_TAG)
 After=network-online.target
 Wants=network-online.target
 
@@ -506,7 +578,9 @@ index_poll=0
 while (( SECONDS < index_deadline )); do
   body="$(curl -sS --max-time 10 "http://$LAIN_HOST:$LAIN_PORT/health/index-status" 2>/dev/null || true)"
   if [[ -n "$body" ]]; then
-    summary="$(printf '%s' "$body" | grep -o '"id":"[^"]*","health":"[^"]*"' | tr '\n' ' ')"
+    # Lain emits {"health":"ready","id":"repo"}; do not depend on the key order,
+    # and never let a non-matching body abort the script (set -e + pipefail).
+    summary="$(printf '%s' "$body" | grep -o '"\(id\|health\)":"[^"]*"' | tr -d '"' | tr '\n' ' ' || true)"
     if [[ "$body" == *'"health":"ready"'* ]] && [[ "$body" != *'"health":"indexing"'* ]]; then
       ok "indexed: $summary"
       break
@@ -523,56 +597,14 @@ if (( SECONDS >= index_deadline )); then
   warn "check the engine log: $ENGINE_LOG"
 fi
 
-# --------------------------------------------------------------------------
-# 7. Loopback relay (container -> engine)
-# --------------------------------------------------------------------------
-
-step "Engine relay"
-
-# The engine refuses to bind a non-loopback address without API keys, and
-# Parallax does not send an Authorization header. So the engine stays on
-# 127.0.0.1 and this relay forwards the Docker bridge address to it. The
-# relay is bound to the bridge IP only: the engine is not reachable from
-# the internet.
-RELAY_UNIT="$ENGINE_UNIT_DIR/lain-relay.service"
-
-if ! command -v socat >/dev/null 2>&1; then
-  die "socat is missing (it is needed to reach the engine from the container)"
-fi
-SOCAT_BIN="$(command -v socat)"
-
-if has_systemd; then
-  mkdir -p "$ENGINE_UNIT_DIR"
-  cat > "$RELAY_UNIT" <<EOF
-[Unit]
-Description=Relay the Docker bridge to the Parallax engine on $LAIN_HOST:$LAIN_PORT
-After=docker.service lain.service
-Wants=docker.service
-
-[Service]
-Type=simple
-ExecStart=$SOCAT_BIN TCP-LISTEN:$LAIN_PORT,fork,reuseaddr,bind=$DOCKER_BRIDGE_GATEWAY TCP:$LAIN_HOST:$LAIN_PORT
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Earlier versions of this script ran a socat relay on the Docker bridge
+# (lain-relay). The containers now use the host network, so remove it on re-run.
+if has_systemd && [[ -f "$ENGINE_UNIT_DIR/lain-relay.service" ]]; then
+  systemctl disable --now lain-relay >/dev/null 2>&1 || true
+  rm -f "$ENGINE_UNIT_DIR/lain-relay.service"
   systemctl daemon-reload
-  systemctl enable lain-relay >/dev/null 2>&1 || true
-  systemctl restart lain-relay
-  ok "systemd unit: lain-relay.service ($DOCKER_BRIDGE_GATEWAY:$LAIN_PORT -> $LAIN_HOST:$LAIN_PORT)"
-else
-  nohup socat "TCP-LISTEN:$LAIN_PORT,fork,reuseaddr,bind=$DOCKER_BRIDGE_GATEWAY" \
-    "TCP:$LAIN_HOST:$LAIN_PORT" >>"$ENGINE_LOG" 2>&1 &
-  printf '%s' "$!" > "$ENGINE_DIR/lain-relay.pid"
-  ok "relay started (no systemd): pid $(cat "$ENGINE_DIR/lain-relay.pid")"
+  ok "removed the obsolete lain-relay service"
 fi
-
-if ! wait_for 30 bash -c "exec 3<>/dev/tcp/$DOCKER_BRIDGE_GATEWAY/$LAIN_PORT"; then
-  die "the relay is not answering on $DOCKER_BRIDGE_GATEWAY:$LAIN_PORT"
-fi
-ok "the engine is reachable from containers at http://host.docker.internal:$LAIN_PORT/mcp"
 
 # --------------------------------------------------------------------------
 # 8. deploy/.env
@@ -613,6 +645,14 @@ if [[ -z "$NEBIUS_TOKEN" ]]; then
   fi
 fi
 
+# Web search (Tavily) is optional; keep the key across re-runs like the model credential.
+if [[ -z "$TAVILY_TOKEN" ]]; then
+  TAVILY_TOKEN="$(existing_env_value TAVILY_TOKEN)"
+  if [[ -n "$TAVILY_TOKEN" ]]; then
+    ok "reusing the Tavily token from the existing $ENV_FILE"
+  fi
+fi
+
 if [[ -f "$ENV_FILE" ]]; then
   cp "$ENV_FILE" "$ENV_FILE.bak.$(date +%Y%m%d%H%M%S)"
   warn "backed up the previous $ENV_FILE"
@@ -624,7 +664,7 @@ cat > "$ENV_FILE" <<EOF
 # These values are read by the compose stack in this directory:
 #   - DOMAIN           the public name Caddy serves (and gets a cert for)
 #   - PARALLAX_TOKENS  the access tokens (JSON array)
-#   - LAIN_URL         the analysis engine, reached through the Docker relay
+#   - LAIN_URL         the analysis engine, reached on the host loopback (the containers use the host network)
 # The rest are container-side paths: the app runs in the parallax container.
 
 DOMAIN=$DOMAIN
@@ -636,8 +676,12 @@ PARALLAX_TOKENS='$TOKENS_JSON'
 # features are off and the investigator reports failed:no_model_configured.
 NEBIUS_TOKEN=$NEBIUS_TOKEN
 
+# Tavily key for the web_search tool (official docs next to what the engine found).
+# Empty means the tool is not offered to the model.
+TAVILY_TOKEN=$TAVILY_TOKEN
+
 LAIN_ADAPTER=real
-LAIN_URL=http://host.docker.internal:$LAIN_PORT/mcp
+LAIN_URL=http://127.0.0.1:$LAIN_PORT/mcp
 PARALLAX_MCP_TRANSPORT=http-sse
 PORT=8080
 
@@ -696,7 +740,7 @@ step "Demo workspace"
 
 info "seeding the database (this runs inside the container)"
 if compose exec -T \
-      -e "SALEOR_LAIN_URL=http://host.docker.internal:$LAIN_PORT/mcp" \
+      -e "SALEOR_LAIN_URL=http://127.0.0.1:$LAIN_PORT/mcp" \
       -e "DATABASE_PATH=/data/parallax.db" \
       parallax pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts; then
   ok "workspace $WORKSPACE_ID seeded"
@@ -762,14 +806,14 @@ compose() { ( cd "\$DEPLOY_DIR" && docker compose "\$@" ); }
 case "\${1:-status}" in
   start)
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl start lain lain-relay
+      systemctl start lain
     fi
     compose up -d
     ;;
   stop)
     compose down
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl stop lain lain-relay
+      systemctl stop lain
     fi
     ;;
   restart)
@@ -778,7 +822,7 @@ case "\${1:-status}" in
     ;;
   status)
     if [[ -d /run/systemd/system ]] && command -v systemctl >/dev/null 2>&1; then
-      systemctl --no-pager status lain lain-relay || true
+      systemctl --no-pager status lain || true
     fi
     compose ps || true
     ;;

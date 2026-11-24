@@ -42,6 +42,26 @@ describe('contractGroup — what a contract is called on the map', () => {
     expect(contractGroup('http:ANY /click', 0).note).toMatch(/event names or test data/);
   });
 
+  it('separates format strings (fmt.Errorf "%w: …") from real routes: %+letter is never a valid URL path', () => {
+    for (const fmt of [
+      'http:ANY /%w',
+      'http:ANY /%w: client secret is required (use WithClientSecret or WithClientSecretProvider)',
+      'http:ANY /%w: %s URL must use HTTPS',
+      'http:ANY /%w: %q',
+    ]) {
+      expect(contractGroup(fmt, 0), fmt).toMatchObject({
+        key: 'http-format-string',
+        label: 'Not routes (format strings)',
+      });
+      expect(contractGroup(fmt, 0).note).toMatch(/format strings/);
+    }
+    // %HH (p. ej. %20) sí es percent-encoding válido: sigue siendo ruta.
+    expect(contractGroup('http:GET /files/%20name', 0).key).toBe('http');
+    // UTF-8 percent-encoding starts with a letter (%C3%A9): still a real route.
+    expect(contractGroup('http:GET /caf%C3%A9/menu', 0).key).toBe('http');
+    expect(contractGroup('http:ANY /a%20b', 0).key).toBe('http-methodless');
+  });
+
   it('gives any other contract kind its own labelled group', () => {
     expect(contractGroup('table:public.orders', 0).label).toBe('Other contracts (table)');
   });

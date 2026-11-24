@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { PARALLAX_VERSION } from '@parallax/shared';
 import { TraceFlowInput } from '@parallax/shared/domain';
 import { ListServiceRefsArgs } from '@parallax/shared/lain';
 import { z } from 'zod';
@@ -14,7 +15,7 @@ const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
 
 export function buildMcpServer(api: ApiClient): McpServer {
-  const server = new McpServer({ name: 'parallax', version: '0.1.0' });
+  const server = new McpServer({ name: 'parallax', version: PARALLAX_VERSION });
 
   server.tool(
     'parallax_explore',

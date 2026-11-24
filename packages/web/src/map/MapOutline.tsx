@@ -181,7 +181,7 @@ export function MapOutline({
               >
                 {displayLabel(n)}
               </span>
-              {n.contract && (
+              {n.contract && n.kind !== 'endpoint' && (
                 <span className="shrink-0 rounded px-1 text-[10px] leading-4 uppercase tracking-wide bg-bg text-muted border border-border">
                   {n.contract}
                 </span>

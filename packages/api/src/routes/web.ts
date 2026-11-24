@@ -33,7 +33,11 @@ export const webRoutes: FastifyPluginAsync = async (app) => {
     if (!existsSync(abs) || !statSync(abs).isFile()) {
       return reply.code(404).send({ type: 'about:blank', title: 'Not Found', status: 404 });
     }
-    return reply.header('content-type', mimeFor(abs)).send(readFileSync(abs));
+    // Los assets van con hash de contenido: inmutables y cacheables para siempre.
+    return reply
+      .header('content-type', mimeFor(abs))
+      .header('cache-control', 'public, max-age=31536000, immutable')
+      .send(readFileSync(abs));
   });
 
   // SPA fallback: any non-API, non-asset URL serves index.html.
@@ -51,6 +55,12 @@ export const webRoutes: FastifyPluginAsync = async (app) => {
         doc: 'https://github.com/spuentesp/parallax#run-dev-mode',
       });
     }
-    return reply.header('content-type', 'text/html; charset=utf-8').send(readFileSync(indexPath));
+    // index.html referencia assets con hash: debe revalidarse SIEMPRE (sin
+    // Cache-Control el navegador lo cachea heurísticamente y sirve la versión
+    // vieja aunque el bundle ya cambió). Los /assets/* sí son inmutables.
+    return reply
+      .header('content-type', 'text/html; charset=utf-8')
+      .header('cache-control', 'no-cache')
+      .send(readFileSync(indexPath));
   });
 };

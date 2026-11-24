@@ -4,10 +4,12 @@ import { useParams } from 'react-router-dom';
 import {
   type TopologyFilters,
   useEvidence,
+  useLooseEnds,
   useWorkspace,
   useWorkspaceTopology,
 } from '../api/hooks.js';
 import { ContractEditor } from '../components/ContractEditor.js';
+import { ContractList } from '../components/ContractList.js';
 import { DependencyList } from '../components/DependencyList.js';
 import type { EvidenceItem } from '../components/EvidencePanel.js';
 
@@ -21,6 +23,7 @@ export function Contracts(): React.ReactElement {
   const [filters, setFilters] = useState<TopologyFilters>({});
   const wsQuery = useWorkspace(id);
   const topoQuery = useWorkspaceTopology(id, filters);
+  const looseEnds = useLooseEnds(id);
   const evidence = useEvidence();
   const [cited, setCited] = useState<EvidenceItem[] | null>(null);
 
@@ -37,55 +40,61 @@ export function Contracts(): React.ReactElement {
         </div>
         <SourceBadge source={topo?.source ?? 'none'} error={topo?.error} />
       </div>
-      <>
-        <>
-          {/* Stats strip */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <Stat label="Services" value={stats?.services ?? 0} />
-            <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
-            <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
-            <Stat label="Repositories" value={ws?.repoCount ?? 0} />
-            <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
-          </div>
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <Stat label="Services" value={stats?.services ?? 0} />
+        <Stat label="Endpoints" value={stats?.endpoints ?? 0} />
+        <Stat label="Dependencies" value={stats?.dependencies ?? 0} />
+        <Stat label="Repositories" value={ws?.repoCount ?? 0} />
+        <Stat label="Contract kinds" value={Object.keys(stats?.byKind ?? {}).length} />
+      </div>
 
-          {id && <ContractEditor workspaceId={id} />}
+      {id && <ContractEditor workspaceId={id} />}
 
-          {/* Filtros de la lista de dependencias */}
-          <div>
-            <div className="flex items-baseline justify-between mb-2">
-              <h2 className="font-semibold">Contracts</h2>
-              <span className="text-xs text-muted">
-                {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
-                {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
-              </span>
-            </div>
-            <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
-            {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
-          </div>
+      {/* Filtros de la lista de contratos */}
+      <div>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="font-semibold">Contracts</h2>
+          <span className="text-xs text-muted">
+            {topo?.source === 'lain' ? 'Live from LAIN' : 'Not connected'}
+            {topo?.lainUrl ? ` · ${topo.lainUrl}` : ''}
+          </span>
+        </div>
+        <FilterBar filters={filters} onChange={setFilters} byKind={stats?.byKind ?? {}} />
+        {topo?.error && <p className="text-xs text-warning mt-2">LAIN error: {topo.error}</p>}
+        <div className="mt-3">
+          <ContractList
+            nodes={topo?.topology?.nodes ?? []}
+            edges={topo?.topology?.edges ?? []}
+            looseEnds={looseEnds.data?.items}
+            kindFilter={filters.kind}
+          />
+        </div>
+      </div>
 
-          {/* Navegación por dependencias + panel de evidencia (§2, §10) */}
-          <div>
-            <div className="flex items-baseline justify-between mb-2">
-              <h2 className="font-semibold">Dependencies &amp; evidence</h2>
-              <span className="text-xs text-muted">
-                Cada call-site abre el código en la vista del motor
-              </span>
-            </div>
-            <DependencyList
-              edges={topo?.topology?.edges ?? []}
-              loading={evidence.isPending}
-              evidence={cited}
-              onLoadEvidence={(refs) => {
-                if (!id) return;
-                evidence.mutate(
-                  { workspaceId: id, refs, contextLines: 6 },
-                  { onSuccess: (res) => setCited(res.items) },
-                );
-              }}
-            />
-          </div>
-        </>
-      </>
+      {/* Navegación por dependencias + panel de evidencia (§2, §10) */}
+      <div>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="font-semibold">Dependencies &amp; evidence</h2>
+          <span className="text-xs text-muted">
+            Each call site opens the code in the engine view
+          </span>
+        </div>
+        <DependencyList
+          // Sólo dependencias reales: las aristas `contains` (un servicio EXPONE un endpoint)
+          // son estructura, no un consumo, y llenaban la lista con filas de 0 call-sites.
+          edges={(topo?.topology?.edges ?? []).filter((e) => e.kind === 'consumes')}
+          loading={evidence.isPending}
+          evidence={cited}
+          onLoadEvidence={(refs) => {
+            if (!id) return;
+            evidence.mutate(
+              { workspaceId: id, refs, contextLines: 6 },
+              { onSuccess: (res) => setCited(res.items) },
+            );
+          }}
+        />
+      </div>
     </div>
   );
 }

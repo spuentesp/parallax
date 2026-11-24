@@ -26,7 +26,7 @@ describe('AssessmentForm', () => {
     fireEvent.change(screen.getByLabelText(/head/i), {
       target: { value: 'afece2321df86647a31d073a2e3cadb50e13d42e' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /evaluar/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^evaluate$/i }));
     await waitFor(() => {
       expect(posted).toEqual({
         repo: 'orders',

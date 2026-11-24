@@ -1,0 +1,305 @@
+{
+  "items": [
+    {
+      "consumers": [
+        {
+          "binding": {
+            "confidence": 1.0,
+            "kind": "static",
+            "source": "Regex"
+          },
+          "caller": {
+            "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+            "id": "saleor-dashboard:Function:src/containers/BackgroundTasks/queries.ts:graphql-call%3Aquery%3AexportFile:3",
+            "line": 3,
+            "name": "graphql-call:query:exportFile",
+            "path": "src/containers/BackgroundTasks/queries.ts",
+            "repo": "saleor-dashboard",
+            "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/containers/BackgroundTasks/queries.ts:3"
+          },
+          "match": "exact",
+          "reads": [
+            {
+              "json_path": "id",
+              "provenance": {
+                "confidence": 1.0,
+                "kind": "static",
+                "source": "TreeSitter"
+              },
+              "site": {
+                "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+                "id": "saleor-dashboard:FieldRef:src/containers/BackgroundTasks/queries.ts:id:3",
+                "line": 3,
+                "path": "src/containers/BackgroundTasks/queries.ts",
+                "repo": "saleor-dashboard",
+                "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/containers/BackgroundTasks/queries.ts:3"
+              }
+            },
+            {
+              "json_path": "status",
+              "provenance": {
+                "confidence": 1.0,
+                "kind": "static",
+                "source": "TreeSitter"
+              },
+              "site": {
+                "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+                "id": "saleor-dashboard:FieldRef:src/containers/BackgroundTasks/queries.ts:status:4",
+                "line": 4,
+                "path": "src/containers/BackgroundTasks/queries.ts",
+                "repo": "saleor-dashboard",
+                "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/containers/BackgroundTasks/queries.ts:4"
+              }
+            }
+          ],
+          "reads_complete": true,
+          "site": {
+            "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+            "id": "saleor-dashboard:Function:src/containers/BackgroundTasks/queries.ts:graphql-call%3Aquery%3AexportFile:3",
+            "line": 3,
+            "path": "src/containers/BackgroundTasks/queries.ts",
+            "repo": "saleor-dashboard",
+            "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/containers/BackgroundTasks/queries.ts:3"
+          }
+        },
+        {
+          "binding": {
+            "confidence": 1.0,
+            "kind": "static",
+            "source": "Regex"
+          },
+          "caller": {
+            "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+            "id": "saleor-dashboard:Function:src/graphql/hooks.generated.ts:graphql-call%3Aquery%3AexportFile:8886",
+            "line": 8886,
+            "name": "graphql-call:query:exportFile",
+            "path": "src/graphql/hooks.generated.ts",
+            "repo": "saleor-dashboard",
+            "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/graphql/hooks.generated.ts:8886"
+          },
+          "match": "exact",
+          "reads": [
+            {
+              "json_path": "id",
+              "provenance": {
+                "confidence": 1.0,
+                "kind": "static",
+                "source": "TreeSitter"
+              },
+              "site": {
+                "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+                "id": "saleor-dashboard:FieldRef:src/graphql/hooks.generated.ts:id:8886",
+                "line": 8886,
+                "path": "src/graphql/hooks.generated.ts",
+                "repo": "saleor-dashboard",
+                "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/graphql/hooks.generated.ts:8886"
+              }
+            },
+            {
+              "json_path": "status",
+              "provenance": {
+                "confidence": 1.0,
+                "kind": "static",
+                "source": "TreeSitter"
+              },
+              "site": {
+                "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+                "id": "saleor-dashboard:FieldRef:src/graphql/hooks.generated.ts:status:8887",
+                "line": 8887,
+                "path": "src/graphql/hooks.generated.ts",
+                "repo": "saleor-dashboard",
+                "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/graphql/hooks.generated.ts:8887"
+              }
+            }
+          ],
+          "reads_complete": true,
+          "site": {
+            "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+            "id": "saleor-dashboard:Function:src/graphql/hooks.generated.ts:graphql-call%3Aquery%3AexportFile:8886",
+            "line": 8886,
+            "path": "src/graphql/hooks.generated.ts",
+            "repo": "saleor-dashboard",
+            "text": "saleor-dashboard@eb1118714c3924904f92a434b409afb3b80443f9:src/graphql/hooks.generated.ts:8886"
+          }
+        }
+      ],
+      "endpoint": {
+        "key": "graphql:query:exportFile",
+        "service": "saleor"
+      },
+      "providers": [
+        {
+          "commit": "487885d437feed94922cdbdf16a76552c120b550",
+          "id": "saleor:Module:saleor/graphql/schema.graphql:query%3AexportFile:1219",
+          "line": 1219,
+          "path": "saleor/graphql/schema.graphql",
+          "repo": "saleor",
+          "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:saleor/graphql/schema.graphql:1219"
+        }
+      ],
+      "schemas": [
+        {
+          "direction": "response",
+          "fields": [
+            {
+              "enum_values": null,
+              "json_path": "app",
+              "nullable": true,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "app",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:app:0"
+              },
+              "required": false,
+              "ty": "unknown"
+            },
+            {
+              "enum_values": null,
+              "json_path": "createdAt",
+              "nullable": false,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "createdAt",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:createdAt:0"
+              },
+              "required": true,
+              "ty": "unknown"
+            },
+            {
+              "enum_values": null,
+              "json_path": "events",
+              "nullable": true,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "events",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:events:0"
+              },
+              "required": false,
+              "ty": "array"
+            },
+            {
+              "enum_values": null,
+              "json_path": "id",
+              "nullable": false,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "id",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:id:0"
+              },
+              "required": true,
+              "ty": "string"
+            },
+            {
+              "enum_values": null,
+              "json_path": "message",
+              "nullable": true,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "message",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:message:0"
+              },
+              "required": false,
+              "ty": "string"
+            },
+            {
+              "enum_values": null,
+              "json_path": "status",
+              "nullable": false,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "status",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:status:0"
+              },
+              "required": true,
+              "ty": "unknown"
+            },
+            {
+              "enum_values": null,
+              "json_path": "updatedAt",
+              "nullable": false,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "updatedAt",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:updatedAt:0"
+              },
+              "required": true,
+              "ty": "unknown"
+            },
+            {
+              "enum_values": null,
+              "json_path": "url",
+              "nullable": true,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "url",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:url:0"
+              },
+              "required": false,
+              "ty": "string"
+            },
+            {
+              "enum_values": null,
+              "json_path": "user",
+              "nullable": true,
+              "ref": {
+                "commit": "487885d437feed94922cdbdf16a76552c120b550",
+                "id": "saleor:Schema:saleor/graphql/schema.graphql:ExportFile:16863",
+                "line": 0,
+                "path": "user",
+                "repo": "saleor",
+                "text": "saleor@487885d437feed94922cdbdf16a76552c120b550:user:0"
+              },
+              "required": false,
+              "ty": "unknown"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "scope": {
+    "configured_only": true,
+    "reviewed": [
+      {
+        "commit": "487885d437feed94922cdbdf16a76552c120b550",
+        "dirty": false,
+        "repo": "saleor"
+      },
+      {
+        "commit": "eb1118714c3924904f92a434b409afb3b80443f9",
+        "dirty": false,
+        "repo": "saleor-dashboard"
+      },
+      {
+        "commit": "a6e357a575c6e694e1aa5e5def4a1783dd223117",
+        "dirty": false,
+        "repo": "storefront"
+      }
+    ],
+    "unreviewed": []
+  }
+}

@@ -121,4 +121,23 @@ describe('MapExplorer — trace end to end', () => {
     expect(screen.queryByTestId('trace-panel')).toBeNull();
     expect(await screen.findByTestId('map-inspector')).toBeTruthy();
   });
+
+  it('a link can open the trace directly (?trace=&tservice=) and the parameters are then removed', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    serve(bodies);
+    const router = createMemoryRouter([{ path: '*', element: <MapExplorer workspaceId="ws1" /> }], {
+      initialEntries: ['/?trace=graphql%3Aquery%3Aproducts&tservice=saleor-api&prov=inferred'],
+    });
+    renderWithQuery(<RouterProvider router={router} />);
+    const panel = await screen.findByTestId('trace-panel');
+    expect(panel.textContent).toMatch(/graphql:query:products/);
+    await waitFor(() =>
+      expect(bodies).toEqual([{ key: 'graphql:query:products', service: 'saleor-api' }]),
+    );
+    // Se quita sólo lo del trazado; lo demás de la vista se conserva.
+    const q = new URLSearchParams(router.state.location.search);
+    expect(q.has('trace')).toBe(false);
+    expect(q.has('tservice')).toBe(false);
+    expect(q.get('prov')).toBe('inferred');
+  });
 });

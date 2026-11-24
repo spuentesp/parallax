@@ -3,30 +3,40 @@
 Goal: a public, **locked** demo. Visitors see only an access-token screen; judges get a link that signs them in with a **read-only** token. Everything runs on one VM: Lain (analysis engine) on the host, Parallax + HTTPS (Caddy) in Docker.
 
 > **Automated:** `install.sh` in the repository root does all of this in one
-> command (Docker, Lain built from the `dev` branch, the demo repos, the
+> command (Docker, the Lain v0.16.0 release binary, the demo repos, the
 > engine service, `deploy/.env` with generated tokens, the compose stack and
 > the seeded workspace): `sudo ./install.sh --domain <name> --nebius-token <token>`.
 > This runbook is the manual path it follows — read it when something in the
 > script needs changing, or when you want to do a step by hand.
 
-> Tested locally (no Docker available in the dev environment): Lain 0.13.0 cold index of Saleor, the API + built web bundle against it, token generation, the sign-in link and read-only behaviour. **Not tested:** the Docker image and compose file themselves — do a dry run on the VM before the deadline.
+> Tested locally (no Docker available in the dev environment): Lain 0.16.0 cold index of Saleor, the API + built web bundle against it, token generation, the sign-in link and read-only behaviour. **Not tested:** the Docker image and compose file themselves — do a dry run on the VM before the deadline.
 
 ## 0. What you need
-- A VM (Nebius AI Cloud, Ubuntu 22.04+, ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
+- A VM (Nebius AI Cloud, Ubuntu 24.04 (the Lain release binary needs glibc 2.39; 22.04 forces a source build), ~4 vCPU / 8 GB / 40 GB disk) with a public IP and ports 80/443 open.
 - A DNS name pointing at it (Caddy gets the certificate automatically). If you only have an IP, use a `nip.io` name such as `1-2-3-4.nip.io`.
 - A Nebius Token Factory key (`NEBIUS_TOKEN`).
+- Optional: a Tavily key (`TAVILY_TOKEN`, `--tavily-token`) for the web-search tool. Without it the tool is not offered to the model. `install.sh` keeps it across re-runs.
 
 ## 1. Install Docker and Git
 ```bash
 curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER && newgrp docker
 ```
 
-## 2. Lain 0.13.0 on the host
+## 2. Lain 0.16.0 on the host
 ```bash
 mkdir -p ~/lain && cd ~/lain
-gh release download v0.13.0 -R spuentesp/lain -p 'lain-0.13.0-x86_64-unknown-linux-gnu.tar.gz' -p SHA256SUMS
-grep x86_64-unknown-linux-gnu.tar.gz$ SHA256SUMS | sha256sum -c - && tar xzf lain-0.13.0-x86_64-unknown-linux-gnu.tar.gz
+gh release download v0.16.0 -R spuentesp/lain -p 'lain-0.16.0-x86_64-unknown-linux-gnu.tar.gz' -p SHA256SUMS
+grep x86_64-unknown-linux-gnu.tar.gz$ SHA256SUMS | sha256sum -c - && tar xzf lain-0.16.0-x86_64-unknown-linux-gnu.tar.gz
 ```
+> The v0.16.0 Linux release binary is linked against glibc 2.39: it runs on Ubuntu
+> 24.04 but not on 22.04 (`GLIBC_2.38 not found`). Check with
+> `~/lain/lain --version`; if it fails, build the tag from source
+> (`git clone --branch v0.16.0 https://github.com/spuentesp/lain && cargo build --release --locked --bin lain`),
+> which is what `install.sh` does automatically.
+
+> Upgrading an existing data dir (for example from 0.15.x): 0.16.0 raises the federation
+> graph schema (v5 → v7) and refuses the old one, so run `~/lain/lain reindex --config ~/saleor/repos.yaml` once
+> after upgrading; it backs up `federated_graph.bin` to `.bak` and rebuilds.
 Clone the repos to analyse and describe them in `repos.yaml` (Saleor example):
 ```bash
 mkdir -p ~/saleor && cd ~/saleor
@@ -59,6 +69,8 @@ Run it so it survives reboots (systemd or `tmux`), listening on **localhost only
 ```
 A cold index of this workspace took **111 s** on a dev machine. Wait until it finishes before seeding.
 
+> Networking: both containers use the host network. Lain answers only loopback `Host` headers (it returns 403 for `host.docker.internal` or a bridge IP), so the app reaches it at `http://127.0.0.1:9999/mcp`. The app listens on `127.0.0.1:8080` only; Caddy (80/443) is the single public entry. Port 8080 must be free on the VM.
+
 ## 3. Configure Parallax
 ```bash
 git clone https://github.com/spuentesp/parallax.git && cd parallax/deploy
@@ -75,7 +87,7 @@ docker compose up -d --build
 ## 5. Seed the workspace
 The Saleor workspace must exist in the database, pointing at Lain:
 ```bash
-docker compose exec -e SALEOR_LAIN_URL=http://host.docker.internal:9999/mcp parallax \
+docker compose exec -e SALEOR_LAIN_URL=http://127.0.0.1:9999/mcp parallax \
   pnpm --filter @parallax/api exec tsx scripts/seed-workspaces.ts
 ```
 (The seed script also creates the Online Boutique and Contracts Fixture workspaces; they will show "LAIN error" unless you run Lain for them too — delete them or ignore.)

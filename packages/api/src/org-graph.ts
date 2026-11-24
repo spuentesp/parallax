@@ -582,6 +582,7 @@ export function describeNode(graph: OrgGraph, id: string): NodeDetail | null {
     children: graph.nodes.filter((n) => n.parent === id),
     consumers: [...consumers.values()],
     providers: [...providers.values()],
+    endpointCount: graph.nodes.filter((n) => subtree.has(n.id) && n.kind === 'endpoint').length,
   };
 }
 

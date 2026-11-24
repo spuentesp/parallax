@@ -8,6 +8,8 @@ const AuthToken = z.object({
 
 const AppConfigSchema = z.object({
   port: z.coerce.number().int().positive().default(8080),
+  // Interface to listen on. The demo stack (host networking) sets 127.0.0.1 so only Caddy reaches it.
+  host: z.string().min(1).optional(),
   databasePath: z.string().min(1).default('./data/parallax.db'),
   lainAdapter: z.enum(['mock', 'real']).default('mock'),
   lainUrl: z.string().url().optional(),
@@ -176,6 +178,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const parsed = AppConfigSchema.safeParse({
     port: env.PORT,
+    ...(env.HOST ? { host: env.HOST } : {}),
     databasePath: env.DATABASE_PATH,
     lainAdapter: env.LAIN_ADAPTER,
     lainUrl: env.LAIN_URL,

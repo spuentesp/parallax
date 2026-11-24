@@ -1,5 +1,6 @@
-// "¿Qué código implementa este endpoint?": los textos son los que LAIN 0.13.0
-// devolvió de verdad para CheckoutShippingAddressUpdate en Saleor.
+// "¿Qué código implementa este endpoint?": los textos son los que LAIN
+// devolvió de verdad para CheckoutShippingAddressUpdate en Saleor
+// (capturados con 0.13.0; los formatos de texto se conservan en 0.15.0).
 
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

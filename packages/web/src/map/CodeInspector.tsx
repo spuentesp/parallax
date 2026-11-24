@@ -4,8 +4,8 @@
 
 import type { ProjectedNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
-import { useSymbolContext } from '../api/hooks.js';
-import { type CodeEntry, codeNodeId } from './code.js';
+import { useSymbolContext, useSymbolLinks } from '../api/hooks.js';
+import { type CodeEntry, candidateTestPaths, codeNodeId } from './code.js';
 import { KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -20,6 +20,8 @@ export interface CodeInspectorProps {
   onToggle: (id: string) => void;
   relationsActive?: boolean;
   onToggleRelations?: () => void;
+  /** Pregunta al asistente con este símbolo como tema ("Ask about this function"). */
+  onAsk?: (question: string) => void;
 }
 
 export function CodeInspector({
@@ -32,6 +34,7 @@ export function CodeInspector({
   onToggle,
   relationsActive,
   onToggleRelations,
+  onAsk,
 }: CodeInspectorProps): React.ReactElement {
   if (!node) {
     return (
@@ -62,6 +65,17 @@ export function CodeInspector({
           )}
         </div>
         <h3 className="text-sm font-semibold font-mono break-words">{node.label}</h3>
+        {onAsk && !isRoot && (
+          <button
+            type="button"
+            onClick={() =>
+              onAsk(`What does ${node.label} do, who calls it, and what breaks if it changes?`)
+            }
+            className="rounded-full border border-border-strong px-2.5 py-1 text-xs hover:border-accent hover:text-accent"
+          >
+            Ask about this {node.kind === 'symbol' ? 'function' : 'code'}
+          </button>
+        )}
         {Boolean(node.meta?.exposesEndpoint) && (
           <div className="flex items-center justify-between rounded-lg bg-accent/10 border border-accent/20 px-3 py-2 text-xs">
             <span className="text-muted">
@@ -79,6 +93,27 @@ export function CodeInspector({
             </button>
           </div>
         )}
+        {node.kind === 'file' &&
+          (() => {
+            const tests = candidateTestPaths(node.label);
+            if (tests.length === 0) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                <span className="text-muted">Tests:</span>
+                {tests.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => onSelect(codeNodeId(repo, 'File', t))}
+                    className="rounded border border-border bg-bg px-1.5 py-0.5 font-mono text-[10px] text-muted hover:text-accent hover:border-accent/40"
+                    title={t}
+                  >
+                    {t.split('/').pop()}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
         {trail.length > 0 && (
           <p className="text-xs text-muted break-words">
             {[...trail].reverse().map((p, i) => (
@@ -131,6 +166,9 @@ export function CodeInspector({
               symbol={node.label}
               onStep={(sym) => onSelect(codeNodeId(repo, 'Function', sym))}
             />
+          )}
+          {node.kind === 'symbol' && (
+            <SymbolLinks workspaceId={workspaceId} repo={repo} symbol={node.label} />
           )}
         </>
       )}
@@ -306,6 +344,96 @@ function CallStackStepper({
           </ul>
         </div>
       )}
+    </div>
+  );
+}
+
+// Lo que une al símbolo con el resto (referencia "Code lens"): qué archivos cambian
+// junto con él (historia de git) y qué otros repos lo alcanzan. Cada caso se dice
+// como es: sin historia no es "no hay acoplamiento", y un nombre repetido no se
+// atribuye a un símbolo que podría no ser el suyo.
+function SymbolLinks({
+  workspaceId,
+  repo,
+  symbol,
+}: {
+  workspaceId: string;
+  repo: string;
+  symbol: string;
+}): React.ReactElement | null {
+  const q = useSymbolLinks(workspaceId, repo, symbol);
+  const d = q.data;
+  if (q.isPending) return <p className="p-5 text-xs text-muted">Reading how it links…</p>;
+  if (q.isError || !d || d.source !== 'lain') return null;
+
+  if (d.note) {
+    return (
+      <div className="p-5 text-xs text-muted" data-testid="symbol-links-note">
+        <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wide">Links</h4>
+        <p>Not shown: {d.note}.</p>
+      </div>
+    );
+  }
+  const co = d.coChange;
+  const repos = d.crossRepo?.repositories ?? [];
+  return (
+    <div className="space-y-4 p-5" data-testid="symbol-links">
+      <section aria-label="Changes together with">
+        <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+          Changes together with
+        </h4>
+        {!co ? (
+          <p className="text-xs text-muted">The engine answer was not understood.</p>
+        ) : co.status === 'none' ? (
+          <p className="text-xs text-muted">
+            No files recorded as changing with it. That needs git history: a shallow clone has none,
+            so this is not proof it changes alone.
+          </p>
+        ) : (
+          <>
+            <ul className="space-y-0.5">
+              {co.partners.map((p) => (
+                <li key={p.path} className="flex items-center gap-2 text-[12px]">
+                  <span className="truncate font-mono" title={p.path}>
+                    {p.path}
+                  </span>
+                  <span className="ml-auto shrink-0 tabular-nums text-muted">{p.times}×</span>
+                </li>
+              ))}
+            </ul>
+            {co.total !== null && co.total > co.partners.length && (
+              <p className="mt-1 text-[11px] text-muted">
+                Showing {co.partners.length} of {co.total} files.
+              </p>
+            )}
+          </>
+        )}
+      </section>
+
+      <section aria-label="Boundary to another repo">
+        <h4 className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">
+          Reached from other repos
+        </h4>
+        {d.crossRepoNote ? (
+          <p className="text-xs text-muted">Not shown: {d.crossRepoNote}.</p>
+        ) : repos.length === 0 ? (
+          <p className="text-xs text-muted">
+            No other repository reaches it, as far as the engine can trace calls.
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {repos.map((r) => (
+              <li key={r.repo} className="flex items-center gap-2 text-[12px]">
+                <span className="font-mono">{r.repo}</span>
+                <span className="ml-auto tabular-nums text-muted">
+                  {r.leaves.length}
+                  {d.crossRepo?.truncated ? '+' : ''} entry points
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

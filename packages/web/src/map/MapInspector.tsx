@@ -6,8 +6,16 @@
 import type { EndpointLink, NodeDetail, NodeRelation, OrgNode } from '@parallax/shared/org-map';
 import type * as React from 'react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ApiError } from '../api/client.js';
-import { useImplementation, useMapNode, useWorkspace, type Workspace } from '../api/hooks.js';
+import {
+  useImplementation,
+  useLooseEnds,
+  useMapNode,
+  useRepoStatus,
+  useWorkspace,
+  type Workspace,
+} from '../api/hooks.js';
 import { EdgeSwatch, KIND_LABEL, KindIcon } from './icons.js';
 import { SourcePeek } from './SourcePeek.js';
 
@@ -16,6 +24,8 @@ export interface MapInspectorProps {
   nodeId: string | null;
   /** Datos síncronos del nodo disponibles de inmediato sin esperar a la API. */
   node?: OrgNode | null | undefined;
+  /** Detalle local para nodos que sólo existen en el cliente (clústeres `clu:`). */
+  localDetail?: NodeDetail | null | undefined;
   onSelect: (id: string) => void;
   onFocus: (id: string) => void;
   onToggle: (id: string) => void;
@@ -23,22 +33,57 @@ export interface MapInspectorProps {
   onClearFocus: () => void;
   /** Abre el trazado de punta a punta de este contrato (sólo endpoints). */
   onTrace?: ((key: string, service: string | null) => void) | undefined;
+  /** Pregunta al asistente con este nodo como tema ("Ask about this"). */
+  onAsk?: ((question: string) => void) | undefined;
 }
 
 const repoName = (id: string | null): string => (id ? id.replace(/^repo:/, '') : '');
+
+/** "2 proven · 1 inferred" para las tarjetas y resúmenes de relaciones. */
+function provSplit(relations: NodeRelation[]): string {
+  const det = relations.filter((r) => r.edge.provenance === 'deterministic').length;
+  const inf = relations.length - det;
+  if (inf === 0) return det > 0 ? `${det} proven` : '';
+  if (det === 0) return `${inf} inferred`;
+  return `${det} proven · ${inf} inferred`;
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number;
+  detail?: string;
+}): React.ReactElement {
+  return (
+    <div className="rounded-lg border border-border bg-bg/60 px-2.5 py-2">
+      <div className="text-lg font-semibold tabular-nums leading-none">{value}</div>
+      <div className="mt-1 text-[10px] leading-tight text-muted" title={detail || label}>
+        {label}
+        {detail ? ` · ${detail}` : ''}
+      </div>
+    </div>
+  );
+}
 
 export function MapInspector({
   workspaceId,
   nodeId,
   node: fallbackNode,
+  localDetail,
   onSelect,
   onFocus,
   onToggle,
   focusing,
   onClearFocus,
   onTrace,
+  onAsk,
 }: MapInspectorProps): React.ReactElement {
-  const q = useMapNode(workspaceId, nodeId);
+  // Los clústeres (clu:…) son sintéticos del cliente: no se piden al servidor.
+  const isLocalOnly = typeof nodeId === 'string' && nodeId.startsWith('clu:');
+  const q = useMapNode(workspaceId, isLocalOnly ? null : nodeId);
   const wsQuery = useWorkspace(workspaceId);
   const workspace = wsQuery.data?.workspace;
 
@@ -54,17 +99,21 @@ export function MapInspector({
     );
   }
 
-  const detail =
-    q.data?.detail ??
-    (fallbackNode
-      ? {
-          node: fallbackNode,
-          path: [],
-          children: [],
-          consumers: [],
-          providers: [],
-        }
-      : null);
+  const detail = isLocalOnly
+    ? (localDetail ??
+      (fallbackNode
+        ? { node: fallbackNode, path: [], children: [], consumers: [], providers: [] }
+        : null))
+    : (q.data?.detail ??
+      (fallbackNode
+        ? {
+            node: fallbackNode,
+            path: [],
+            children: [],
+            consumers: [],
+            providers: [],
+          }
+        : null));
 
   if (q.isPending && !detail) return <div className="p-5 text-sm text-muted">Loading…</div>;
   if (q.isError) {
@@ -95,13 +144,14 @@ export function MapInspector({
       workspaceId={workspaceId}
       detail={detail}
       workspace={workspace}
-      loadingRelations={q.isPending}
+      loadingRelations={q.isFetching}
       onSelect={onSelect}
       onFocus={onFocus}
       onToggle={onToggle}
       focusing={focusing}
       onClearFocus={onClearFocus}
       onTrace={onTrace}
+      onAsk={onAsk}
     />
   );
 }
@@ -117,6 +167,7 @@ function Detail({
   focusing,
   onClearFocus,
   onTrace,
+  onAsk,
 }: Omit<MapInspectorProps, 'nodeId' | 'node'> & {
   detail: NodeDetail;
   workspace?: Workspace | null | undefined;
@@ -131,32 +182,41 @@ function Detail({
     (node.meta.providers as Array<{ repo?: string; path?: string; line?: number }> | undefined) ??
     [];
   const targetRepoName = node.kind === 'repo' ? node.label : repoNode?.label;
-  const wsRepo = workspace?.repos?.find(
-    (r) =>
-      r.id === node.id ||
-      (targetRepoName &&
-        (r.uri.endsWith(`/${targetRepoName}.git`) ||
-          r.uri.endsWith(`/${targetRepoName}`) ||
-          r.uri.toLowerCase().includes(targetRepoName.toLowerCase()))),
-  );
+  // Primero el repo que coincide por id o por el final exacto de su URI; sólo si
+  // no hay ninguno se cae a "contiene". Al revés, el repo "saleor" tomaba los
+  // datos de "saleor-dashboard" (su URI también contiene "saleor").
+  const wantedName = targetRepoName?.toLowerCase();
+  const wsRepo =
+    workspace?.repos?.find(
+      (r) =>
+        r.id === node.id ||
+        (wantedName !== undefined &&
+          (r.uri.toLowerCase().endsWith(`/${wantedName}.git`) ||
+            r.uri.toLowerCase().endsWith(`/${wantedName}`))),
+    ) ??
+    workspace?.repos?.find(
+      (r) => wantedName !== undefined && r.uri.toLowerCase().includes(wantedName),
+    );
 
   return (
     <div className="divide-y divide-border" data-testid="map-inspector">
       <div className="p-5 space-y-2">
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <KindIcon kind={node.kind} />
-          <span>{node.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[node.kind]}</span>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-service px-2 py-0.5 text-[11px] text-service">
+            <KindIcon kind={node.kind} size={12} />
+            {node.meta.role === 'interfaces' ? 'Interfaces' : KIND_LABEL[node.kind]}
+          </span>
+          <h3
+            className={`min-w-0 text-lg font-semibold leading-tight break-words ${node.kind === 'endpoint' ? 'font-mono text-sm' : ''}`}
+          >
+            {node.label}
+          </h3>
           {node.contract && (
-            <span className="rounded px-1 uppercase tracking-wide bg-bg border border-border">
+            <span className="rounded px-1 text-[11px] uppercase tracking-wide bg-bg border border-border text-muted">
               {node.contract}
             </span>
           )}
         </div>
-        <h3
-          className={`text-base font-semibold break-words ${node.kind === 'endpoint' ? 'font-mono text-sm' : ''}`}
-        >
-          {node.label}
-        </h3>
         {node.kind === 'group' && (
           <div className="space-y-1" data-testid="group-note">
             {typeof node.meta.contracts === 'number' && (
@@ -186,13 +246,36 @@ function Detail({
           </p>
         )}
         <div className="flex flex-wrap gap-2 pt-1">
+          {onAsk && (
+            <button
+              type="button"
+              onClick={() => onAsk(`Who depends on ${node.label}, and what breaks if it changes?`)}
+              title="Ask the assistant about this node"
+              className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg hover:bg-accent-hover"
+            >
+              Ask about this
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onFocus(node.id)}
-            className="px-2.5 py-1 rounded-full text-xs bg-accent text-accent-fg"
+            className={
+              onAsk
+                ? 'rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent'
+                : 'rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-accent-fg hover:bg-accent-hover'
+            }
           >
             Focus neighborhood
           </button>
+          {node.kind === 'endpoint' && typeof node.meta.service === 'string' && (
+            <Link
+              to={`/orgs/${workspaceId}/contracts/detail?${new URLSearchParams({ key: node.label, service: node.meta.service })}`}
+              title="Provider, fields and who reads each one"
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent"
+            >
+              Contract details
+            </Link>
+          )}
           {node.kind === 'endpoint' && onTrace && (
             <button
               type="button"
@@ -200,7 +283,7 @@ function Detail({
                 onTrace(node.label, detail.path.find((p) => p.kind === 'service')?.label ?? null)
               }
               title="Follow the value from its data, through the API and its clients, to where it ends"
-              className="px-2.5 py-1 rounded-full text-xs border border-accent text-accent hover:bg-accent/10"
+              className="rounded-lg border border-border-strong px-3 py-1.5 text-xs hover:border-accent hover:text-accent"
             >
               Trace end to end
             </button>
@@ -209,7 +292,7 @@ function Detail({
             <button
               type="button"
               onClick={onClearFocus}
-              className="px-2.5 py-1 rounded-full text-xs bg-bg text-muted hover:bg-border"
+              className="rounded-lg bg-bg px-3 py-1.5 text-xs text-muted hover:bg-border"
             >
               Clear focus
             </button>
@@ -218,88 +301,121 @@ function Detail({
             <button
               type="button"
               onClick={() => onToggle(node.id)}
-              className="px-2.5 py-1 rounded-full text-xs bg-bg text-muted hover:bg-border"
+              className="rounded-lg bg-bg px-3 py-1.5 text-xs text-muted hover:bg-border"
             >
               {detail.children.length} inside · open / close
             </button>
           )}
         </div>
 
-        {/* Datos básicos / propiedades estructuradas */}
-        <div className="rounded-lg border border-border/70 bg-bg/60 p-2.5 space-y-2 text-xs">
-          <div className="flex items-center justify-between text-[11px] font-mono text-muted bg-surface/80 border border-border/50 rounded px-2 py-0.5 select-all">
-            <span className="text-[10px] uppercase font-sans text-muted/70 tracking-wider">
-              Node ID
-            </span>
-            <span className="truncate max-w-[15rem]">{node.id}</span>
+        {/* Tarjetas de resumen (como la referencia de diseño): endpoints que
+            contiene, quién lo consume y de qué depende, con la procedencia. */}
+        {(node.kind === 'service' || node.kind === 'repo') && (
+          <div className="grid grid-cols-3 gap-2" data-testid="node-stat-cards">
+            <StatCard
+              label="endpoints"
+              value={
+                detail.endpointCount ?? detail.children.filter((c) => c.kind === 'endpoint').length
+              }
+            />
+            <StatCard
+              label="consumers"
+              value={detail.consumers.length}
+              detail={provSplit(detail.consumers)}
+            />
+            <StatCard
+              label="outbound"
+              value={detail.providers.length}
+              detail={provSplit(detail.providers)}
+            />
           </div>
+        )}
 
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
-            <div>
-              <span className="text-[10px] text-muted block uppercase tracking-wide">Type</span>
-              <span className="font-medium text-fg capitalize">{node.kind}</span>
+        {(node.kind === 'service' || node.kind === 'repo') && (
+          <ScopeNote workspaceId={workspaceId} node={node} />
+        )}
+
+        {/* Datos básicos / propiedades estructuradas: plegadas, la tarjeta se lee sin ellas. */}
+        <details className="group rounded-lg border border-border/70 bg-bg/60 text-xs">
+          <summary className="cursor-pointer list-none px-2.5 py-1.5 text-[11px] text-muted hover:text-fg [&::-webkit-details-marker]:hidden">
+            Details
+            <span className="ml-1 font-mono text-[10px]">· {node.kind}</span>
+          </summary>
+          <div className="space-y-2 border-t border-border/70 p-2.5">
+            <div className="flex items-center justify-between text-[11px] font-mono text-muted bg-surface/80 border border-border/50 rounded px-2 py-0.5 select-all">
+              <span className="text-[10px] uppercase font-sans text-muted/70 tracking-wider">
+                Node ID
+              </span>
+              <span className="truncate max-w-[15rem]">{node.id}</span>
             </div>
-            {node.contract && (
+
+            <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[11px]">
               <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Protocol
-                </span>
-                <span className="font-mono text-fg">{node.contract.toUpperCase()}</span>
+                <span className="text-[10px] text-muted block uppercase tracking-wide">Type</span>
+                <span className="font-medium text-fg capitalize">{node.kind}</span>
               </div>
-            )}
-            {targetRepoName && (
-              <div className="col-span-2">
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Repository
-                </span>
-                <span className="font-medium text-fg break-all">{targetRepoName}</span>
-                {wsRepo?.uri && (
-                  <span className="block text-[10px] font-mono text-muted truncate">
-                    {wsRepo.uri}
+              {node.contract && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Protocol
                   </span>
-                )}
-                {wsRepo?.sha && (
-                  <span className="block text-[10px] font-mono text-muted">
-                    Commit: {wsRepo.sha}
+                  <span className="font-mono text-fg">{node.contract.toUpperCase()}</span>
+                </div>
+              )}
+              {targetRepoName && (
+                <div className="col-span-2">
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Repository
                   </span>
-                )}
-                {wsRepo?.local && (
-                  <span className="block text-[10px] font-mono text-muted truncate">
-                    Local: {wsRepo.local}
+                  <span className="font-medium text-fg break-all">{targetRepoName}</span>
+                  {wsRepo?.uri && (
+                    <span className="block text-[10px] font-mono text-muted truncate">
+                      {wsRepo.uri}
+                    </span>
+                  )}
+                  {wsRepo?.sha && (
+                    <span className="block text-[10px] font-mono text-muted">
+                      Commit: {wsRepo.sha}
+                    </span>
+                  )}
+                  {wsRepo?.local && (
+                    <span className="block text-[10px] font-mono text-muted truncate">
+                      Local: {wsRepo.local}
+                    </span>
+                  )}
+                </div>
+              )}
+              {typeof node.meta.definedAt === 'string' && (
+                <div className="col-span-2">
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Defined at
                   </span>
-                )}
-              </div>
-            )}
-            {typeof node.meta.definedAt === 'string' && (
-              <div className="col-span-2">
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Defined at
-                </span>
-                <span className="font-mono text-fg text-[11px] break-all">
-                  {String(node.meta.definedAt)}
-                </span>
-              </div>
-            )}
-            {detail.children.length > 0 && (
-              <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Children
-                </span>
-                <span className="font-medium text-fg">{detail.children.length} elements</span>
-              </div>
-            )}
-            {(detail.consumers.length > 0 || detail.providers.length > 0) && (
-              <div>
-                <span className="text-[10px] text-muted block uppercase tracking-wide">
-                  Connections
-                </span>
-                <span className="font-medium text-fg">
-                  {detail.consumers.length} in · {detail.providers.length} out
-                </span>
-              </div>
-            )}
+                  <span className="font-mono text-fg text-[11px] break-all">
+                    {String(node.meta.definedAt)}
+                  </span>
+                </div>
+              )}
+              {detail.children.length > 0 && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Children
+                  </span>
+                  <span className="font-medium text-fg">{detail.children.length} elements</span>
+                </div>
+              )}
+              {(detail.consumers.length > 0 || detail.providers.length > 0) && (
+                <div>
+                  <span className="text-[10px] text-muted block uppercase tracking-wide">
+                    Connections
+                  </span>
+                  <span className="font-medium text-fg">
+                    {detail.consumers.length} in · {detail.providers.length} out
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </details>
       </div>
 
       {loadingRelations && (
@@ -315,7 +431,7 @@ function Detail({
             title="Consumed by"
             summary={
               detail.consumers.length > 0
-                ? `${detail.consumers.length} service${detail.consumers.length === 1 ? '' : 's'} across ${consumerRepos.size} repo${consumerRepos.size === 1 ? '' : 's'}`
+                ? `${detail.consumers.length} service${detail.consumers.length === 1 ? '' : 's'} across ${consumerRepos.size} repo${consumerRepos.size === 1 ? '' : 's'}${provSplit(detail.consumers) ? ` · ${provSplit(detail.consumers)}` : ''}`
                 : undefined
             }
             empty="No consumers found in the indexed repositories. That is not proof there are none: unresolved calls and unindexed repos are outside this map."
@@ -381,7 +497,11 @@ function Detail({
                   )}
                 </div>
                 {p.path && lainRepo && (
-                  <SourcePeek workspaceId={workspaceId} repo={lainRepo} target={{ path: p.path }} />
+                  <SourcePeek
+                    workspaceId={workspaceId}
+                    repo={lainRepo}
+                    target={{ path: p.path, line: p.line }}
+                  />
                 )}
               </div>
             );
@@ -447,7 +567,13 @@ function Relations({
                     <EdgeSwatch provenance={edge.provenance} width={22} />
                     <span className="text-[11px] tabular-nums text-muted">×{edge.count}</span>
                   </span>
-                  <span className="block text-[10px] text-muted">
+                  <span
+                    className={`mt-0.5 inline-block rounded-full border px-1.5 py-px text-[10px] ${
+                      edge.provenance === 'inferred'
+                        ? 'border-dashed border-inferred text-warning'
+                        : 'border-deterministic text-muted'
+                    }`}
+                  >
                     {edge.provenance === 'inferred'
                       ? `inferred · ${Math.round(edge.confidence * 100)}%`
                       : edge.inferredCount > 0
@@ -729,13 +855,65 @@ function EndpointCallers({
                 <SourcePeek
                   workspaceId={workspaceId}
                   repo={site.repo}
-                  target={{ path: site.path }}
+                  target={{ path: site.path, line: site.line ?? undefined }}
                 />
               )}
             </li>
           );
         })}
       </ul>
+    </div>
+  );
+}
+
+/**
+ * Alcance del análisis (referencia "Scope"): una afirmación de "sin impacto" sólo
+ * vale si todos los repos están analizados y no hay llamadas sin resolver que
+ * apunten a este servicio. Los datos son los del propio motor (estado de repos y
+ * cabos sueltos); si no están, no se dice nada.
+ */
+function ScopeNote({
+  workspaceId,
+  node,
+}: {
+  workspaceId: string;
+  node: { kind: string; label: string };
+}): React.ReactElement | null {
+  const status = useRepoStatus(workspaceId);
+  const loose = useLooseEnds(workspaceId);
+  const repos = status.data?.repos ?? [];
+  if (status.data?.source !== 'lain' || repos.length === 0) return null;
+  const ready = repos.filter((r) => r.state === 'indexed').length;
+  const aimed =
+    node.kind === 'service' && loose.data?.source === 'lain'
+      ? // Una llamada "podría ser de este servicio" si el motor lo nombra como destino O lo
+        // ofrece entre sus candidatos. Sólo contar `targetService` se quedaba corto (en
+        // Saleor lo traían 3 de 33; 15 de 33 traían candidatos).
+        loose.data.items.filter(
+          (i) =>
+            i.kind === 'unresolved' &&
+            (i.detail.targetService === node.label ||
+              (i.candidateRefs ?? []).some((c) => c.service === node.label)),
+        ).length
+      : 0;
+  const complete = ready === repos.length && aimed === 0;
+  return (
+    <div
+      className={`rounded-lg border p-3 text-xs leading-relaxed ${
+        complete ? 'border-border text-muted' : 'border-warning/40 bg-warning/10 text-fg'
+      }`}
+      data-testid="scope-note"
+    >
+      <b className={complete ? '' : 'text-warning'}>
+        Scope: {ready} of {repos.length} repos analyzed.
+      </b>{' '}
+      {aimed > 0 &&
+        `${aimed} unresolved call${aimed === 1 ? '' : 's'} could match this service, so "no impact" is not claimed. `}
+      {ready < repos.length &&
+        'Unanalyzed repos are outside this map, so "no impact" is not claimed. '}
+      <Link to={`/orgs/${workspaceId}/coverage`} className="text-accent underline">
+        Open in Coverage
+      </Link>
     </div>
   );
 }

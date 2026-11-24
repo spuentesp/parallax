@@ -667,12 +667,20 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
             // Un símbolo (explain_symbol) o un path (get_code_snippet).
             symbol: z.string().min(1).optional(),
             path: z.string().min(1).optional(),
+            // Línea de ancla cuando se conoce (definedAt `path:line`): el
+            // snippet se abre en la función, no en lines 1-N.
+            line: z.coerce.number().int().min(1).optional(),
           })
           .loose(),
       },
     },
     async (req, reply) => {
-      const { repo, symbol, path } = req.query as { repo: string; symbol?: string; path?: string };
+      const { repo, symbol, path, line } = req.query as {
+        repo: string;
+        symbol?: string;
+        path?: string;
+        line?: number;
+      };
       if ((symbol === undefined) === (path === undefined)) {
         return reply
           .code(400)
@@ -706,8 +714,8 @@ export const workspaceRoutes: FastifyPluginAsync = async (app) => {
         });
         const snippet =
           path !== undefined
-            ? await resolvePathSnippet(client, repo, path)
-            : await resolveSymbolSnippet(client, repo, symbol as string);
+            ? await resolvePathSnippet(client, repo, path, 12, line)
+            : await resolveSymbolSnippet(client, repo, symbol as string, 12, line);
         return { snippet, source: 'lain' as const };
       } catch (e) {
         return {

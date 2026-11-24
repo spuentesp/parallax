@@ -5,7 +5,7 @@
 import type { OrgEdge, ProjectedNode } from '@parallax/shared/org-map';
 import { describe, expect, it } from 'vitest';
 import {
-  type CyEdgeData,
+  type CyElement,
   type CyNodeData,
   edgeLabel,
   edgeOpacity,
@@ -41,18 +41,15 @@ const edge = (over: Partial<OrgEdge> = {}): OrgEdge => ({
 });
 
 describe('nodeLabel — every state', () => {
-  it('plain nodes show their label; endpoints lose a short contract prefix only', () => {
+  it('nodes show their label; endpoint rows keep the full contract (the type is part of the name)', () => {
     expect(nodeLabel(node({ id: 's', label: 'orders' }), 0)).toBe('orders');
-    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'http:GET /a' }), 0)).toBe('GET /a');
-    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'websocket:/ws' }), 0)).toBe('/ws');
-    // 10 o más caracteres antes de ':' no es un prefijo de contrato.
-    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'abcdefghij:rest' }), 0)).toBe(
-      'abcdefghij:rest',
+    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'http:GET /a' }), 0)).toBe(
+      'HTTP\nGET /a',
     );
-    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'abcdefghi:rest' }), 0)).toBe('rest');
-    // Sin ':' o con ':' al inicio no hay prefijo; y sólo los endpoints se recortan.
+    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'websocket:/ws' }), 0)).toBe(
+      'WEBSOCKET\n/ws',
+    );
     expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: 'plain' }), 0)).toBe('plain');
-    expect(nodeLabel(node({ id: 'e', kind: 'endpoint', label: ':x' }), 0)).toBe(':x');
     expect(nodeLabel(node({ id: 's', label: 'a:b' }), 0)).toBe('a:b');
   });
 
@@ -85,40 +82,53 @@ describe('nodeLabel — every state', () => {
 });
 
 describe('edge encodings — exact values', () => {
-  it('width: 1 for one relation, +0.35 per doubling, capped at 2.6', () => {
-    expect(edgeWidth(1)).toBeCloseTo(1);
-    expect(edgeWidth(0)).toBeCloseTo(1);
-    expect(edgeWidth(2)).toBeCloseTo(1.35);
-    expect(edgeWidth(8)).toBeCloseTo(2.05);
-    expect(edgeWidth(1024)).toBe(2.6);
+  it('width: 1.4 for one relation, log scale up to 3.5 at 40+ (reference scale)', () => {
+    expect(edgeWidth(1)).toBeCloseTo(1.4);
+    expect(edgeWidth(0)).toBeCloseTo(1.4);
+    expect(edgeWidth(2)).toBeCloseTo(1.79, 1);
+    expect(edgeWidth(8)).toBeCloseTo(2.58, 1);
+    expect(edgeWidth(40)).toBeCloseTo(3.5);
+    expect(edgeWidth(1024)).toBe(3.5);
   });
 
-  it('opacity: deterministic 0.9; inferred 0.35 + 0.55·confidence, clamped to [0,1]', () => {
-    expect(edgeOpacity({ provenance: 'deterministic', confidence: 0 })).toBe(0.9);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: 0 })).toBeCloseTo(0.35);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: 0.5 })).toBeCloseTo(0.625);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: 1 })).toBeCloseTo(0.9);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: 7 })).toBeCloseTo(0.9);
-    expect(edgeOpacity({ provenance: 'inferred', confidence: -3 })).toBeCloseTo(0.35);
+  it('opacity: deterministic full (1); inferred fixed 0.75 (reference)', () => {
+    expect(edgeOpacity({ provenance: 'deterministic', confidence: 0 })).toBe(1);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 0 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 0.5 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 1 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: 7 })).toBe(0.75);
+    expect(edgeOpacity({ provenance: 'inferred', confidence: -3 })).toBe(0.75);
   });
 
-  it('label: empty for a single clean relation; ×N for aggregates; ×N (k~) for mixed', () => {
-    expect(edgeLabel(edge())).toBe('');
-    expect(edgeLabel(edge({ count: 2 }))).toBe('×2');
+  it('label: every relation edge shows its count; inferred = "N · confianza"', () => {
+    expect(edgeLabel(edge())).toBe('1');
+    expect(edgeLabel(edge({ count: 2 }))).toBe('2');
+    // Inferido: siempre "N · confianza" (el score es información visible).
     expect(
       edgeLabel(
-        edge({ provenance: 'inferred', count: 3, inferredCount: 3, deterministicCount: 0 }),
+        edge({
+          provenance: 'inferred',
+          confidence: 0.6,
+          count: 3,
+          inferredCount: 3,
+          deterministicCount: 0,
+        }),
       ),
-    ).toBe('×3');
+    ).toBe('3 · 0.6');
     expect(
       edgeLabel(
-        edge({ provenance: 'inferred', count: 1, inferredCount: 1, deterministicCount: 0 }),
+        edge({
+          provenance: 'inferred',
+          confidence: 0,
+          count: 1,
+          inferredCount: 1,
+          deterministicCount: 0,
+        }),
       ),
-    ).toBe('');
-    // Una arista mixta de un solo uso visible sigue diciendo que hay inferencia.
-    expect(edgeLabel(edge({ count: 1, inferredCount: 1 }))).toBe('×1 (1~)');
-    expect(edgeLabel(edge({ count: 4, inferredCount: 1 }))).toBe('×4 (1~)');
-    expect(edgeLabel(edge({ count: 4, inferredCount: 0 }))).toBe('×4');
+    ).toBe('1 · 0.0');
+    expect(edgeLabel(edge({ count: 1, inferredCount: 1 }))).toBe('1');
+    expect(edgeLabel(edge({ count: 4, inferredCount: 1 }))).toBe('4');
+    expect(edgeLabel(edge({ count: 4, inferredCount: 0 }))).toBe('4');
   });
 });
 
@@ -198,7 +208,6 @@ describe('toCyElements / layoutInput — data fields', () => {
       data: CyNodeData;
       classes: string;
     };
-  const edgeEl = els.find((x) => x.group === 'edges') as { data: CyEdgeData; classes: string };
 
   it('node data carries label, kind, counts and the parent only when it is in the view', () => {
     expect(nodeData('r').data).toMatchObject({
@@ -216,105 +225,209 @@ describe('toCyElements / layoutInput — data fields', () => {
       collapsible: true,
       expanded: false,
     });
-    expect(nodeData('ep').data).toMatchObject({ label: 'GET /x', contract: 'http', parent: 's' });
+    // 'ep' es interfaz del servicio 's': fila dentro de la caja del servicio
+    // (parent = service), con clase 'row'.
+    expect(nodeData('ep').data).toMatchObject({ label: 'HTTP\nGET /x', contract: 'http' });
+    expect(nodeData('ep').data.parent).toBe('s');
     expect(nodeData('leaf').data.contract).toBeUndefined();
     expect(nodeData('leaf').data.collapsible).toBe(false);
   });
 
-  it('node classes: kind, plus expanded / collapsible when they apply', () => {
+  it('node classes: kind, plus expanded / collapsible / row / dot when they apply', () => {
     expect(nodeData('r').classes).toBe('repo expanded');
+    // 's' contiene a su endpoint en el lienzo: es caja, no punto.
     expect(nodeData('s').classes).toBe('service collapsible');
+    // Un servicio suelto (sin hijos en el lienzo) ya no es punto: es caja compacta.
     expect(nodeData('leaf').classes).toBe('service');
+    expect(nodeData('ep').classes).toContain('endpoint');
+    expect(nodeData('ep').classes).toContain('row');
   });
 
-  it('edge data: label, provenance, confidence, count, width, opacity, mixed', () => {
-    expect(edgeEl.data).toMatchObject({
-      id: 'ed',
-      source: 'leaf',
-      target: 'ep',
-      label: '×3',
-      provenance: 'inferred',
-      confidence: 0.5,
-      count: 3,
-      mixed: false,
-    });
-    expect(edgeEl.data.width).toBeCloseTo(edgeWidth(3));
-    expect(edgeEl.data.opacity).toBeCloseTo(0.625);
-    expect(edgeEl.classes).toBe('inferred');
-    const mixed = toCyElements({
-      ...view,
-      edges: [
-        edge({
-          id: 'm',
-          source: 'leaf',
-          target: 'ep',
-          count: 3,
-          inferredCount: 1,
-          deterministicCount: 2,
+  it('every visible endpoint is a row inside its service box, even with no edges', () => {
+    const quiet: typeof view = { ...view, edges: [] };
+    const findNode = (els: CyElement[], id: string) =>
+      els.find((x) => x.group === 'nodes' && x.data.id === id) as {
+        data: CyNodeData;
+        classes: string;
+      };
+    const ep = findNode(toCyElements(quiet), 'ep');
+    expect(ep.data.parent).toBe('s');
+    expect(ep.classes).toContain('row');
+  });
+
+  it('no synthetic port→service edge: containment already expresses the relation', () => {
+    for (const opts of [{}, { selectedId: 'ep' }, { focusIds: new Set(['ep']) }]) {
+      const els = toCyElements({ ...view, edges: [] }, opts);
+      expect(els.some((x) => x.group === 'edges' && x.data.id.startsWith('servedby:'))).toBe(false);
+    }
+  });
+
+  it('the Interfaces box is dropped and services hang directly from the repo box', () => {
+    const v: typeof view = {
+      nodes: [
+        node({ id: 'r', kind: 'repo', label: 'repo', childCount: 1, expanded: true }),
+        node({
+          id: 'interfaces:r',
+          kind: 'group',
+          label: 'Interfaces',
+          parent: 'r',
+          meta: { role: 'interfaces' },
+          childCount: 1,
+          expanded: true,
+        }),
+        node({ id: 's', parent: 'interfaces:r', label: 'svc', childCount: 1 }),
+        node({
+          id: 'grp:s:http',
+          kind: 'group',
+          label: 'HTTP routes',
+          parent: 's',
+          meta: { group: 'http' },
+          childCount: 1,
+          expanded: true,
+        }),
+        node({
+          id: 'ep',
+          kind: 'endpoint',
+          parent: 'grp:s:http',
+          label: 'http:GET /x',
+          contract: 'http',
         }),
       ],
-    });
-    expect((mixed.find((x) => x.group === 'edges') as { data: CyEdgeData }).data.mixed).toBe(true);
-    const clean = toCyElements({
-      ...view,
-      edges: [edge({ id: 'm', source: 'leaf', target: 'ep' })],
-    });
-    expect((clean.find((x) => x.group === 'edges') as { data: CyEdgeData }).data.mixed).toBe(false);
-  });
-
-  it('drops an edge when either end is not drawn', () => {
-    const only = toCyElements({
-      ...view,
-      edges: [
-        edge({ id: 'a', source: 'leaf', target: 'ghost' }),
-        edge({ id: 'b', source: 'ghost', target: 'leaf' }),
-      ],
-    });
-    expect(only.filter((x) => x.group === 'edges')).toEqual([]);
-  });
-
-  it('quiets edges of a dense view: the class is added and the provenance class kept', () => {
-    const dense = {
-      nodes: Array.from({ length: 10 }, (_, i) => node({ id: `n${i}` })),
-      edges: (() => {
-        const out: OrgEdge[] = [];
-        for (let a = 0; a < 10; a++)
-          for (let b = 0; b < 10; b++)
-            if (a !== b)
-              out.push(
-                edge({
-                  id: `e${a}-${b}`,
-                  source: `n${a}`,
-                  target: `n${b}`,
-                  count: ((a * 7 + b * 3) % 9) + 1,
-                }),
-              );
-        return out;
-      })(),
-      hiddenChildren: {},
+      edges: [],
+      hiddenChildren: { r: 0 },
     };
-    const classes = toCyElements(dense)
-      .filter((x) => x.group === 'edges')
-      .map((x) => x.classes);
-    expect(classes.some((c) => c === 'deterministic quiet')).toBe(true);
-    expect(classes.some((c) => c === 'deterministic')).toBe(true);
+    const els = toCyElements(v);
+    const ids = els.filter((x) => x.group === 'nodes').map((x) => x.data.id);
+    expect(ids).toContain('r');
+    expect(ids).toContain('s');
+    expect(ids).toContain('ep');
+    expect(ids).not.toContain('interfaces:r');
+    expect(ids).not.toContain('grp:s:http'); // grupo vacío (su endpoint es puerto): fuera
+    const svc = els.find((x) => x.group === 'nodes' && x.data.id === 's');
+    const ep = els.find((x) => x.group === 'nodes' && x.data.id === 'ep');
+    expect(svc && 'parent' in svc.data ? svc.data.parent : undefined).toBe('r');
+    // El endpoint cuelga de su servicio (contención), no de la caja del repo.
+    expect(ep && 'parent' in ep.data ? ep.data.parent : undefined).toBe('s');
   });
 
-  it('layoutInput mirrors nodes (with their final label) and weights edges by count', () => {
-    const li = layoutInput(view);
-    expect(li.nodes.find((x) => x.id === 'r')).toEqual({
-      id: 'r',
-      parent: null,
-      kind: 'repo',
-      label: 'repo  (+4)',
-    });
-    expect(li.nodes.find((x) => x.id === 's')).toEqual({
-      id: 's',
-      parent: 'r',
-      kind: 'service',
-      label: 'svc  ▸ 1',
-    });
-    expect(li.edges).toEqual([{ source: 'leaf', target: 'ep', weight: 3 }]);
+  it('a group with visible edges is NOT drawn: the edge is retargeted to the provider service', () => {
+    const v: typeof view = {
+      nodes: [
+        node({ id: 'r', kind: 'repo', label: 'repo', childCount: 1, expanded: true }),
+        node({ id: 's', parent: 'r', label: 'svc' }),
+        node({
+          id: 'grp:s:http',
+          kind: 'group',
+          label: 'HTTP routes',
+          parent: 's',
+          meta: { group: 'http' },
+          childCount: 20,
+          expanded: true,
+        }),
+        node({
+          id: 'ep',
+          kind: 'endpoint',
+          parent: 'grp:s:http',
+          label: 'http:GET /x',
+          contract: 'http',
+        }),
+        node({ id: 'other', parent: 'r', label: 'other' }),
+      ],
+      edges: [edge({ id: 'e1', source: 'other', target: 'grp:s:http', count: 5 })],
+      hiddenChildren: { r: 0 },
+    };
+    const els = toCyElements(v);
+    const ids = els.filter((x) => x.group === 'nodes').map((x) => x.data.id);
+    expect(ids).not.toContain('grp:s:http'); // la caja de puro título desaparece
+    expect(ids).toContain('ep'); // el endpoint sigue como fila dentro del servicio
+    const e1 = els.find((x) => x.group === 'edges' && x.data.id === 'e1');
+    expect(e1 && e1.group === 'edges' ? e1.data.target : undefined).toBe('s'); // arista → servicio
+  });
+
+  it('nothing is ever muted: with cross-repo edges the whole graph stays visible and provenance lives on the edges', () => {
+    const v: typeof view = {
+      nodes: [
+        node({ id: 'repo:a', kind: 'repo', label: 'a', childCount: 1, expanded: true }),
+        node({ id: 'svc:a', parent: 'repo:a', label: 'svc-a', childCount: 0 }),
+        node({ id: 'repo:b', kind: 'repo', label: 'b', childCount: 1, expanded: true }),
+        node({ id: 'svc:b', parent: 'repo:b', label: 'svc-b', childCount: 1 }),
+        node({
+          id: 'ep:b',
+          kind: 'endpoint',
+          parent: 'svc:b',
+          label: 'http:GET /x',
+          contract: 'http',
+        }),
+      ],
+      edges: [
+        edge({
+          id: 'e1',
+          source: 'svc:a',
+          target: 'ep:b',
+          kind: 'consumes',
+          provenance: 'inferred',
+          confidence: 0.6,
+          count: 2,
+          inferredCount: 2,
+          deterministicCount: 0,
+        }),
+      ],
+      hiddenChildren: { r: 0 },
+    };
+    const els = toCyElements(v);
+    for (const x of els) {
+      if (x.group === 'nodes') expect(x.classes).not.toContain('muted');
+    }
+    // La arista llega a la FILA proveedora visible (referencia Contracts lens) y
+    // conserva procedencia y rótulo.
+    const e1 = els.find((x) => x.group === 'edges' && x.data.id === 'e1');
+    expect(e1 && e1.group === 'edges' ? e1.data.source : undefined).toBe('svc:a');
+    expect(e1 && e1.group === 'edges' ? e1.data.target : undefined).toBe('ep:b');
+    expect(e1 && e1.group === 'edges' ? e1.data.label : undefined).toBe('2 · 0.6');
+    expect(e1?.classes).toContain('inferred');
+  });
+
+  it('when the relation target is a dropped group (fanout cap), the edge climbs to the provider service box', () => {
+    const v: typeof view = {
+      nodes: [
+        node({ id: 'repo:a', kind: 'repo', label: 'a', childCount: 1, expanded: true }),
+        node({ id: 'svc:a', parent: 'repo:a', label: 'svc-a', childCount: 0 }),
+        node({ id: 'repo:b', kind: 'repo', label: 'b', childCount: 1, expanded: true }),
+        node({ id: 'svc:b', parent: 'repo:b', label: 'svc-b', childCount: 1, expanded: true }),
+        // El grupo de contratos queda fuera del lienzo (caja de título): la arista sube al servicio.
+        node({
+          id: 'grp:b:http',
+          kind: 'group',
+          parent: 'svc:b',
+          label: 'HTTP routes',
+          childCount: 18,
+        }),
+      ],
+      edges: [
+        edge({
+          id: 'e1',
+          source: 'svc:a',
+          target: 'grp:b:http',
+          kind: 'consumes',
+          provenance: 'inferred',
+          confidence: 0.6,
+          count: 2,
+          inferredCount: 2,
+          deterministicCount: 0,
+        }),
+      ],
+      hiddenChildren: { r: 0 },
+    };
+    const els = toCyElements(v);
+    const e1 = els.find((x) => x.group === 'edges' && x.data.id === 'e1');
+    expect(e1 && e1.group === 'edges' ? e1.data.target : undefined).toBe('svc:b');
+  });
+
+  it('without cross-repo edges nothing is muted either (single-repo view)', () => {
+    const els = toCyElements(view);
+    for (const x of els) {
+      if (x.group === 'nodes') expect(x.classes).not.toContain('muted');
+    }
   });
 
   it('the hidden count only applies to the node it is keyed by', () => {

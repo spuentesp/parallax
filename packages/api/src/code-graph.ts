@@ -351,12 +351,15 @@ export async function buildGraphChildren(
 /**
  * Fuente de un símbolo: explain_symbol aporta el path (query_graph no devuelve
  * propiedades), y get_code_snippet abre ese path en el índice del repo.
+ * Si se conoce la línea del símbolo (p. ej. line_start del nodo), el snippet
+ * se abre ahí, no en la cabecera de licencia.
  */
 export async function resolveSymbolSnippet(
   adapter: LainAdapter,
   repo: string,
   symbol: string,
   contextLines = 12,
+  line?: number,
 ): Promise<SymbolSnippetResult> {
   let path: string | null = null;
   let explainText = '';
@@ -389,6 +392,7 @@ export async function resolveSymbolSnippet(
     const snippet = await adapter.getCodeSnippet({
       path,
       repo_id: repo,
+      ...(line !== undefined ? { line } : {}),
       context_lines: contextLines,
     });
     return {
@@ -413,17 +417,21 @@ export async function resolveSymbolSnippet(
   }
 }
 
-/** Fuente de un archivo por su path (p. ej. dónde se define un endpoint). */
+/** Fuente de un archivo por su path (p. ej. dónde se define un endpoint).
+ * Si se conoce la línea (definedAt `path:line`, provider con line), el snippet
+ * se abre ahí, no en la cabecera de licencia. */
 export async function resolvePathSnippet(
   adapter: LainAdapter,
   repo: string,
   path: string,
   contextLines = 12,
+  line?: number,
 ): Promise<SymbolSnippetResult> {
   try {
     const snippet = await adapter.getCodeSnippet({
       path,
       repo_id: repo,
+      ...(line !== undefined ? { line } : {}),
       context_lines: contextLines,
     });
     return { symbol: path, repo, path, text: snippet.text };

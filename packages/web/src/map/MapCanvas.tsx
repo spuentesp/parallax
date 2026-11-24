@@ -4,17 +4,24 @@
 // index.css (se releen al cambiar el tema), nada está cableado a "dark".
 
 import type { MapViewResponse } from '@parallax/shared/org-map';
-import cytoscape, { type Core, type ElementDefinition, type StylesheetJson } from 'cytoscape';
+import cytoscape, {
+  type Core,
+  type ElementDefinition,
+  type NodeSingular,
+  type StylesheetJson,
+} from 'cytoscape';
 import type * as React from 'react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { type CyElement, layoutInput, toCyElements } from './elements.js';
-import { layoutMap, type MapLayout, type Point } from './layout.js';
+import { layoutMap, type MapLayout } from './layout.js';
 
 export interface MapCanvasProps {
   view: Pick<MapViewResponse, 'nodes' | 'edges' | 'hiddenChildren'>;
   selectedId: string | null;
   /** Vecindad enfocada: lo demás se atenúa. null = sin foco. */
   focusIds: ReadonlySet<string> | null;
+  /** Nodos a resaltar cuando la selección cae en un nodo sólo de cliente (p. ej. un clúster). */
+  highlightIds?: ReadonlySet<string> | null;
   onSelect: (id: string | null) => void;
   /** Abre/cierra un nodo (doble clic). */
   onToggle: (id: string) => void;
@@ -24,12 +31,16 @@ export interface MapCanvasProps {
   traceContract?: { key: string; service: string | null } | null;
   /** Límite numérico de bifurcación (fanout) para el trazado de punta a punta. */
   traceFanoutLimit?: number;
+  /** Nivel de zoom actual, para mostrarlo en los controles (100 = 1x). */
+  onZoomLevel?: (level: number) => void;
 }
 
 /** Controles del lienzo que la barra de fuera no puede alcanzar (zoom). */
 export interface MapCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
+  /** Vuelve a 100% (zoom 1) centrado. */
+  zoomReset: () => void;
   fit: () => void;
 }
 
@@ -41,6 +52,19 @@ const TOKEN = (name: string, fallback: string): string => {
 
 const FONT_UI = '"Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif';
 const FONT_MONO = '"JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace';
+/** Paso de zoom por clic (los botones repiten al mantener pulsado). */
+const ZOOM_STEP = 1.35;
+
+/** Zoom alrededor del centro del lienzo; sin tamaño medible (p. ej. tests) zoom plano. */
+function zoomAboutCenter(cy: Core, level: number): void {
+  const w = cy.width();
+  const h = cy.height();
+  if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+    cy.zoom({ level, renderedPosition: { x: w / 2, y: h / 2 } });
+  } else {
+    cy.zoom(level);
+  }
+}
 
 export function buildStyle(): StylesheetJson {
   const fg = TOKEN('--color-fg', '#14161a');
@@ -49,12 +73,15 @@ export function buildStyle(): StylesheetJson {
   const accent = TOKEN('--color-accent', '#4d7c0f');
   const repo = TOKEN('--color-repo', '#5b6572');
   const service = TOKEN('--color-service', '#4f46e5');
-  const endpoint = TOKEN('--color-endpoint', '#475569');
   const codeC = TOKEN('--color-code', '#6d28d9');
   const fileC = TOKEN('--color-file', '#7c3aed');
   const symbolC = TOKEN('--color-symbol', '#8b5cf6');
   const det = TOKEN('--color-deterministic', '#8a97a8');
   const inf = TOKEN('--color-inferred', '#d97706');
+  const borderStrong = TOKEN('--color-border-strong', '#343b45');
+  const repoFill = TOKEN('--color-repo-fill', '#0f1216');
+  const serviceFill = TOKEN('--color-service-fill', '#141824');
+  const surface2 = TOKEN('--color-surface-2', '#171b21');
 
   return [
     {
@@ -81,16 +108,18 @@ export function buildStyle(): StylesheetJson {
     {
       selector: 'node.repo',
       style: {
+        // Como en la referencia "Contracts lens": caja sólida #0f1216 con
+        // borde #343b45 y rótulo mono arriba a la izquierda.
         shape: 'round-rectangle',
-        'corner-radius': 16 as unknown as string,
-        'background-color': repo,
-        'background-opacity': 0.04,
-        'border-color': repo,
-        'border-width': 1.5,
-        'underlay-color': repo,
-        'underlay-opacity': 0.07,
-        'underlay-padding': 4,
+        'corner-radius': 12 as unknown as string,
+        'background-color': repoFill,
+        'background-opacity': 1,
+        'border-color': borderStrong,
+        'border-width': 1,
         'font-weight': 600,
+        'font-family': FONT_MONO,
+        'font-size': 12,
+        color: repo,
         width: 'data(w)',
         height: 'data(h)',
         // Los repos contienen servicios, y cada servicio lleva su rótulo
@@ -102,15 +131,29 @@ export function buildStyle(): StylesheetJson {
     {
       selector: 'node.service',
       style: {
+        // Servicio: caja #141824 con borde índigo tenue (#818cf8 al 70%);
+        // seleccionado o destacado pasa a borde de acento a 2px.
         shape: 'round-rectangle',
-        'corner-radius': 12 as unknown as string,
-        'background-color': service,
-        'background-opacity': 0.03,
+        'corner-radius': 10 as unknown as string,
+        'background-color': serviceFill,
+        'background-opacity': 1,
         'border-color': service,
+        'border-opacity': 0.7,
+        'border-width': 1.5,
         'font-weight': 500,
+        'font-family': FONT_MONO,
+        'font-size': 13,
         width: 'data(w)',
         height: 'data(h)',
         padding: '14px',
+      },
+    },
+    {
+      selector: 'node.service:selected, node.service.hl, node.service.connected-peer',
+      style: {
+        'border-color': accent,
+        'border-opacity': 1,
+        'border-width': 2,
       },
     },
     {
@@ -132,6 +175,25 @@ export function buildStyle(): StylesheetJson {
         color: muted,
       },
     },
+    // Clúster de contratos relacionados dentro de un grupo: caja punteada más
+    // tenue que el grupo, para leer "familia" sin competir con el servicio.
+    {
+      selector: 'node.group.cluster',
+      style: {
+        'border-style': 'dotted',
+        'border-opacity': 0.3,
+        padding: '8px',
+        'font-size': 10,
+      },
+    },
+    // Un contenedor SIN hijos es una hoja: el layout le reserva exactamente w×h.
+    // En Cytoscape el padding se suma por fuera del tamaño, así que el de los
+    // contenedores (28/14/10px) agrandaba los repos colapsados hasta ~90px de alto
+    // y se montaban unos sobre otros.
+    {
+      selector: 'node.repo:childless, node.service:childless, node.group:childless',
+      style: { padding: '0px' },
+    },
     {
       selector: 'node.interfaces',
       style: {
@@ -146,52 +208,106 @@ export function buildStyle(): StylesheetJson {
         'font-size': 13,
       },
     },
-    // Hoja: tarjeta neutra. El color lo pone el borde; el fondo es la superficie.
+    // Fila de interfaz dentro de la caja de su servicio (modelo de la
+    // referencia): tarjeta plana a todo lo ancho, rótulo a la izquierda en
+    // mono — el contrato completo ya incluye su tipo ("http:GET /x").
     {
-      selector: 'node.endpoint',
+      selector: 'node.endpoint.row',
       style: {
+        // Fila de contrato como en la referencia: tarjeta sólida #171b21 a
+        // todo lo ancho, borde #343b45, rótulo de dos líneas centrado.
         shape: 'round-rectangle',
         'corner-radius': 8 as unknown as string,
-        'background-color': surface,
+        'background-color': surface2,
         'background-opacity': 1,
-        'border-color': endpoint,
-        'border-width': 1.25,
+        'border-color': borderStrong,
+        'border-opacity': 1,
+        'border-width': 1,
         width: 'data(w)',
         height: 'data(h)',
-        padding: '0px',
-        'font-size': 12,
+        'padding-left': '10px',
+        'padding-right': '8px',
+        // Centrado: con halign left/right este build del lienzo dibuja el rótulo
+        // FUERA de la caja cuando el texto es más ancho; centrado queda dentro.
+        // El rótulo es de dos líneas: tipo de contrato arriba, nombre debajo.
+        'text-halign': 'center',
+        'text-valign': 'center',
+        // El rótulo ya viene truncado para caber en la fila (elements.nodeLabel):
+        // wrap rompe en el "\n" (tipo arriba, nombre debajo, como la referencia)
+        // y nunca más allá del ancho del nodo (text-max-width = data(w)).
+        'text-wrap': 'wrap',
+        'text-max-width': 'data(w)' as unknown as string,
+        'font-size': 11,
         'font-family': FONT_MONO,
+        color: fg,
+      },
+    },
+    {
+      selector:
+        'node.endpoint.row.hover, node.endpoint.row:selected, node.endpoint.row.hl, node.endpoint.row.loud',
+      style: {
+        'background-color': accent,
+        'background-opacity': 0.16,
+        'border-color': accent,
+        'border-opacity': 1,
+        'border-width': 1.5,
+        'z-index': 20,
       },
     },
     // Grafo de código: la puerta ("Code"), archivos/módulos y símbolos.
+    // Plegada es una pastilla compacta (botón "Code ▸"); abierta es la caja
+    // que contiene los archivos. Nunca una caja vacía con título.
     {
       selector: 'node.code',
       style: {
-        shape: 'round-rectangle',
-        'corner-radius': 10 as unknown as string,
-        'background-color': 'transparent',
-        'background-opacity': 0,
-        'border-color': codeC,
-        'border-width': 1,
-        'border-style': 'dashed',
-        'border-opacity': 0.45,
         'font-weight': 500,
         'font-size': 12,
         color: codeC,
-        width: 'data(w)',
-        height: 'data(h)',
-        padding: '12px',
+      },
+    },
+    {
+      selector: 'node.code:childless',
+      style: {
+        shape: 'round-rectangle',
+        'corner-radius': 13 as unknown as string,
+        width: 96 as unknown as string,
+        height: 26 as unknown as string,
+        'background-color': codeC,
+        'background-opacity': 0.14,
+        'border-color': codeC,
+        'border-width': 1,
+        'border-style': 'solid',
+        'border-opacity': 0.7,
+        'text-valign': 'center',
+        'text-halign': 'center',
+        'text-wrap': 'none',
+        'text-max-width': 90 as unknown as string,
+        padding: '0px',
+        label: 'data(label)',
+      },
+    },
+    {
+      selector: 'node.code:childless.hover, node.code:childless:selected',
+      style: {
+        'background-opacity': 0.18,
+        'border-opacity': 1,
+        'border-width': 1.5,
       },
     },
     {
       selector: 'node.code:parent',
       style: {
+        shape: 'round-rectangle',
+        'corner-radius': 10 as unknown as string,
+        width: 'data(w)',
+        height: 'data(h)',
+        padding: '12px',
         'background-color': codeC,
         'background-opacity': 0.04,
-        'border-style': 'solid',
-        'border-opacity': 0.75,
-        'border-width': 1.25,
-        padding: '16px',
+        'border-color': codeC,
+        'border-width': 1,
+        'border-style': 'dashed',
+        'border-opacity': 0.45,
       },
     },
     {
@@ -200,7 +316,7 @@ export function buildStyle(): StylesheetJson {
         shape: 'round-rectangle',
         'corner-radius': 10 as unknown as string,
         'background-color': fileC,
-        'background-opacity': 0.05,
+        'background-opacity': 0.12,
         'border-color': fileC,
         width: 'data(w)',
         height: 'data(h)',
@@ -214,8 +330,8 @@ export function buildStyle(): StylesheetJson {
       style: {
         shape: 'round-rectangle',
         'corner-radius': 8 as unknown as string,
-        'background-color': surface,
-        'background-opacity': 1,
+        'background-color': symbolC,
+        'background-opacity': 0.14,
         'border-color': symbolC,
         'border-width': 1.25,
         width: 'data(w)',
@@ -225,12 +341,70 @@ export function buildStyle(): StylesheetJson {
         'font-family': FONT_MONO,
       },
     },
+    // Unidad básica = punto (va después de symbol/file para ganarles a las
+    // hojas): servicio, archivo, clase o función plegados son nodos, no cajas.
+    // Lleva el rótulo debajo; el tamaño/color distinguen el tipo de unidad.
+    {
+      selector: 'node.dot',
+      style: {
+        shape: 'ellipse',
+        width: 18 as unknown as string,
+        height: 18 as unknown as string,
+        // Sin padding: el punto mide lo que mide; el rótulo vive en la banda
+        // LABEL_H que ya reserva el layout (con padding el nodo renderizado
+        // crecía y las etiquetas chocaban con la fila de abajo).
+        padding: '0px',
+        'background-color': service,
+        'background-opacity': 0.9,
+        'border-width': 0,
+        label: 'data(label)',
+        color: fg,
+        'font-size': 11,
+        'font-weight': 500,
+        'text-valign': 'bottom',
+        'text-margin-y': 6,
+        'text-max-width': 140 as unknown as string,
+        'text-background-color': surface,
+        'text-background-opacity': 0.85,
+        'text-background-padding': '2px',
+      },
+    },
+    // Azul = servicio (unidad que corre); violeta = unidad de código.
+    {
+      selector: 'node.file.dot',
+      style: {
+        width: 14 as unknown as string,
+        height: 14 as unknown as string,
+        'background-color': fileC,
+        'background-opacity': 0.9,
+      },
+    },
+    {
+      selector: 'node.symbol.dot',
+      style: {
+        width: 10 as unknown as string,
+        height: 10 as unknown as string,
+        'background-color': symbolC,
+        'background-opacity': 0.9,
+      },
+    },
+    // Punto plegado con hijos ocultos: anillo punteado = "hay más dentro".
+    {
+      selector: 'node.dot.collapsible',
+      style: {
+        'border-width': 1.5,
+        'border-style': 'dashed',
+        'border-color': muted,
+      },
+    },
     // Abiertos: contenedor, la etiqueta va arriba y el padding deja sitio a los hijos.
     {
       selector: ':parent',
       style: {
         'text-valign': 'top',
-        'text-halign': 'center',
+        // Rótulo de contenedor arriba a la IZQUIERDA, como en la referencia.
+        'text-halign': 'left',
+        'text-margin-x': 12,
         // El rótulo vive en la banda reservada por el reparto (arriba del
         // rectángulo): si roza el borde, parecía tachado.
         'text-margin-y': -8,
@@ -245,11 +419,15 @@ export function buildStyle(): StylesheetJson {
       selector: 'node:selected',
       style: {
         'border-width': 2.5,
+        'border-color': accent,
         'outline-width': 3,
         'outline-color': accent,
         'outline-opacity': 0.9,
         'outline-offset': 2,
-        'z-index': 10,
+        'underlay-color': accent,
+        'underlay-opacity': 0.25,
+        'underlay-padding': 6,
+        'z-index': 30,
       },
     },
     // Hover: el nodo responde al puntero sin cambiar de color.
@@ -305,16 +483,24 @@ export function buildStyle(): StylesheetJson {
         'line-cap': 'round',
         'source-distance-from-node': 2,
         'target-distance-from-node': 4,
-        // El rótulo (×N) sólo aparece al mirar la arista: en conjunto es ruido.
-        label: '',
-        'font-size': 9,
+        // El rótulo (×N, o N·confianza si es inferido) va siempre: el número de
+        // call-sites es información, no ruido. A medio ver al descansar; a pleno
+        // al mirar/seleccionar la arista (clase hover / :selected / hl).
+        label: 'data(label)',
+        'font-size': 10.5,
+        'font-weight': 500,
         color: muted,
+        'text-opacity': 0.9,
         'text-background-color': surface,
-        'text-background-opacity': 0.85,
-        'text-background-padding': '2px',
+        'text-background-opacity': 0.9,
+        'text-background-padding': '3px',
         'text-rotation': 'autorotate',
         'overlay-opacity': 0,
       },
+    },
+    {
+      selector: 'edge.hover, edge:selected, edge.hl, edge.loud',
+      style: { 'text-opacity': 1, color: fg, 'z-index': 12 },
     },
     // Determinista = trazo continuo y neutro; inferido = trazo discontinuo y ámbar.
     {
@@ -327,7 +513,9 @@ export function buildStyle(): StylesheetJson {
         'line-color': inf,
         'target-arrow-color': inf,
         'line-style': 'dashed',
-        'line-dash-pattern': [5, 4],
+        // Guion de la referencia: trazo 7-5 a opacidad 0.75 (la confianza va
+        // en el rótulo, no en la opacidad).
+        'line-dash-pattern': [7, 5],
       },
     },
     // Relaciones de código bajo demanda: limpias por defecto, rótulo sólo al enfocar
@@ -347,7 +535,8 @@ export function buildStyle(): StylesheetJson {
       },
     },
     {
-      selector: 'edge.code-edge:selected, edge.code-edge.hl, edge.code-edge.loud',
+      selector:
+        'edge.code-edge:hover, edge.code-edge:selected, edge.code-edge.hl, edge.code-edge.loud',
       style: {
         label: 'data(label)',
         opacity: 1,
@@ -365,8 +554,24 @@ export function buildStyle(): StylesheetJson {
         opacity: 0.25,
       },
     },
+    // "Proporciona": el conector del borde apunta a su implementación dentro de
+    // la caja del repo (acento, flecha hacia dentro). Las de consumo (consumes)
+    // van en color de procedencia y apuntan al conector del proveedor.
     {
-      selector: 'edge.servedby, edge.implements',
+      selector: 'edge.servedby',
+      style: {
+        'line-color': accent,
+        'target-arrow-color': accent,
+        'line-style': 'solid',
+        width: 1.2,
+        opacity: 0.5,
+        'target-arrow-shape': 'triangle',
+        'arrow-scale': 0.6,
+        label: '',
+      },
+    },
+    {
+      selector: 'edge.implements',
       style: {
         'line-color': codeC,
         'target-arrow-color': codeC,
@@ -384,18 +589,20 @@ export function buildStyle(): StylesheetJson {
     },
     {
       selector:
-        'edge.servedby:selected, edge.servedby.hl, edge.servedby.loud, edge.implements:selected',
+        'edge.servedby:hover, edge.servedby:selected, edge.servedby.hl, edge.servedby.loud, edge.implements:hover, edge.implements:selected',
       style: {
         label: 'data(label)',
         opacity: 1,
         width: 2,
       },
     },
-    // Atenuar es jerarquizar, no borrar: por debajo de este valor el nodo se
-    // vuelve ilegible y se pierde el contexto de dónde estaba.
-    { selector: '.dim', style: { opacity: 0.2 } },
-    // Relaciones secundarias de un grafo denso: presentes, pero en segundo plano.
-    { selector: 'edge.quiet', style: { opacity: 0.12, width: 1 } },
+    // Sin apagado global: todo el grafo se ve.Sólo el modo foco atenúa lo que
+    // NO es vecindad — y nunca por debajo de legible: lo importante (lo que
+    // tiene relaciones) se resalta con hl/loud, no se esconde.
+    { selector: '.dim', style: { opacity: 0.38 } },
+    // Relaciones secundarias de un grafo denso: presentes y legibles, en
+    // segundo plano — nunca invisibles (una relación es información).
+    { selector: 'edge.quiet', style: { opacity: 0.35, width: 1, 'text-opacity': 0.6 } },
     { selector: 'edge.hl, edge.loud', style: { opacity: 1, 'z-index': 10, label: 'data(label)' } },
   ];
 }
@@ -406,14 +613,34 @@ export function buildStyle(): StylesheetJson {
  * con tamaño — pestaña oculta, primer render —: si no lo tiene se deja
  * `pending` y el ResizeObserver encuadra cuando haya sitio.
  */
-function applyLayout(cy: Core, lay: MapLayout, first: boolean): 'done' | 'pending' {
+function applyLayout(
+  cy: Core,
+  lay: MapLayout,
+  first: boolean,
+  preserve?: ReadonlySet<string>,
+): 'done' | 'pending' {
   cy.batch(() => {
     for (const [id, p] of lay.leaves) {
       const n = cy.getElementById(id);
       const size = lay.sizes.get(id);
       if (n.empty()) continue;
       if (size) n.data({ w: size.w, h: size.h, tw: size.w - 12 });
-      n.position(p);
+      // Tras tocar el lienzo, los nodos existentes conservan su posición (un
+      // re-reparto no debe "volver" lo que el usuario colocó a su sitio).
+      if (preserve?.has(id)) continue;
+      let pos = p;
+      if (preserve) {
+        // Nodo nuevo: se alinea con la posición REAL de su raíz (delta entre
+        // el reparto nuevo y dónde quedó la raíz en pantalla).
+        let root: NodeSingular = n;
+        while (root.parent().nonempty()) root = root.parent()[0] as NodeSingular;
+        const top = lay.top.get(root.id());
+        if (top) {
+          const cur = root.position();
+          pos = { x: p.x + (cur.x - top.x), y: p.y + (cur.y - top.y) };
+        }
+      }
+      n.position(pos);
     }
   });
   const box = cy.container();
@@ -439,11 +666,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     view,
     selectedId,
     focusIds,
+    highlightIds = null,
     onSelect,
     onToggle,
     fitNonce = 0,
     traceContract = null,
     traceFanoutLimit = 3,
+    onZoomLevel,
   },
   ref,
 ): React.ReactElement {
@@ -451,31 +680,29 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
   const cyRef = useRef<Core | null>(null);
   const lastSig = useRef('');
   const touched = useRef(false);
-  // Posiciones de primer nivel del reparto anterior: abrir un nodo no baraja el resto.
-  const topRef = useRef<ReadonlyMap<string, Point>>(new Map());
   // Los handlers de Cytoscape se registran una vez: leen siempre lo último.
-  const handlers = useRef({ onSelect, onToggle });
-  handlers.current = { onSelect, onToggle };
+  const handlers = useRef({ onSelect, onToggle, onZoomLevel });
+  handlers.current = { onSelect, onToggle, onZoomLevel };
 
-  // Zoom y encuadre desde los controles flotantes del lienzo.
+  // Zoom y encuadre desde los controles flotantes del lienzo. Paso amplio
+  // (×1.6) para llegar rápido; los botones además repiten al mantener pulsado.
   useImperativeHandle(
     ref,
     () => ({
       zoomIn: () => {
         const cy = cyRef.current;
         if (!cy) return;
-        cy.zoom({
-          level: Math.min(cy.zoom() * 1.25, cy.maxZoom()),
-          renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
-        });
+        zoomAboutCenter(cy, Math.min(cy.zoom() * ZOOM_STEP, cy.maxZoom()));
       },
       zoomOut: () => {
         const cy = cyRef.current;
         if (!cy) return;
-        cy.zoom({
-          level: Math.max(cy.zoom() / 1.25, cy.minZoom()),
-          renderedPosition: { x: cy.width() / 2, y: cy.height() / 2 },
-        });
+        zoomAboutCenter(cy, Math.max(cy.zoom() / ZOOM_STEP, cy.minZoom()));
+      },
+      zoomReset: () => {
+        const cy = cyRef.current;
+        if (!cy) return;
+        zoomAboutCenter(cy, 1);
       },
       fit: () => {
         const cy = cyRef.current;
@@ -497,13 +724,32 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       style: buildStyle(),
       minZoom: 0.15,
       maxZoom: 2.5,
-      wheelSensitivity: 0.25,
+      wheelSensitivity: 0.12,
       boxSelectionEnabled: false,
     });
+    // Un clic selecciona (nunca abre ni cierra: eso es del doble clic, para no
+    // perder la selección al abrir). Doble clic sobre un nodo = open/close.
     cy.on('tap', 'node', (ev) => handlers.current.onSelect(String(ev.target.id())));
     cy.on('dbltap', 'node', (ev) => handlers.current.onToggle(String(ev.target.id())));
     cy.on('tap', (ev) => {
       if (ev.target === cy) handlers.current.onSelect(null);
+    });
+    // El nivel de zoom se comunica para mostrarlo en los controles (%).
+    cy.on('zoom', () => handlers.current.onZoomLevel?.(cy.zoom()));
+    handlers.current.onZoomLevel?.(cy.zoom());
+    // Un "clic" que se mueve menos de 8px no es un arrastre: se restaura la
+    // posición para que click nunca mueva el nodo.
+    let dragStart: { x: number; y: number } | null = null;
+    cy.on('dragstart', 'node', (ev) => {
+      const p = (ev.target as NodeSingular).position();
+      dragStart = { x: p.x, y: p.y };
+    });
+    cy.on('dragfree', 'node', (ev) => {
+      const n = ev.target as NodeSingular;
+      if (!dragStart) return;
+      const p = n.position();
+      if (Math.hypot(p.x - dragStart.x, p.y - dragStart.y) < 8) n.position(dragStart);
+      dragStart = null;
     });
     // Hover: el nodo se ilumina un instante bajo el puntero. Cytoscape no
     // tiene propiedad de cursor, así que el puntero se cambia en el lienzo.
@@ -515,26 +761,13 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       ev.target.removeClass('hover');
       if (host.current) host.current.style.cursor = '';
     });
-    // Conservar las posiciones movidas por el usuario para que al expandir o
-    // plegar un contenedor no rebote a la posición previa.
-    const syncTopPositions = () => {
-      const next = new Map<string, Point>(topRef.current);
-      for (const n of cy.nodes()) {
-        if (n.isChild()) continue;
-        const bb = n.boundingBox();
-        next.set(n.id(), {
-          x: (bb.x1 + bb.x2) / 2,
-          y: (bb.y1 + bb.y2) / 2,
-        });
-      }
-      topRef.current = next;
-    };
-    cy.on('dragfree', 'node', syncTopPositions);
+    // Lo mismo para aristas: el rótulo (×N / N·confianza) pasa a pleno al mirar.
+    cy.on('mouseover', 'edge', (ev) => ev.target.addClass('hover'));
+    cy.on('mouseout', 'edge', (ev) => ev.target.removeClass('hover'));
     cyRef.current = cy;
     // Instancia nueva = lienzo vacío: el diff de datos tiene que volver a repartir
     // (StrictMode monta, desmonta y monta de nuevo conservando los refs).
     lastSig.current = '';
-    topRef.current = new Map();
     // Gancho de inspección para las comprobaciones en navegador real (dev).
     if (import.meta.env.DEV) (window as unknown as { __parallaxCy?: Core }).__parallaxCy = cy;
 
@@ -604,9 +837,12 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
-    const els = toCyElements(view);
+    const els = toCyElements(view, { selectedId, focusIds });
     const sig = signature(els);
     const wanted = new Set(els.map((e) => e.data.id));
+    // Ids que ya están en el lienzo ANTES del diff: si el usuario ya tocó el
+    // lienzo, sus posiciones se respetan (no se re-reparten y "vuelven").
+    const existing = new Set(cy.elements().map((el) => el.id()));
 
     let added: cytoscape.Collection | null = null;
     cy.batch(() => {
@@ -634,10 +870,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       const first = lastSig.current === '';
       lastSig.current = sig;
       if (els.length > 0) {
-        const input = layoutInput(view);
-        const lay = layoutMap(input.nodes, input.edges, topRef.current);
-        topRef.current = lay.top;
-        const state = applyLayout(cy, lay, first);
+        const input = layoutInput(view, { selectedId, focusIds });
+        const lay = layoutMap(input.nodes, input.edges);
+        // Tras tocar el lienzo sólo se conservan las posiciones de las CAJAS DE
+        // PRIMER NIVEL (repos): los hijos se reempaquetan limpios dentro de su
+        // contenedor, así nada queda "montado encima" de otra cosa al abrir/cerrar.
+        const preserve = touched.current
+          ? new Set([...existing].filter((id) => lay.top.has(id)))
+          : undefined;
+        const state = applyLayout(cy, lay, first, preserve);
         host.current?.setAttribute('data-layout', state);
         // Tras abrir un nodo se encuadra lo que apareció (y su contenedor), no
         // todo el grafo: el usuario no pierde el hilo ni queda mirando un vacío.
@@ -669,7 +910,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         }
       }
     }
-  }, [view]);
+  }, [view, selectedId, focusIds]);
 
   // Selección, foco y trazado de punta a punta: sólo clases, sin tocar la geometría.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `view` re-aplica las clases
@@ -773,6 +1014,19 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         }
       } else if (selectedId) {
         const n = cy.getElementById(selectedId);
+        if (n.empty() && highlightIds && highlightIds.size > 0) {
+          // Selección en un nodo sólo de cliente (clúster): se resaltan sus
+          // miembros en el lienzo (los puertos del borde de la caja del repo).
+          const eles = cy.nodes().filter((x) => highlightIds.has(x.id()));
+          if (eles.nonempty()) {
+            const edges = eles.connectedEdges();
+            const keep = eles.union(eles.ancestors()).union(edges).union(edges.connectedNodes());
+            cy.elements().not(keep).addClass('dim');
+            keep.removeClass('dim');
+            eles.addClass('connected-peer');
+            edges.addClass('hl loud');
+          }
+        }
         if (n.nonempty()) {
           n.select();
           const connectedEdges = n.connectedEdges();
@@ -801,7 +1055,7 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
         }
       }
     });
-  }, [selectedId, focusIds, view, traceContract, traceFanoutLimit]);
+  }, [selectedId, focusIds, highlightIds, view, traceContract, traceFanoutLimit]);
 
   // Un foco nuevo (agente, "Focus neighborhood") encuadra su vecindad.
   const focusKey = useMemo(() => (focusIds ? [...focusIds].sort().join('|') : ''), [focusIds]);
@@ -827,7 +1081,11 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
     if (!cy || !selectedId) return;
     const n = cy.getElementById(selectedId);
     if (n.nonempty()) cy.animate({ center: { eles: n }, duration: 180 });
-  }, [selectedId]);
+    else if (highlightIds && highlightIds.size > 0) {
+      const eles = cy.nodes().filter((x) => highlightIds.has(x.id()));
+      if (eles.nonempty()) cy.animate({ center: { eles }, duration: 180 });
+    }
+  }, [selectedId, highlightIds]);
 
   // Cytoscape toma el control del estilo de su contenedor (lo fuerza a
   // `position: relative`), así que el contenedor no puede ser el elemento

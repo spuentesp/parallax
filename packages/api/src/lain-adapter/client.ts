@@ -231,9 +231,14 @@ export class RealLainAdapter implements LainAdapter {
       try {
         parsed = JSON.parse(envelope.content[0].text) as Record<string, unknown>;
       } catch {
+        // Un rechazo del motor llega como texto plano ("Error: Invalid argument: ...") con
+        // sus razones: se conserva en vez de reducirlo a "unparseable".
+        const text = envelope.content[0].text.trim();
         throw LainCallError.parse({
           code: 'LainUnavailable',
-          message: `lain returned unparseable content[0].text for ${tool}`,
+          message: text.startsWith('Error:')
+            ? `lain rejected ${tool}: ${text.slice('Error:'.length).trim().slice(0, 400)}`
+            : `lain returned unparseable content[0].text for ${tool}`,
         });
       }
     }
@@ -355,6 +360,7 @@ export class RealLainAdapter implements LainAdapter {
       ...(req.repo ? { repo: req.repo } : {}),
       ...(req.cap !== undefined ? { cap: req.cap } : {}),
       ...(req.min_impact ? { min_impact: req.min_impact } : {}),
+      // Nuevos en lain 0.15.
       ...(req.max_hops !== undefined ? { max_hops: req.max_hops } : {}),
       ...(req.timeout_ms !== undefined ? { timeout_ms: req.timeout_ms } : {}),
     });
@@ -419,6 +425,8 @@ export class RealLainAdapter implements LainAdapter {
     const res = await this.call<QueryGraphResponse>('query_graph', {
       query: req.query,
       ...(req.repo_id ? { repo_id: req.repo_id } : {}),
+      // Desde 0.15 las lecturas crudas aceptan snapshot (live por defecto).
+      ...(req.snapshot ? { snapshot: req.snapshot } : {}),
     });
     // El motor omite `nodes`/`edges`/`paths` enteros cuando están vacíos:
     // se normalizan a [] sin inventar nada (un vacío sigue siendo un vacío).

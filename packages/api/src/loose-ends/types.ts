@@ -27,6 +27,10 @@ export interface LooseEnd {
   candidates: string[];
   /** Cuántos candidatos había en total. */
   candidateCount: number;
+  /** GlobalId del consumidor en LAIN: es lo que pide `check_binding` para validar un vínculo. */
+  consumerId?: string;
+  /** Candidatos con su servicio (hasta MAX_CANDIDATE_REFS), para proponer un vínculo. */
+  candidateRefs?: Array<{ key: string; service: string; reason: string | null }>;
 }
 
 /** Qué es un cabo suelto, según quién lo dice. */

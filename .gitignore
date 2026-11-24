@@ -14,7 +14,10 @@ data/
 node_modules/
 dist/
 build/
-coverage/
+# Test coverage reports only. A bare `coverage/` also matched the source directory
+# packages/api/src/coverage, which therefore was never committed.
+/coverage/
+packages/*/coverage/
 **/*.tsbuildinfo
 .DS_Store
 

@@ -13,10 +13,13 @@ export function SourcePeek({
 }: {
   workspaceId: string;
   repo: string;
-  target: string | { path: string };
+  target: string | { path: string; line?: number | undefined };
 }): React.ReactElement {
   const [wanted, setWanted] = useState(false);
-  const key = typeof target === 'string' ? target : `path:${target.path}`;
+  const key =
+    typeof target === 'string'
+      ? target
+      : `path:${target.path}${target.line !== undefined ? `:${target.line}` : ''}`;
   const q = useQuery({
     queryKey: ['map-source', workspaceId, repo, key],
     queryFn: () => fetchGraphSnippet(workspaceId, repo, target),

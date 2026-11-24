@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RealLainAdapter } from '../src/lain-adapter/client.js';
 
-describe('RealLainAdapter native Lain 0.13 tools', () => {
+describe('RealLainAdapter native Lain 0.15 tools', () => {
   it('forwards trace_flow and returns the engine result unchanged', async () => {
     const data = {
       from: { symbol: 'getOrder' },
@@ -26,12 +26,12 @@ describe('RealLainAdapter native Lain 0.13 tools', () => {
             jsonrpc: '2.0',
             id: 1,
             result: {
-              structuredContent: { analyzer_version: '0.13.0', api_version: 1, data },
+              structuredContent: { analyzer_version: '0.15.0', api_version: 1, data },
             },
           });
         },
       },
-      '0.13.0',
+      '0.15.0',
     );
     const result = await adapter.traceFlow({
       snapshot: 'live',
@@ -75,12 +75,12 @@ describe('RealLainAdapter native Lain 0.13 tools', () => {
             jsonrpc: '2.0',
             id: 1,
             result: {
-              structuredContent: { analyzer_version: '0.13.0', api_version: 1, data },
+              structuredContent: { analyzer_version: '0.15.0', api_version: 1, data },
             },
           });
         },
       },
-      '0.13.0',
+      '0.15.0',
     );
     const applied = await adapter.applyContractContext({
       snapshot: 'live',

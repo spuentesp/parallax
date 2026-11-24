@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { PARALLAX_VERSION } from '@parallax/shared';
 import { z } from 'zod';
 import { type AssessmentToolDeps, assessPrShape, makeAssessPrHandler } from '../tools/assess-pr.js';
 import { getAssessmentShape, makeGetAssessmentHandler } from '../tools/get-assessment.js';
@@ -39,7 +40,7 @@ function notImpl(tool: string) {
 // §15 G2 / P09: assess_pr y get_assessment se registran contra los MISMOS
 // servicios que las rutas HTTP, usando el worker y la DB de la app.
 export function buildMcpServer(deps?: Partial<AssessmentToolDeps>): McpServer {
-  const server = new McpServer({ name: 'parallax', version: '0.1.0' });
+  const server = new McpServer({ name: 'parallax', version: PARALLAX_VERSION });
 
   server.tool(
     'parallax_explore',

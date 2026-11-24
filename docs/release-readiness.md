@@ -1,6 +1,7 @@
 # Release validation, 2026-10-21
 
-> 2026-11-10: the engine pin moved to lain `origin/dev` @ `b7fd2935` (v0.15.0
+> 2026-11-23: the engine pin is now the Lain v0.16.0 release (see `release-0.2.0.md`).
+> 2026-11-10 (superseded): the pin had moved to lain `origin/dev` @ `b7fd2935` (v0.15.0
 > batch, `analyzer_version` `0.14.0`). See
 > [lain-integration-notes.md](lain-integration-notes.md) for the deltas and
 > the Parallax-side handling. The table below is the historical v0.11.0 record.

@@ -49,6 +49,7 @@ describe('the sidebar is the same on every screen', () => {
     '/orgs/acme/contracts',
     '/orgs/acme/assessments',
     '/orgs/acme/assessments/a_1',
+    '/orgs/acme/coverage',
     '/orgs/acme/services/orders',
     '/orgs/acme/typo',
   ];
@@ -58,7 +59,10 @@ describe('the sidebar is the same on every screen', () => {
       renderAt(url);
       expect(labelsShown(), url).toEqual(LABELS);
       // Y el recuadro del workspace actual, siempre.
-      expect(screen.getByText('Workspace'), url).toBeTruthy();
+      expect(
+        within(screen.getByRole('complementary', { name: 'Navigation' })).getByText('Workspace'),
+        url,
+      ).toBeTruthy();
       cleanup();
     }
   });
@@ -78,6 +82,7 @@ describe('the sidebar is the same on every screen', () => {
       ['/orgs/acme/contracts', 'Contracts'],
       ['/orgs/acme/assessments', 'Assessments'],
       ['/orgs/acme/assessments/a_1', 'Assessments'],
+      ['/orgs/acme/coverage', 'Coverage'],
     ];
     for (const [url, current] of cases) {
       renderAt(url);
@@ -96,6 +101,7 @@ describe('the sidebar is the same on every screen', () => {
     expect(href('Repositories')).toBe('/orgs/acme/repos');
     expect(href('Contracts')).toBe('/orgs/acme/contracts');
     expect(href('Assessments')).toBe('/orgs/acme/assessments');
+    expect(href('Coverage')).toBe('/orgs/acme/coverage');
   });
 
   it('outside a workspace page it keeps pointing at the workspace in use: the first one when none was used', async () => {
@@ -163,5 +169,43 @@ describe('product chrome', () => {
     renderAt('/orgs');
     expect(screen.getByRole('img', { name: 'Parallax' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /switch to (light|dark) mode/i })).toBeTruthy();
+  });
+});
+
+describe('data-source badge', () => {
+  const mapSource = (source: string) =>
+    server.use(
+      http.post('/api/workspaces/:id/map/view', () =>
+        HttpResponse.json({
+          nodes: [],
+          edges: [],
+          hiddenChildren: {},
+          focus: null,
+          unknownExpand: [],
+          meta: { source },
+        }),
+      ),
+    );
+
+  it('says "Sample data" only when no engine is configured', async () => {
+    mapSource('unconfigured');
+    renderAt('/orgs/acme');
+    expect(await screen.findByTestId('sample-data-badge')).toBeTruthy();
+    expect(screen.queryByTestId('engine-unreachable-badge')).toBeNull();
+  });
+
+  it('says the engine is unreachable, not "sample data", when it errors', async () => {
+    mapSource('error');
+    renderAt('/orgs/acme');
+    expect(await screen.findByTestId('engine-unreachable-badge')).toBeTruthy();
+    expect(screen.queryByTestId('sample-data-badge')).toBeNull();
+  });
+
+  it('shows neither badge on a live engine', async () => {
+    mapSource('lain');
+    renderAt('/orgs/acme');
+    await screen.findByTestId('map-explorer');
+    expect(screen.queryByTestId('sample-data-badge')).toBeNull();
+    expect(screen.queryByTestId('engine-unreachable-badge')).toBeNull();
   });
 });

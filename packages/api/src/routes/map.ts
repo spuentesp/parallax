@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { buildBriefing } from '../onboarding/briefing.js';
 import { describeNode, searchOrgGraph } from '../org-graph.js';
 import { viewOrgGraph } from '../org-graph-view.js';
+import { buildMatrix } from '../org-matrix.js';
 
 // Mapa de la organización (command center). El grafo completo se construye una
 // vez por workspace y se cachea (stale-while-revalidate); cada petición sólo
@@ -115,6 +116,22 @@ export const mapRoutes: FastifyPluginAsync = async (app) => {
         results: searchOrgGraph(loaded.graph, (req.query as { q: string }).q),
         meta: loaded.meta,
       };
+    },
+  );
+
+  // Matriz de dependencias (lente "Matrix"): celdas consumidor × proveedor
+  // con call-sites, procedencia y contratos que las sustentan.
+  app.get(
+    '/api/workspaces/:id/map/matrix',
+    {
+      config: { scopes: ['read'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req) => {
+      const loaded = await load((req.params as { id: string }).id, false);
+      if (!loaded.ok)
+        return { matrix: null, meta: { source: loaded.source, error: loaded.error ?? null } };
+      return { matrix: buildMatrix(loaded.graph), meta: loaded.meta };
     },
   );
 

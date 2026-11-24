@@ -115,4 +115,47 @@ export interface NodeDetail {
   children: OrgNode[];
   consumers: NodeRelation[];
   providers: NodeRelation[];
+  /** Endpoints dentro del subárbol del nodo (tarjetas de resumen del inspector). */
+  endpointCount?: number | undefined;
+}
+
+/**
+ * Matriz de dependencias (lente "Matrix" del mapa): filas = consumidores,
+ * columnas = proveedores. Una celda agrega las relaciones consumer → provider
+ * y el número de la celda es el número de call-sites. El nivel repo se deriva
+ * en el cliente agrupando los servicios por repo.
+ */
+export interface MatrixService {
+  id: string;
+  label: string;
+  repoId: string | null;
+  repoLabel: string | null;
+}
+
+export interface MatrixLink {
+  endpointId: string;
+  endpointLabel: string;
+  count: number;
+  provenance: Provenance;
+  confidence: number;
+}
+
+export interface MatrixCell {
+  consumer: string;
+  provider: string;
+  count: number;
+  deterministicCount: number;
+  inferredCount: number;
+  /** Confianza mínima de lo inferido (1 si todo es determinista). */
+  confidence: number;
+  provenance: Provenance;
+  /** Contratos concretos que sustentan la celda (los más usados primero). */
+  links: MatrixLink[];
+}
+
+export interface MatrixData {
+  services: MatrixService[];
+  cells: MatrixCell[];
+  /** Servicios declarados sin ninguna relación (aparecen como fila/columna vacía). */
+  standalone: string[];
 }

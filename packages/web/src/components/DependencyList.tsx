@@ -50,15 +50,15 @@ export function DependencyList({
           useCount?: number;
           repo?: string;
         };
-        const isOpen = open === `${e.source}->${e.target}`;
+        // Un servicio puede exponer y usar el mismo endpoint (dos aristas, misma pareja):
+        // la clave incluye el tipo para no repetirse.
+        const edgeKey = `${e.kind}:${e.source}->${e.target}`;
+        const isOpen = open === edgeKey;
         return (
-          <div
-            key={`${e.source}->${e.target}`}
-            className="rounded-xl border border-border bg-surface"
-          >
+          <div key={edgeKey} className="rounded-xl border border-border bg-surface">
             <button
               type="button"
-              onClick={() => setOpen(isOpen ? null : `${e.source}->${e.target}`)}
+              onClick={() => setOpen(isOpen ? null : edgeKey)}
               className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-bg transition-colors"
             >
               <span className="text-xs text-muted">{isOpen ? '▾' : '▸'}</span>
@@ -94,7 +94,7 @@ export function DependencyList({
                     }}
                     className="text-xs px-2.5 py-1 rounded-lg bg-accent text-accent-fg hover:opacity-90 transition-opacity"
                   >
-                    Ver código citado
+                    View cited code
                   </button>
                 </div>
 

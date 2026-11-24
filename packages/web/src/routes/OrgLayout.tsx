@@ -1,5 +1,6 @@
 import type * as React from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
+import { AskBar } from '../components/AskBar.js';
 import { FlowActions } from '../components/FlowActions.js';
 import { MapExplorer } from '../map/MapExplorer.js';
 import { nodeContext } from '../map/nodeId.js';
@@ -14,17 +15,20 @@ export function OrgLayout(): React.ReactElement {
   const ctx = nodeContext(params.get('sel'));
 
   return (
-    <div className="h-full">
-      {orgId ? (
-        <MapExplorer
-          // Otro workspace es otro mapa: se monta de cero. Sin esto, el mapa
-          // nuevo hereda los nodos abiertos, los recuentos y las posiciones del
-          // anterior, y parece que al cambiar de workspace no pasa nada.
-          key={orgId}
-          workspaceId={orgId}
-          actions={<FlowActions orgId={orgId} selectedNode={ctx} />}
-        />
-      ) : null}
+    <div className="flex h-full flex-col">
+      <div className="min-h-0 flex-1">
+        {orgId ? (
+          <MapExplorer
+            // Otro workspace es otro mapa: se monta de cero. Sin esto, el mapa
+            // nuevo hereda los nodos abiertos, los recuentos y las posiciones del
+            // anterior, y parece que al cambiar de workspace no pasa nada.
+            key={orgId}
+            workspaceId={orgId}
+            actions={<FlowActions orgId={orgId} selectedNode={ctx} />}
+          />
+        ) : null}
+      </div>
+      {orgId && <AskBar selectedName={ctx?.name} />}
     </div>
   );
 }

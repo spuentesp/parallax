@@ -1,0 +1,3551 @@
+{
+  "ambiguous": [],
+  "complete": false,
+  "external": [],
+  "repos": [
+    {
+      "analyzer_version": "0.16.0+72538bfaf6af2c5c+c10",
+      "commit": "a31848549f5dc5843fe9e66422bf34a915559ee5",
+      "error": null,
+      "languages": ["python"],
+      "repo": "saleor",
+      "sensors": {
+        "dynamic_dispatch": 14,
+        "entry_points": 336,
+        "field_reads": 47,
+        "graphql": 604,
+        "http_clients": 45,
+        "http_routes": 5,
+        "sql_tables": 788,
+        "websocket": 1
+      },
+      "skips": [],
+      "state": "indexed",
+      "unresolved": [
+        {
+          "count": 1760,
+          "locations": {
+            "directories": {
+              "saleor/graphql/order": 77,
+              "saleor/graphql/product/filters": 108,
+              "saleor/product/migrations": 67,
+              "saleor/warehouse": 75
+            },
+            "files": {
+              "saleor/discount/utils/promotion.py": 39,
+              "saleor/graphql/order/filters.py": 53,
+              "saleor/graphql/product/filters/product_helpers.py": 68,
+              "saleor/warehouse/models.py": 54
+            }
+          },
+          "reason": "OrmDynamicQuery",
+          "sample_ids": [
+            "saleor/account/migrations/0013_auto_20171120_0521.py:18",
+            "saleor/account/migrations/0021_unique_token.py:11"
+          ]
+        },
+        {
+          "count": 35,
+          "reason": "DynamicSql",
+          "sample_ids": ["saleor/discount/models.py:400", "saleor/discount/models.py:401"]
+        }
+      ]
+    },
+    {
+      "analyzer_version": "0.16.0+72538bfaf6af2c5c+c10",
+      "commit": "e34cd91db8cd51ed9cbd69374b4f3bdb61c0285f",
+      "error": null,
+      "languages": ["ts", "tsjs", "tsx"],
+      "repo": "saleor-dashboard",
+      "sensors": {
+        "dynamic_dispatch": 149,
+        "entry_points": 2,
+        "field_reads": 139,
+        "frontend_values": 13,
+        "graphql": 1947,
+        "http_clients": 235
+      },
+      "skips": [],
+      "state": "indexed",
+      "unresolved": [
+        {
+          "count": 25,
+          "reason": "FrontendValueUnclassified",
+          "sample_ids": ["scripts/check-changesets.ts:103", "scripts/check-changesets.ts:45"]
+        },
+        {
+          "count": 3,
+          "reason": "DynamicSql",
+          "sample_ids": [
+            "src/containers/BackgroundTasks/BackgroundTasksProvider.tsx:66",
+            "src/containers/BackgroundTasks/BackgroundTasksProvider.tsx:82"
+          ]
+        }
+      ]
+    },
+    {
+      "analyzer_version": "0.16.0+72538bfaf6af2c5c+c10",
+      "commit": "05641e1fa8b87a6ba0a403d2d323164872422fa5",
+      "error": null,
+      "languages": ["ts", "tsjs", "tsx"],
+      "repo": "storefront",
+      "sensors": {
+        "dynamic_dispatch": 3,
+        "entry_points": 19,
+        "field_reads": 548,
+        "frontend_values": 16,
+        "graphql": 65,
+        "http_clients": 78,
+        "http_routes": 10
+      },
+      "skips": [],
+      "state": "indexed",
+      "unresolved": [
+        {
+          "count": 19,
+          "reason": "FrontendValueUnclassified",
+          "sample_ids": [
+            "src/app/api/revalidate/route.ts:110",
+            "src/app/api/revalidate/route.ts:118"
+          ]
+        }
+      ]
+    }
+  ],
+  "schemaless_endpoints": [
+    {
+      "key": "http:ANY /^$",
+      "service": "saleor-api"
+    },
+    {
+      "key": "http:ANY /^\\.well-known/jwks.json$",
+      "service": "saleor-api"
+    },
+    {
+      "key": "http:ANY /^plugins/(",
+      "service": "saleor-api"
+    },
+    {
+      "key": "http:ANY /^plugins/global/(",
+      "service": "saleor-api"
+    },
+    {
+      "key": "http:ANY /^static/(",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/api_post_request_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/assign_default_customer_type_to_users_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/automatic_checkout_completion_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/clean_duplicated_gift_lines_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/clear_promotion_rule_variants_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/collection_product_updated_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/deactivate_expired_cards_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/deactivate_preorder_for_variants_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/decrease_voucher_codes_usage_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_digital_customer_events",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_digital_order_events",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_empty_allocations_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_event_payloads_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_expired_checkouts",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_expired_orders_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_expired_reservations_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_files_from_private_storage_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_files_from_storage_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_from_storage_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/delete_old_export_files",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/disconnect_voucher_codes_from_draft_orders_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/drop_invalid_shipping_methods_relations_for_given_channels",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/expire_orders_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/export_products_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/fetch_brand_data_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/fetch_product_media_image_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/fill_app_extension_settings_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/finish_creating_user",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/fix_shared_address_instances_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/fulfill_attribute_value_numeric_field",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/generate_deferred_payloads",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/handle_promotion_toggle",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/install_app_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/mark_gift_cards_search_index_as_dirty_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/mark_pages_search_vector_as_dirty",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/mark_products_search_index_as_dirty_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/mark_products_search_vector_as_dirty",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/observability_reporter_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/observability_send_events",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/populate_order_line_product_type_id_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/populate_user_number_of_orders_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/propagate_checkout_deliveries_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/recalculate_discounted_price_for_products_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/recalculate_orders_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/release_voucher_code_usage_of_draft_orders",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_account_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_account_delete_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_email_with_link_to_download_file_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_export_failed_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_fulfillment_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_fulfillment_update_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_gift_card_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_invoice_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_order_canceled_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_order_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_order_confirmed_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_order_refund_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_order_updated",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_password_reset_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_payment_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_request_email_change_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_set_staff_password_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_set_user_password_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_staff_order_confirmation_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_staff_password_reset_email_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_user_change_email_notification_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_webhook_request_async",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/send_webhooks_async_for_app",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/set_automatic_completion_delay_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/set_order_search_document_values",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/set_product_search_document_values",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/set_promotion_rule_variants_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/set_user_search_document_values",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/transaction_release_funds_for_checkout_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/trigger_automatic_checkout_completion_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/trigger_send_password_reset_notification",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_checkouts_search_vector_task_batch_process",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_discounted_prices_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_gift_cards_search_vector_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_stocks_quantity_allocated_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_variant_relations_for_active_promotion_rules_task",
+      "service": "saleor-api"
+    },
+    {
+      "key": "topic:celery/update_variants_names",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_address",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_customerevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_customernote",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_customertype",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_group",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_staffnotificationrecipient",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_user",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:account_userpermission",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:app_app",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:app_appextension",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:app_appinstallation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:app_appproblem",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:app_apptoken",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_assignedpageattributevalue",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_assignedproductattributevalue",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_assigneduserattributevalue",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_assignedvariantattribute",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_assignedvariantattributevalue",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attribute",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributecustomertype",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributepage",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributeproduct",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributetranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributevalue",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributevaluetranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:attribute_attributevariant",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:channel_channel",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:checkout_checkout",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:checkout_checkoutdelivery",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:checkout_checkoutline",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:checkout_checkoutmetadata",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_checkout_automatic_completion_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_checkout_search_update_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_eventdelivery",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_eventdeliveryattempt",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_eventpayload",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_gift_card_search_update_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_page_search_update_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_product_search_update_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:core_promotion_webhook_schedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:csv_exportevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:csv_exportfile",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_checkoutdiscount",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_checkoutlinediscount",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_orderdiscount",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_orderlinediscount",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotion",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotionevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotionrule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotionrule_variants",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotionruletranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_promotiontranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_voucher",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_voucherchannellisting",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_vouchercode",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_vouchercustomer",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:discount_vouchertranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:giftcard_giftcard",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:giftcard_giftcardevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:giftcard_giftcardtag",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:invoice_invoice",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:invoice_invoiceevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:menu_menu",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:menu_menuitem",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:menu_menuitemtranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_fulfillment",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_fulfillmentline",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_order",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_orderevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_ordereventdiscountobject",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_ordergrantedrefund",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_ordergrantedrefundline",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:order_orderline",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:page_page",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:page_pagetranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:page_pagetype",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:payment_payment",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:payment_transaction",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:payment_transactionevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:payment_transactionitem",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:permission_permission",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:plugins_emailtemplate",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:plugins_pluginconfiguration",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_category",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_categorytranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_collection",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_collectionchannellisting",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_collectionproduct",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_collectiontranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_product",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productchannellisting",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productmedia",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productmediatranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_producttranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_producttype",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productvariant",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productvariantchannellisting",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_productvarianttranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_variantchannellistingpromotionrule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:product_variantmedia",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:schedulers_customschedule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:shipping_shippingmethod",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:shipping_shippingmethodchannellisting",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:shipping_shippingmethodpostalcoderule",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:shipping_shippingmethodtranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:shipping_shippingzone",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:site_sitesettings",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:site_sitesettingstranslation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:tax_taxclass",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:tax_taxclasscountryrate",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:tax_taxconfiguration",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:tax_taxconfigurationpercountry",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:tests_book",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:thumbnail_thumbnail",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:user",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_allocation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_channelwarehouse",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_preorderallocation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_preorderreservation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_reservation",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_stock",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:warehouse_warehouse",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:webhook_webhook",
+      "service": "saleor-api"
+    },
+    {
+      "key": "table:webhook_webhookevent",
+      "service": "saleor-api"
+    },
+    {
+      "key": "http:GET /api/cache-info",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:GET /api/dev/ledger",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:GET /api/listing",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:GET /api/revalidate",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/auth/confirm-account",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/auth/login",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/auth/register",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/auth/reset-password",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/auth/set-password",
+      "service": "saleor-storefront"
+    },
+    {
+      "key": "http:POST /api/revalidate",
+      "service": "saleor-storefront"
+    }
+  ],
+  "scope": {
+    "caveats": {
+      "excluded_repositories": [],
+      "failed_repositories": [],
+      "unconfigured_scope": "Only explicitly configured repositories were reviewed; unconfigured organization repositories are not visible to analysis."
+    },
+    "configured_only": true,
+    "excluded": [],
+    "failed": [],
+    "reviewed": [
+      {
+        "commit": "a31848549f5dc5843fe9e66422bf34a915559ee5",
+        "dirty": false,
+        "repo": "saleor"
+      },
+      {
+        "commit": "e34cd91db8cd51ed9cbd69374b4f3bdb61c0285f",
+        "dirty": false,
+        "repo": "saleor-dashboard"
+      },
+      {
+        "commit": "05641e1fa8b87a6ba0a403d2d323164872422fa5",
+        "dirty": false,
+        "repo": "storefront"
+      }
+    ],
+    "unreviewed": []
+  },
+  "stale_bindings": 0,
+  "summary": {
+    "orm_dynamic_query": {
+      "directories": [
+        {
+          "count": 108,
+          "directory": "saleor/graphql/product/filters",
+          "repo": "saleor"
+        },
+        {
+          "count": 77,
+          "directory": "saleor/graphql/order",
+          "repo": "saleor"
+        },
+        {
+          "count": 75,
+          "directory": "saleor/warehouse",
+          "repo": "saleor"
+        },
+        {
+          "count": 67,
+          "directory": "saleor/product/migrations",
+          "repo": "saleor"
+        },
+        {
+          "count": 66,
+          "directory": "saleor/order/migrations",
+          "repo": "saleor"
+        }
+      ],
+      "files": [
+        {
+          "count": 1,
+          "path": "saleor/account/migrations/0013_auto_20171120_0521.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/account/migrations/0021_unique_token.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/account/migrations/0040_auto_20200415_0443.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/account/migrations/0045_auto_20200427_0425.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/account/migrations/0079_full_channel_access_group_for_openid.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/migrations/0081_update_user_is_confirmed.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/migrations/0083_confirm_active_user.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/migrations/tasks/saleor3_22.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/migrations/tasks/saleor3_23.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/account/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/search.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/account/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/account/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/app/actions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/app/installation_utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/app/management/commands/install_app.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/app/manifest_validations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/app/migrations/0001_initial.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/app/migrations/0006_convert_extension_enums_into_one.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/app/migrations/0010_update_app_tokens.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/app/migrations/0023_populate_app_and_app_installation_uuid.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/app/migrations/0039_remove_manage_apps_permission.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/app/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/app/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/asgi/usage_telemetry.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/attribute/lock_objects.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/attribute/management/commands/update_attribute_file_urls.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/attribute/migrations/0009_auto_20210421_0552.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/attribute/migrations/0011_update_values_file_urls.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/attribute/migrations/0020_auto_20220214_1027.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/attribute/migrations/0021_auto_20220406_1713.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/attribute/migrations/0022_attribute_value_translations_propagate_names.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/attribute/migrations/0023_lstrip_slash_from_value_file_url.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/attribute/migrations/0025_attribute_value_translations_propagate_names.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/attribute/models/base.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 12,
+          "path": "saleor/attribute/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/channel/migrations/0003_alter_channel_default_country.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/channel/migrations/0020_migrate_checkout_ttl_release_funds.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/actions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/calculations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/checkout/complete_checkout.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/checkout/delivery_context.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/checkout/migrations/0007_merge_cart_with_checkout.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/checkout/migrations/0011_auto_20180913_0817.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/migrations/0030_checkout_channel_listing.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/migrations/0056_move_checkout_metadata_to_separate_model.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/migrations/0067_auto_20240405_0756.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/checkout/migrations/0071_propagate_line_unidscounted_unit_price.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/checkout/migrations/fix_empty_data_in_lines.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/checkout/migrations/tasks/saleor3_20.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/migrations/tasks/saleor3_21.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/migrations/tasks/saleor3_23.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/checkout/payment_utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/checkout/search/indexing.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/checkout/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 13,
+          "path": "saleor/checkout/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/management/commands/check_mptt_trees.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/core/management/commands/clean_editorjs_fields.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/core/management/commands/clearorders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/migrations/0001_migrate_metadata.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/migrations/0004_delete_delivery_without_webhook.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/core/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/core/schedules.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/search.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/core/search_tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/core/utils/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/core/utils/batches.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/core/utils/random_data.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/csv/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/csv/utils/export.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/csv/utils/product_headers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/csv/utils/products_data.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/discount/migrations/0014_auto_20190701_0402.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/discount/migrations/0018_auto_20190827_0315.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 13,
+          "path": "saleor/discount/migrations/0047_migrate_sales_to_promotions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/discount/migrations/0051_detach_sale_from_permission.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/discount/migrations/0057_move_codes_to_new_model.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/discount/migrations/0060_set_vouchercustomer_codes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/discount/migrations/0063_basediscount_voucher_code.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/discount/migrations/0084_set_missing_currency.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/discount/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 16,
+          "path": "saleor/discount/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/discount/utils/checkout.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/discount/utils/order.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 39,
+          "path": "saleor/discount/utils/promotion.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/discount/utils/voucher.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/giftcard/gateway.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/giftcard/migrations/0006_auto_20210719_1117.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/giftcard/migrations/0014_set_giftcardevent_order_values.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/giftcard/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/giftcard/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 12,
+          "path": "saleor/giftcard/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/account/bulk_mutations/customer_bulk_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/account/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 16,
+          "path": "saleor/graphql/account/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/account_address_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/account_register.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/account_set_default_address.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/account_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/confirm_account.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/confirm_email_change.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/account/send_confirmation_email.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/authentication/deactivate_all_user_tokens.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/authentication/password_change.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/authentication/set_password.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/authentication/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/account/mutations/base.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/customer_type/customer_type_assign_attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/staff/address_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/staff/address_set_default.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/account/mutations/staff/customer_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/account/mutations/staff/customer_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/account/mutations/staff/staff_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/account/mutations/staff/user_avatar_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 12,
+          "path": "saleor/graphql/account/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/account/types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/app/dataloaders/app.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/app/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_activate.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/app/mutations/app_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_deactivate.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_problem_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/app/mutations/app_problem_dismiss.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/app/mutations/app_retry_install.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_self_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_token_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/app/mutations/app_token_verify.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/app/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/graphql/attribute/bulk_mutations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 12,
+          "path": "saleor/graphql/attribute/dataloaders/assigned_attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/dataloaders/attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/attribute/dataloaders/reference_types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/attribute/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/mutations/attribute_bulk_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/graphql/attribute/mutations/attribute_bulk_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/mutations/attribute_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/attribute/mutations/attribute_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/mutations/attribute_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/mutations/attribute_value_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/attribute/mutations/attribute_value_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/attribute/mutations/base_reorder_attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/attribute/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/attribute/mutations/validators.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/graphql/attribute/shared_filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/attribute/utils/attribute_assignment.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/attribute/utils/shared.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/attribute/utils/type_handlers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/channel/mutations/channel_reorder_warehouses.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/channel/mutations/channel_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/channel/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/channel/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/checkout/dataloaders/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/graphql/checkout/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/checkout/mutations/checkout_complete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/checkout/mutations/checkout_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/mutations/checkout_create_from_order.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/mutations/checkout_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/mutations/checkout_delivery_method_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/mutations/checkout_lines_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/mutations/checkout_remove_promo_code.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/checkout/mutations/checkout_shipping_address_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/checkout/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/checkout/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/core/connection.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/context.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/federation/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/filters/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/core/filters/shared_filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/core/filters/where_filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/core/mutations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/types/model.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/core/utils/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/utils/reordering.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/graphql/core/utils/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/core/validators/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/csv/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/csv/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 27,
+          "path": "saleor/graphql/discount/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/discount/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/bulk_mutations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/discount/mutations/promotion/promotion_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/promotion/promotion_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/discount/mutations/promotion/promotion_rule_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/promotion/promotion_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/discount/mutations/sale/sale_base_catalogue.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/discount/mutations/sale/sale_channel_listing_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/discount/mutations/sale/sale_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/sale/sale_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/discount/mutations/sale/sale_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/discount/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/voucher/voucher_channel_listing_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/voucher/voucher_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/discount/mutations/voucher/voucher_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/graphql/discount/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/discount/types/sales.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/graphql/discount/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/giftcard/bulk_mutations/gift_card_bulk_activate.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/giftcard/bulk_mutations/gift_card_bulk_deactivate.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/giftcard/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/graphql/giftcard/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/giftcard/mutations/gift_card_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/giftcard/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/invoice/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/invoice/mutations/invoice_request_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/invoice/mutations/invoice_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/menu/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/menu/mutations/menu_item_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/menu/mutations/menu_item_move.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/menu/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/meta/mutations/base.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/meta/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/graphql/meta/permissions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/notifications/mutations/external_notification_trigger.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/order/bulk_mutations/draft_orders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/bulk_mutations/order_bulk_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/graphql/order/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 53,
+          "path": "saleor/graphql/order/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/draft_order_cleaner.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/draft_order_complete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/draft_order_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/order/mutations/draft_order_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/fulfillment_update_tracking.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/order_confirm.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/order_discount_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/order/mutations/order_grant_refund_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/order/mutations/order_grant_refund_utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/order_line_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/order/mutations/order_lines_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/order/mutations/order_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/order/mutations/order_update_shipping.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/order/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/order/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/order/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/graphql/page/bulk_mutations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/page/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/mutations/page_attribute_assign.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/mutations/page_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/page/mutations/page_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/mutations/page_reorder_attribute_values.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/page/mutations/page_type_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/mutations/page_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/page/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/page/types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/payment/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/payment/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/payment/mutations/base.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/payment/mutations/payment/checkout_payment_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/payment/mutations/transaction/transaction_event_report.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/payment/mutations/transaction/transaction_request_refund_for_granted_refund.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/payment/mutations/transaction/transaction_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/payment/mutations/transaction/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/payment/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/payment/types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/plugins/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/bulk_mutations/collection_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/bulk_mutations/product_bulk_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/bulk_mutations/product_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/bulk_mutations/product_type_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/bulk_mutations/product_variant_bulk_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/product/bulk_mutations/product_variant_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/bulk_mutations/product_variant_bulk_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/bulk_mutations/product_variant_stocks_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/dataloaders/attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 18,
+          "path": "saleor/graphql/product/dataloaders/products.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/filters/category.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/filters/collection.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/product/filters/product.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 23,
+          "path": "saleor/graphql/product/filters/product_attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 68,
+          "path": "saleor/graphql/product/filters/product_helpers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/product/filters/product_type.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/filters/product_variant.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/mutations/attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/category/category_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/category/category_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/mutations/channels.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/collection/collection_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/mutations/product/product_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/product/mutations/product/product_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/product/product_media_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/product/mutations/product/product_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/mutations/product_type/product_type_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/product/mutations/product_variant/product_variant_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/product/mutations/product_variant/product_variant_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/product_variant/product_variant_set_default.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/product/mutations/product_variant/product_variant_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/mutations/product_variant/variant_media_assign.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 23,
+          "path": "saleor/graphql/product/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/product/schema.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/sorters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/product/types/categories.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/types/collections.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/graphql/product/types/products.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/product/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/bulk_mutations/shipping_price_bulk_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/graphql/shipping/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/shipping/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/shipping/mutations/base.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/mutations/shipping_method_channel_listing_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/mutations/shipping_price_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/mutations/shipping_price_exclude_products.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/mutations/shipping_price_remove_product_from_exclude.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/shipping/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shipping/schema.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/shop/mutations/shop_address_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/shop/mutations/shop_settings_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/shop/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/site/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/tax/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/tax/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/tax/mutations/tax_class_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/tax/mutations/tax_class_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/tax/mutations/tax_configuration_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/tax/mutations/tax_exemption_manage.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/tax/schema.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/translations/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/translations/mutations/shipping_price_translate.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 7,
+          "path": "saleor/graphql/translations/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/translations/schema.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/translations/types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/graphql/utils/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 18,
+          "path": "saleor/graphql/utils/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/warehouse/bulk_mutations/stock_bulk_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 26,
+          "path": "saleor/graphql/warehouse/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 15,
+          "path": "saleor/graphql/warehouse/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/warehouse/mutations/warehouse_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/warehouse/mutations/warehouse_shipping_zone_assign.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/warehouse/mutations/warehouse_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/warehouse/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/webhook/dataloaders/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/webhook/filters.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/webhook/mutations/event_delivery_retry.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/webhook/mutations/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/webhook/mutations/webhook_create.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/webhook/mutations/webhook_delete.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/graphql/webhook/mutations/webhook_trigger.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/webhook/mutations/webhook_update.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/graphql/webhook/resolvers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/webhook/subscription_types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/graphql/webhook/types.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/invoice/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/menu/migrations/0003_auto_20180405_0854.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/menu/migrations/0007_auto_20180807_0547.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/menu/migrations/0008_menu_json_content_new.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/menu/migrations/0019_menu_slug.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/menu/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/order/actions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/calculations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0032_orderline_is_shipping_required.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0035_auto_20180221_1057.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0038_auto_20180228_0451.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0041_auto_20180222_0458.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0054_move_data_to_order_events.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0057_orderevent_parameters_new.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/order/migrations/0070_drop_update_event_and_rename_events.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0073_auto_20190829_0249.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0081_auto_20200406_0456.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0090_order_channel_listing.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0109_undiscounted_prices.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/order/migrations/0111_auto_20210518_1357.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0118_auto_20210913_0731.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/order/migrations/0119_orderline_is_gift_card.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0140_fix_order_undiscounted_total.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0145_rewrite_order_events.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/order/migrations/0163_order_events_rename_transaction_events.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0165_fix_order_charge_status_with_transactions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0166_order_propagate_expired_at.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0172_auto_20230627_0816.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0172_update_order_cc_addresses.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0177_set_order_voucher_code.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0181_order_subtotal_as_a_field.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/order/migrations/0189_set_undiscounted_base_shipping_price.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0192_set_undiscounted_base_shipping_price_on_draft_orders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/order/migrations/0193_fix_subtotal_value_for_order_from_bulk.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/0199_set_draft_base_price_expire_at.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/order/migrations/0200_order_with_waiting_for_approval_fulfillments.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/migrations/0204_set_order_lines_count.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/migrations/tasks/saleor3_20.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/order/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/order/notifications.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/order/search.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/order/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 18,
+          "path": "saleor/order/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/page/search.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/page/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/dataloaders.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/payment/gateway.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/payment/gateways/stripe/webhooks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/lock_objects.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/payment/migrations/0009_convert_to_partially_charged_and_partially_refunded.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/migrations/0016_auto_20200423_0314.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/migrations/0027_assign_psp_reference_values.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/payment/migrations/0040_migrate_renamed_fields.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 11,
+          "path": "saleor/payment/migrations/0041_add_calculation_transaction_events.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/migrations/0043_populate_transaction_item_token.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/migrations/0051_alter_transactionitem_available_actions.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/payment/migrations/0056_fix_invalid_atobarai_payments.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/payment/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/payment/transaction_item_calculations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 20,
+          "path": "saleor/payment/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/permission/enums.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/permission/management.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/plugins/admin_email/plugin.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/avatax/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/plugins/avatax/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/plugins/base_plugin.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/plugins/email_common.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/manager.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/migrations/0002_auto_20200417_0335.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/migrations/0003_auto_20200429_0142.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/migrations/0004_drop_support_for_env_vatlayer_access_key.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/plugins/migrations/0008_pluginconfiguration_channel.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/migrations/0010_auto_20220104_1239.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/plugins/openid_connect/plugin.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/plugins/openid_connect/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/plugins/user_email/plugin.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/plugins/webhook/plugin.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/management/commands/update_all_products_discounted_prices.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 21,
+          "path": "saleor/product/managers.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/product/migrations/0015_transfer_locations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/product/migrations/0018_auto_20161212_0725.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/product/migrations/0020_attribute_data_to_class.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0024_migrate_json_data.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0046_product_category.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0059_generate_variant_name_from_attrs.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0062_sortable_models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/product/migrations/0074_auto_20181010_0730.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/product/migrations/0102_migrate_data_enterprise_grade_attributes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/product/migrations/0104_fix_invalid_attributes_map.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0105_product_minimal_variant_price.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/product/migrations/0107_attributes_map_to_m2m.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0108_auto_20191003_0422.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/product/migrations/0112_auto_20200129_0050.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0114_auto_20200129_0815.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0118_populate_product_variant_price.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/product/migrations/0123_auto_20200904_1251.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0126_product_default_variant.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/product/migrations/0138_migrate_description_json_into_description.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0141_update_descritpion_fields.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0143_rename_product_images_to_product_media.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/0178_fix_description_plaintext_field.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 20,
+          "path": "saleor/product/migrations/0183_calculate_discounted_prices.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/migrations/tasks/saleor3_23.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/product/search.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 16,
+          "path": "saleor/product/tasks.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/product/utils/__init__.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 10,
+          "path": "saleor/product/utils/product.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/product/utils/variant_prices.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/product/utils/variants.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/schedulers/migrations/0001_initial.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/schedulers/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/shipping/migrations/0018_default_zones_countries.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 8,
+          "path": "saleor/shipping/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/site/migrations/0007_auto_20171027_0856.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/site/migrations/0013_assign_default_menus.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/site/migrations/0018_sitesettings_homepage_collection.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 4,
+          "path": "saleor/site/patch_sites.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/tax/calculations/checkout.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/tax/calculations/order.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/tax/migrations/0004_migrate_tax_classes.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/tax/migrations/0005_migrate_vatlayer.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/tax/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/tax/webhooks/shared.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/thumbnail/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 3,
+          "path": "saleor/thumbnail/views.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/warehouse/availability.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/warehouse/channel_stock_availability.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 15,
+          "path": "saleor/warehouse/management.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/migrations/0001_initial.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/migrations/0003_warehouse_slug.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/migrations/0014_remove_warehouse_company_name.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 2,
+          "path": "saleor/warehouse/migrations/0016_stock_quantity_allocated.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/migrations/0031_create_default_warehouse.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 54,
+          "path": "saleor/warehouse/models.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/reservations.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 1,
+          "path": "saleor/warehouse/validation.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 6,
+          "path": "saleor/webhook/payloads.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/webhook/transport/asynchronous/transport.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 5,
+          "path": "saleor/webhook/transport/utils.py",
+          "repo": "saleor"
+        },
+        {
+          "count": 9,
+          "path": "saleor/webhook/utils.py",
+          "repo": "saleor"
+        }
+      ],
+      "groups_are_samples": false,
+      "repos": [
+        {
+          "count": 1760,
+          "repo": "saleor"
+        }
+      ],
+      "source": "sensor_ledger",
+      "total": 1760
+    }
+  },
+  "unnormalized": [
+    "GET <dynamic>",
+    "POST <dynamic>",
+    "POST <dynamic>",
+    "UNKNOWN <dynamic>",
+    "GET <dynamic>",
+    "GET <dynamic>",
+    "UNKNOWN <dynamic>",
+    "POST <dynamic>",
+    "topic-read:saleor/checkout/tasks.py:206",
+    "topic-read:saleor/checkout/tasks.py:314",
+    "topic-read:saleor/discount/tasks.py:327",
+    "topic-read:saleor/discount/tasks.py:364",
+    "topic-read:saleor/giftcard/tasks.py:28",
+    "topic-read:saleor/page/tasks.py:25",
+    "topic-read:saleor/plugins/avatax/tasks.py:15",
+    "topic-read:saleor/product/tasks.py:312",
+    "topic-read:saleor/product/tasks.py:362",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:535",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:761",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:846",
+    "topic-read:saleor/webhook/transport/synchronous/transport.py:69",
+    "UNKNOWN <dynamic>",
+    "POST <dynamic>",
+    "POST <dynamic>"
+  ],
+  "unresolved_consumers": [
+    "graphql-call:query:__schema",
+    "graphql-call:query:if",
+    "GET <dynamic>",
+    "POST <dynamic>",
+    "POST <dynamic>",
+    "UNKNOWN <dynamic>",
+    "GET <dynamic>",
+    "GET <dynamic>",
+    "UNKNOWN <dynamic>",
+    "POST <dynamic>",
+    "topic-read:saleor/checkout/tasks.py:206",
+    "topic-read:saleor/checkout/tasks.py:314",
+    "topic-read:saleor/discount/tasks.py:327",
+    "topic-read:saleor/discount/tasks.py:364",
+    "topic-read:saleor/giftcard/tasks.py:28",
+    "topic-read:saleor/page/tasks.py:25",
+    "topic-read:saleor/plugins/avatax/tasks.py:15",
+    "topic-read:saleor/product/tasks.py:312",
+    "topic-read:saleor/product/tasks.py:362",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:535",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:761",
+    "topic-read:saleor/webhook/transport/asynchronous/transport.py:846",
+    "topic-read:saleor/webhook/transport/synchronous/transport.py:69",
+    "ws:client:foo.test:/",
+    "GET /",
+    "GET /en/default-channel",
+    "POST <dynamic>",
+    "POST <dynamic>",
+    "UNKNOWN <dynamic>",
+    "POST <dynamic>",
+    "POST <dynamic>",
+    "POST <dynamic>"
+  ],
+  "unresolved_refs": [],
+  "url_defaults": [
+    {
+      "consumer": "storefront:HttpClientCall:scripts/check-ppr-resume.mjs:GET /en/default-channel:54",
+      "default": true,
+      "env": ["NEXT_PUBLIC_DEFAULT_CHANNEL", "PPR_RESUME_PORT"],
+      "host": "127.0.0.1"
+    }
+  ]
+}

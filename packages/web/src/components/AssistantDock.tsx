@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   type MapFocusDto,
@@ -28,6 +28,9 @@ import { useMediaQuery } from './useMediaQuery.js';
 // La conversación vive en el servidor y en la URL (?conv=): recargar o abrir el
 // enlace recupera el hilo.
 
+/** Una pregunta idéntica que llega por ?ask= dentro de esta ventana es un reenvío, no una pregunta nueva. */
+const ASK_DEDUPE_MS = 60_000;
+
 export function AssistantDock({
   workspaceId,
   docked = false,
@@ -43,13 +46,17 @@ export function AssistantDock({
   const wideDock = useMediaQuery('(min-width: 1280px)');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   // Abierto/cerrado por separado: ocultarlo en el mapa no lo abre sobre otra sección.
-  const [openDocked, setOpenDocked] = useState(wideDock);
+  // Abierto al entrar sólo si sobra sitio: en una portátil el panel (22rem) le quita
+  // al mapa un tercio del ancho, y la barra de pregunta del mapa ya es la entrada.
+  // Preguntar (?ask=) o reabrir un hilo (?conv=) lo abre siempre.
+  const roomy = useMediaQuery('(min-width: 1700px)');
+  const [openDocked, setOpenDocked] = useState(roomy);
   const [openFloating, setOpenFloating] = useState(false);
+  useEffect(() => {
+    if (docked) setOpenDocked(roomy);
+  }, [docked, roomy]);
   const chatOpen = docked ? openDocked : openFloating;
   const setChatOpen = docked ? setOpenDocked : setOpenFloating;
-  useEffect(() => {
-    if (docked) setOpenDocked(wideDock);
-  }, [docked, wideDock]);
 
   // La conversación vive en el servidor y en la URL (?conv=): recargar la página
   // o abrir el enlace recupera el hilo.
@@ -133,6 +140,34 @@ export function AssistantDock({
     setLoadedFor(null);
     setConv(null);
   };
+
+  // Pregunta planteada desde otra pantalla (?ask=…, p. ej. "Ask about this pair"
+  // en la matriz): se abre el chat, se envía una sola vez y se retira la URL.
+  const askParam = params.get('ask');
+  // Lo último enviado desde la URL y cuándo. `setSearchParams` con función parte de una foto vieja de la URL, así que
+  // otro cambio de parámetros (p. ej. ?conv= al llegar el hilo) puede volver a poner ?ask=. Se ignora la misma
+  // pregunta dentro de la ventana; pasada, volver a preguntarlo es una pregunta nueva.
+  const askSentRef = useRef<{ q: string; at: number } | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: handleSend cambia en cada render; el ref evita reenvíos.
+  useEffect(() => {
+    if (!askParam) return;
+    const last = askSentRef.current;
+    const repeat = last !== null && last.q === askParam && Date.now() - last.at < ASK_DEDUPE_MS;
+    if (!repeat) {
+      askSentRef.current = { q: askParam, at: Date.now() };
+      setOpenDocked(true);
+      setOpenFloating(true);
+      handleSend(askParam);
+    }
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('ask');
+        return next;
+      },
+      { replace: true },
+    );
+  }, [askParam]);
 
   // El agente deja el mapa apuntando a su subgrafo: foco + selección en la URL.
   const showOnMap = (focus: MapFocusDto) =>

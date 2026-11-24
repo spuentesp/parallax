@@ -56,9 +56,9 @@ import type {
 import type { CodeTool } from '../agent/code-tools.js';
 import type { ProductCodeTool } from './product-tools.js';
 
-// Firmas alineadas con las tools reales de lain 0.9.1: todas reciben
+// Firmas alineadas con las tools reales de lain 0.15/0.16: todas reciben
 // `snapshot` (o `base`/`head` en diff_contracts) y los argumentos homónimos
-// de docs/lain-tool-schemas.json. Las 13 del paquete contracts.
+// del schema publicado por Lain. Las 16 del paquete contracts.
 // Las del grafo crudo (query_graph y anexas) viven en el paquete `raw`,
 // que hay que load_package antes de usarlas.
 export interface LainAdapter {

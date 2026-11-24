@@ -444,6 +444,7 @@ describe('enum schemas used on their own', () => {
     'already_bound',
     'op_mismatch',
     'field_mismatch',
+    'catch_all_route',
   ])('CheckBindingReason accepts %s', (reason) => {
     expect(CheckBindingReason.safeParse(reason).success).toBe(true);
   });

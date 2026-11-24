@@ -59,16 +59,17 @@ cp .env.example .env     # fill in PARALLAX_TOKENS, LAIN_URL, NEBIUS_TOKEN
 ## Install on a machine (one command)
 
 `install.sh` puts the whole demo stack on a fresh Ubuntu/Debian box: Docker,
-Lain built from the **`dev` branch** of [lain](https://github.com/spuentesp/lain),
-the Saleor demo repos, the engine as a service, the HTTPS front end (Caddy),
-and a `deploy/.env` with generated tokens.
+the [lain](https://github.com/spuentesp/lain) **release binary** (v0.16.0,
+SHA256-verified; set `LAIN_FROM_SOURCE=1` to build a branch from source
+instead; if the binary needs a newer glibc than the machine has, as v0.16.0
+does on Ubuntu 22.04, the script builds the same tag from source), the Saleor demo repos, the engine as a service, the HTTPS front end
+(Caddy), and a `deploy/.env` with generated tokens.
 
 ```bash
 sudo ./install.sh --domain demo.example.com --nebius-token ntb_...
 ```
 
-It prints the admin link and the read-only link when it finishes. The engine is
-built from source, so the first run takes 15–40 minutes. `deploy/RUNBOOK.md`
+It prints the admin link and the read-only link when it finishes. `deploy/RUNBOOK.md`
 describes the same stack by hand; `parallax-stack {status|logs|restart}` drives
 it afterwards.
 
@@ -80,33 +81,27 @@ pnpm dev:web             # web on :5173 with Vite dev server proxying /api → :
 pnpm dev:mcp             # stdio MCP entrypoint
 ```
 
-The api uses `LAIN_ADAPTER=mock` by default. Use the **lain dev pin**
-(`origin/dev` @ `b7fd2935`, the v0.15.0 batch) for the GraphQL provider and
-binding fixes, the indexing performance and startup cache, and the
-`dynamic_target` unresolved vocabulary. A dev build reports
-`analyzer_version` `0.14.0` (`CARGO_PKG_VERSION`); Parallax does not hard-pin
-the string at boot — only `gate:graphql` does (override with
-`LAIN_EXPECTED_ANALYZER_VERSION`). Build it with:
-
-```bash
-git clone https://github.com/spuentesp/lain && cd lain && git checkout origin/dev
-cargo build --bin lain
-```
-
-Start its HTTP server with your workspace's `repos.yaml`; Parallax loads the
-`contracts` package when the server starts with the default core profile.
+The api uses `LAIN_ADAPTER=mock` by default. Use
+[Lain v0.16.0](https://github.com/spuentesp/lain/releases/tag/v0.16.0) (the
+latest release) for the GraphQL provider and binding fixes, the indexing performance
+and startup cache, the live coverage ledger, and the `query_graph` pipeline the Query
+page uses. Parallax does not hard-pin the engine's `analyzer_version` string at boot;
+only `gate:graphql` does (override with `LAIN_EXPECTED_ANALYZER_VERSION`, for example
+when testing a development build). Start its HTTP server with your workspace's
+`repos.yaml`; Parallax loads the `contracts` package when the server starts with the
+default core profile.
 
 ```bash
 lain server --config /path/to/repos.yaml --transport http --port 9999
 ```
 
 The indexing performance patch for v0.11.0 (`patches/lain-0.11.0-indexing-performance.patch`)
-is superseded: dev includes that work, so no patch is needed. On upgrade,
-`FEDERATION_GRAPH_VERSION` goes 4 → 5: run `lain reindex` once per data dir
-(the server refuses the old graph with `FederationSchemaMismatch`), and
-re-prepare snapshots — `diff_contracts` refuses base/head recorded under a
-different `analyzer_version` (`analyzer_mismatch`); the assessment worker
-handles this automatically by re-preparing snapshots once.
+is superseded: v0.16.0 includes that work, so no patch is needed. On upgrade the
+federation graph schema changes (v4 → v5 in 0.15, v5 → v7 in 0.16): run `lain reindex`
+once per data dir (the server refuses the old graph and says so), and re-prepare
+snapshots — `diff_contracts` refuses base/head recorded under a different
+`analyzer_version` (`analyzer_mismatch`); the assessment worker handles this
+automatically by re-preparing snapshots once.
 
 Point Parallax at that server:
 
@@ -114,7 +109,7 @@ Point Parallax at that server:
 LAIN_ADAPTER=real LAIN_URL=http://localhost:9999/mcp pnpm dev:api
 ```
 
-Verify the native 0.13 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
+Verify the native 0.15 `trace_flow` and `list_service_refs` workflows against that server (read-only, with actual JSON output):
 
 ```bash
 LAIN_URL=http://localhost:9999/mcp pnpm demo:lain
@@ -235,7 +230,7 @@ binding YAML verbatim, and checks the automatic dependency after suppressing
 copied providers. It cleans up the servers and temporary repos when it exits.
 
 ```bash
-LAIN_BIN=/path/to/lain-dev-binary pnpm gate:graphql   # dev pin; expects analyzer_version 0.14.0
+LAIN_BIN=/path/to/lain-0.16.0 pnpm gate:graphql   # expects analyzer_version 0.16.0 (override: LAIN_EXPECTED_ANALYZER_VERSION)
 ```
 
 For Saleor, apply the advisor's `provides_graphql: false` entry to the
