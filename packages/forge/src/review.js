@@ -112,14 +112,22 @@ export function summarizeAssessment(assessment) {
           highestRisk: ci.highestRisk,
           symbolsTotal: (ci.symbols ?? []).length,
           untestedTotal: (ci.symbols ?? []).filter((s) => s.untested).length,
-          symbols: (ci.symbols ?? []).slice(0, MAX_SYMBOLS).map((s) => ({
-            name: s.name,
-            path: s.path,
-            line: s.line,
-            change: s.change,
-            risk: s.risk,
-            untested: s.untested,
-          })),
+          // Riskiest first, untested before tested, so the few shown are the ones that matter.
+          symbols: [...(ci.symbols ?? [])]
+            .sort(
+              (a, b) =>
+                (RISK_ORDER[a.risk] ?? 9) - (RISK_ORDER[b.risk] ?? 9) ||
+                Number(!!b.untested) - Number(!!a.untested),
+            )
+            .slice(0, MAX_SYMBOLS)
+            .map((s) => ({
+              name: s.name,
+              path: s.path,
+              line: s.line,
+              change: s.change,
+              risk: s.risk,
+              untested: s.untested,
+            })),
         }
       : null,
     explanation: narrative

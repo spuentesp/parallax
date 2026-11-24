@@ -60,6 +60,16 @@ describe('assessmentMatchesPr', () => {
 describe('summarizeAssessment (real report)', () => {
   const s = summarizeAssessment(real);
 
+  it('shows the riskiest edited code first, untested before tested', () => {
+    const risks = s.codeImpact.symbols.map((x) => x.risk);
+    const order = { high: 0, medium: 1, low: 2 };
+    expect(risks).toEqual([...risks].sort((a, b) => order[a] - order[b]));
+    const high = s.codeImpact.symbols.filter((x) => x.risk === 'high');
+    const firstTested = high.findIndex((x) => !x.untested);
+    const lastUntested = high.map((x) => !x.untested).lastIndexOf(false);
+    if (firstTested !== -1) expect(lastUntested).toBeLessThan(firstTested);
+  });
+
   it('keeps the identity and status, and counts the classes honestly', () => {
     expect(s.id).toBe(real.id);
     expect(s.status).toBe('PARTIAL');

@@ -1,0 +1,156 @@
+{
+ "issueKey": "OSP-2",
+ "expected": {
+  "summary": {
+   "targets": 3,
+   "consumers": 3,
+   "provenByCode": 3,
+   "inferredOnly": 0
+  },
+  "unmatchedTerms": [],
+  "targets": [
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "ep:rpc:openshell.v1.OpenShell/CreateSandbox@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/CreateSandbox",
+     "kind": "endpoint"
+    },
+    "consumersTotal": 1,
+    "consumers": [
+     {
+      "service": "openshell-sdk",
+      "provenance": "deterministic",
+      "usages": 2,
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4816897/Service+architecture+openshell-sdk"
+     }
+    ]
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "ep:rpc:openshell.compute.v1.ComputeDriver/CreateSandbox@openshell-gateway",
+     "label": "rpc:openshell.compute.v1.ComputeDriver/CreateSandbox",
+     "kind": "endpoint"
+    },
+    "consumersTotal": 0,
+    "consumers": []
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "svc:openshell-gateway",
+     "label": "openshell-gateway",
+     "kind": "service"
+    },
+    "consumersTotal": 3,
+    "consumers": [
+     {
+      "service": "OpenShell",
+      "provenance": "deterministic",
+      "usages": 22
+     },
+     {
+      "service": "nemoclaw",
+      "provenance": "deterministic",
+      "usages": 3,
+      "annotations": {
+       "owner": "Platform team",
+       "criticality": "High"
+      },
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4718593/Service+architecture+nemoclaw"
+     },
+     {
+      "service": "openshell-sdk",
+      "provenance": "deterministic",
+      "usages": 23,
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4816897/Service+architecture+openshell-sdk"
+     }
+    ]
+   }
+  ],
+  "graph": {
+   "nodes": [
+    {
+     "id": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/CreateSandbox@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/CreateSandbox",
+     "kind": "target",
+     "detail": "endpoint"
+    },
+    {
+     "id": "service:ws_cluster_a:openshell-sdk",
+     "label": "openshell-sdk",
+     "kind": "consumer",
+     "detail": null,
+     "criticality": null
+    },
+    {
+     "id": "target:ws_cluster_a:ep:rpc:openshell.compute.v1.ComputeDriver/CreateSandbox@openshell-gateway",
+     "label": "rpc:openshell.compute.v1.ComputeDriver/CreateSandbox",
+     "kind": "target",
+     "detail": "endpoint"
+    },
+    {
+     "id": "target:ws_cluster_a:svc:openshell-gateway",
+     "label": "openshell-gateway",
+     "kind": "target",
+     "detail": "service"
+    },
+    {
+     "id": "service:ws_cluster_a:OpenShell",
+     "label": "OpenShell",
+     "kind": "consumer",
+     "detail": null,
+     "criticality": null
+    },
+    {
+     "id": "service:ws_cluster_a:nemoclaw",
+     "label": "nemoclaw",
+     "kind": "consumer",
+     "detail": "Platform team",
+     "criticality": "High"
+    }
+   ],
+   "edges": [
+    {
+     "from": "service:ws_cluster_a:openshell-sdk",
+     "to": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/CreateSandbox@openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 2
+    },
+    {
+     "from": "service:ws_cluster_a:OpenShell",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 22
+    },
+    {
+     "from": "service:ws_cluster_a:nemoclaw",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 3
+    },
+    {
+     "from": "service:ws_cluster_a:openshell-sdk",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 23
+    }
+   ]
+  }
+ },
+ "contacts": [
+  {
+   "service": "nemoclaw",
+   "owner": "Platform team",
+   "criticality": "High"
+  }
+ ],
+ "nextSteps": [
+  "Talk to Platform team (owns nemoclaw, high criticality) before this ships."
+ ],
+ "pullRequests": []
+}

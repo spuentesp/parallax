@@ -18,6 +18,24 @@ describe('extractTerms', () => {
     );
   });
 
+  it('reads only the method out of a qualified gRPC name, not the service around it', () => {
+    // Regression: "OpenShell" in "openshell.v1.OpenShell/ConnectSupervisor" showed up as a
+    // second target next to the method.
+    expect(
+      extractTerms('We expect to change rpc openshell.v1.OpenShell/ConnectSupervisor today'),
+    ).toEqual(['ConnectSupervisor']);
+    expect(
+      extractTerms('rpc openshell.compute.v1.ComputeDriver/AuthenticateSandbox takes a string'),
+    ).toEqual(['AuthenticateSandbox']);
+  });
+
+  it('still finds a service named on its own next to a qualified method', () => {
+    expect(extractTerms('rpc a.v1.Svc/DoThing in the openshell-gateway service')).toEqual([
+      'DoThing',
+      'openshell-gateway',
+    ]);
+  });
+
   it('finds HTTP routes', () => {
     const terms = extractTerms('Support streaming on POST /v1/chat/completions in nemo-fabric');
     // the method stays attached, so GET and POST on one path are not confused

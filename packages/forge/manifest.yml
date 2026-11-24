@@ -1,4 +1,12 @@
 modules:
+  # What a ticket predicts versus what its pull request changed, inside the issue view.
+  jira:issuePanel:
+    - key: parallax-impact-panel
+      title: Parallax impact
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      resource: panel
+      resolver:
+        function: panel-resolver
   # One MCP server: the same actions power Rovo agents and third-party MCP clients.
   rovo:mcp:
     - key: parallax-mcp
@@ -231,6 +239,14 @@ modules:
       handler: index.ticketReview
     - key: publishServiceDoc
       handler: index.publishServiceDoc
+    - key: panel-resolver
+      handler: panel.handler
+
+# The Jira issue panel is a Custom UI app: the bundle in static/panel is built with
+# `pnpm build:panel` before `forge deploy`.
+resources:
+  - key: panel
+    path: static/panel
 
 # Required for any app with a rovo:mcp module from 2027-01-05 (tag <= 8 chars,
 # description <= 100 chars, keywords combined <= 50 chars).
@@ -260,6 +276,7 @@ permissions:
       backend:
         - address: marbled-river-9619.fly.dev
   scopes:
+    - read:jira-work
     - read:space:confluence
     - read:page:confluence
     - write:page:confluence

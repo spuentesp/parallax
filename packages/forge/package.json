@@ -6,12 +6,20 @@
   "description": "Parallax Forge app for Atlassian Codegeist 2026 (Rovo MCP + agent, Jira panel)",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:panel": "vite",
+    "build:panel": "vite build"
   },
   "dependencies": {
-    "@forge/api": "^7.0.0"
+    "@forge/api": "^7.0.0",
+    "@forge/bridge": "^7.4.0",
+    "@forge/resolver": "^2.0.2"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "5.0.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vite": "8.3.4",
     "vitest": "5.0.4"
   }
 }
