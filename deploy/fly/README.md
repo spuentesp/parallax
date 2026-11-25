@@ -1,7 +1,7 @@
 # Fly.io demo (the two NVIDIA clusters)
 
 App `marbled-river-9619` (region gru), one machine, 4 GB / 2 shared CPUs, `min_machines_running = 1`.
-Image: `Dockerfile.fly` = Ubuntu 24.04 + Lain v0.16.1 (release binary, sha256-checked) + Parallax + six NVIDIA repos
+Image: `Dockerfile.fly` = Ubuntu 24.04 + Lain v0.16.2 (release binary, sha256-checked) + Parallax + six NVIDIA repos
 cloned at pinned commits (`clone-repos.sh`, LFS not smudged so the worktrees are clean).
 
 ## Why the image looks like this
