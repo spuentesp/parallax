@@ -51,9 +51,11 @@ in the Forge app is the domain in `packages/forge/manifest.yml` and the `BACKEND
 
 External exposure of Forge tools is off by default (Atlassian's rovo:mcp Preview).
 
-1. Go to <https://admin.atlassian.com> and select your site.
-2. Open **Connected apps**, choose **parallax-codegeist**, then **View app details**.
-3. Under **Tools**, choose **Expose tools to MCP-compatible apps** > **Enable tools**.
+1. Go to <https://admin.atlassian.com> and select your organization.
+2. Open **Apps** > **Atlassian apps**, then click **Looking for your Marketplace and third-party
+   apps?** (this is the list Atlassian used to call *Connected apps*).
+3. Choose **parallax-codegeist** > **View app details**, scroll to **Tools**, and choose
+   **Expose tools to MCP-compatible apps** > **Enable tools** > **Enable**.
 
 ## 3. Use it
 
@@ -141,6 +143,9 @@ says so when coverage is incomplete.
 **Owner**), then refresh the panel. The owner you wrote appears.
 
 ### Option B: the Parallax Architect agent in Rovo (nothing else to install)
+
+This needs Rovo on your site. The Codegeist development site has it; a brand-new free trial site
+did not show Rovo chat or agents at all when we tried it, in which case use Options A and C.
 
 The app ships a Rovo agent. Open Rovo (<https://home.atlassian.com> > your site > **Chat**), go to
 **Agents**, search for **Parallax Architect** (app: parallax-codegeist) and start a chat. Try:
