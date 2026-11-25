@@ -35,3 +35,16 @@ build of 2026-10-30) is `registry.fly.io/marbled-river-9619:deployment-01M671FR2
 - The free Fly trial kills machines after 5 minutes; the account needs a card on file.
 - A restart takes ~1 minute before the first answer; the health check has a 6-minute grace period.
 - Memory: both engines + API sit around 2.1 GB at rest; 4 GB leaves room for the Ask path.
+
+## Requesting an analysis (off by default)
+
+`POST /api/pr-requests` (scope `request`) can start the analysis of a pull request: it fetches the PR's
+commits into the checkout, then runs the normal assessment. It is limited to the repositories listed in
+`PARALLAX_REQUEST_ALLOWLIST` (`owner/repo=workspaceId`, comma-separated), runs one analysis at a time for
+the whole server, pauses ten minutes after a failure and accepts at most six requests per hour. **It is
+disabled unless that variable is set, and the demo does not set it.**
+
+Why it is off: indexing a pull request whose base is not already indexed takes a second full snapshot of the
+repository. On the 8 GB demo machine that took the cluster A engine to 7.4 GB and the kernel killed it
+(tested with NVIDIA/OpenShell #4995). The panel and the tools kept working from cached data, but nothing
+restarts the engine and `/api/health` does not notice. Turn this on only on a machine with more memory.

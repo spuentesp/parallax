@@ -3,7 +3,7 @@ import { z } from 'zod';
 const AuthToken = z.object({
   token: z.string().min(1),
   orgId: z.string().min(1),
-  scopes: z.array(z.enum(['read', 'write', 'publish'])).min(1),
+  scopes: z.array(z.enum(['read', 'write', 'publish', 'request'])).min(1),
 });
 
 const AppConfigSchema = z.object({
@@ -48,6 +48,12 @@ const AppConfigSchema = z.object({
   githubApiBase: z.string().url().optional(),
   // Escritura a GitHub: credencial separada para comentarios de asesoría.
   githubWriteToken: z.string().min(1).optional(),
+  // Pedir un análisis de PR (POST /api/pr-requests, scope `request`): lista de `owner/repo=workspaceId`
+  // separada por comas. Sin ella la función está apagada.
+  requestAllowlist: z.string().optional(),
+  // Base desde la que se traen los commits de un PR (por defecto https://github.com); los tests
+  // apuntan a repos git locales.
+  githubGitBase: z.string().min(1).optional(),
   // Secreto HMAC de los webhooks de pull_request. Sin él no se acepta ningún webhook.
   githubWebhookSecret: z.string().min(1).optional(),
   gitlabReadToken: z.string().min(1).optional(),
@@ -196,6 +202,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     githubReadToken: env.PARALLAX_GITHUB_READ_TOKEN,
     githubApiBase: env.PARALLAX_GITHUB_API_BASE,
     githubWriteToken: env.PARALLAX_GITHUB_WRITE_TOKEN,
+    requestAllowlist: env.PARALLAX_REQUEST_ALLOWLIST,
+    githubGitBase: env.PARALLAX_GITHUB_GIT_BASE,
     githubWebhookSecret: env.PARALLAX_GITHUB_WEBHOOK_SECRET,
     gitlabReadToken: env.PARALLAX_GITLAB_READ_TOKEN,
     gitlabApiBase: env.PARALLAX_GITLAB_API_BASE,

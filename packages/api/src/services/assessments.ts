@@ -24,7 +24,7 @@ import type {
 } from '../worker/assessment-worker.js';
 import { computeInputDigest } from '../worker/state.js';
 
-type Db = BetterSQLite3Database<typeof schema>;
+export type Db = BetterSQLite3Database<typeof schema>;
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
