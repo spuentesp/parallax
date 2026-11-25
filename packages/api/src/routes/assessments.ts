@@ -10,6 +10,7 @@ import {
   IdempotencyConflictError,
   listAssessments,
   NotFoundError,
+  parsePrFilter,
 } from '../services/assessments.js';
 
 // §15 G2: el informe se persiste una sola vez y se sirve igual desde web y
@@ -67,12 +68,29 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
     {
       config: { scopes: ['read'] },
       schema: {
-        querystring: z.object({ orgId: z.string().min(1).optional() }).loose(),
+        querystring: z
+          .object({ orgId: z.string().min(1).optional(), pr: z.string().min(1).optional() })
+          .loose(),
       },
     },
-    async (req) => {
-      const { orgId } = req.query as { orgId?: string };
-      return { assessments: await listAssessments(app.db, orgId ? { orgId } : {}) };
+    async (req, reply) => {
+      const { orgId, pr } = req.query as { orgId?: string; pr?: string };
+      // ?pr=owner/repo#123 devuelve sólo los informes de ese PR (filas ligeras, sin el motor).
+      const prFilter = pr === undefined ? undefined : parsePrFilter(pr);
+      if (pr !== undefined && !prFilter) {
+        return reply.code(400).send({
+          type: 'about:blank',
+          title: 'Bad Request',
+          status: 400,
+          detail: 'pr must look like owner/repo#123',
+        });
+      }
+      return {
+        assessments: await listAssessments(app.db, {
+          ...(orgId ? { orgId } : {}),
+          ...(prFilter ? { pr: prFilter } : {}),
+        }),
+      };
     },
   );
 

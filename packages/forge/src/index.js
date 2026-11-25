@@ -240,10 +240,33 @@ const FINAL_STATUSES = new Set(['READY', 'PARTIAL']);
 
 // Find the newest stored assessment of one pull request.
 // Returns { assessment } (final), { running: status } or { failed: true } or {} when none exists.
-async function findPrAssessment(ref) {
-  const list = await parallax('/api/assessments');
+export async function findPrAssessment(ref) {
+  const key = `${ref.owner}/${ref.repo}#${ref.number}`;
+  const list = await parallax(`/api/assessments?pr=${encodeURIComponent(key)}`);
   if (list.error) return { error: list.error };
-  const recent = (list.assessments || [])
+  const rows = list.assessments || [];
+
+  // A server that knows the `pr` filter marks every row with its pull request. An older server
+  // ignores the filter and returns everything without that mark: scan the newest reports then.
+  const filtered = rows.every((a) => 'pr' in a);
+  if (!filtered) return findPrAssessmentByScan(ref, rows);
+
+  const mine = rows
+    .filter((a) => a.pr && assessmentMatchesPr({ manifest: { pr: a.pr } }, ref))
+    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+  const done = mine.find((a) => FINAL_STATUSES.has(a.status));
+  if (done) {
+    const full = await parallax(`/api/assessments/${done.id}`);
+    return full.error ? { error: full.error } : { assessment: full.assessment };
+  }
+  const other = mine[0];
+  if (!other) return {};
+  return other.status === 'FAILED' ? { failed: true } : { running: other.status };
+}
+
+// Fallback for a server without the `pr` filter: open the newest reports and match their manifests.
+async function findPrAssessmentByScan(ref, rows) {
+  const recent = [...rows]
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
     .slice(0, MAX_ASSESSMENTS_SCANNED);
   const full = await Promise.all(recent.map((a) => parallax(`/api/assessments/${a.id}`)));
