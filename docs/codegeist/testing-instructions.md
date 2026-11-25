@@ -38,10 +38,11 @@ in the Forge app is the domain in `packages/forge/manifest.yml` and the `BACKEND
 
 ## 1. Install (about 2 minutes)
 
-1. Open the installation link from the submission.
-2. Choose your site and install on **Jira**. Open the link again and install on **Confluence**.
-   **Install on both**: pages are written to Confluence and linked from Jira.
-3. Review the permissions screen: Parallax reads and writes Confluence pages, labels and content
+1. Open the installation link from the submission. It shows the app's permissions; click **Get app**.
+2. Choose your site. Under "Select any additional Atlassian apps", **tick Confluence** as well as
+   Jira, then **Install**. Pages are written to Confluence and linked from Jira, so install on both.
+   (If you install on Jira first, open the link again to add Confluence.)
+3. Review the permissions: Parallax reads and writes Confluence pages, labels and content
    properties, and **reads Jira issues** (summary, description, comments, links) as the person
    viewing them, to power the issue panel. It never writes to Jira. See [privacy.md](privacy.md).
    The first time you use a feature, Atlassian may ask you to approve the app's access: approve it.
@@ -62,8 +63,10 @@ The panel compares what a ticket *predicts* with what its pull request *actually
 
 1. In any Jira project, create an issue and paste one of the five tickets below as its
    description (the first line is the summary).
-2. Open the issue. **The panel is not shown by default.** On the issue toolbar, click the
-   **hexagon (app) icon**, then **Parallax impact**. The panel opens in the issue content.
+2. Open the issue. **The panel is not shown by default.** On the icon row under the issue title,
+   click the **Parallax impact** button (a blue icon; in some issue views it is under the **Apps**
+   hexagon menu). The panel opens in the issue content, below the description. It works in Jira
+   Software, Work Management and Jira Service Management projects.
 3. Read it top to bottom: who to talk to, a graph of what the ticket's words point at (green
    solid line = proven by code, amber dashed = inferred, red dot = criticality), then the
    pull request's real analysis with a one-sentence headline of how the two differ, and a ranked

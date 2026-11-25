@@ -258,16 +258,17 @@ const CHANGE_WORDS = { EndpointRemoved: 'removed' };
 
 // Findings the engine proved (class Verified), said plainly: what changed and where the
 // consumers that break live. Nothing is said for findings that are only suspected.
+const provenVerb = (f) => `was ${CHANGE_WORDS[f.change] ?? 'changed'}`;
+
 function provenNote(touched) {
   const proven = touched.filter((f) => f.class === 'Verified');
   if (proven.length === 0) return '';
   const parts = proven.map((f) => {
     const name = f.endpoint.split('/').pop();
-    const verb = CHANGE_WORDS[f.change] ?? 'changed';
     const repos = Object.keys(f.affectedByRepo ?? {});
     const where = repos.length ? ` in ${repos.join(', ')}` : '';
     const breaking = f.compat === 'Breaking' ? ' (breaking)' : '';
-    return `${name} was ${verb}${breaking} and ${plural(f.affectedDistinct, 'consumer')}${where} ${f.affectedDistinct === 1 ? 'is' : 'are'} proven to use it`;
+    return `${name} ${provenVerb(f)}${breaking} and ${plural(f.affectedDistinct, 'consumer')}${where} ${f.affectedDistinct === 1 ? 'is' : 'are'} proven to use it`;
   });
   return ` Proven by the engine: ${parts.join('; ')}.`;
 }
@@ -361,6 +362,20 @@ export function nextSteps({ expected, drift, summary }) {
     );
   }
 
+  // A contract the ticket names that the engine proved a consumer of: someone will break.
+  const confirmed = new Set(drift?.confirmed ?? []);
+  const provenNamed = (summary?.findings ?? []).filter(
+    (f) => f.class === 'Verified' && confirmed.has(f.endpoint),
+  );
+  if (provenNamed.length > 0) {
+    const f = provenNamed[0];
+    const repos = Object.keys(f.affectedByRepo ?? {});
+    const more = provenNamed.length > 1 ? ` (and ${provenNamed.length - 1} more)` : '';
+    steps.push(
+      `Coordinate before merging: ${f.endpoint.split('/').pop()}${more} ${provenVerb(f)} and the engine proved ${plural(f.affectedDistinct, 'consumer')}${repos.length ? ` in ${repos.join(', ')}` : ''} use${f.affectedDistinct === 1 ? 's' : ''} it.`,
+    );
+  }
+
   const code = drift?.codeChanges;
   if (code) {
     const risky = (summary?.codeImpact?.symbols ?? [])
@@ -405,7 +420,9 @@ export function nextSteps({ expected, drift, summary }) {
 
   if (summary && !summary.coverage.complete) {
     steps.push(
-      'Treat "needs investigation" as open questions: this analysis cannot prove the absence of impact.',
+      (summary.counts?.needsInvestigation ?? 0) > 0
+        ? 'Treat "needs investigation" as open questions: this analysis cannot prove the absence of impact.'
+        : 'Coverage is incomplete, so an empty result here does not prove there is no impact.',
     );
   }
 

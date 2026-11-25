@@ -242,7 +242,7 @@ describe('nextSteps', () => {
     // and it must NOT claim contracts the ticket never named were touched
     expect(steps.some((t) => /did not name/.test(t))).toBe(false);
     // coverage is incomplete in this report, and the last step must say so
-    expect(steps.at(-1)).toMatch(/cannot prove the absence of impact/);
+    expect(steps.at(-1)).toMatch(/does not prove there is no impact/);
   });
 
   it('points at the riskiest edit and at missing tests for a code-only PR (real report)', () => {
@@ -470,5 +470,19 @@ describe('a PR that removes an RPC (real synthetic PR)', () => {
     s.findings[0].class = 'NeedsInvestigation';
     const d = computeDrift({ targets: [endpointTarget(rpc, 'openshell-gateway')] }, s);
     expect(d.headline).not.toMatch(/Proven by the engine/);
+  });
+
+  it('tells the reader to coordinate with proven consumers, and does not invent open questions', () => {
+    const expected = { targets: [endpointTarget(rpc, 'openshell-gateway')] };
+    const summary = summarizeAssessment(removedRpc);
+    const steps = nextSteps({ expected, drift: computeDrift(expected, summary), summary });
+    expect(steps[0]).toBe(
+      'Coordinate before merging: ListSandboxTemplates was removed and the engine proved 1 consumer in OpenShell uses it.',
+    );
+    // This report has no needs-investigation findings, so it must not talk about them.
+    expect(steps.join(' ')).not.toMatch(/needs investigation/);
+    expect(steps.at(-1)).toBe(
+      'Coverage is incomplete, so an empty result here does not prove there is no impact.',
+    );
   });
 });
