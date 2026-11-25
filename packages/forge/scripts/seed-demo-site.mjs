@@ -56,6 +56,16 @@ const TICKETS = [
   },
   {
     type: 'Task',
+    summary: 'Remove the ListSandboxTemplates RPC',
+    body: [
+      'Sandbox templates are being managed through config instead. Remove rpc openshell.v1.OpenShell/ListSandboxTemplates from the openshell-gateway service.',
+      'Open question: which clients still call it?',
+    ],
+    // A clearly labelled synthetic PR on a fork that removes exactly this RPC.
+    pr: 'https://github.com/spuentesp/openshell/pull/2',
+  },
+  {
+    type: 'Task',
     summary: 'Change the ListSandboxes default page size from 50 to 25',
     body: [
       'rpc openshell.v1.OpenShell/ListSandboxes on openshell-gateway returns up to 50 sandboxes by default. Halve the default to reduce latency.',

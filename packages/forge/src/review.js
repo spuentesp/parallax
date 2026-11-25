@@ -222,7 +222,9 @@ export function computeDrift(expected, summary) {
         extra: inNamedService.length + elsewhere.length,
         missed: missed.length,
         code: codeChanges,
-      }) + settleNote(couldNotCompare, compatibleChanges),
+      }) +
+      provenNote(touched) +
+      settleNote(couldNotCompare, compatibleChanges),
     codeChanges,
     couldNotCompare,
     compatibleChanges,
@@ -251,6 +253,24 @@ export function computeDrift(expected, summary) {
 }
 
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+const CHANGE_WORDS = { EndpointRemoved: 'removed' };
+
+// Findings the engine proved (class Verified), said plainly: what changed and where the
+// consumers that break live. Nothing is said for findings that are only suspected.
+function provenNote(touched) {
+  const proven = touched.filter((f) => f.class === 'Verified');
+  if (proven.length === 0) return '';
+  const parts = proven.map((f) => {
+    const name = f.endpoint.split('/').pop();
+    const verb = CHANGE_WORDS[f.change] ?? 'changed';
+    const repos = Object.keys(f.affectedByRepo ?? {});
+    const where = repos.length ? ` in ${repos.join(', ')}` : '';
+    const breaking = f.compat === 'Breaking' ? ' (breaking)' : '';
+    return `${name} was ${verb}${breaking} and ${plural(f.affectedDistinct, 'consumer')}${where} ${f.affectedDistinct === 1 ? 'is' : 'are'} proven to use it`;
+  });
+  return ` Proven by the engine: ${parts.join('; ')}.`;
+}
 
 // What the engine could not settle, as a sentence to append to a headline.
 function settleNote(couldNotCompare, compatibleChanges) {

@@ -60,7 +60,7 @@ External exposure of Forge tools is off by default (Atlassian's rovo:mcp Preview
 
 The panel compares what a ticket *predicts* with what its pull request *actually changed*.
 
-1. In any Jira project, create an issue and paste one of the four tickets below as its
+1. In any Jira project, create an issue and paste one of the five tickets below as its
    description (the first line is the summary).
 2. Open the issue. **The panel is not shown by default.** On the issue toolbar, click the
    **hexagon (app) icon**, then **Parallax impact**. The panel opens in the issue content.
@@ -69,8 +69,8 @@ The panel compares what a ticket *predicts* with what its pull request *actually
    pull request's real analysis with a one-sentence headline of how the two differ, and a ranked
    list of next steps.
 
-Tickets to paste (three pull requests are analysed: two real, merged ones and one clearly
-labelled synthetic demo; **any other pull request link shows "has not been analysed yet"**):
+Tickets to paste (four pull requests are analysed: two real, merged ones and two clearly
+labelled synthetic demos; **any other pull request link shows "has not been analysed yet"**):
 
 **A. A PR that edits risky code and touches an interface file**
 
@@ -110,7 +110,21 @@ prediction graph shows `openshell-sdk` depending on `CreateSandbox` (the SDK set
 the headline says the engine found no definite contract change and counted one wire-compatible
 change that it does not list individually.
 
-**D. A prediction only, no pull request yet**
+**D. A synthetic demo PR that removes an RPC (the one with a proven consumer)**
+
+> Remove the ListSandboxTemplates RPC
+>
+> Sandbox templates are being managed through config instead. Remove rpc openshell.v1.OpenShell/ListSandboxTemplates from the openshell-gateway service.
+>
+> Pull request: https://github.com/spuentesp/openshell/pull/2
+
+That pull request is also a labelled demo on a fork (do not merge). Expected headline: "The PR
+touched exactly what the ticket named (1 contract change). Proven by the engine:
+ListSandboxTemplates was removed (breaking) and 1 consumer in OpenShell is proven to use it. Also:
+8 methods in changed interface files could not be compared." This is the only analysis with a
+**proven** (Verified) finding.
+
+**E. A prediction only, no pull request yet**
 
 > Change the ListSandboxes default page size from 50 to 25
 >
@@ -191,11 +205,11 @@ A page that Parallax did not create is never overwritten, even if it has the sam
 
 - The demo data are two public NVIDIA code clusters, indexed at pinned commits. Parallax does
   not index your own repositories in this build.
-- Only three pull requests have been analysed (OpenShell #5052, NemoClaw #13812 and the synthetic
-  demo spuentesp/openshell#1). Others report "has not been analysed yet". None of the analyses
-  contains a "Verified" finding: real OpenShell and NemoClaw changes mostly add to their
-  interfaces, a removed proto3 field is wire-compatible, and the engine does not claim a proof it
-  does not have.
+- Only four pull requests have been analysed (OpenShell #5052, NemoClaw #13812 and the synthetic
+  demos spuentesp/openshell#1 and #2). Others report "has not been analysed yet". Only the
+  synthetic #2 contains a "Verified" finding: real OpenShell and NemoClaw changes mostly add to
+  their interfaces, a removed proto3 field is wire-compatible, and the engine does not claim a
+  proof it does not have.
 - Confluence pages are written as the calling user, so Confluence's own space permissions apply.
 - External MCP exposure and `rovo:mcp` are Atlassian Preview features.
 - The Forge app is not eligible for "Runs on Atlassian": it calls an external server by design.

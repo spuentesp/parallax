@@ -23,6 +23,11 @@ const fork = JSON.parse(
 const codeOnly = JSON.parse(
   readFileSync(new URL('./fixtures/assessment-13812.json', import.meta.url), 'utf8'),
 );
+// The real report of a synthetic PR that removes the ListSandboxTemplates RPC: the only
+// assessment in which the engine proves a consumer (the OpenShell SDK/CLI calls it).
+const removedRpc = JSON.parse(
+  readFileSync(new URL('./fixtures/assessment-fork-rpc.json', import.meta.url), 'utf8'),
+);
 
 describe('extractPrRefs', () => {
   it('finds GitHub pull request URLs and ignores everything else', () => {
@@ -431,5 +436,39 @@ describe('computeDrift', () => {
       'The engine found no definite contract change in this PR. Also: 8 methods in changed interface files could not be compared; 1 wire-compatible change (such as an added or removed field) was found but not listed.',
     );
     expect(d.namedButUntouched).toEqual(['rpc:openshell.v1.OpenShell/CreateSandbox']);
+  });
+});
+
+describe('a PR that removes an RPC (real synthetic PR)', () => {
+  const rpc = 'rpc:openshell.v1.OpenShell/ListSandboxTemplates';
+  const endpointTarget = (label, service) => ({ node: { kind: 'endpoint', label, service } });
+
+  it('reports the removal as the one proven, breaking finding', () => {
+    const s = summarizeAssessment(removedRpc);
+    expect(s.counts).toMatchObject({ verified: 1, needsInvestigation: 0, couldNotCompare: 8 });
+    expect(s.findings).toHaveLength(1);
+    expect(s.findings[0]).toMatchObject({
+      endpoint: rpc,
+      change: 'EndpointRemoved',
+      compat: 'Breaking',
+      class: 'Verified',
+      affectedByRepo: { OpenShell: 1 },
+    });
+  });
+
+  it('says what the engine proved, next to the verdict', () => {
+    const expected = { targets: [endpointTarget(rpc, 'openshell-gateway')] };
+    const d = computeDrift(expected, summarizeAssessment(removedRpc));
+    expect(d.verdict).toBe('aligned');
+    expect(d.headline).toBe(
+      'The PR touched exactly what the ticket named (1 contract change). Proven by the engine: ListSandboxTemplates was removed (breaking) and 1 consumer in OpenShell is proven to use it. Also: 8 methods in changed interface files could not be compared.',
+    );
+  });
+
+  it('says nothing is proven when the finding is only suspected', () => {
+    const s = summarizeAssessment(removedRpc);
+    s.findings[0].class = 'NeedsInvestigation';
+    const d = computeDrift({ targets: [endpointTarget(rpc, 'openshell-gateway')] }, s);
+    expect(d.headline).not.toMatch(/Proven by the engine/);
   });
 });
