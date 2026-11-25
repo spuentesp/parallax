@@ -34,8 +34,11 @@ ENV LAIN_GIT_SIDECAR_BIN=/usr/local/bin/lain-git-sidecar \
 # One engine per cluster, so each workspace sees only its own repos. `lain prewarm` publishes each one's
 # startup checkpoint; the graphs land in /lain-data-a and /lain-data-b (outside the /data volume,
 # which would hide them). A cold start on Fly then restores them instead of re-indexing.
-COPY deploy/fly/bake.sh /usr/local/bin/bake.sh
-RUN bake.sh
+# BAKE_SNAPSHOTS=1 (default) also bakes each cluster's pinned-commit snapshot cache (see bake.sh);
+# --build-arg BAKE_SNAPSHOTS=0 skips it.
+ARG BAKE_SNAPSHOTS=1
+COPY deploy/fly/bake.sh deploy/fly/bake-snapshots.mjs /usr/local/bin/
+RUN BAKE_SNAPSHOTS="${BAKE_SNAPSHOTS}" bake.sh
 
 WORKDIR /app
 COPY . .
@@ -45,7 +48,8 @@ RUN pnpm install --frozen-lockfile \
 ENV NODE_ENV=production PORT=8080 \
     LAIN_ADAPTER=real LAIN_URL=http://127.0.0.1:9999/mcp \
     CLUSTER_A_LAIN_URL=http://127.0.0.1:9999/mcp CLUSTER_B_LAIN_URL=http://127.0.0.1:9998/mcp \
-    DATABASE_PATH=/data/parallax.db WEB_BUNDLE_PATH=/app/packages/web/dist
+    DATABASE_PATH=/data/parallax.db WEB_BUNDLE_PATH=/app/packages/web/dist \
+    LAIN_SNAPSHOT_RESIDENT_IDLE_SECS=60
 VOLUME /data
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=300s --retries=3 \

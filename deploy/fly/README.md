@@ -14,6 +14,12 @@ cloned at pinned commits (`clone-repos.sh`, LFS not smudged so the worktrees are
   API's boot handshake times out. A start that does not restore it logs `federation startup cache miss: <reason>`.
   The checkpoint needs clean worktrees, which is why the clone script sets `GIT_LFS_SKIP_SMUDGE=1`, and prewarm must
   use the same config paths and `LAIN_*` environment as the server (the Dockerfile sets them before the bake).
+- **`bake.sh` also bakes the snapshot cache** (on by default; `--build-arg BAKE_SNAPSHOTS=0` turns it off). It starts
+  each engine briefly and prepares the snapshot of the pinned commits (`bake-snapshots.mjs`), then stops it. A PR
+  analysis snapshots every workspace repo, the non-PR ones at their pin; with the bake, and Lain >= 0.16.2 reusing
+  cached entries, only the PR repo's base and head are indexed at runtime. The build fails if an engine does not
+  restore the prewarmed checkpoint or a snapshot record is not saved as `ready`. This makes
+  `PARALLAX_WARM_SNAPSHOTS` unnecessary. The cache is keyed by the Lain build, so it is rebuilt with every bump.
 - The graphs live in `/lain-data-a` and `/lain-data-b`, **not** on the `/data` volume (the mount would hide them).
 - `entrypoint.sh` waits for each engine to answer `list_services` before starting the API (it refuses to boot without Lain).
 
@@ -63,6 +69,11 @@ unchanged on 0.16.1), and `LAIN_INDEX_CACHE_MB` (that is an on-disk budget).
 
 What the image does about it:
 
+- **Lain 0.16.2** stops a snapshot job from re-indexing a repo commit that is already in the cache, gives
+  each queued job to one worker only, and no longer rebuilds the live graph when only `.git` changed (the
+  watcher is off here anyway).
+- **`LAIN_SNAPSHOT_RESIDENT_IDLE_SECS=60`** drops a snapshot view nobody has used for a minute. Without it the
+  views of the last analysis stay loaded and add about 1.2 GB to the next one.
 - **The engines are supervised.** `entrypoint.sh` restarts an engine that dies, about 30 s later (tested by
   letting the kernel kill it). Before this a dead engine stayed dead, `/api/health` still said `ok`, and
   every new analysis failed with `lain call failed: fetch failed` until the machine was restarted. The
