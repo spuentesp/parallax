@@ -22,7 +22,7 @@ Check the server before you start:
 
 ```
 curl https://marbled-river-9619.fly.dev/api/health
-# expected: {"status":"ok","version":"0.2.0","lainAdapter":"real","apiVersion":"1","analyzerVersion":"0.16.1"}
+# expected: {"status":"ok","version":"0.2.0","lainAdapter":"real","apiVersion":"1","analyzerVersion":"0.16.2"}
 ```
 
 The server stays up through judging. A cold start after a restart takes about a minute. To run

@@ -1,6 +1,7 @@
 # Fly.io demo (the two NVIDIA clusters)
 
-App `marbled-river-9619` (region gru), one machine, 4 GB / 2 shared CPUs, `min_machines_running = 1`.
+App `marbled-river-9619` (region gru), one machine, 8 GB / 4 shared CPUs (`shared-cpu-4x`, no swap),
+`min_machines_running = 1`.
 Image: `Dockerfile.fly` = Ubuntu 24.04 + Lain v0.16.2 (release binary, sha256-checked) + Parallax + six NVIDIA repos
 cloned at pinned commits (`clone-repos.sh`, LFS not smudged so the worktrees are clean).
 
@@ -9,7 +10,7 @@ cloned at pinned commits (`clone-repos.sh`, LFS not smudged so the worktrees are
   clusters' services in both workspaces. `seed-nvidia-demo.ts` points `ws_cluster_a`/`ws_cluster_b` at their engine.
 - **`bake.sh` runs `lain prewarm` for each cluster at build time** (needs Lain >= 0.16.1). `lain server` re-indexes
   everything on every start unless a startup checkpoint exists. `prewarm` publishes it and fails the build, with the
-  reason, if it cannot. Without the baked checkpoint, a cold start on 2 shared CPUs spends minutes indexing and the
+  reason, if it cannot. Without the baked checkpoint, a cold start on shared CPUs spends minutes indexing and the
   API's boot handshake times out. A start that does not restore it logs `federation startup cache miss: <reason>`.
   The checkpoint needs clean worktrees, which is why the clone script sets `GIT_LFS_SKIP_SMUDGE=1`, and prewarm must
   use the same config paths and `LAIN_*` environment as the server (the Dockerfile sets them before the bake).
@@ -34,25 +35,31 @@ build of 2026-10-30) is `registry.fly.io/marbled-river-9619:deployment-01M671FR2
 ## Gotchas
 - The free Fly trial kills machines after 5 minutes; the account needs a card on file.
 - A restart takes ~1 minute before the first answer; the health check has a 6-minute grace period.
-- Memory: both engines + API sit around 2.1 GB at rest; 4 GB leaves room for the Ask path.
+- Memory: both engines + API sit around 2.1 GB at rest. 8 GB is the most Fly offers on shared CPUs; with Lain
+  0.16.2 it holds an analysis of a new pull request, but with little room for a series of them (see below).
 
 ## Memory: what an analysis of a new commit costs
 
-Measured by running the deployed image under podman with a 4 GB RAM cap (swap allowed) and watching the
-cgroup; the engine's own log lines say what it was doing.
+Measured by running the deployed image under podman with a 4 GB RAM cap (swap allowed) and sampling the
+cgroup's `memory.current + memory.swap.current` every 2 s; the engine's own log lines say what it was doing.
 
-| Moment | Whole container |
-|---|---|
-| Started, graph restored from the baked checkpoint | about 1.7 GB (cluster A engine 1.2 GB) |
-| After the pinned snapshots are built (warm-up) | about 3.6 GB |
-| One analysis of NVIDIA/OpenShell #4995 (a base that is not the pinned commit) | peaks near 7.3 GB |
+| Moment | Lain 0.16.1 (2026-11-25) | Lain 0.16.2 (2026-11-26) |
+|---|---|---|
+| Started, graph restored from the baked checkpoint | about 1.7 GB (cluster A engine 1.2 GB) | about 2.6 GB |
+| After the pinned snapshots are built (warm-up) | about 3.6 GB | not measured |
+| Analysis of NVIDIA/OpenShell #4995 (a base that is not the pinned commit) | peaks near 7.3 GB, killed on Fly | peaks at 5.6 GB, READY in under 3 min |
+| Right after it, NVIDIA/OpenShell #6003 (another new base, 26 files) | not measured | peaks at 6.2 GB, PARTIAL (symbol limit), 2 min |
+| At rest after both | not measured | about 5.1 GB |
 
 Lain builds a snapshot of **every repository in the workspace** for each commit it has not seen (NemoClaw
 alone is 6,653 files and 825k references), keeps up to `LAIN_SNAPSHOT_RESIDENT` (default 2, one for each end
-of a diff) resident next to the live graph, and does not give the memory back afterwards. The Fly machine
-has 7.9 GB and no swap, so such an analysis ends with the kernel killing the engine
-(`Out of memory: Killed process … (lain)`); on a machine that can swap it stalls instead. Things that do
-**not** help: `LAIN_SNAPSHOT_WORKERS=1` (peak unchanged), and `LAIN_INDEX_CACHE_MB` (that is an on-disk budget).
+of a diff) resident next to the live graph, and does not give all the memory back afterwards. The Fly machine
+has 7.9 GB and no swap. On 0.16.1 an analysis of a new commit ended with the kernel killing the engine
+(`Out of memory: Killed process … (lain)`). 0.16.2 (no per-commit re-indexing of cached repositories, one
+snapshot worker pool per data dir) keeps two back-to-back analyses under that limit, with about 1.7 GB to
+spare at the peak, and neither engine restarted. Whether a longer series stays under it was not tested: memory
+at rest grew from 2.6 to 5.1 GB over the two. Things that do **not** help: `LAIN_SNAPSHOT_WORKERS=1` (peak
+unchanged on 0.16.1), and `LAIN_INDEX_CACHE_MB` (that is an on-disk budget).
 
 What the image does about it:
 
@@ -68,8 +75,8 @@ What the image does about it:
   `exhausted retries` after about 100 s while Lain kept working. This does not help when Lain itself stops
   answering because the machine is out of memory.
 
-To run analyses of arbitrary pull requests you need a machine with more memory (16 GB or more), or to
-exclude a repository from the analysis (`excludeRepos`), which declares the coverage gap.
+To run many analyses of arbitrary pull requests safely you still want a machine with more memory (16 GB or
+more), or to exclude a repository from the analysis (`excludeRepos`), which declares the coverage gap.
 
 ## Requesting an analysis (off by default)
 
@@ -79,6 +86,7 @@ commits into the checkout, then runs the normal assessment. It is limited to the
 the whole server, pauses ten minutes after a failure and accepts at most six requests per hour. **It is
 disabled unless that variable is set, and the demo does not set it.**
 
-Why it is off: see the memory section above. On the 8 GB demo machine one such analysis took the cluster A
-engine to 7.4 GB and the kernel killed it (tested with NVIDIA/OpenShell #4995). Turn this on only on a
-machine with more memory.
+Why it is off: see the memory section above. On Lain 0.16.1 one such analysis took the cluster A engine to
+7.4 GB on the 8 GB demo machine and the kernel killed it (NVIDIA/OpenShell #4995). On 0.16.2 the same
+analysis peaks at 5.6 GB in a local run with the same cap, but memory at rest grows with each new base commit, so it
+is still off on the judges' machine. Turning it on is a decision, not a fix.
