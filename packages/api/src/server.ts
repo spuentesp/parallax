@@ -31,6 +31,7 @@ import { mapRoutes } from './routes/map.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { officialDocsRoutes } from './routes/official-docs.js';
 import { orgsRoutes } from './routes/orgs.js';
+import { prRequestRoutes } from './routes/pr-requests.js';
 import { proposalRoutes } from './routes/proposals.js';
 import { publicationRoutes } from './routes/publications.js';
 import { queryRoutes } from './routes/query.js';
@@ -65,6 +66,7 @@ export async function buildApp(config: AppConfig): Promise<FastifyInstance> {
   await app.register(healthRoutes);
   await app.register(orgsRoutes);
   await app.register(assessmentRoutes);
+  await app.register(prRequestRoutes);
   await app.register(proposalRoutes);
   await app.register(publicationRoutes);
   await app.register(queryRoutes);

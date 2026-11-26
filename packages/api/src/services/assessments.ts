@@ -24,7 +24,7 @@ import type {
 } from '../worker/assessment-worker.js';
 import { computeInputDigest } from '../worker/state.js';
 
-type Db = BetterSQLite3Database<typeof schema>;
+export type Db = BetterSQLite3Database<typeof schema>;
 
 const SPEC_DOC =
   'https://github.com/spuentesp/parallax/blob/main/docs/superpowers/specs/2026-10-13-parallax-foundation-design.md';
@@ -232,13 +232,26 @@ function parseJson(text: string | null): unknown {
 
 // Resumen para el listado: sin el output crudo del motor, que pesa y sólo
 // hace falta al abrir un informe.
+export interface PrFilter {
+  owner: string;
+  repo: string;
+  number: number;
+}
+
+// "owner/repo#123" -> filtro; null si no tiene esa forma.
+export function parsePrFilter(text: string): PrFilter | null {
+  const m = /^([\w.-]+)\/([\w.-]+)#(\d+)$/.exec(text.trim());
+  return m ? { owner: m[1] as string, repo: m[2] as string, number: Number(m[3]) } : null;
+}
+
 export async function listAssessments(
   db: Db,
-  opts: { orgId?: string } = {},
+  opts: { orgId?: string; pr?: PrFilter } = {},
 ): Promise<
   Array<{
     id: string;
     orgId: string;
+    pr: { owner: string; repo: string; number: number } | null;
     status: string;
     inputDigest: string;
     findingCount: number;
@@ -256,12 +269,20 @@ export async function listAssessments(
         .orderBy(schema.assessment.createdAt)
     : await db.select().from(schema.assessment).orderBy(schema.assessment.createdAt);
 
-  return rows.map((r) => {
+  const light = rows.map((r) => {
     const engine = parseJson(r.engineJson) as { diff?: { changes?: unknown[] } } | null;
     const coverage = parseJson(r.coverageJson) as { complete?: boolean; summary?: string } | null;
+    const manifest = parseJson(r.manifestJson) as {
+      pr?: { owner?: string; repo?: string; number?: number };
+    } | null;
+    const pr = manifest?.pr;
     return {
       id: r.id,
       orgId: r.orgId,
+      pr:
+        pr?.owner && pr.repo && typeof pr.number === 'number'
+          ? { owner: pr.owner, repo: pr.repo, number: pr.number }
+          : null,
       status: r.status,
       inputDigest: r.inputDigest,
       findingCount: Array.isArray(engine?.diff?.changes) ? engine.diff.changes.length : 0,
@@ -271,6 +292,15 @@ export async function listAssessments(
       completedAt: r.completedAt,
     };
   });
+  const want = opts.pr;
+  if (!want) return light;
+  return light.filter(
+    (a) =>
+      a.pr !== null &&
+      a.pr.number === want.number &&
+      a.pr.owner.toLowerCase() === want.owner.toLowerCase() &&
+      a.pr.repo.toLowerCase() === want.repo.toLowerCase(),
+  );
 }
 
 export async function getAssessmentRecord(db: Db, id: string): Promise<AssessmentRecord | null> {

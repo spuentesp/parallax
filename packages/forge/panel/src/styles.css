@@ -1,0 +1,378 @@
+/* Parallax impact panel.
+   Colours come from Atlassian's design tokens (--ds-*) when Jira provides them, so the panel
+   follows Jira's light and dark themes; the fallbacks keep it readable in a plain browser. */
+
+:root {
+  --px-text: var(--ds-text, #172b4d);
+  --px-subtle: var(--ds-text-subtle, #5e6c84);
+  --px-surface: var(--ds-surface, #ffffff);
+  --px-raised: var(--ds-surface-raised, #f7f8f9);
+  --px-border: var(--ds-border, #dfe1e6);
+  --px-link: var(--ds-link, #0c66e4);
+  --px-good: var(--ds-icon-success, #1f845a);
+  --px-good-bg: var(--ds-background-success, #dcfff1);
+  --px-warn: var(--ds-icon-warning, #b38600);
+  --px-warn-bg: var(--ds-background-warning, #fff7d6);
+  --px-bad: var(--ds-icon-danger, #c9372c);
+  --px-bad-bg: var(--ds-background-danger, #ffeceb);
+  --px-notice-bg: var(--ds-background-information, #e9f2ff);
+  --px-neutral-bg: var(--ds-background-neutral, #f1f2f4);
+}
+
+/* Fallback dark palette, only when Jira's theme tokens are absent (plain browser). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --px-text: #c7d1db;
+    --px-subtle: #9fadbc;
+    --px-surface: #1d2125;
+    --px-raised: #22272b;
+    --px-border: #38414a;
+    --px-link: #579dff;
+    --px-good: #4bce97;
+    --px-good-bg: #1c3329;
+    --px-warn: #f5cd47;
+    --px-warn-bg: #3a2c00;
+    --px-bad: #f87168;
+    --px-bad-bg: #42221f;
+    --px-notice-bg: #1c2b41;
+    --px-neutral-bg: #2c333a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--px-text);
+  background: var(--px-surface);
+  font:
+    14px / 1.5 -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    sans-serif;
+}
+
+a {
+  color: var(--px-link);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+}
+code {
+  background: var(--px-neutral-bg);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 4px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0;
+}
+h2 {
+  font-size: 14px;
+  margin: 0 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+h3 {
+  font-size: 12px;
+  margin: 14px 0 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--px-subtle);
+}
+
+.panel {
+  padding: 8px 4px 12px;
+  max-width: 820px;
+}
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.muted {
+  color: var(--px-subtle);
+}
+.small {
+  font-size: 12px;
+}
+.lead {
+  margin: 0 0 8px;
+}
+
+.card {
+  border: 1px solid var(--px-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 10px 0;
+  background: var(--px-surface);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  color: var(--px-text);
+  background: var(--px-neutral-bg);
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 12px;
+}
+button:hover {
+  filter: brightness(0.95);
+}
+button.quiet {
+  background: transparent;
+  color: var(--px-link);
+  padding: 2px 6px;
+}
+
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--px-neutral-bg);
+  border-radius: 10px;
+  padding: 1px 8px;
+  color: var(--px-subtle);
+}
+
+.chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 3px;
+  padding: 0 6px;
+  margin-left: 6px;
+  background: var(--px-neutral-bg);
+}
+.chip.good {
+  background: var(--px-good-bg);
+  color: var(--px-good);
+}
+.chip.notice {
+  background: var(--px-warn-bg);
+  color: var(--px-warn);
+}
+.chip.risk-high {
+  background: var(--px-bad-bg);
+  color: var(--px-bad);
+}
+.chip.risk-medium {
+  background: var(--px-warn-bg);
+  color: var(--px-warn);
+}
+.chip.risk-low {
+  background: var(--px-good-bg);
+  color: var(--px-good);
+}
+.chip.owner {
+  background: var(--px-notice-bg);
+  font-weight: 500;
+  margin: 0 6px 0 0;
+  padding: 2px 8px;
+}
+
+.contacts {
+  margin: 4px 0 0;
+}
+
+/* The headline: how the PR compares with the ticket. */
+.headline {
+  border-left: 4px solid var(--px-subtle);
+  background: var(--px-neutral-bg);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+.headline.good {
+  border-color: var(--px-good);
+  background: var(--px-good-bg);
+}
+.headline.notice {
+  border-color: var(--px-warn);
+  background: var(--px-notice-bg);
+}
+.headline.warning {
+  border-color: var(--px-warn);
+  background: var(--px-warn-bg);
+}
+
+.caveat {
+  font-size: 12.5px;
+  color: var(--px-subtle);
+  border-top: 1px dashed var(--px-border);
+  padding-top: 8px;
+  margin: 12px 0 0;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding-left: 20px;
+}
+li {
+  margin: 4px 0;
+}
+.unnamed ul,
+.code ul {
+  list-style: none;
+  padding-left: 0;
+}
+.steps ol {
+  padding-left: 22px;
+}
+
+.explain {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.explain summary {
+  cursor: pointer;
+  color: var(--px-subtle);
+}
+
+/* The graph. */
+.graph {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: 8px 0 4px;
+}
+.node rect {
+  fill: var(--px-raised);
+  stroke: var(--px-border);
+  stroke-width: 1;
+}
+.node.target rect {
+  stroke: var(--px-link);
+  stroke-width: 1.5;
+}
+.node.crit-high rect,
+.node.crit-crit rect {
+  stroke: var(--px-bad);
+}
+.node-label {
+  fill: var(--px-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.node-sub {
+  fill: var(--px-subtle);
+  font-size: 10px;
+}
+.crit-dot {
+  fill: var(--px-subtle);
+}
+.crit-high .crit-dot,
+.crit-crit .crit-dot {
+  fill: var(--px-bad);
+}
+.crit-med .crit-dot {
+  fill: var(--px-warn);
+}
+.crit-low .crit-dot {
+  fill: var(--px-good);
+}
+.edge {
+  fill: none;
+  opacity: 0.85;
+}
+.edge.proven {
+  stroke: var(--px-good);
+}
+.edge.inferred {
+  stroke: var(--px-warn);
+  stroke-dasharray: 6 4;
+}
+.arrow.proven {
+  fill: var(--px-good);
+}
+.arrow.inferred {
+  fill: var(--px-warn);
+}
+
+.legend {
+  font-size: 12px;
+  color: var(--px-subtle);
+  margin: 2px 0 0;
+}
+.swatch {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px solid var(--px-good);
+  vertical-align: middle;
+  margin: 0 4px 0 12px;
+}
+.swatch:first-of-type {
+  margin-left: 0;
+}
+.swatch.inferred {
+  border-top: 2px dashed var(--px-warn);
+}
+.swatch.dot {
+  width: 8px;
+  height: 8px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--px-bad);
+}
+
+/* Loading and error. */
+.state {
+  padding: 16px;
+}
+.state.error {
+  border: 1px solid var(--px-bad);
+  background: var(--px-bad-bg);
+  border-radius: 8px;
+  margin: 12px 4px;
+}
+.skeleton {
+  height: 14px;
+  width: 60%;
+  border-radius: 4px;
+  margin: 8px 0;
+  background: linear-gradient(90deg, var(--px-neutral-bg), var(--px-raised), var(--px-neutral-bg));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+.skeleton.wide {
+  width: 85%;
+}
+.skeleton.graph-skeleton {
+  height: 130px;
+  width: 100%;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+footer {
+  margin-top: 12px;
+}
+
+.node.isolated {
+  opacity: 0.6;
+}

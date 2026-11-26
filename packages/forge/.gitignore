@@ -1,0 +1,7 @@
+node_modules/
+.idea/
+
+/.forge/
+
+# Built Jira panel (run `pnpm build:panel` before `forge deploy`)
+/static/panel

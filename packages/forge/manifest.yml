@@ -1,0 +1,285 @@
+modules:
+  # What a ticket predicts versus what its pull request changed, inside the issue view.
+  jira:issuePanel:
+    - key: parallax-impact-panel
+      title: Parallax impact
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+      resource: panel
+      resolver:
+        function: panel-resolver
+  # One MCP server: the same actions power Rovo agents and third-party MCP clients.
+  rovo:mcp:
+    - key: parallax-mcp
+      name: Parallax Architecture
+      tools:
+        - parallax-status
+        - parallax-list-workspaces
+        - parallax-briefing
+        - parallax-find
+        - parallax-node-impact
+        - parallax-contract-detail
+        - parallax-expected-impact
+        - parallax-ticket-review
+        - parallax-publish-service-doc
+  # The same actions, packaged as an agent that ships with the app, so it is
+  # available on every site that installs it.
+  rovo:agent:
+    - key: parallax-architect
+      name: Parallax Architect
+      description: Answers "what breaks if we change X?" from a real code graph, with proof levels and owners.
+      prompt: |
+        You are the Parallax Architect. You answer questions about software architecture
+        using ONLY the Parallax tools, which read a real code graph built from source
+        repositories. Never invent services, endpoints or dependencies.
+
+        How to work:
+        1. If you do not know the workspace id, call List architecture workspaces first.
+        2. To orient, call Workspace architecture briefing.
+        3. To find a service or endpoint by name, call Find services or symbols; it returns node ids.
+        4. To answer "what breaks if we change X?", call Blast radius of a node with the node id.
+           Report every consumer, how many usages, which endpoints it uses and example call sites.
+           If a list is shortened, say how many there are in total.
+        5. Always state the evidence level of each dependency: "deterministic" means proven by
+           code; "inferred" means a heuristic found it and a person must verify. Never present an
+           inferred dependency as certain.
+        6. If a consumer has an owner or criticality from its Confluence page, say so, because
+           that is who the reader needs to contact.
+        7. Only publish a Confluence page when the user asks you to, and ask which space key to
+           use if they have not said. Report whether the page was created or updated and give its link.
+        8. If a tool returns an error, say what the error was instead of guessing.
+        9. When the user pastes a ticket or describes a planned change in words ("we want to
+           change how sandboxes are created"), call Expected impact of a change with that text.
+           It is a prediction from words, not from code: say which matches were exact and which
+           were fuzzy, list terms that could not be placed, and never claim a change is safe
+           just because nothing matched.
+        10. When the text also links a GitHub pull request, call Review a ticket and its pull
+            request instead. It compares what the ticket predicted with what the pull request
+            actually changed. Report the drift in one sentence, list what was touched but never
+            named, and repeat the coverage caveat: an incomplete analysis is never proof of safety.
+            Finish with the "nextSteps" in order and name the "contacts" (owners) it returns;
+            do not add steps of your own.
+      conversationStarters:
+        - Which Parallax workspaces are available?
+        - What breaks if I change the openshell-gateway service in ws_cluster_a?
+        - What would this ticket affect? We want to add labels to the CreateSandbox call.
+        - Document the nemoclaw service in Confluence
+      actions:
+        - parallax-status
+        - parallax-list-workspaces
+        - parallax-briefing
+        - parallax-find
+        - parallax-node-impact
+        - parallax-contract-detail
+        - parallax-expected-impact
+        - parallax-ticket-review
+        - parallax-publish-service-doc
+  action:
+    - key: parallax-ticket-review
+      name: Review a ticket and its pull request
+      function: ticketReview
+      actionVerb: GET
+      description: |
+        Compare what a ticket predicts with what its linked GitHub pull request actually
+        changed. Returns expected impact, the stored analysis of the PR, and the drift.
+      inputs:
+        text:
+          title: Ticket text
+          type: string
+          required: true
+          description: "Ticket summary and description, including any GitHub pull request link"
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: false
+          description: "Optional: limit the search to one workspace"
+    - key: parallax-expected-impact
+      name: Expected impact of a change
+      function: expectedImpact
+      actionVerb: GET
+      description: |
+        Predict what a described change (a ticket) will touch. Finds the services and
+        endpoints named in the text and returns who consumes them, with proof level.
+      inputs:
+        text:
+          title: Change description
+          type: string
+          required: true
+          description: "The ticket text or a description of the planned change"
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: false
+          description: "Optional: limit the search to one workspace"
+    - key: parallax-status
+      name: Parallax backend status
+      function: parallaxStatus
+      actionVerb: GET
+      description: |
+        Report whether the Parallax architecture backend is reachable and which
+        Lain analyzer version it runs.
+    - key: parallax-list-workspaces
+      name: List architecture workspaces
+      function: listWorkspaces
+      actionVerb: GET
+      description: |
+        List the architecture workspaces Parallax has analysed. Each workspace is a
+        set of repositories studied together. Call this first to get a workspaceId.
+    - key: parallax-briefing
+      name: Workspace architecture briefing
+      function: briefing
+      actionVerb: GET
+      description: |
+        Get a deterministic overview of a workspace: which services exist, their
+        entry points, and who uses what. Use it to orient before asking about a change.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+    - key: parallax-find
+      name: Find services or symbols
+      function: findNodes
+      actionVerb: GET
+      description: |
+        Search a workspace's code graph for services, symbols or contracts by name.
+        Returns node ids to pass to parallax-node-impact.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        query:
+          title: Search text
+          type: string
+          required: true
+          description: "Name or fragment of a service, symbol or contract"
+    - key: parallax-node-impact
+      name: Blast radius of a node
+      function: nodeImpact
+      actionVerb: GET
+      description: |
+        Show who consumes a service or symbol and what it depends on, with
+        provenance. Use it to answer "what breaks if we change X?".
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        nodeId:
+          title: Node ID
+          type: string
+          required: true
+          description: "Node id returned by parallax-find"
+    - key: parallax-contract-detail
+      name: API contract detail
+      function: contractDetail
+      actionVerb: GET
+      description: |
+        Show the providers, schemas and consumers of one API contract, such as a
+        GraphQL field or a protobuf message.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        contractKey:
+          title: Contract key
+          type: string
+          required: true
+          description: "The contract key, e.g. a GraphQL field or proto message name"
+        service:
+          title: Service
+          type: string
+          required: false
+          description: "Optional service name to narrow the contract"
+    - key: parallax-publish-service-doc
+      name: Publish service architecture page to Confluence
+      function: publishServiceDoc
+      actionVerb: CREATE
+      description: |
+        Create or update a Confluence page documenting one service and who depends
+        on it, with proof level and analysed commit. Labelled parallax, lain and
+        machine-made. Only updates pages Parallax created. Ask which space to use.
+      inputs:
+        workspaceId:
+          title: Workspace ID
+          type: string
+          required: true
+          description: "Workspace id from parallax-list-workspaces"
+        nodeId:
+          title: Service node ID
+          type: string
+          required: true
+          description: "A service node id such as svc:openshell-gateway (from parallax-briefing or parallax-find)"
+        spaceKey:
+          title: Confluence space key
+          type: string
+          required: true
+          description: "Key of the Confluence space to publish into"
+  function:
+    - key: parallaxStatus
+      handler: index.parallaxStatus
+    - key: listWorkspaces
+      handler: index.listWorkspaces
+    - key: briefing
+      handler: index.briefing
+    - key: findNodes
+      handler: index.findNodes
+    - key: nodeImpact
+      handler: index.nodeImpact
+    - key: contractDetail
+      handler: index.contractDetail
+    - key: expectedImpact
+      handler: index.expectedImpact
+    - key: ticketReview
+      handler: index.ticketReview
+    - key: publishServiceDoc
+      handler: index.publishServiceDoc
+    - key: panel-resolver
+      handler: panel.handler
+
+# The Jira issue panel is a Custom UI app: the bundle in static/panel is built with
+# `pnpm build:panel` before `forge deploy`.
+resources:
+  - key: panel
+    path: static/panel
+
+# Required for any app with a rovo:mcp module from 2027-01-05 (tag <= 8 chars,
+# description <= 100 chars, keywords combined <= 50 chars).
+app:
+  runtime:
+    name: nodejs24.x
+    memoryMB: 256
+    architecture: arm64
+  id: ari:cloud:ecosystem::app/9fe4925c-2d52-4c10-b231-f5bf5a9df465
+  # Jira is where the app is installed first; Confluence is connected afterwards.
+  compatibility:
+    jira:
+      required: true
+    confluence:
+      required: false
+  rovo:
+    tag: plx
+    description: Service topology, contracts and blast radius for Jira work
+    keywords:
+      - architecture
+      - blast-radius
+      - services
+
+permissions:
+  external:
+    fetch:
+      backend:
+        - address: marbled-river-9619.fly.dev
+  scopes:
+    - read:jira-work
+    - read:space:confluence
+    - read:page:confluence
+    - write:page:confluence
+    - write:label:confluence
+    - read:content.property:confluence
+    - write:content.property:confluence

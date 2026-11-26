@@ -1,0 +1,22 @@
+{
+ "issueKey": "OSP-99",
+ "expected": {
+  "summary": {
+   "targets": 0,
+   "consumers": 0,
+   "provenByCode": 0,
+   "inferredOnly": 0
+  },
+  "unmatchedTerms": [],
+  "targets": [],
+  "graph": {
+   "nodes": [],
+   "edges": []
+  }
+ },
+ "contacts": [],
+ "nextSteps": [
+  "Name the service or endpoint this ticket changes, so Parallax can predict its impact."
+ ],
+ "pullRequests": []
+}

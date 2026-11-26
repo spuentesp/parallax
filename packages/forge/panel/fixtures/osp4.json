@@ -1,0 +1,225 @@
+{
+ "issueKey": "OSP-4",
+ "expected": {
+  "summary": {
+   "targets": 4,
+   "consumers": 2,
+   "provenByCode": 2,
+   "inferredOnly": 0
+  },
+  "unmatchedTerms": [],
+  "targets": [
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "ep:rpc:openshell.v1.OpenShell/GetProviderProfile@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/GetProviderProfile",
+     "kind": "endpoint"
+    },
+    "consumersTotal": 1,
+    "consumers": [
+     {
+      "service": "nemoclaw",
+      "provenance": "deterministic",
+      "usages": 2,
+      "annotations": {
+       "owner": "Platform team",
+       "criticality": "High"
+      },
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4718593/Service+architecture+nemoclaw"
+     }
+    ]
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "ep:rpc:openshell.v1.OpenShell/UpdateConfig@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/UpdateConfig",
+     "kind": "endpoint"
+    },
+    "consumersTotal": 1,
+    "consumers": [
+     {
+      "service": "OpenShell",
+      "provenance": "deterministic",
+      "usages": 2
+     }
+    ]
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "svc:nemoclaw",
+     "label": "nemoclaw",
+     "kind": "service"
+    },
+    "consumersTotal": 0,
+    "consumers": []
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "svc:OpenShell",
+     "label": "OpenShell",
+     "kind": "service"
+    },
+    "consumersTotal": 0,
+    "consumers": []
+   }
+  ],
+  "graph": {
+   "nodes": [
+    {
+     "id": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/GetProviderProfile@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/GetProviderProfile",
+     "kind": "target",
+     "detail": "endpoint"
+    },
+    {
+     "id": "service:ws_cluster_a:nemoclaw",
+     "label": "nemoclaw",
+     "kind": "consumer",
+     "detail": "Platform team",
+     "criticality": "High"
+    },
+    {
+     "id": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/UpdateConfig@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/UpdateConfig",
+     "kind": "target",
+     "detail": "endpoint"
+    },
+    {
+     "id": "service:ws_cluster_a:OpenShell",
+     "label": "OpenShell",
+     "kind": "consumer",
+     "detail": null,
+     "criticality": null
+    },
+    {
+     "id": "target:ws_cluster_a:svc:nemoclaw",
+     "label": "nemoclaw",
+     "kind": "target",
+     "detail": "service"
+    },
+    {
+     "id": "target:ws_cluster_a:svc:OpenShell",
+     "label": "OpenShell",
+     "kind": "target",
+     "detail": "service"
+    }
+   ],
+   "edges": [
+    {
+     "from": "service:ws_cluster_a:nemoclaw",
+     "to": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/GetProviderProfile@openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 2
+    },
+    {
+     "from": "service:ws_cluster_a:OpenShell",
+     "to": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/UpdateConfig@openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 2
+    }
+   ]
+  }
+ },
+ "contacts": [
+  {
+   "service": "nemoclaw",
+   "owner": "Platform team",
+   "criticality": "High"
+  }
+ ],
+ "pullRequests": [
+  {
+   "url": "https://github.com/NVIDIA/NemoClaw/pull/13812",
+   "assessment": {
+    "id": "a_mwv7bp8b_wflahd",
+    "status": "READY",
+    "pr": "NVIDIA/NemoClaw#13812",
+    "counts": {
+     "verified": 0,
+     "needsInvestigation": 0,
+     "noKnownImpact": 0,
+     "couldNotCompare": 0
+    },
+    "coverage": {
+     "complete": false,
+     "reviewed": [
+      "NeMo-Fabric",
+      "NemoClaw",
+      "OpenShell"
+     ],
+     "note": "Coverage is incomplete: an empty result does not prove there is no impact."
+    },
+    "findings": [],
+    "findingsTotal": 0,
+    "couldNotCompare": [],
+    "compatibleChanges": 0,
+    "codeImpact": {
+     "repo": "NemoClaw",
+     "filesChanged": 4,
+     "filesAnalyzed": 2,
+     "highestRisk": "high",
+     "symbolsTotal": 2,
+     "untestedTotal": 1,
+     "symbols": [
+      {
+       "name": "requireNativeProviderPolicy",
+       "path": "src/lib/adapters/openshell/provider-policy.ts",
+       "line": 98,
+       "change": "edited",
+       "risk": "high",
+       "untested": false
+      },
+      {
+       "name": "handleOnboardCommandError",
+       "path": "src/lib/onboard/command/error-reporting.ts",
+       "line": 57,
+       "change": "edited",
+       "risk": "medium",
+       "untested": true
+      }
+     ]
+    },
+    "explanation": {
+     "model": "nvidia/Nemotron-3_5-Lightning",
+     "text": "Engine compared two snapshots and reported 0 contract changes across the workspace. However, coverage is INCOMPLETE: the reviewed repos are NeMo-Fabric, NemoClaw, and OpenShell (partial). OpenShell SDK is unreviewed. Unresolved calls exist in all repos (dynamic topics, dynamic targets, env-unmapped URLs, rpc_stub_unknown, etc.), meaning the engine could not fully bind all call targets. An empty diff of published contracts does not guarantee no impact when coverage is incomplete and many calls remain unbound.\n\nFindings (engine classifications are authoritative):\n\nCoverage: INCOMPLETE — revisados: NeMo-Fabric, NemoClaw, OpenShell · la cobertura está incompleta: un resultado vacío no autoriza a…",
+     "note": "Written by a language model from the findings above; the findings are the evidence."
+    }
+   },
+   "drift": {
+    "verdict": "code-only",
+    "headline": "The PR changed no contracts, but edited 2 code symbols in NemoClaw (highest risk: high; 1 untested).",
+    "codeChanges": {
+     "repo": "NemoClaw",
+     "symbols": 2,
+     "highestRisk": "high",
+     "untested": 1,
+     "filesChanged": 4,
+     "filesAnalyzed": 2
+    },
+    "couldNotCompare": 0,
+    "compatibleChanges": 0,
+    "confirmed": [],
+    "touchedButNotNamed": [],
+    "namedButUntouched": [
+     "rpc:openshell.v1.OpenShell/GetProviderProfile",
+     "rpc:openshell.v1.OpenShell/UpdateConfig"
+    ],
+    "caveat": "The assessment has incomplete coverage, so \"untouched\" does not mean \"safe\"."
+   },
+   "nextSteps": [
+    "Talk to Platform team (owns nemoclaw, high criticality) before this ships.",
+    "Have a second reviewer read requireNativeProviderPolicy (src/lib/adapters/openshell/provider-policy.ts:98): high risk.",
+    "Add tests for the 1 untested edited symbol in NemoClaw.",
+    "Treat \"needs investigation\" as open questions: this analysis cannot prove the absence of impact."
+   ]
+  }
+ ]
+}

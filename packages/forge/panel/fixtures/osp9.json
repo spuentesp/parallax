@@ -1,0 +1,270 @@
+{
+ "issueKey": "OSP-9",
+ "expected": {
+  "summary": {
+   "targets": 2,
+   "consumers": 3,
+   "provenByCode": 3,
+   "inferredOnly": 0
+  },
+  "unmatchedTerms": [],
+  "targets": [
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "ep:rpc:openshell.v1.OpenShell/ConnectSupervisor@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/ConnectSupervisor",
+     "kind": "endpoint"
+    },
+    "consumersTotal": 0,
+    "consumers": []
+   },
+   {
+    "workspaceId": "ws_cluster_a",
+    "matched": "exact",
+    "node": {
+     "nodeId": "svc:openshell-gateway",
+     "label": "openshell-gateway",
+     "kind": "service"
+    },
+    "consumersTotal": 3,
+    "consumers": [
+     {
+      "service": "OpenShell",
+      "provenance": "deterministic",
+      "usages": 22
+     },
+     {
+      "service": "nemoclaw",
+      "provenance": "deterministic",
+      "usages": 3,
+      "annotations": {
+       "owner": "Platform team",
+       "criticality": "High"
+      },
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4718593/Service+architecture+nemoclaw"
+     },
+     {
+      "service": "openshell-sdk",
+      "provenance": "deterministic",
+      "usages": 23,
+      "confluencePage": "https://one-atlas-bhik.atlassian.net/wiki/spaces/PLXDOCS/pages/4816897/Service+architecture+openshell-sdk"
+     }
+    ]
+   }
+  ],
+  "graph": {
+   "nodes": [
+    {
+     "id": "target:ws_cluster_a:ep:rpc:openshell.v1.OpenShell/ConnectSupervisor@openshell-gateway",
+     "label": "rpc:openshell.v1.OpenShell/ConnectSupervisor",
+     "kind": "target",
+     "detail": "endpoint"
+    },
+    {
+     "id": "target:ws_cluster_a:svc:openshell-gateway",
+     "label": "openshell-gateway",
+     "kind": "target",
+     "detail": "service"
+    },
+    {
+     "id": "service:ws_cluster_a:OpenShell",
+     "label": "OpenShell",
+     "kind": "consumer",
+     "detail": null,
+     "criticality": null
+    },
+    {
+     "id": "service:ws_cluster_a:nemoclaw",
+     "label": "nemoclaw",
+     "kind": "consumer",
+     "detail": "Platform team",
+     "criticality": "High"
+    },
+    {
+     "id": "service:ws_cluster_a:openshell-sdk",
+     "label": "openshell-sdk",
+     "kind": "consumer",
+     "detail": null,
+     "criticality": null
+    }
+   ],
+   "edges": [
+    {
+     "from": "service:ws_cluster_a:OpenShell",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 22
+    },
+    {
+     "from": "service:ws_cluster_a:nemoclaw",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 3
+    },
+    {
+     "from": "service:ws_cluster_a:openshell-sdk",
+     "to": "target:ws_cluster_a:svc:openshell-gateway",
+     "provenance": "deterministic",
+     "usages": 23
+    }
+   ]
+  }
+ },
+ "contacts": [
+  {
+   "service": "nemoclaw",
+   "owner": "Platform team",
+   "criticality": "High"
+  }
+ ],
+ "pullRequests": [
+  {
+   "url": "https://github.com/NVIDIA/OpenShell/pull/5052",
+   "assessment": {
+    "id": "a_mwv5twg8_76hlpk",
+    "status": "PARTIAL",
+    "pr": "NVIDIA/OpenShell#5052",
+    "counts": {
+     "verified": 0,
+     "needsInvestigation": 0,
+     "noKnownImpact": 0,
+     "couldNotCompare": 9
+    },
+    "coverage": {
+     "complete": false,
+     "reviewed": [
+      "NeMo-Fabric",
+      "NemoClaw",
+      "OpenShell"
+     ],
+     "note": "Coverage is incomplete: an empty result does not prove there is no impact."
+    },
+    "findings": [],
+    "findingsTotal": 0,
+    "couldNotCompare": [
+     {
+      "endpoint": "rpc:openshell.supervisor.host.v1.SupervisorHost/Attach",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/ConnectSupervisor",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/GetGatewayConfig",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/PushSandboxLogs",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/GetSandboxConfig",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/RelayStream",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/ExecSandboxInteractive",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/ForwardTcp",
+      "service": "openshell-gateway"
+     },
+     {
+      "endpoint": "rpc:openshell.v1.OpenShell/PeerRelay",
+      "service": "openshell-gateway"
+     }
+    ],
+    "compatibleChanges": 0,
+    "codeImpact": {
+     "repo": "OpenShell",
+     "filesChanged": 20,
+     "filesAnalyzed": 12,
+     "highestRisk": "high",
+     "symbolsTotal": 10,
+     "untestedTotal": 7,
+     "symbols": [
+      {
+       "name": "Inner",
+       "path": "crates/openshell-supervisor-control/src/controller.rs",
+       "line": 343,
+       "change": "edited",
+       "risk": "high",
+       "untested": true
+      },
+      {
+       "name": "SessionRuntimeContext",
+       "path": "crates/openshell-supervisor-process/src/supervisor_session.rs",
+       "line": 122,
+       "change": "edited",
+       "risk": "high",
+       "untested": true
+      },
+      {
+       "name": "new",
+       "path": "crates/openshell-supervisor-control/src/controller.rs",
+       "line": 399,
+       "change": "edited",
+       "risk": "high",
+       "untested": false
+      },
+      {
+       "name": "start_boundary_access",
+       "path": "crates/openshell-supervisor-process/src/delegated.rs",
+       "line": 83,
+       "change": "edited",
+       "risk": "high",
+       "untested": false
+      },
+      {
+       "name": "close_admission",
+       "path": "crates/openshell-server/src/supervisor_session.rs",
+       "line": 434,
+       "change": "edited",
+       "risk": "medium",
+       "untested": false
+      }
+     ]
+    },
+    "explanation": {
+     "model": "nvidia/Nemotron-3_5-Lightning",
+     "text": "This workspace has 9 ChangedWithoutSchema contract findings for the openshell-gateway RPC interface. Five of the findings (F1, F2, F5, F8, and F9) are classified as NeedsInvestigation with unresolved_candidates, meaning the engine could not determine impact for some consumers. Sixteen other affected consumer entries are also NeedsInvestigation: unresolved_candidates, reflecting the same engine limitation. The remaining four findings (F3, F4, F6, F7) are classified as NeedsInvestigation with no_schema, where the engine detected a schema change but could not map it to any consumer impact. Two consumer services—OpenShell and NemoClaw—appear as both self-consumers and external consumers; NeMo-Fa…",
+     "note": "Written by a language model from the findings above; the findings are the evidence."
+    }
+   },
+   "drift": {
+    "verdict": "code-only",
+    "headline": "The PR changed no contracts, but edited 10 code symbols in OpenShell (highest risk: high; 7 untested). Also: 9 methods in changed interface files could not be compared.",
+    "codeChanges": {
+     "repo": "OpenShell",
+     "symbols": 10,
+     "highestRisk": "high",
+     "untested": 7,
+     "filesChanged": 20,
+     "filesAnalyzed": 12
+    },
+    "couldNotCompare": 9,
+    "compatibleChanges": 0,
+    "confirmed": [],
+    "touchedButNotNamed": [],
+    "namedButUntouched": [
+     "rpc:openshell.v1.OpenShell/ConnectSupervisor"
+    ],
+    "caveat": "The assessment has incomplete coverage, so \"untouched\" does not mean \"safe\"."
+   },
+   "nextSteps": [
+    "Talk to Platform team (owns nemoclaw, high criticality) before this ships.",
+    "Have a second reviewer read Inner (crates/openshell-supervisor-control/src/controller.rs:343): high risk, untested.",
+    "Add tests for the 7 untested edited symbols in OpenShell.",
+    "Read the diff of the changed interface files yourself: the engine could not compare 9 methods in them.",
+    "Treat \"needs investigation\" as open questions: this analysis cannot prove the absence of impact."
+   ]
+  }
+ ]
+}

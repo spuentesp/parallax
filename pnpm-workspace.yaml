@@ -3,6 +3,8 @@ packages:
 allowBuilds:
   canvas: true
   esbuild: true
+  # Pulled in by @forge/bridge (the Jira panel); its install script only prints a donation notice.
+  iframe-resizer: false
   msw: true
 minimumReleaseAgeExclude:
   - fastify@5.12.7

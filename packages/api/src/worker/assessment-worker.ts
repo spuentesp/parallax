@@ -28,7 +28,12 @@ export type { AssessmentEvent, AssessmentRecord } from './state.js';
 
 type Db = BetterSQLite3Database<typeof schema>;
 
-const SNAPSHOT_WAIT_MS = 60_000;
+// Cuánto le pedimos a Lain que espere en cada llamada (prepare y get_snapshot). Debe ser MENOR que el
+// timeout HTTP del adaptador (30 s por llamada, con reintentos): una espera mayor se aborta en el
+// cliente y se reporta como "exhausted retries" a los ~100 s, mientras Lain sigue trabajando.
+const SNAPSHOT_CALL_WAIT_MS = 20_000;
+// Tiempo total que puede tardar construir un snapshot. Indexar un repo grande en frío tarda minutos.
+const SNAPSHOT_DEADLINE_MS = 15 * 60_000;
 const SNAPSHOT_POLL_MS = 200;
 // Trazamos impacto sólo para los primeros cambios de contrato: el resto queda como hallazgo del
 // motor sin traza, y ESO SE DECLARA como hueco de cobertura (antes se cortaba en silencio y un
@@ -806,20 +811,24 @@ export class AssessmentWorker {
     repos: Record<string, string>,
   ): Promise<string> {
     if (!lain) throw new Error(`no LAIN configured for the workspace of ${JSON.stringify(repos)}`);
-    const prepared = await lain.prepareSnapshot({ repos, wait_ms: SNAPSHOT_WAIT_MS });
+    const prepared = await lain.prepareSnapshot({ repos, wait_ms: SNAPSHOT_CALL_WAIT_MS });
     if (prepared.state === 'ready') return prepared.snapshot;
     if (prepared.state === 'failed') throw new Error(`snapshot ${prepared.snapshot} failed`);
 
-    const deadline = this.now() + SNAPSHOT_WAIT_MS;
+    const deadline = this.now() + SNAPSHOT_DEADLINE_MS;
     while (this.now() < deadline) {
       await this.sleep(SNAPSHOT_POLL_MS);
-      const status = await lain.getSnapshot({ snapshot: prepared.snapshot });
+      // Long-poll: Lain responde en cuanto el snapshot está listo, o a los SNAPSHOT_CALL_WAIT_MS.
+      const status = await lain.getSnapshot({
+        snapshot: prepared.snapshot,
+        wait_ms: SNAPSHOT_CALL_WAIT_MS,
+      });
       if (status.state === 'ready') return status.snapshot;
       if (status.state === 'failed') {
         throw new Error(`snapshot ${prepared.snapshot} failed: ${status.error ?? 'unknown'}`);
       }
     }
-    throw new Error(`snapshot ${prepared.snapshot} not ready after ${SNAPSHOT_WAIT_MS}ms`);
+    throw new Error(`snapshot ${prepared.snapshot} not ready after ${SNAPSHOT_DEADLINE_MS}ms`);
   }
 
   private async beginStep(id: string, step: string): Promise<number> {

@@ -354,6 +354,74 @@ describe('AssessmentWorker', () => {
     expect(final.engineJson).toBeTruthy();
   });
 
+  // Regression (reproduced locally against the deployed image): the worker asked Lain to wait 60 s per
+  // call but the adapter aborts a call after 30 s and retries three times, so a snapshot that simply took
+  // a few minutes to build failed with "exhausted retries" after ~100 s while Lain kept working.
+  describe('a snapshot that takes minutes to build', () => {
+    const slowAdapter = (readyAfterMs: number, clock: { now: number }, start: number) => {
+      const base = createLainMock();
+      const prepareWaits: number[] = [];
+      const pollWaits: Array<number | undefined> = [];
+      const adapter: LainAdapter = {
+        ...base,
+        prepareSnapshot: async (req) => {
+          prepareWaits.push(req.wait_ms ?? 0);
+          return { ...(await base.prepareSnapshot(req)), state: 'pending' as const };
+        },
+        getSnapshot: async (req) => {
+          pollWaits.push(req.wait_ms);
+          const ready = clock.now - start >= readyAfterMs;
+          return {
+            snapshot: req.snapshot,
+            state: ready ? ('ready' as const) : ('pending' as const),
+          };
+        },
+      };
+      return { adapter, prepareWaits, pollWaits };
+    };
+
+    it('is waited for beyond the old one-minute budget, asking Lain to wait less than the adapter timeout', async () => {
+      const start = 1_700_000_000_000;
+      const clock = { now: start };
+      const { adapter, prepareWaits, pollWaits } = slowAdapter(3 * 60_000, clock, start);
+      const w = new AssessmentWorker(db, {
+        getLain: async () => adapter,
+        now: () => clock.now,
+        sleep: async (ms) => {
+          clock.now += ms;
+        },
+      });
+      const { assessment } = await w.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
+      const final = await w.run(assessment.id);
+
+      expect(['READY', 'PARTIAL']).toContain(final.status);
+      // Three minutes of (fake) waiting went by, which the old 60 s budget could not have survived.
+      expect(clock.now - start).toBeGreaterThanOrEqual(3 * 60_000);
+      // Every wait asked of Lain stays under the adapter's 30 s transport timeout.
+      for (const wait of [...prepareWaits, ...pollWaits]) {
+        expect(wait).toBeDefined();
+        expect(wait as number).toBeLessThan(30_000);
+      }
+    });
+
+    it('still fails, with the cause, when the snapshot never becomes ready', async () => {
+      const start = 1_700_000_000_000;
+      const clock = { now: start };
+      const { adapter } = slowAdapter(Number.POSITIVE_INFINITY, clock, start);
+      const w = new AssessmentWorker(db, {
+        getLain: async () => adapter,
+        now: () => clock.now,
+        sleep: async (ms) => {
+          clock.now += ms;
+        },
+      });
+      const { assessment } = await w.create(resolved('org_demo', SHAS.ordersBase, SHAS.ordersS1));
+      const final = await w.run(assessment.id);
+      expect(final.status).toBe('FAILED');
+      expect(final.engineJson).toContain('not ready after 900000ms');
+    });
+  });
+
   it('surfaces a truncated diff as a declared gap, never as "no findings" (INV 3)', async () => {
     const base = createLainMock();
     const adapter: LainAdapter = {
