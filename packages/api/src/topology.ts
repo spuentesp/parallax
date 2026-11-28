@@ -473,6 +473,26 @@ export async function buildEndpointTopology(
     if (n.kind === 'group') n.meta = { ...n.meta, contracts: perGroup.get(n.id) ?? 0 };
   }
 
+  // A service's consumer count is the number of distinct services with a drawn dependency on it.
+  // LAIN's own count also includes a service reading its own interface, which is skipped above as
+  // an internal read; copying it would show "4 consumers" next to a list of 3.
+  const consumersOf = new Map<string, Set<string>>();
+  for (const e of edges) {
+    if (e.kind !== 'consumes') continue;
+    const owner = nodes.get(e.target)?.meta?.service;
+    if (typeof owner !== 'string') continue;
+    const ownerId = serviceNodeId(owner);
+    if (e.source === ownerId) continue;
+    const set = consumersOf.get(ownerId) ?? new Set<string>();
+    set.add(e.source);
+    consumersOf.set(ownerId, set);
+  }
+  for (const n of nodes.values()) {
+    if (n.kind === 'service' && n.meta && 'consumerServices' in n.meta) {
+      n.meta = { ...n.meta, consumerServices: consumersOf.get(n.id)?.size ?? 0 };
+    }
+  }
+
   const all = [...nodes.values()];
   return {
     nodes: all,

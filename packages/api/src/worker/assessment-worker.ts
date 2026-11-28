@@ -724,7 +724,22 @@ export class AssessmentWorker {
       return { ok: false, reason: 'not_finished', detail: `assessment ${id} is ${rec.status}` };
     }
     const attempt = await this.beginStep(id, 'reexplain');
-    const outcome = await this.runExplain(rec);
+    // The explainer reads the PR's snapshot views. Lain does not keep them across a restart, so
+    // they are prepared again first (Lain reuses them when they still exist).
+    let views: { baseId: string; headId: string };
+    try {
+      const manifest = JSON.parse(rec.manifestJson) as ResolvedManifest;
+      const lain = await this.lainFor(rec.orgId);
+      views = {
+        baseId: await this.awaitSnapshot(lain, manifest.base.repos),
+        headId: await this.awaitSnapshot(lain, manifest.head.repos),
+      };
+    } catch (e) {
+      const detail = `snapshot failed: ${describeError(e)}`;
+      await this.endStep(id, 'reexplain', attempt, 'failed', sha256Hex(detail));
+      return { ok: false, reason: 'explain_failed', detail };
+    }
+    const outcome = await this.runExplain({ ...rec, ...views });
     if (outcome.status !== 'available') {
       await this.endStep(id, 'reexplain', attempt, 'failed', sha256Hex(outcome.status));
       return { ok: false, reason: 'explain_failed', detail: outcome.status };

@@ -35,7 +35,8 @@ Secrets (set once, `fly secrets set ... -a marbled-river-9619`): `PARALLAX_TOKEN
 `QUERY_RATE_LIMIT_PER_HOUR`. Keep `PARALLAX_TOKENS` unchanged so shared links keep working.
 
 ## Roll back
-`fly releases -a marbled-river-9619`, then `fly deploy --image <the old release's image> ...`. v26 (Lain 0.16.2,
+`fly releases -a marbled-river-9619`, then `fly deploy --image <the old release's image> ...`. v27 (Lain 0.16.3, before
+the explain and consumer-count fixes, 2026-11-28) is `registry.fly.io/marbled-river-9619:deployment-20261127-v0163`. v26 (Lain 0.16.2,
 2026-11-25) is `registry.fly.io/marbled-river-9619:deployment-20261125-v0162`. v19 (the 0.1.0 / Lain 0.13
 build of 2026-10-30) is `registry.fly.io/marbled-river-9619:deployment-01M671FR27VQFRKNZHNESBMWX4`.
 
