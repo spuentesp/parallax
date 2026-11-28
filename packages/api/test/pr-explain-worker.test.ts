@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '../src/db/schema.js';
+import { getLainMockCalls, resetLainMock } from '../src/lain-adapter/record.js';
 import { buildApp } from '../src/server.js';
 
 const SHAS = {
@@ -265,6 +266,27 @@ describe('assessment explain step in PR mode', () => {
         .from(schema.jobStep)
         .where(eq(schema.jobStep.assessmentId, id));
       expect(steps.filter((s) => s.step === 'reexplain').map((s) => s.state)).toEqual(['done']);
+    });
+
+    it('prepares the base and head snapshots again, and explains against the new head', async () => {
+      // Lain does not keep a PR's views across a restart; re-explaining must not assume they exist.
+      stubModel([]);
+      const id = await finishedAssessment();
+      resetLainMock();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/assessments/${id}/reexplain`,
+        headers: { authorization: 'Bearer t' },
+      });
+      expect(res.statusCode).toBe(200);
+      const calls = getLainMockCalls();
+      expect(calls.filter((c) => c.tool === 'prepare_snapshot')).toHaveLength(2);
+      const prepared = new Set(
+        calls.filter((c) => c.tool === 'get_snapshot').map((c) => c.snapshot as string),
+      );
+      const catalogViews = calls.filter((c) => c.tool === 'list_services').map((c) => c.snapshot);
+      expect(catalogViews.length).toBeGreaterThan(0);
+      expect(catalogViews.every((v) => v !== undefined && prepared.has(v))).toBe(true);
     });
 
     it('keeps the previous revision and reports the cause when the model fails', async () => {

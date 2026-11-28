@@ -181,6 +181,7 @@ Connected apps > parallax-codegeist).
 
 | Tool | Ask it | You get |
 |---|---|---|
+| `parallax-status` | "Is the Parallax server up?" | Whether the server answers, its version and the analyzer version |
 | `parallax-list-workspaces` | "Which Parallax workspaces exist?" | `ws_cluster_a` (OpenShell stack), `ws_cluster_b` (NeMo Agent Toolkit) |
 | `parallax-briefing` | "Brief me on ws_cluster_a" | Services, entry points, who uses what |
 | `parallax-find` | "Find CreateSandbox in ws_cluster_a" | Matching endpoints and their node ids |
