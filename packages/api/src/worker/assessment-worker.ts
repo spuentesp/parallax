@@ -742,7 +742,15 @@ export class AssessmentWorker {
     const outcome = await this.runExplain({ ...rec, ...views });
     if (outcome.status !== 'available') {
       await this.endStep(id, 'reexplain', attempt, 'failed', sha256Hex(outcome.status));
-      return { ok: false, reason: 'explain_failed', detail: outcome.status };
+      // Say why, not only that it failed: the investigator records its errors in the payload.
+      const p = (outcome.payload ?? {}) as { errors?: unknown; error?: unknown };
+      const cause = Array.isArray(p.errors) ? p.errors.filter((e) => typeof e === 'string') : [];
+      if (typeof p.error === 'string') cause.push(p.error);
+      return {
+        ok: false,
+        reason: 'explain_failed',
+        detail: cause.length ? `${outcome.status}: ${cause.join('; ')}` : outcome.status,
+      };
     }
     const rows = await this.db
       .select()

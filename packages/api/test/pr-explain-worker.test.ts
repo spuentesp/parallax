@@ -278,7 +278,8 @@ describe('assessment explain step in PR mode', () => {
         headers: { authorization: 'Bearer t' },
       });
       expect(res.statusCode).toBe(502);
-      expect((res.json() as { detail: string }).detail).toMatch(/^failed:/);
+      // The cause travels with the status, so a failure can be diagnosed from the response.
+      expect((res.json() as { detail: string }).detail).toMatch(/^failed:[a-z_]+: .+/);
       const after = await report(id);
       expect(after.assessment.explanation.revision).toBe(0);
       expect(after.assessment.explanation.status).toBe('available');
