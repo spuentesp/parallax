@@ -14,7 +14,7 @@ third-party logos, no music.
 | 2 | Jira panel | Open **Parallax impact** on OSP-10, scroll: prediction graph, PR headline, Talk to, next steps | 0:50 |
 | 3 | MCP | Terminal: Claude Code calls `parallax-node-impact`, then `parallax-ticket-review` on OSP-10's text | 0:60 |
 | 4 | Confluence | Page "Service architecture: nemoclaw": lozenges, generated sections, Human notes with Owner | 0:35 |
-| 5 | Rovo agent | Ask Rovo > Parallax Architect: "What breaks if I change openshell-gateway in ws_cluster_a?" | 0:25 |
+| 5 | Rovo agent | Ask Rovo > @Parallax Architect: "What breaks if I change the openshell-gateway service in ws_cluster_a? Who should I talk to?" | 0:20 |
 | 6 | How it works | Architecture slide (Forge > one egress domain > Fly: API + two Lain engines), then the web console map and a live `/api/health` | 0:40 |
 | 7 | Close | Title card: Parallax for Atlassian, install link note | 0:15 |
 
@@ -57,7 +57,8 @@ panel and the tools report.
 
 ### 5. Rovo agent
 Inside Atlassian, the Parallax Architect agent in Rovo chains the same tools, so anyone on the team can
-ask in plain language.
+ask in plain language. It answers with the consumers the code proves, the owner and criticality people
+wrote in Confluence, and a link to the service's page.
 
 ### 6. How it works
 How it works. The Forge app runs on Atlassian and calls one declared outbound domain: a Parallax

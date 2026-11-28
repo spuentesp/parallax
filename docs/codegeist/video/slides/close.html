@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Parallax for Atlassian</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: #f7f8fa; color: #172b4d;
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  .wrap { position: absolute; left: 120px; top: 190px; right: 120px; }
+  h1 { font-size: 64px; font-weight: 700; letter-spacing: -0.02em; }
+  .line { font-size: 26px; color: #44546f; margin-top: 18px; line-height: 1.4; max-width: 900px; }
+  .rule { width: 120px; height: 5px; border-radius: 3px; background: linear-gradient(90deg, #0c66e4, #6e5dc6); margin: 34px 0 30px; }
+  .facts { display: flex; gap: 34px; font-size: 18px; color: #172b4d; }
+  .facts span { padding: 8px 14px; border-radius: 8px; background: #fff; border: 1.5px solid #dcdfe4; }
+  .foot { position: absolute; left: 120px; bottom: 70px; font-size: 16px; color: #626f86; }
+  .fade { opacity: 0; transition: opacity 1s ease; } .fade.on { opacity: 1; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Parallax for Atlassian</h1>
+    <div class="line">The code's real architecture, next to the work that changes it.</div>
+    <div class="rule"></div>
+    <div class="facts fade" id="facts">
+      <span>Jira impact panel</span><span>8 MCP tools</span><span>Rovo agent</span><span>Two-way Confluence pages</span>
+    </div>
+  </div>
+  <div class="foot fade" id="foot">Built on Atlassian Forge · code graph by Lain · source: github.com/spuentesp/parallax (MIT)</div>
+<script>window.step = () => { document.getElementById('facts').classList.add('on'); document.getElementById('foot').classList.add('on'); };</script>
+</body>
+</html>
