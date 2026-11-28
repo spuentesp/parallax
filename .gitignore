@@ -33,3 +33,4 @@ packages/*/.stryker-tmp/
 
 # Temp scratch (TMPDIR for local test runs)
 .tmp/
+docs/codegeist/video/out/
