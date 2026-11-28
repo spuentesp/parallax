@@ -2,7 +2,7 @@
 
 App `marbled-river-9619` (region gru), one machine, 8 GB / 4 shared CPUs (`shared-cpu-4x`, no swap),
 `min_machines_running = 1`.
-Image: `Dockerfile.fly` = Ubuntu 24.04 + Lain v0.16.2 (release binary, sha256-checked) + Parallax + six NVIDIA repos
+Image: `Dockerfile.fly` = Ubuntu 24.04 + Lain v0.16.3 (release binary, sha256-checked) + Parallax + six NVIDIA repos
 cloned at pinned commits (`clone-repos.sh`, LFS not smudged so the worktrees are clean).
 
 ## Why the image looks like this
@@ -35,7 +35,8 @@ Secrets (set once, `fly secrets set ... -a marbled-river-9619`): `PARALLAX_TOKEN
 `QUERY_RATE_LIMIT_PER_HOUR`. Keep `PARALLAX_TOKENS` unchanged so shared links keep working.
 
 ## Roll back
-`fly releases -a marbled-river-9619`, then `fly deploy --image <the old release's image> ...`. v19 (the 0.1.0 / Lain 0.13
+`fly releases -a marbled-river-9619`, then `fly deploy --image <the old release's image> ...`. v26 (Lain 0.16.2,
+2026-11-25) is `registry.fly.io/marbled-river-9619:deployment-20261125-v0162`. v19 (the 0.1.0 / Lain 0.13
 build of 2026-10-30) is `registry.fly.io/marbled-river-9619:deployment-01M671FR27VQFRKNZHNESBMWX4`.
 
 ## Gotchas
@@ -45,6 +46,12 @@ build of 2026-10-30) is `registry.fly.io/marbled-river-9619:deployment-01M671FR2
   0.16.2 it holds an analysis of a new pull request, but with little room for a series of them (see below).
 
 ## Memory: what an analysis of a new commit costs
+
+**Lain 0.16.3 (deployed 2026-11-28, v27).** Same recipe on this image (4 GB cap, whole container, engine A,
+#4995 then #6003): settled 1.6 GB, peaks **2.7 GB** and **3.0 GB**, 2.3 GB at rest after both, no engine
+restarted. 0.16.3 returns freed C-heap and allocator memory after every snapshot build and index job, and the
+gRPC consumer sensor no longer holds every Rust parse tree at once. The 0.16.1/0.16.2 history below is kept
+for reference.
 
 Measured by running the deployed image under podman with a 4 GB RAM cap (swap allowed) and sampling the
 cgroup's `memory.current + memory.swap.current` every 2 s; the engine's own log lines say what it was doing.
