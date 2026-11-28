@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>How Parallax for Atlassian works</title>
+<style>
+  :root {
+    --ink: #172b4d; --muted: #5e6c84; --line: #c1c7d0; --bg: #f7f8fa;
+    --atl: #e9f2ff; --atl-edge: #0c66e4; --fly: #f3f0ff; --fly-edge: #6e5dc6;
+    --lain: #ffffff; --ok: #1f845a;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1280px; height: 720px; overflow: hidden; background: var(--bg); color: var(--ink);
+    font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; }
+  h1 { position: absolute; left: 56px; top: 36px; font-size: 30px; font-weight: 650; letter-spacing: -0.01em; }
+  .sub { position: absolute; left: 56px; top: 80px; font-size: 16px; color: var(--muted); }
+  .box { position: absolute; border-radius: 14px; border: 2px solid; padding: 18px 20px; }
+  .box h2 { font-size: 19px; font-weight: 650; margin-bottom: 10px; }
+  .box p, .box li { font-size: 15px; line-height: 1.45; color: var(--ink); }
+  .box ul { padding-left: 18px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px; }
+  #atl { left: 56px; top: 140px; width: 330px; height: 380px; background: var(--atl); border-color: var(--atl-edge); }
+  #fly { left: 610px; top: 140px; width: 614px; height: 380px; background: var(--fly); border-color: var(--fly-edge); }
+  .inner { position: absolute; background: var(--lain); border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .inner h3 { font-size: 16px; font-weight: 650; margin-bottom: 4px; }
+  .inner p { font-size: 13.5px; color: var(--muted); line-height: 1.4; }
+  #api { left: 20px; top: 70px; width: 570px; }
+  #lainA { left: 20px; top: 178px; width: 277px; }
+  #lainB { left: 313px; top: 178px; width: 277px; }
+  #baked { left: 20px; top: 266px; width: 570px; border-style: dashed; }
+  #arrow { position: absolute; left: 396px; top: 320px; width: 204px; height: 60px; }
+  #arrow svg { overflow: visible; }
+  #domain { position: absolute; left: 392px; top: 282px; width: 212px; text-align: center; font-size: 12.5px; white-space: nowrap;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); }
+  #domain small { display: block; font-family: "Inter", "Segoe UI", system-ui, sans-serif; color: var(--muted); font-size: 12.5px; margin-top: 3px; white-space: normal; }
+  #health { position: absolute; left: 56px; top: 556px; width: 1168px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 15px; background: #fff; border: 1.5px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+  #health b { color: var(--ok); }
+  .foot { position: absolute; left: 20px; right: 20px; bottom: 18px; font-size: 13.5px; color: var(--muted); }
+  .step { opacity: 0; transform: translateY(10px); transition: opacity .7s ease, transform .7s ease; }
+  .step.on { opacity: 1; transform: none; }
+  .hl { transition: box-shadow .5s ease; }
+  .hl.lit { box-shadow: 0 0 0 4px rgba(110, 93, 198, .28); }
+</style>
+</head>
+<body>
+  <h1>How it works</h1>
+  <div class="sub">One Forge app on your Atlassian site, one Parallax server, the code graph behind both.</div>
+
+  <div id="atl" class="box step" data-step="1">
+    <span class="tag">Runs on Atlassian</span>
+    <h2>Forge app: parallax-codegeist</h2>
+    <ul>
+      <li>Jira issue panel (Custom UI)</li>
+      <li>Rovo agent: Parallax Architect</li>
+      <li>9 tools through the Atlassian MCP server (rovo:mcp)</li>
+      <li>Confluence pages from an editable template, with human notes read back</li>
+    </ul>
+    <p class="foot">Reads Jira and writes Confluence as the person using it.</p>
+  </div>
+
+  <div id="arrow" class="step" data-step="2">
+    <svg width="204" height="60" viewBox="0 0 204 60"><path d="M4 30 H190" stroke="#172b4d" stroke-width="2.5" fill="none"/>
+      <path d="M188 22 L202 30 L188 38 Z" fill="#172b4d"/></svg>
+  </div>
+  <div id="domain" class="step" data-step="2">marbled-river-9619.fly.dev<small>the one declared outbound domain</small></div>
+
+  <div id="fly" class="box step" data-step="3">
+    <span class="tag">One machine on Fly.io</span>
+    <div id="api" class="inner hl"><h3>Parallax API</h3><p>Predictions from ticket text, pull request assessments, drift, next steps and the web console. Stored in SQLite.</p></div>
+    <div id="lainA" class="inner hl"><h3>Lain engine A</h3><p>OpenShell, NemoClaw, NeMo-Fabric</p></div>
+    <div id="lainB" class="inner hl"><h3>Lain engine B</h3><p>NeMo Agent Toolkit, its UI and examples</p></div>
+    <div id="baked" class="inner step" data-step="4"><h3>Code graph, built into the image</h3><p>Public repositories at pinned commits. Services linked through their gRPC and HTTP contracts; a pull request is compared base against head. A restart restores the graph in about a minute.</p></div>
+  </div>
+
+  <div id="health" class="step" data-step="5">GET /api/health &nbsp;→&nbsp; <span id="health-body">…</span></div>
+
+<script>
+  // The recorder calls step(n) as the narration reaches each part, and setHealth() with a live response.
+  window.step = (n) => {
+    document.querySelectorAll(`.step[data-step="${n}"]`).forEach((el) => el.classList.add('on'));
+    if (n === 4) document.querySelectorAll('#lainA, #lainB').forEach((el) => el.classList.add('lit'));
+    if (n === 5) { document.querySelectorAll('.lit').forEach((el) => el.classList.remove('lit')); document.getElementById('api').classList.add('lit'); }
+  };
+  window.setHealth = (json) => {
+    const h = JSON.parse(json);
+    document.getElementById('health-body').innerHTML =
+      `status <b>${h.status}</b> · Parallax ${h.version} · analyzer Lain ${h.analyzerVersion} · adapter ${h.lainAdapter}`;
+  };
+</script>
+</body>
+</html>
