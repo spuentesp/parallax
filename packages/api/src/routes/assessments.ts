@@ -139,6 +139,30 @@ export const assessmentRoutes: FastifyPluginAsync = async (app) => {
   // Preview del comentario que se publicaría. DRY RUN: se genera localmente y
   // NUNCA se envía a GitHub. Conserva el SHA evaluado y los límites de
   // cobertura (§2), que es lo que hace revisable el informe antes de decidir.
+  // Explains a finished assessment again (new explanation revision; the report and status are
+  // untouched). Write scope: it calls the model and the engine's snapshot views.
+  app.post(
+    '/api/assessments/:id/reexplain',
+    {
+      config: { scopes: ['write'] },
+      schema: { params: z.object({ id: z.string().min(1) }) },
+    },
+    async (req, reply) => {
+      const { id } = req.params as { id: string };
+      const result = await app.assessmentWorker.reexplain(id);
+      if (result.ok)
+        return { revision: result.revision, status: result.status, model: result.model };
+      const code =
+        result.reason === 'not_found' ? 404 : result.reason === 'not_finished' ? 409 : 502;
+      return reply.code(code).send({
+        type: 'about:blank',
+        title: code === 404 ? 'Not Found' : code === 409 ? 'Conflict' : 'Bad Gateway',
+        status: code,
+        detail: result.detail,
+      });
+    },
+  );
+
   app.get(
     '/api/assessments/:id/comment-preview',
     {

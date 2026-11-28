@@ -681,54 +681,7 @@ export class AssessmentWorker {
     const attempt = await this.beginStep(id, 'explain');
     try {
       await this.db.delete(schema.explanation).where(eq(schema.explanation.assessmentId, id));
-
-      const engine = rec.engineJson
-        ? (JSON.parse(rec.engineJson) as {
-            diff?: { changes?: unknown[] };
-            analyzerVersion?: string;
-          })
-        : null;
-      const changes = engine?.diff?.changes;
-      const engineFindings = Array.isArray(changes) ? changes : [];
-      const viewId = rec.headId ?? 'live';
-
-      let outcome: ExplainOutcome;
-      if (!this.explain) {
-        outcome = {
-          status: 'failed:no_model_configured',
-          model: 'none',
-          payload: null,
-        };
-      } else {
-        try {
-          outcome = await this.explain({
-            orgId: rec.orgId,
-            viewId,
-            baseView: rec.baseId ?? undefined,
-            question:
-              'Explain, for an architect, the impact of these contract changes. ' +
-              'Keep engine classifications as they are, cite evidence ids you receive, ' +
-              'and separate what is known from what remains unknown.',
-            engineFindings,
-            coverage: rec.coverageJson
-              ? (JSON.parse(rec.coverageJson) as {
-                  complete?: boolean;
-                  missing?: string[];
-                  summary?: string;
-                })
-              : {},
-          });
-        } catch (e) {
-          // Un fallo del modelo nunca destruye el informe estructural: queda
-          // como estado de explicación con causa, separado del resultado.
-          outcome = {
-            status: 'failed:explain_error',
-            model: 'none',
-            payload: { error: describeError(e) },
-          };
-        }
-      }
-
+      const outcome = await this.runExplain(rec);
       await this.db.insert(schema.explanation).values({
         id: `ex_${id}`,
         assessmentId: id,
@@ -750,6 +703,114 @@ export class AssessmentWorker {
       const message = describeError(e);
       await this.endStep(id, 'explain', attempt, 'failed', null);
       return this.fail(rec, `explain step failed: ${message}`);
+    }
+  }
+
+  /**
+   * Explains a finished assessment again and stores the result as a new revision (readers serve
+   * the highest one). The structural report, the status and the other steps are left alone; the
+   * run is recorded as a `reexplain` job step. Only a successful explanation is stored: a failed
+   * attempt keeps the previous revision in place and is returned to the caller with its cause.
+   */
+  async reexplain(
+    id: string,
+  ): Promise<
+    | { ok: true; revision: number; status: string; model: string }
+    | { ok: false; reason: 'not_found' | 'not_finished' | 'explain_failed'; detail: string }
+  > {
+    const rec = await this.get(id);
+    if (!rec) return { ok: false, reason: 'not_found', detail: `assessment ${id} not found` };
+    if (rec.status !== 'READY' && rec.status !== 'PARTIAL') {
+      return { ok: false, reason: 'not_finished', detail: `assessment ${id} is ${rec.status}` };
+    }
+    const attempt = await this.beginStep(id, 'reexplain');
+    // The explainer reads the PR's snapshot views. Lain does not keep them across a restart, so
+    // they are prepared again first (Lain reuses them when they still exist).
+    let views: { baseId: string; headId: string };
+    try {
+      const manifest = JSON.parse(rec.manifestJson) as ResolvedManifest;
+      const lain = await this.lainFor(rec.orgId);
+      views = {
+        baseId: await this.awaitSnapshot(lain, manifest.base.repos),
+        headId: await this.awaitSnapshot(lain, manifest.head.repos),
+      };
+    } catch (e) {
+      const detail = `snapshot failed: ${describeError(e)}`;
+      await this.endStep(id, 'reexplain', attempt, 'failed', sha256Hex(detail));
+      return { ok: false, reason: 'explain_failed', detail };
+    }
+    const outcome = await this.runExplain({ ...rec, ...views });
+    if (outcome.status !== 'available') {
+      await this.endStep(id, 'reexplain', attempt, 'failed', sha256Hex(outcome.status));
+      // Say why, not only that it failed: the investigator records its errors in the payload.
+      const p = (outcome.payload ?? {}) as { errors?: unknown; error?: unknown };
+      const cause = Array.isArray(p.errors) ? p.errors.filter((e) => typeof e === 'string') : [];
+      if (typeof p.error === 'string') cause.push(p.error);
+      return {
+        ok: false,
+        reason: 'explain_failed',
+        detail: cause.length ? `${outcome.status}: ${cause.join('; ')}` : outcome.status,
+      };
+    }
+    const rows = await this.db
+      .select()
+      .from(schema.explanation)
+      .where(eq(schema.explanation.assessmentId, id));
+    const revision = rows.reduce((m, r) => Math.max(m, r.revision), -1) + 1;
+    await this.db.insert(schema.explanation).values({
+      id: `ex_${id}_r${revision}`,
+      assessmentId: id,
+      revision,
+      model: outcome.model,
+      status: outcome.status,
+      payload: outcome.payload != null ? JSON.stringify(outcome.payload) : null,
+      createdAt: this.now(),
+    });
+    await this.endStep(id, 'reexplain', attempt, 'done', sha256Hex(outcome.status));
+    return { ok: true, revision, status: outcome.status, model: outcome.model };
+  }
+
+  /** One explanation of an assessment's stored engine findings. Never throws for a model failure. */
+  private async runExplain(rec: AssessmentRecord): Promise<ExplainOutcome> {
+    const engine = rec.engineJson
+      ? (JSON.parse(rec.engineJson) as {
+          diff?: { changes?: unknown[] };
+          analyzerVersion?: string;
+        })
+      : null;
+    const changes = engine?.diff?.changes;
+    const engineFindings = Array.isArray(changes) ? changes : [];
+    const viewId = rec.headId ?? 'live';
+
+    if (!this.explain) {
+      return { status: 'failed:no_model_configured', model: 'none', payload: null };
+    }
+    try {
+      return await this.explain({
+        orgId: rec.orgId,
+        viewId,
+        baseView: rec.baseId ?? undefined,
+        question:
+          'Explain, for an architect, the impact of these contract changes. ' +
+          'Keep engine classifications as they are, cite evidence ids you receive, ' +
+          'and separate what is known from what remains unknown.',
+        engineFindings,
+        coverage: rec.coverageJson
+          ? (JSON.parse(rec.coverageJson) as {
+              complete?: boolean;
+              missing?: string[];
+              summary?: string;
+            })
+          : {},
+      });
+    } catch (e) {
+      // Un fallo del modelo nunca destruye el informe estructural: queda
+      // como estado de explicación con causa, separado del resultado.
+      return {
+        status: 'failed:explain_error',
+        model: 'none',
+        payload: { error: describeError(e) },
+      };
     }
   }
 

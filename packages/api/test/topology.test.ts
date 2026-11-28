@@ -129,6 +129,38 @@ describe('buildEndpointTopology', () => {
     expect(servedBy?.target).toBe(serviceNodeId('orders'));
   });
 
+  it('counts consumers from the drawn dependencies, not the engine count that includes internal reads', async () => {
+    // LAIN counts orders reading its own interface as a consumer of orders. Parallax skips that
+    // internal read, so the count it shows must agree with the list it draws (only shipping).
+    const withInternalRead = {
+      ...fake,
+      listServices: async () => {
+        const r = await fake.listServices({} as never);
+        return {
+          ...r,
+          items: r.items.map((i) => (i.service === 'orders' ? { ...i, consumer_services: 2 } : i)),
+        };
+      },
+      getService: async (req: { service: string }) => {
+        const r = await (
+          fake.getService as (q: { service: string }) => Promise<{
+            service: string;
+            consumers: Array<{ service: string; repo: string; uses: unknown[] }>;
+            endpoints: unknown[];
+          }>
+        )(req);
+        if (req.service !== 'orders') return r;
+        const own = r.consumers[0] as { service: string; repo: string; uses: unknown[] };
+        return { ...r, consumers: [...r.consumers, { ...own, service: 'orders', repo: 'orders' }] };
+      },
+    } as unknown as LainAdapter;
+    const t = await buildEndpointTopology(withInternalRead);
+    const orders = t.nodes.find((n) => n.id === serviceNodeId('orders'));
+    const drawn = t.edges.filter((e) => e.kind === 'consumes').map((e) => e.source);
+    expect(drawn).toEqual([serviceNodeId('shipping')]);
+    expect(orders?.meta?.consumerServices).toBe(1);
+  });
+
   it('nests services under Interfaces, separately from the repo code', async () => {
     const t = await buildEndpointTopology(fake);
     const byId = new Map(t.nodes.map((n) => [n.id, n]));

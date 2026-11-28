@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as schema from '../src/db/schema.js';
+import { getLainMockCalls, resetLainMock } from '../src/lain-adapter/record.js';
 import { buildApp } from '../src/server.js';
 
 const SHAS = {
@@ -79,7 +80,10 @@ describe('assessment explain step in PR mode', () => {
       databasePath: join(dir, 'p.db'),
       lainAdapter: 'mock',
       mcpTransport: 'stdio',
-      authTokens: [{ token: 't', orgId: 'org_demo', scopes: ['read', 'write', 'publish'] }],
+      authTokens: [
+        { token: 't', orgId: 'org_demo', scopes: ['read', 'write', 'publish'] },
+        { token: 'r', orgId: 'org_demo', scopes: ['read'] },
+      ],
       webBundlePath: join(dir, 'web'),
       nebiusToken: 'test-token',
     });
@@ -203,5 +207,124 @@ describe('assessment explain step in PR mode', () => {
     expect(payload.pr.unaddressed).toEqual(['F1']);
     // El informe estructural del motor no se ve afectado por el fallo del modelo.
     expect(payload.narrative).toContain('NOT EXPLAINED by the model.');
+  });
+
+  describe('POST /api/assessments/:id/reexplain', () => {
+    async function finishedAssessment(): Promise<string> {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/assessments',
+        headers: { authorization: 'Bearer t' },
+        payload: { repo: 'orders', base: SHAS.ordersBase, head: SHAS.ordersS1, orgId: 'org_demo' },
+      });
+      const id = (created.json() as { assessment: { id: string } }).assessment.id;
+      await app.assessmentWorker.run(id);
+      return id;
+    }
+    async function report(id: string) {
+      return (
+        await app.inject({
+          method: 'GET',
+          url: `/api/assessments/${id}`,
+          headers: { authorization: 'Bearer t' },
+        })
+      ).json() as {
+        assessment: {
+          status: string;
+          explanation: { status: string; revision: number | null; narrative?: string | null };
+        };
+      };
+    }
+
+    it('stores a new revision that the report serves, and leaves the status alone', async () => {
+      stubModel([], (id) => id !== 'F1'); // first run: F1 unexplained
+      const id = await finishedAssessment();
+      const before = await report(id);
+      expect(before.assessment.explanation.revision).toBe(0);
+      expect(before.assessment.explanation.narrative).toContain('NOT EXPLAINED by the model.');
+
+      vi.unstubAllGlobals();
+      const seen: Seen[] = [];
+      stubModel(seen); // second run: every finding explained
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/assessments/${id}/reexplain`,
+        headers: { authorization: 'Bearer t' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ revision: 1, status: 'available' });
+      expect(seen).toHaveLength(1);
+
+      const after = await report(id);
+      expect(after.assessment.status).toBe(before.assessment.status);
+      expect(after.assessment.explanation.revision).toBe(1);
+      expect(after.assessment.explanation.status).toBe('available');
+      expect(after.assessment.explanation.narrative).not.toContain('NOT EXPLAINED by the model.');
+
+      const steps = await app.db
+        .select()
+        .from(schema.jobStep)
+        .where(eq(schema.jobStep.assessmentId, id));
+      expect(steps.filter((s) => s.step === 'reexplain').map((s) => s.state)).toEqual(['done']);
+    });
+
+    it('prepares the base and head snapshots again, and explains against the new head', async () => {
+      // Lain does not keep a PR's views across a restart; re-explaining must not assume they exist.
+      stubModel([]);
+      const id = await finishedAssessment();
+      resetLainMock();
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/assessments/${id}/reexplain`,
+        headers: { authorization: 'Bearer t' },
+      });
+      expect(res.statusCode).toBe(200);
+      const calls = getLainMockCalls();
+      expect(calls.filter((c) => c.tool === 'prepare_snapshot')).toHaveLength(2);
+      const prepared = new Set(
+        calls.filter((c) => c.tool === 'get_snapshot').map((c) => c.snapshot as string),
+      );
+      const catalogViews = calls.filter((c) => c.tool === 'list_services').map((c) => c.snapshot);
+      expect(catalogViews.length).toBeGreaterThan(0);
+      expect(catalogViews.every((v) => v !== undefined && prepared.has(v))).toBe(true);
+    });
+
+    it('keeps the previous revision and reports the cause when the model fails', async () => {
+      stubModel([]);
+      const id = await finishedAssessment();
+      vi.unstubAllGlobals();
+      vi.stubGlobal('fetch', async () => new Response('upstream down', { status: 503 }));
+      const res = await app.inject({
+        method: 'POST',
+        url: `/api/assessments/${id}/reexplain`,
+        headers: { authorization: 'Bearer t' },
+      });
+      expect(res.statusCode).toBe(502);
+      // The cause travels with the status, so a failure can be diagnosed from the response.
+      expect((res.json() as { detail: string }).detail).toMatch(/^failed:[a-z_]+: .+/);
+      const after = await report(id);
+      expect(after.assessment.explanation.revision).toBe(0);
+      expect(after.assessment.explanation.status).toBe('available');
+      const steps = await app.db
+        .select()
+        .from(schema.jobStep)
+        .where(eq(schema.jobStep.assessmentId, id));
+      expect(steps.filter((s) => s.step === 'reexplain').map((s) => s.state)).toEqual(['failed']);
+    });
+
+    it('needs the write scope and an existing assessment', async () => {
+      const readOnly = await app.inject({
+        method: 'POST',
+        url: '/api/assessments/a_missing/reexplain',
+        headers: { authorization: 'Bearer r' },
+      });
+      expect(readOnly.statusCode).toBe(403);
+      const missing = await app.inject({
+        method: 'POST',
+        url: '/api/assessments/a_missing/reexplain',
+        headers: { authorization: 'Bearer t' },
+      });
+      expect(missing.statusCode).toBe(404);
+    });
   });
 });
