@@ -46,6 +46,47 @@ interface RawChange {
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 ? v : null);
 
+/**
+ * "ChangedWithoutSchema" is not a contract change. The engine has no schema for these methods
+ * (streaming calls, for instance), so it cannot compare them, and it flags every one of them
+ * whenever their interface file changes at all, even for a comment edit. Parallax reports them as
+ * "could not be compared" (see packages/forge/src/review.js), so the explainer must not present
+ * them as findings: otherwise its text contradicts the counts shown next to it.
+ */
+export const UNCOMPARED_KIND = 'ChangedWithoutSchema';
+
+export interface UncomparedMethod {
+  service: string | null;
+  key: string | null;
+}
+
+export function splitChanges(changes: readonly unknown[]): {
+  definite: unknown[];
+  uncompared: UncomparedMethod[];
+} {
+  const definite: unknown[] = [];
+  const uncompared: UncomparedMethod[] = [];
+  for (const raw of changes) {
+    const c = (raw ?? {}) as RawChange;
+    if (str(c.kind) === UNCOMPARED_KIND) {
+      uncompared.push({
+        service: str(c.endpoint?.service) ?? str(c.service),
+        key: str(c.endpoint?.key),
+      });
+    } else {
+      definite.push(raw);
+    }
+  }
+  return { definite, uncompared };
+}
+
+/** The deterministic line about methods the engine could not compare (empty when there are none). */
+export function uncomparedLine(uncompared: readonly UncomparedMethod[]): string | null {
+  if (uncompared.length === 0) return null;
+  const names = uncompared.map((u) => u.key ?? '?').join(', ');
+  return `Could not be compared: ${uncompared.length} method(s) in changed interface files (${names}). The engine has no schema for them; this is not evidence that they changed, and they are not findings.`;
+}
+
 export function buildFindings(changes: readonly unknown[]): PrFinding[] {
   return changes.map((raw, i) => {
     const c = (raw ?? {}) as RawChange;
@@ -101,11 +142,17 @@ export function coverageLine(coverage: PrCoverage): string {
   return `Coverage: INCOMPLETE${reason ? ` — ${reason}` : ''}. Absence of an impact is not evidence of no impact.`;
 }
 
-export function renderFindingsBlock(findings: readonly PrFinding[], coverage: PrCoverage): string {
+export function renderFindingsBlock(
+  findings: readonly PrFinding[],
+  coverage: PrCoverage,
+  uncompared: readonly UncomparedMethod[] = [],
+): string {
+  const skipped = uncomparedLine(uncompared);
   return [
     `The engine compared two snapshots of this workspace and reported ${findings.length} contract change(s). They are facts; their classes are authoritative.`,
     '',
     ...findings.map(describeFinding),
+    ...(skipped ? ['', skipped] : []),
     '',
     coverageLine(coverage),
   ].join('\n');
@@ -180,6 +227,7 @@ export async function verifyPrSubmission(
   submission: PrSubmitArgs,
   coverage: PrCoverage,
   validateRefs: (refs: string[]) => Promise<PrFindingResult['evidence']>,
+  uncompared: readonly UncomparedMethod[] = [],
 ): Promise<PrVerification> {
   const byId = new Map<string, PrSubmitArgs['findings'][number]>();
   const unknownIds: string[] = [];
@@ -224,6 +272,7 @@ export async function verifyPrSubmission(
     '',
     'Findings (engine classifications are authoritative):',
     ...lines,
+    ...(uncomparedLine(uncompared) ? ['', uncomparedLine(uncompared) as string] : []),
     '',
     coverageLine(coverage),
     ...(submission.coverage_note ? [submission.coverage_note.trim()] : []),

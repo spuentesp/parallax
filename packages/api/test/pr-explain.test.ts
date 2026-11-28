@@ -10,6 +10,7 @@ import {
   coverageLine,
   PR_TOOL_BUDGET,
   renderFindingsBlock,
+  splitChanges,
 } from '../src/agent/pr-explain.js';
 import { createLainMock } from '../src/lain-adapter/mock.js';
 
@@ -375,5 +376,52 @@ describe('PR explanation', () => {
     expect(payload.pr?.findings).toHaveLength(2);
     expect(payload.pr?.findings[0]?.engine_class).toBe('Verified');
     expect(payload.narrative).toContain('Findings (engine classifications are authoritative):');
+  });
+});
+
+describe('methods the engine could not compare', () => {
+  // The engine flags every schema-less method of a changed interface file as
+  // ChangedWithoutSchema, even for a comment edit. Parallax reports them as "could not be
+  // compared", so the explanation must not present them as findings (it used to, and its text
+  // then contradicted the counts shown next to it).
+  const uncompared = {
+    kind: 'ChangedWithoutSchema',
+    compat: 'Unknown',
+    endpoint: { key: 'rpc:openshell.v1.OpenShell/ConnectSupervisor', service: 'openshell-gateway' },
+    impact: { class: 'NeedsInvestigation', reasons: ['no_schema'] },
+    affected: [{ service: 'NeMo-Fabric', class: 'NeedsInvestigation', reasons: 'no_schema' }],
+  };
+
+  it('splits them from the definite changes', () => {
+    const split = splitChanges([...changes, uncompared]);
+    expect(split.definite).toEqual(changes);
+    expect(split.uncompared).toEqual([
+      { service: 'openshell-gateway', key: 'rpc:openshell.v1.OpenShell/ConnectSupervisor' },
+    ]);
+  });
+
+  it('numbers only the definite changes and names the others on their own line', async () => {
+    const model = new Scripted([
+      submit({
+        summary: 'Two contract changes.',
+        findings: [
+          { id: 'F1', explanation: 'e1' },
+          { id: 'F2', explanation: 'e2' },
+        ],
+      }),
+    ]);
+    const r = await run(model, { pr: { changes: [...changes, uncompared], coverage } });
+    const user = String(model.calls[0]?.messages[1]?.content);
+    expect(user).toContain('reported 2 contract change(s)');
+    expect(user).not.toContain('F3');
+    expect(user).toContain(
+      'Could not be compared: 1 method(s) in changed interface files (rpc:openshell.v1.OpenShell/ConnectSupervisor)',
+    );
+    // Explaining F1 and F2 is complete: the uncompared method is not a finding to explain.
+    expect(r.explanationStatus).toBe('available');
+    expect(r.pr?.findings.map((f) => f.id)).toEqual(['F1', 'F2']);
+    const text = r.answer ?? '';
+    expect(text).toContain('Could not be compared: 1 method(s)');
+    expect(text).not.toContain('ChangedWithoutSchema');
   });
 });

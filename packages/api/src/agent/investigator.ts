@@ -64,6 +64,7 @@ import {
   PrSubmitArgs,
   type PrVerification,
   renderFindingsBlock,
+  splitChanges,
   verifyPrSubmission,
 } from './pr-explain.js';
 import { WEB_REPO } from './web-search.js';
@@ -455,7 +456,9 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
     ...(opts.web ? { web: opts.web } : {}),
     ...(opts.maxResultChars !== undefined ? { maxResultChars: opts.maxResultChars } : {}),
   });
-  const prFindings = opts.pr ? buildFindings(opts.pr.changes) : null;
+  // Methods the engine could not compare are not findings: they are reported on their own line.
+  const prSplit = opts.pr ? splitChanges(opts.pr.changes) : null;
+  const prFindings = prSplit ? buildFindings(prSplit.definite) : null;
   if (prFindings) dispatcher.deliverEvidence(prFindings.flatMap((f) => f.evidenceIds));
   const tools = [...dispatcher.toolSpecs(), opts.pr ? PR_SUBMIT_SPEC : SUBMIT_TOOL_SPEC];
   const modelRole = opts.modelRole ?? 'worker';
@@ -579,7 +582,7 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
       role: 'user',
       content:
         prFindings && opts.pr
-          ? [renderFindingsBlock(prFindings, opts.pr.coverage), mapBlock]
+          ? [renderFindingsBlock(prFindings, opts.pr.coverage, prSplit?.uncompared ?? []), mapBlock]
               .filter(Boolean)
               .join('\n\n')
           : contextBlocks.length > 0
@@ -1175,10 +1178,16 @@ export async function investigate(raw: InvestigateOptions): Promise<Investigatio
   // la narrativa (hechos deterministas + explicación del modelo por id).
   const prResult: PrVerification | null =
     prFindings && opts.pr && prSubmission && answer != null
-      ? await verifyPrSubmission(prFindings, prSubmission, opts.pr.coverage, async (refs) => {
-          const r = await cleanedValidate(refs);
-          return { accepted: r.accepted, rejected: r.rejected };
-        })
+      ? await verifyPrSubmission(
+          prFindings,
+          prSubmission,
+          opts.pr.coverage,
+          async (refs) => {
+            const r = await cleanedValidate(refs);
+            return { accepted: r.accepted, rejected: r.rejected };
+          },
+          prSplit?.uncompared ?? [],
+        )
       : null;
   if (prResult) answer = prResult.narrative;
   // Lo que escribió el modelo (no la narrativa compuesta) es lo que se contrasta
