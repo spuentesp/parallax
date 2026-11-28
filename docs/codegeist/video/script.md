@@ -39,7 +39,7 @@ talk to, and what to do next. A language model writes the explanation; every fac
 the code graph.
 
 ### 3. MCP
-The same answers work outside Atlassian. The app exposes eight tools through the Atlassian MCP server,
+The same answers work outside Atlassian. The app exposes nine tools through the Atlassian MCP server,
 with the rovo:mcp module. Here, Claude Code, signed in through Atlassian, asks what breaks if the
 OpenShell gateway changes. The tool returns every consumer, the endpoints it calls, the call sites,
 and a proof level for each edge: deterministic when the code proves it, inferred when a heuristic
